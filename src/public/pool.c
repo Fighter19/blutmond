@@ -30,14 +30,19 @@ BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle h
 
 BmResult bmPoolFinalize(BmPool *pool)
 {
-  if (pool == NULL)
+  BmTypePrivate *type_priv = bmTypeManagerGetTypeFromHandle(g_typeManager, pool->elementType);
+  if (pool == NULL || type_priv == NULL)
   {
     return BM_ERROR_INVALID_ARGUMENT;
   }
 
+  if (type_priv->free == NULL)
+  {
+    return BM_SUCCESS;
+  }
+
   for (size_t i = 0; i < pool->elementCount; i++)
   {
-    BmTypePrivate *type_priv = bmTypeManagerGetTypeFromHandle(g_typeManager, pool->elementType);
     void *pData = (char*)pool->memory + i * type_priv->size;
     if (type_priv->free != NULL)
       type_priv->free(pData);
