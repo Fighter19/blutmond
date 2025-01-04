@@ -4,14 +4,46 @@
 #include "type_private.h"
 #include "memory_private.h"
 
-void bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle hMemory, BmTypeHandle type)
+#include "type_manager.h"
+
+BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle hMemory, BmTypeHandle type)
 {
+  if (pool == NULL || hDevice == NULL || hMemory == NULL)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
+  }
+
+  BmTypePrivate *type_priv = bmTypeManagerGetTypeFromHandle(g_typeManager, type);
+  if (type_priv == NULL)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
+  }
+
   pool->device = hDevice;
   pool->memory = hMemory;
   pool->elementCount = 0;
-  pool->elementCapacity = hMemory->size / type->size;
+  pool->elementCapacity = hMemory->size / type_priv->size;
 
   pool->elementType = type;
+  return BM_SUCCESS;
+}
+
+BmResult bmPoolFinalize(BmPool *pool)
+{
+  if (pool == NULL)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
+  }
+
+  for (size_t i = 0; i < pool->elementCount; i++)
+  {
+    BmTypePrivate *type_priv = bmTypeManagerGetTypeFromHandle(g_typeManager, pool->elementType);
+    void *pData = (char*)pool->memory + i * type_priv->size;
+    if (type_priv->free != NULL)
+      type_priv->free(pData);
+  }
+
+  return BM_SUCCESS;
 }
 
 BmResult bmPoolAllocate(BmPool *pool, void **ppData)
@@ -21,7 +53,9 @@ BmResult bmPoolAllocate(BmPool *pool, void **ppData)
     return BM_ERROR_OUT_OF_MEMORY;
   }
 
-  BmResult resMap = bmMapMemory(pool->device, pool->memory, pool->elementCount * pool->elementType->size, pool->elementType->size, ppData);
+  BmTypePrivate *type_priv = bmTypeManagerGetTypeFromHandle(g_typeManager, pool->elementType);
+
+  BmResult resMap = bmMapMemory(pool->device, pool->memory, pool->elementCount * type_priv->size, type_priv->size, ppData);
   if (resMap != BM_SUCCESS)
   {
     return resMap;
@@ -29,7 +63,7 @@ BmResult bmPoolAllocate(BmPool *pool, void **ppData)
 
   pool->elementCount++;
 
-  bmTypeInitializeMemory(pool->elementType, *ppData);
+  bmTypeInitializeForType(pool->elementType, *ppData);
 
   return BM_SUCCESS;
 }

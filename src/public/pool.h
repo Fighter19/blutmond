@@ -19,8 +19,8 @@ typedef struct BmPool
   BmTypeHandle elementType;
 } BmPool;
 
-void bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle hMemory, BmTypeHandle type);
-void bmPoolFinalize(BmPool *pool);
+BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle hMemory, BmTypeHandle type);
+BmResult bmPoolFinalize(BmPool *pool);
 
 BmResult bmPoolAllocate(BmPool *pool, void **ppData);
 

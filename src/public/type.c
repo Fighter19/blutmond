@@ -1,7 +1,11 @@
 #include "type.h"
 #include "type_private.h"
 
-void bmTypeInitializeMemory(BmTypeHandle type, void *data)
+#include "type_manager.h"
+
+void bmTypeInitializeForType(BmTypeHandle type, void *data)
 {
-  type->init(data);
+  BmTypePrivate *type_priv = bmTypeManagerGetTypeFromHandle(g_typeManager, type);
+  if (type_priv->init != NULL)
+    type_priv->init(data);
 }

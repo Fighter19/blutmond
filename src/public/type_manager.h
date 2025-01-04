@@ -12,5 +12,22 @@ typedef struct BmTypeManager
   size_t typeCount;
 } BmTypeManager;
 
-void bmTypeManagerInitialize(BmTypeManager *manager) {(void)manager;}
-void bmTypeManagerFinalize(BmTypeManager *manager) {(void)manager;}
+typedef struct BmTypeCreateInfo
+{
+  const char *name;
+
+  BmMemoryType memoryType;
+
+  size_t size;
+
+  void (*init)(void *data);
+  void (*free)(void *data);
+} BmTypeCreateInfo;
+
+void bmTypeManagerInit(BmTypeManager *manager);
+void bmTypeManagerFinalize(BmTypeManager *manager);
+
+BmResult bmTypeManagerCreate(BmTypeManager *manager, const BmTypeCreateInfo *pCreateInfo, BmTypeHandle *pHandle);
+BmTypePrivate *bmTypeManagerGetTypeFromHandle(BmTypeManager *manager, BmTypeHandle handle);
+
+extern BmTypeManager *g_typeManager;

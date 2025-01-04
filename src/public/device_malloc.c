@@ -21,6 +21,7 @@ static BmResult bmMallocAllocateMemory(
     return BM_ERROR_OUT_OF_MEMORY;
   }
 
+  hMemory->size = pAllocateInfo->allocationSize;
   *phMemory = hMemory;
 
   return BM_SUCCESS;
