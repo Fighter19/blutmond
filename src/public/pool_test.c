@@ -41,6 +41,21 @@ int main(int argc, char **argv)
 
   bmPoolAllocate(&pool, (void**)&test_int);
 
+  for (int i = 0; i < 10; i++)
+  {
+    result = bmPoolAllocate(&pool, (void**)&test_int);
+    test_int = i;
+    if (result != BM_SUCCESS)
+    {
+      break;
+    }
+  }
+
+  if (result != BM_SUCCESS)
+  {
+    return 1;
+  }
+
   bmPoolFinalize(&pool);
 
   bmFreeMemory(device, memory);
