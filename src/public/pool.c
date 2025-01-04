@@ -40,12 +40,23 @@ BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle h
   {
     return BM_ERROR_OUT_OF_MEMORY;
   }
-#ifdef BM_POOL_USE_INT_HANDLE
-  pool->pFreeList = 0;
-#else
-  pool->pFreeList = (BmPoolElementHandle)pool->pBuffer;
-#endif
+  pool->pFreeList = BM_POOL_ELEMENT_INVALID;
   return result;
+}
+
+static void *bmPoolGetElementPtr(BmPool *pool, BmPoolElementHandle pElement)
+{
+  BmTypePrivate *type_priv = bmTypeManagerGetTypeFromHandle(g_typeManager, pool->elementType);
+  if (type_priv == NULL)
+  {
+    return NULL;
+  }
+
+#ifdef BM_POOL_USE_INT_HANDLE
+  return (void*)((char*)pool->pBuffer + pElement * type_priv->size);
+#else
+  return (void*)pElement;
+#endif
 }
 
 BmResult bmPoolFinalize(BmPool *pool)
@@ -61,20 +72,12 @@ BmResult bmPoolFinalize(BmPool *pool)
     return BM_SUCCESS;
   }
 
-  BmPoolElementHandle pElement = pool->pFreeList;
-  
-  while (pElement != BM_POOL_ELEMENT_INVALID)
+  // Free all elements, implementations need to be robust against double freeing
+  // Objects should be set to NULL after freeing, or have a flag to indicate that they are free
+  for (size_t i = 0; i < pool->elementCount; i++)
   {
-#ifdef BM_POOL_USE_INT_HANDLE
-    void *pElementPtr = (void*)((char*)pool->pBuffer + pElement * type_priv->size);
-    BmPoolElementHandle pNext = *(BmPoolElementHandle*)pElementPtr;
-    type_priv->free(pElementPtr);
-#else
-    BmPoolElementHandle pNext = *(BmPoolElementHandle*)pElement;
-    type_priv->free((void*)pElement);
-#endif
-
-    pElement = pNext;
+    void *pElement = bmPoolGetElementPtr(pool, i);
+    type_priv->free(pElement);
   }
 
   // Unmap memory
@@ -95,6 +98,7 @@ BmResult bmPoolAllocate(BmPool *pool, void **ppData)
   BmPoolElementHandle pElement = pool->pFreeList;
   if (pElement != BM_POOL_ELEMENT_INVALID)
   {
+    // Re-use element from free list
 #ifdef BM_POOL_USE_INT_HANDLE
     void *pElementPtr = (void*)((char*)pool->pBuffer + pElement * type_priv->size);
     pool->pFreeList = *(BmPoolElementHandle*)pElementPtr;
@@ -110,7 +114,6 @@ BmResult bmPoolAllocate(BmPool *pool, void **ppData)
 #else
     pElement = (BmPoolElementHandle)pool->pBuffer + pool->elementCount * type_priv->size;
 #endif
-    pool->elementCount++;
   }
 
   pool->elementCount++;
@@ -120,12 +123,38 @@ BmResult bmPoolAllocate(BmPool *pool, void **ppData)
   }
 
 #ifdef BM_POOL_USE_INT_HANDLE
-  ppData = (void*)((char*)pool->pBuffer + pElement * type_priv->size);
+  *ppData = (void*)((char*)pool->pBuffer + pElement * type_priv->size);
 #else
   *ppData = pElement;
 #endif
 
   bmTypeInitializeForType(pool->elementType, (void*)*ppData);
 
+  return BM_SUCCESS;
+}
+
+BmResult bmPoolFree(BmPool *pool, void *pData)
+{
+  BmTypePrivate *type_priv = bmTypeManagerGetTypeFromHandle(g_typeManager, pool->elementType);
+
+  if (type_priv->free != NULL)
+  {
+    type_priv->free(pData);
+  }
+
+  BmPoolElementHandle pElement = BM_POOL_ELEMENT_INVALID;
+#ifdef BM_POOL_USE_INT_HANDLE
+  pElement = ((char*)pData - (char*)pool->pBuffer) / type_priv->size;
+  if (pElement >= pool->elementCapacity)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
+  }
+#else
+  pElement = (BmPoolElementHandle)pData;
+#endif
+
+  pool->pFreeList = pElement;
+
+  pool->elementCount--;
   return BM_SUCCESS;
 }

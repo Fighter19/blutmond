@@ -6,6 +6,12 @@
 #include "type_manager.h"
 #include "errors.h"
 
+static void free_int(void *data)
+{
+  uint32_t *pInt = (uint32_t*)data;
+  *pInt = 0xDDDDDDDD;
+}
+
 int main(int argc, char **argv)
 {
   (void)argc;
@@ -27,24 +33,24 @@ int main(int argc, char **argv)
   },
   &memory);
 
-  uint32_t test_int;
+  uint32_t *test_ints[10] = {NULL};
 
   BmTypeHandle type;
 
   result = bmTypeManagerCreate(&typeManager, &(BmTypeCreateInfo) {
-    .size = sizeof(test_int),
+    .name = "uint32_t",
+    .size = sizeof(uint32_t),
+    .free = free_int,
   },
   &type);
 
   BmPool pool;
   bmPoolInit(&pool, device, memory, type);
 
-  bmPoolAllocate(&pool, (void**)&test_int);
-
   for (int i = 0; i < 10; i++)
   {
-    result = bmPoolAllocate(&pool, (void**)&test_int);
-    test_int = i;
+    result = bmPoolAllocate(&pool, (void**)&test_ints[i]);
+    *test_ints[i] = i;
     if (result != BM_SUCCESS)
     {
       break;
@@ -56,7 +62,22 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  bmPoolFinalize(&pool);
+  bmPoolFree(&pool, test_ints[5]);
+  bmPoolFree(&pool, test_ints[3]);
+  uint32_t *test_int_5 = NULL;
+  bmPoolAllocate(&pool, (void**)&test_int_5);
+  if (test_int_5 == NULL)
+  {
+    return 1;
+  }
+  *test_int_5 = 0x12345678;
+
+  result = bmPoolFinalize(&pool);
+
+  if (result != BM_SUCCESS)
+  {
+    return 1;
+  }
 
   bmFreeMemory(device, memory);
 

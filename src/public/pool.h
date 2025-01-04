@@ -12,8 +12,8 @@
 #define BM_POOL_USE_INT_HANDLE
 
 #ifdef BM_POOL_USE_INT_HANDLE
-typedef int BmPoolElementHandle;
-#define BM_POOL_ELEMENT_INVALID -1
+typedef unsigned int BmPoolElementHandle;
+#define BM_POOL_ELEMENT_INVALID (unsigned int)(-1)
 #else
 typedef void* BmPoolElementHandle;
 #define BM_POOL_ELEMENT_INVALID NULL
@@ -36,4 +36,5 @@ BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle h
 BmResult bmPoolFinalize(BmPool *pool);
 
 BmResult bmPoolAllocate(BmPool *pool, void **ppData);
+BmResult bmPoolFree(BmPool *pool, void *pData);
 
