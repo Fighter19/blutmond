@@ -153,6 +153,12 @@ BmResult bmPoolFree(BmPool *pool, void *pData)
   pElement = (BmPoolElementHandle)pData;
 #endif
 
+  // Once the latest element is freed, it will need to use the one freed prior to it
+  // Add it to tracking. This is essentially setting pNext to the current head of the free list
+  // (pNext is terminology used in linked lists, which have been used to implement SLAB allocators)
+  void *pElementPtr = bmPoolGetElementPtr(pool, pElement);
+  *(BmPoolElementHandle*)pElementPtr = pool->pFreeList;
+
   pool->pFreeList = pElement;
 
   pool->elementCount--;
