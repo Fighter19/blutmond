@@ -7,6 +7,10 @@ if(USE_SANITIZER)
     add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()
 
+if(UNIX)
+    add_compile_options(-DUNIX)
+endif()
+
 file(GLOB_RECURSE SOURCES src/public/*.c src/private/*.c)
 
 add_compile_options(-Wall -Wextra -Werror -pedantic)

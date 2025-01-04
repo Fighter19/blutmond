@@ -6,6 +6,32 @@
 #include "type_manager.h"
 #include "errors.h"
 
+#ifdef UNIX
+#include <signal.h>
+
+static void bmBreakpoint()
+{
+  raise(SIGTRAP);
+}
+#else
+static void bmBreakpoint()
+{
+}
+#endif
+
+#ifdef UNIX
+#include <stdio.h>
+
+static void bmPrintTestError(const char *expression, const char *file, int line)
+{
+  printf("Test failed, expression: %s in %s:%d\n", expression, file, line);
+}
+#else
+#define bmPrintTestError(expression, file, line)
+#endif
+
+#define TEST_ASSERT(x) if (!(x)) { bmPrintTestError(#x, __FILE__, __LINE__); bmBreakpoint(); return 1; }
+
 static void free_int(void *data)
 {
   uint32_t *pInt = (uint32_t*)data;
@@ -27,11 +53,12 @@ int main(int argc, char **argv)
 
   BmDeviceMemoryHandle memory;
 
-  bmAllocateMemory(device, &(BmMemoryAllocateInfo) {
+  result = bmAllocateMemory(device, &(BmMemoryAllocateInfo) {
     .allocationSize = 1*1024,
     .memoryTypeIndex = 0,
   },
   &memory);
+  TEST_ASSERT(result == BM_SUCCESS);
 
   uint32_t *test_ints[10] = {NULL};
 
@@ -43,9 +70,11 @@ int main(int argc, char **argv)
     .free = free_int,
   },
   &type);
+  TEST_ASSERT(result == BM_SUCCESS);
 
   BmPool pool;
-  bmPoolInit(&pool, device, memory, type);
+  result = bmPoolInit(&pool, device, memory, type);
+  TEST_ASSERT(result == BM_SUCCESS);
 
   for (int i = 0; i < 10; i++)
   {
@@ -56,49 +85,32 @@ int main(int argc, char **argv)
       break;
     }
   }
+  TEST_ASSERT(result == BM_SUCCESS);
 
-  if (result != BM_SUCCESS)
-  {
-    return 1;
-  }
-
-  bmPoolFree(&pool, test_ints[5]);
-  bmPoolFree(&pool, test_ints[3]);
+  result = bmPoolFree(&pool, test_ints[5]);
+  TEST_ASSERT(result == BM_SUCCESS);
+  result = bmPoolFree(&pool, test_ints[3]);
+  TEST_ASSERT(result == BM_SUCCESS);
   uint32_t *test_int_3 = NULL;
   uint32_t *test_int_5 = NULL;
-  bmPoolAllocate(&pool, (void**)&test_int_3);
-  if (test_int_3 == NULL)
-  {
-    return 1;
-  }
+  result = bmPoolAllocate(&pool, (void**)&test_int_3);
+  TEST_ASSERT(result == BM_SUCCESS);
+  TEST_ASSERT(test_int_3 != NULL);
   *test_int_3 = 0x12345678;
 
-  bmPoolAllocate(&pool, (void**)&test_int_5);
-  if (test_int_5 == NULL)
-  {
-    return 1;
-  }
+  result = bmPoolAllocate(&pool, (void**)&test_int_5);
+  TEST_ASSERT(result == BM_SUCCESS);
 
-  if (test_ints[3] != test_int_3)
-  {
-    return 1;
-  }
+  TEST_ASSERT(test_int_5 != NULL);
+  TEST_ASSERT(test_ints[3] == test_int_3);
 
   result = bmPoolFinalize(&pool);
+  TEST_ASSERT(result == BM_SUCCESS);
 
-  if (result != BM_SUCCESS)
-  {
-    return 1;
-  }
-
-  bmFreeMemory(device, memory);
+  result = bmFreeMemory(device, memory);
+  TEST_ASSERT(result == BM_SUCCESS);
 
   bmTypeManagerFinalize(&typeManager);
-
-  if (result != BM_SUCCESS)
-  {
-    return 1;
-  }
 
   return 0;
 }
