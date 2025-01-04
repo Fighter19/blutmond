@@ -64,13 +64,25 @@ int main(int argc, char **argv)
 
   bmPoolFree(&pool, test_ints[5]);
   bmPoolFree(&pool, test_ints[3]);
+  uint32_t *test_int_3 = NULL;
   uint32_t *test_int_5 = NULL;
+  bmPoolAllocate(&pool, (void**)&test_int_3);
+  if (test_int_3 == NULL)
+  {
+    return 1;
+  }
+  *test_int_3 = 0x12345678;
+
   bmPoolAllocate(&pool, (void**)&test_int_5);
   if (test_int_5 == NULL)
   {
     return 1;
   }
-  *test_int_5 = 0x12345678;
+
+  if (test_ints[3] != test_int_3)
+  {
+    return 1;
+  }
 
   result = bmPoolFinalize(&pool);
 
