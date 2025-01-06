@@ -24,7 +24,6 @@ BmResult bmTypeManagerCreate(BmTypeManager *manager, const BmTypeCreateInfo *pCr
 
   BmTypePrivate *type = &manager->types[manager->typeCount];
   type->name = pCreateInfo->name;
-  type->memoryType = pCreateInfo->memoryType;
   type->size = pCreateInfo->size;
   type->init = pCreateInfo->init;
   type->free = pCreateInfo->free;
