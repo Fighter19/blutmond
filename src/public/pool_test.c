@@ -32,6 +32,10 @@ static void bmPrintTestError(const char *expression, const char *file, int line)
 
 #define TEST_ASSERT(x) if (!(x)) { bmPrintTestError(#x, __FILE__, __LINE__); bmBreakpoint(); return 1; }
 
+// Default CPU-sided memory
+BmDeviceHandle g_defaultDevice = 0;
+BmDeviceMemoryHandle g_defaultMemory = 0;
+
 static void free_int(void *data)
 {
   uint32_t *pInt = (uint32_t*)data;
@@ -45,19 +49,17 @@ int main(int argc, char **argv)
 
   BmResult result;
 
-  BmDeviceHandle device;
-  device = bmDeviceMallocCreate();
+  g_defaultDevice = bmDeviceMallocCreate();
 
   BmTypeManager typeManager;
   bmTypeManagerInit(&typeManager);
 
-  BmDeviceMemoryHandle memory;
-
-  result = bmAllocateMemory(device, &(BmMemoryAllocateInfo) {
+  result = bmAllocateMemory(g_defaultDevice, &(BmMemoryAllocateInfo) {
     .allocationSize = 1*1024,
     .memoryTypeIndex = 0,
   },
-  &memory);
+  &g_defaultMemory);
+
   TEST_ASSERT(result == BM_SUCCESS);
 
   uint32_t *test_ints[10] = {NULL};
@@ -73,7 +75,7 @@ int main(int argc, char **argv)
   TEST_ASSERT(result == BM_SUCCESS);
 
   BmPool pool;
-  result = bmPoolInit(&pool, device, memory, type);
+  result = bmPoolInit(&pool, g_defaultDevice, g_defaultMemory, type);
   TEST_ASSERT(result == BM_SUCCESS);
 
   for (int i = 0; i < 10; i++)
@@ -107,7 +109,7 @@ int main(int argc, char **argv)
   result = bmPoolFinalize(&pool);
   TEST_ASSERT(result == BM_SUCCESS);
 
-  result = bmFreeMemory(device, memory);
+  result = bmFreeMemory(g_defaultDevice, g_defaultMemory);
   TEST_ASSERT(result == BM_SUCCESS);
 
   bmTypeManagerFinalize(&typeManager);
