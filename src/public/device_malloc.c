@@ -9,6 +9,8 @@
 
 #include "memory_private.h"
 
+#include "device_malloc.h"
+
 static BmResult bmMallocAllocateMemory(
     BmDeviceHandle device,
     const BmMemoryAllocateInfo *pAllocateInfo,
@@ -58,6 +60,8 @@ static void bmDeviceMallocInit(BmDevice *device)
   device->pfnAllocateMemory = bmMallocAllocateMemory;
   device->pfnMapMemory = bmMallocMapMemory;
   device->pfnFreeMemory = bmMallocFreeMemory;
+
+  device->pfnDestroyDevice = bmDeviceMallocDestroy;
 }
 
 static BmDevice g_deviceMalloc = {0};
@@ -68,4 +72,13 @@ BmDeviceHandle bmDeviceMallocCreate()
   bmDeviceMallocInit(device);
 
   return device;
+}
+
+BmResult bmDeviceMallocDestroy(BmDeviceHandle device)
+{
+  if (device == NULL)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
+  }
+  return BM_SUCCESS;
 }

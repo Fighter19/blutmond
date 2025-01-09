@@ -17,3 +17,17 @@ typedef BmResult (*PFN_bmMapMemory)(
 typedef BmResult (*PFN_bmFreeMemory)(
     struct BmDevice *device,
     BmDeviceMemoryHandle hMemory);
+
+typedef BmResult (*PFN_bmCreateDevice)(
+    BmPhysicalDeviceHandle hPhysicalDevice,
+    BmDeviceHandle *phDevice);
+
+typedef BmResult (*PFN_bmDestroyDevice)(
+    BmDeviceHandle hDevice);
+
+BmResult bmCreateDevice(
+    BmPhysicalDeviceHandle hPhysicalDevice,
+    BmDeviceHandle *phDevice);
+
+BmResult bmDestroyDevice(
+    BmDeviceHandle hDevice);

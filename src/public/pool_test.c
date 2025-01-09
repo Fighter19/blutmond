@@ -6,6 +6,8 @@
 #include "type_manager.h"
 #include "errors.h"
 
+#include "physical_device_emu.h"
+
 #ifdef UNIX
 #include <signal.h>
 
@@ -49,7 +51,9 @@ int main(int argc, char **argv)
 
   BmResult result;
 
-  g_defaultDevice = bmDeviceMallocCreate();
+  BmPhysicalDeviceHandle hPhysicalDevice = bmCreateDevicePhysicalEmu();
+
+  result = bmCreateDevice(hPhysicalDevice, &g_defaultDevice);
 
   BmTypeManager typeManager;
   bmTypeManagerInit(&typeManager);
