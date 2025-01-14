@@ -4,16 +4,10 @@
 
 // Forward declaration of BmDevice
 typedef struct BmDevice *BmDeviceHandle;
-typedef uint32_t BmDeviceSize;
 typedef struct BmDeviceMemoryPrivate *BmDeviceMemoryHandle;
 
 typedef struct BmBackground *BmBackgroundHandle;
 typedef struct BmBuffer *BmBufferHandle;
-
-typedef enum
-{
-  BM_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO = 0,
-} BmStructureType;
 
 typedef struct BmMemoryDedicatedAllocateInfo
 {
@@ -61,14 +55,20 @@ typedef struct BmMemoryType {
 #define BM_MAX_MEMORY_HEAPS 3
 #define BM_MAX_MEMORY_TYPES 2
 
+typedef struct BmMemoryHeap {
+  /// Size of the heap
+  BmDeviceSize size;
+} BmMemoryHeap;
+
 typedef struct BmPhysicalDeviceMemoryProperties {
   /// Memory heaps (EWRAM, IWRAM, VRAM)
-  BmDeviceSize heapCount;
-  BmDeviceSize heaps[BM_MAX_MEMORY_HEAPS];
+  BmDeviceSize memoryHeapCount;
+  BmMemoryHeap memoryHeaps[BM_MAX_MEMORY_HEAPS];
   /// Memory types
   uint32_t memoryTypeCount;
   BmMemoryType memoryTypes[BM_MAX_MEMORY_TYPES];
 
+  /// Equivalent to MemoryBudget extension
   BmDeviceSize heapBudget[BM_MAX_MEMORY_HEAPS];
   BmDeviceSize heapUsage[BM_MAX_MEMORY_HEAPS];
 } BmPhysicalDeviceMemoryProperties;

@@ -79,7 +79,7 @@ int main(int argc, char **argv)
   TEST_ASSERT(result == BM_SUCCESS);
 
   BmPool pool;
-  result = bmPoolInit(&pool, g_defaultDevice, g_defaultMemory, type);
+  result = bmPoolInit(&pool, g_defaultDevice, g_defaultMemory, 100*sizeof(uint32_t), type);
   TEST_ASSERT(result == BM_SUCCESS);
 
   for (int i = 0; i < 10; i++)

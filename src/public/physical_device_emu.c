@@ -5,7 +5,8 @@
 
 #include "errors.h"
 
-#include "device_malloc.h"
+//#include "device_malloc.h"
+#include "device_gba_emu.h"
 
 #include "physical_device_emu.h"
 
@@ -14,7 +15,7 @@ static BmPhysicalDevice g_emuDevice;
 static BmResult bmDevicePhysicalEmuCreateDevice(BmPhysicalDeviceHandle hPhysicalDevice, BmDeviceHandle *phDevice)
 {
   (void)hPhysicalDevice;
-  *phDevice = bmDeviceMallocCreate();
+  *phDevice = bmDeviceGbaCreate();
 
   return BM_SUCCESS;
 }

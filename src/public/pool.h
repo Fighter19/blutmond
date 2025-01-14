@@ -32,7 +32,7 @@ typedef struct BmPool
   void *pBuffer;
 } BmPool;
 
-BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle hMemory, BmTypeHandle type);
+BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle hMemory, BmDeviceSize size, BmTypeHandle type);
 BmResult bmPoolFinalize(BmPool *pool);
 
 BmResult bmPoolAllocate(BmPool *pool, void **ppData);

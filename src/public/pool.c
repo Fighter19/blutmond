@@ -2,11 +2,10 @@
 #include "errors.h"
 
 #include "type_private.h"
-#include "memory_private.h"
 
 #include "type_manager.h"
 
-BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle hMemory, BmTypeHandle type)
+BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle hMemory, BmDeviceSize size, BmTypeHandle type)
 {
   if (pool == NULL || hDevice == NULL || hMemory == NULL)
   {
@@ -30,7 +29,7 @@ BmResult bmPoolInit(BmPool *pool, BmDeviceHandle hDevice, BmDeviceMemoryHandle h
   pool->device = hDevice;
   pool->memory = hMemory;
   pool->elementCount = 0;
-  pool->elementCapacity = hMemory->size / type_priv->size;
+  pool->elementCapacity = size / type_priv->size;
 
   pool->elementType = type;
 
