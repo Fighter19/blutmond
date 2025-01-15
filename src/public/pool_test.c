@@ -66,6 +66,39 @@ int main(int argc, char **argv)
 
   TEST_ASSERT(result == BM_SUCCESS);
 
+  BmDeviceMemoryHandle memory1;
+  result = bmAllocateMemory(g_defaultDevice, &(BmMemoryAllocateInfo) {
+    .allocationSize = 120,
+    .memoryTypeIndex = 0,
+  },
+  &memory1);
+
+  TEST_ASSERT(result == BM_SUCCESS);
+
+  result = bmFreeMemory(g_defaultDevice, memory1);
+
+  TEST_ASSERT(result == BM_SUCCESS);
+
+  BmDeviceMemoryHandle memory2;
+  result = bmAllocateMemory(g_defaultDevice, &(BmMemoryAllocateInfo) {
+    .allocationSize = 128,
+    .memoryTypeIndex = 0,
+  },
+  &memory2);
+
+  TEST_ASSERT(result == BM_SUCCESS);
+
+  BmDeviceMemoryHandle memory3;
+  result = bmAllocateMemory(g_defaultDevice, &(BmMemoryAllocateInfo) {
+    .allocationSize = 120,
+    .memoryTypeIndex = 0,
+  },
+  &memory3);
+
+  TEST_ASSERT(result == BM_SUCCESS);
+
+  TEST_ASSERT(memory1 == memory3);
+
   uint32_t *test_ints[10] = {NULL};
 
   BmTypeHandle type;
