@@ -20,7 +20,7 @@ Contents:
 11. [Emulation layer for the PC](#11-emulation-layer-for-the-pc)
 12. [GDB stub](#12-gdb-stub)
 13. [Sound: research, target and tools](#13-sound-research-target-and-tools)
-14. [Asset pipeline (from SceneCompiler)](#14-asset-pipeline-from-scenecompiler)
+14. [Assets: portable model and pipeline](#14-assets-portable-model-and-pipeline)
 15. [Editor and UI toolkit](#15-editor-and-ui-toolkit)
 16. [Showing hardware limits in the editor](#16-showing-hardware-limits-in-the-editor)
 17. [Ports: GB, SNES, PC, browser](#17-ports-gb-snes-pc-browser)
@@ -85,7 +85,7 @@ running from ROM is slow, and every indirect call costs).
 
 ```
 ┌──────────────────────────── Editor (C++) ─────────────────────────────┐
-│ Project · World map · Room · Tiles/palettes · Sprites · Scripts       │  oseui toolkit
+│ Project · World map · Room · Tiles/palettes · Sprites · Scripts       │  ose-ui toolkit
 │ (text ⇄ nodes) · Sound (piano roll, instruments) · State · Hardware · │  GLES2/WebGL1
 │ Build & run · Live link · Debugger                                    │  SDL3
 └──────────┬──────────────────────────────┬─────────────────────────────┘
@@ -302,7 +302,7 @@ second; the real number has to be measured on hardware.
 ## 9. Transports: Xboo, Raspberry Pi, GBA to GBA
 
 The editor talks to the GBA through one **transport interface** (`bm_link`): open, exchange
-32-bit words, optional reset line, measured rate. The packet protocol on top (upload, live
+32-bit words, measured rate. The packet protocol on top (upload, live
 reload, state, log, GDB) is the same for every transport.
 
 | Transport | Who makes the clock | Expected rate | Status |
@@ -329,9 +329,32 @@ Possible improvements on the parallel port side:
 - set the data bit and the falling clock edge in **one** write, then the rising edge: two
   writes per bit when sending instead of three;
 - do not read the status when only sending;
-- **double speed burst** over the SD line (/SELECT): two bits per clock; needs the optional
-  fifth wire and matching code in the GBA bootstrap;
+- **double speed burst** over the SD line (/SELECT): two bits per clock. Only used when the
+  editor detects the fifth wire at connect time (it sends a test pattern over SD); without it
+  everything runs on the four basic wires;
 - measure `ioperm` + `outb` (root) against `ppdev`, as an option for measurements.
+
+### Robustness: wherever xcomms works, Blutmond works
+
+The baseline is the plain four-wire Xboo cable (SC, SI, SO, GND) as documented for xcomms:
+no SD wire, no reset wire, any PC and cable length on which xcomms boots a GBA. Nothing in the
+protocol may need more than that, and it has to live with some bit errors:
+
+- **Initial boot** uses the same BIOS multiboot sequence as xcomms `NormalBoot` (handshake
+  `0x6202`/`0x72`, header, key exchange, CRC), with the same per-word delay setting. If xcomms
+  can boot the device, so can the editor.
+- **Packets** after that: sync word, type, sequence number, length, payload, CRC-32. The GBA
+  answers every packet with ACK or NAK (with the sequence number it expects).
+- **Retry**: on NAK, bad CRC or timeout the packet is sent again; after several failures the
+  link goes back to a resync pattern and continues where it stopped. A transfer never has to
+  start from the beginning, because chunks are confirmed one by one.
+- **Adaptive delay**: start with a safe delay per bit (as xcomms' "Transfer Delay"), lower it
+  while transfers are clean, raise it again on errors. The value that works is remembered per
+  device and transport.
+- **Applying is atomic**: a live update (section 7) is only applied after all its chunks have
+  arrived and been checked. A broken transfer leaves the running game untouched.
+- **Error counters** (CRC errors, retries, resyncs, effective rate) are shown in the editor's
+  live-link window, so a bad cable is visible instead of mysterious.
 
 Because this link is slow, the live workflow (section 7) is built to **send little**:
 compressed chunks, only chunks whose hash changed (the editor remembers per device what is
@@ -348,7 +371,8 @@ KB and arrives in a fraction of a second even over the parallel port.
   the GBA, which is also how the live-link handler and the GDB stub are reached.
 - The parallel port code is rewritten for Blutmond as a small library (`xboo`) with
   `parport.cxx` as the template; the FLTK user interface of xcomms is not needed.
-- The reset line is optional; the live workflow does not need it.
+- The reset line is not used; the live workflow does not need it. The device is started once
+  by switching it on with no cartridge (or with the runtime on a cartridge), as with xcomms.
 
 ## 10. Scripting language
 
@@ -558,14 +582,53 @@ mixer runs in the editor, so the preview sounds exactly like the device. With th
 - Own sequence format (events instead of tracker rows), so piano roll and automation fit
   without detours.
 
-## 14. Asset pipeline (from SceneCompiler)
+## 14. Assets: portable model and pipeline
+
+### Assets are portable, packs are per platform
+
+Everything a developer makes in the editor must be portable to other retro platforms in
+principle, even before the runtime is. That is why the project stores **source assets** in a
+platform-neutral model, and the GBA data is only a **build output**:
+
+```
+source assets (project, platform neutral) ──cook for profile──► pack for GBA
+                                          ├─────────────────► pack for SNES
+                                          ├─────────────────► pack for GB/GBC
+                                          └─────────────────► pack for PC/web
+```
+
+| Asset | Stored as (source) | Cooked for a platform |
+|---|---|---|
+| Images, tilesets | indexed PNG plus palettes in 24-bit colour, tile size 8×8, flip flags; the original true-colour image is kept for re-quantising | colour depth, palette count/size, colour format (BGR555, GB shades, …), tile dedup |
+| Tile maps, rooms | grid of tile references with flip flags, layers with roles (foreground, background, parallax), collision as its own layer of types (solid, slope, platform, hazard…) | number of layers, map entry format, screen size, scrolling limits |
+| Sprites, animations | frames as images, hitboxes, anchor, timing in frames | OBJ sizes and shapes, meta sprites, per-line limits |
+| Raster effects | the effect as parameters (wave: amplitude, period, speed) plus the line table it produces | HDMA tables (GBA, SNES), shader (PC/web), or a simpler fallback where the platform has none |
+| Entities, rooms, world map | text (JSON-like), with typed properties | packed binary |
+| Scripts | Mondskript source | bytecode (portable) or native module |
+| Music, SFX | event sequences plus instruments described by sound (sample, pulse with duty, wave, noise, envelopes, effects) | GBA mixer data; on platforms with sound chips (GB/NES/SNES SPC700) a mapping to their channels |
+| Strings, dialogue | UTF-8 text with IDs | font and encoding of the platform |
+
+Rules that follow from this:
+
+- Source formats are open and documented (PNG, text, a small binary only where needed) and
+  versioned, so assets can be converted later without the editor.
+- The **cooker reports what it had to change** for a profile: colours merged, palettes split,
+  layers dropped, sprites over the per-line limit, effects replaced by fallbacks. The editor
+  shows this per platform, so a developer sees early what a port would cost.
+- Platform-specific tweaks (a hand-made GB palette, a simpler effect for one target) are stored
+  as **overrides** next to the source asset, never instead of it.
+- The GBA-specific editor views (palette banks, VRAM map, OAM) work on the cooked result for
+  the GBA profile; the source asset stays as it was.
+
+### Ideas from SceneCompiler/SceneLoaderGBA
 
 The earlier SceneCompiler/SceneLoaderGBA pipeline (Tiled maps → binary archive → multiboot
-loader) already solves several parts of this plan. What is taken over, and how it changes:
+loader) solved several of these problems already. Blutmond takes over the **ideas**, not the
+code: it is written from scratch in C and C++ to fit the model above.
 
 | SceneCompiler / SceneLoaderGBA | In Blutmond |
 |---|---|
-| Tiled `.tmx` input, also with embedded tilesets | **Tiled import** in the editor (rooms, layers, tilesets, object layers → entities), so existing maps such as the `Castle Corridor` rooms keep working; the own room editor stays the main tool |
+| Tiled `.tmx` input, also with embedded tilesets | **Tiled import** in the editor (rooms, layers, tilesets, object layers → entities), so existing Tiled maps keep working; the own room editor stays the main tool |
 | metatiles cut into 8×8 tiles, hashed, stored once | same, plus detection of **flipped** copies (H/V flip bits in the map entry) to save more VRAM |
 | tiles not used in the map are skipped | same; the editor also shows unused tiles in a tileset |
 | optional 3×3 colour matrix for the GBA screen (after Pokéfan531) | colour correction as a setting per project, with a side-by-side preview "PC colours / GBA screen"; also as a shader option in the browser build |
@@ -597,10 +660,11 @@ docking, menus, lists, tables, text fields, drag and drop. Dependencies:
 | `stb_truetype` | header only, shipped with it |
 | window/input | SDL3 (decided), see below |
 
-Decided: the toolkit is split out as its **own library `oseui` in its own repository**; OpenSE
-and Blutmond both use it. The toolkit itself does not depend on SDL: it receives input events
+Decided: the toolkit is split out as its **own library in its own repository,
+[Fighter19/ose-ui](https://github.com/Fighter19/ose-ui)** (created, still empty); OpenSE and
+Blutmond both use it. The toolkit itself does not depend on SDL: it receives input events
 and draws through a small render interface (GLES2 and GLES3 back ends). SDL3 sits only in a
-thin platform layer next to it (`oseui_sdl3`). Plus a "classic" theme: bevelled frames, pixel
+thin platform layer next to it (`ose-ui-sdl3`). Plus a "classic" theme: bevelled frames, pixel
 font, fixed colours, in the style of Lunar Magic and Windows 9x tools.
 
 ### SDL3 in the build
@@ -666,8 +730,13 @@ hardware does and which ways out there are.
 | SNES | partly | C compilers for the 65816 produce slow code; data formats, bytecode and interpreter can be ported, the runtime would probably need assembly parts; the PPU model fits well (mode 7, HDMA) |
 | Game Boy / GBC | data only | 8 KB of RAM and an 8-bit CPU: the runtime does not fit. A reduced runtime (e.g. with GBDK) for simple games that reads packs in a GB profile is possible |
 
+The runtime is written so it can be ported later (HAL, fixed point, no pointers in state, C
+without compiler extensions outside the HAL). Independent of that, **all assets stay portable**
+(section 14): even where a runtime port does not exist yet, a project's art, maps, music and
+scripts can be cooked for another platform or taken to another engine.
+
 The platform profile in the editor makes sure a project knows from the start which targets it
-is meant for.
+is meant for, and the cooker reports per profile what a port would change.
 
 ## 18. Build, tests, toolchain
 
@@ -681,8 +750,10 @@ is meant for.
   - live reload: load pack A, play, push pack B in every reload mode, compare the state with
     the expected migration;
   - sound: mixer output bit exact between host and the GBA build in mGBA;
-  - asset pipeline: palette packer and tile dedup against fixed inputs (the existing
-    `Castle Corridor` rooms are a good test case);
+  - asset pipeline: palette packer and tile dedup against fixed inputs; cooking one project
+    for two profiles (GBA and a GB/GBC profile) with the expected change report;
+  - link robustness: a transport test double that flips bits and drops words at a set rate;
+    transfers must still complete and apply correctly;
   - size budgets: runtime size and IWRAM use per module in CI.
 
 ## 19. Milestones
@@ -691,11 +762,11 @@ is meant for.
 |---|---|---|
 | M0 | clean up: findings from section 2, HAL interface, host and GBA builds | test runs on the host; a ROM shows a backdrop colour in mGBA; no engine code contains a hardware address |
 | M1 | graphics core: BG layers, sprites, palettes, line table; software PPU; PPU snapshots | test scene looks the same on GBA and host (golden image) |
-| M2 | asset pipeline: pack format, Tiled import, tile dedup, palette packer, colour correction | a SceneCompiler room (`Castle Corridor`) is shown on GBA and host from a Blutmond pack |
-| M3 | editor shell: `oseui` split out, GLES2 canvas, SDL3, classic theme; tile/palette windows, hardware window | editor runs on the desktop and in the browser (WebGL 1) |
+| M2 | asset pipeline: source asset model, cooker with change report, pack format, Tiled import, tile dedup, palette packer, colour correction | a room made in Tiled is shown on GBA and host from a Blutmond pack; the same room cooks for a second profile with a report |
+| M3 | editor shell: `ose-ui` split out, GLES2 canvas, SDL3, classic theme; tile/palette windows, hardware window | editor runs on the desktop and in the browser (WebGL 1) |
 | M4 | room editor, collision, player physics, camera, room changes, VRAM tile streaming | a playable room with doors on the GBA |
 | M5 | state schema, save states, state map in the editor | save state taken on the host loads in mGBA (and back) |
-| M6 | live link: `xboo` library (measure the rate first), packet protocol, region table, reload modes | the runtime stays on the GBA; a changed room and a changed state are pushed without a reset |
+| M6 | live link: `xboo` library (measure the rate first), packet protocol with CRC/retry/resync, adaptive delay, region table, reload modes | the runtime stays on the GBA; a changed room and a changed state are pushed without a reset over a four-wire Xboo cable; the bit-error test passes |
 | M7 | scripting: parser, types, bytecode, verifier, interpreter; text view; then node view | enemy and door scripted; text/node switch is lossless; script swap over the live link |
 | M8 | AOT: C back end, relocation packer, module loader/overlays; GDB stub over the transport | AOT module in IWRAM faster than bytecode with the same state hashes; breakpoint on a script line on hardware |
 | M9 | sound engine and sound editor | song with synth, samples and reverb under budget; preview bit exact |
@@ -723,7 +794,10 @@ is meant for.
 | Question | Decision |
 |---|---|
 | Window/input | SDL3, downloaded by CMake when needed, also for WASM |
-| Toolkit | split out as its own repository `oseui` |
+| Toolkit | split out as its own repository [Fighter19/ose-ui](https://github.com/Fighter19/ose-ui) |
+| Portability | runtime portable later; all assets portable to other retro platforms from the start (section 14) |
+| Cable features | only the four basic Xboo wires are assumed; SD burst is used only if detected; no reset wire; the protocol tolerates bit errors (section 9) |
+| SceneCompiler/SceneLoaderGBA | ideas are taken over, code is not |
 | Syntax | modelled on UnrealScript (classes, fixed fields, states, few strings), avoiding UnrealScript's mistakes (section 10) |
 | PC ↔ GBA cable | Xboo cable on the parallel port with the own `ppdev` driver (xcomms, branch `parport`); Raspberry Pi/RP2040 as later options |
 | Development workflow | runtime loaded once, content pushed live, no reset (section 7) |
@@ -732,14 +806,10 @@ is meant for.
 
 **Still open**
 
-1. **GB/SNES**: is "data formats portable, runtime only for GBA/PC/web" enough for now?
-2. **SD wire**: is the fifth wire (GBA SD to /SELECT) connected on the cable? Then double
-   speed burst is possible.
-3. **oseui repository**: under which name should it be created? It cannot be created from this
-   session.
-4. **SceneCompiler/SceneLoaderGBA**: are the repositories available, so code (palette packer,
-   tile cache, profiler) can be ported rather than rewritten, and the `Castle Corridor` rooms
-   used as test data?
+1. **Second asset profile**: which platform should be the second cooker target to prove the
+   asset model (GBC is the cheapest check, SNES the closest match)?
+2. **Test maps**: the Tiled rooms used by SceneCompiler are not in its repository. Can they be
+   shared as test data, or should new test rooms be made?
 
 ## 21. Sources
 
@@ -764,5 +834,5 @@ is meant for.
   [loopj/gba-multiboot-pico](https://github.com/loopj/gba-multiboot-pico),
   [gba-link-connection](https://github.com/rodri042/gba-link-connection/),
   [pinout notes by AlexApps99](https://gist.github.com/AlexApps99/9e7707b87a2f81c64421b76cfd5d0733)
-- SceneCompiler and SceneLoaderGBA: the project summary provided by the author (repositories
-  not available in this session)
+- SceneCompiler and SceneLoaderGBA: the author's earlier projects (`Fighter19/SceneCompiler`,
+  `Fighter19/SceneLoaderGBA`, private), used for ideas only
