@@ -110,7 +110,7 @@ if(BM_PLATFORM STREQUAL "gba")
     ExternalProject_Add(host_tools
       SOURCE_DIR ${PROJECT_SOURCE_DIR}
       BINARY_DIR ${CMAKE_BINARY_DIR}/host-tools
-      CMAKE_ARGS -DBM_PLATFORM=host -DCMAKE_BUILD_TYPE=Release
+      CMAKE_ARGS -DBM_PLATFORM=host -DCMAKE_BUILD_TYPE=Release -DBM_BUILD_EDITOR=OFF
       BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --target bmcook
       INSTALL_COMMAND ""
       BUILD_ALWAYS ON
@@ -152,13 +152,34 @@ if(BM_PLATFORM STREQUAL "host")
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
   set(CMAKE_CXX_EXTENSIONS OFF)
 
-  # Cooker: Tiled rooms -> pack (tools/cooker). Uses stb_image from third_party.
-  add_executable(bmcook
-    tools/cooker/main.cpp tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp
-    tools/cooker/image.cpp src/pack/pack.c)
-  target_include_directories(bmcook PRIVATE src/pack third_party/stb)
-  target_compile_definitions(bmcook PRIVATE BM_PLATFORM_HOST)
+  # Cooker: Tiled rooms -> pack (tools/cooker), as a library for bmcook and the editor.
+  # Uses stb_image from third_party.
+  add_library(bm_cooker STATIC
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp src/pack/pack.c)
+  target_include_directories(bm_cooker PUBLIC tools/cooker src/pack PRIVATE third_party/stb)
+  target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST)
+  target_compile_options(bm_cooker PRIVATE ${BM_WARNINGS})
+  add_executable(bmcook tools/cooker/main.cpp)
+  target_link_libraries(bmcook PRIVATE bm_cooker)
   target_compile_options(bmcook PRIVATE ${BM_WARNINGS})
+
+  # Editor (on ose-ui with SDL3 and GLES 2). ose-ui is fetched at a pinned commit; point
+  # FETCHCONTENT_SOURCE_DIR_OSE_UI at a local checkout to work on both.
+  option(BM_BUILD_EDITOR "Build the editor (downloads ose-ui and, if not installed, SDL3)" ON)
+  if(BM_BUILD_EDITOR)
+    include(FetchContent)
+    FetchContent_Declare(ose_ui
+      GIT_REPOSITORY https://github.com/Fighter19/ose-ui.git
+      GIT_TAG 81846abb402362fd542952a58e648844a6551520)
+    FetchContent_MakeAvailable(ose_ui)
+    add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp)
+    set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
+    target_link_libraries(bmeditor PRIVATE bm_cooker blutmond ose_ui_sdl3)
+    target_compile_definitions(bmeditor PRIVATE BM_EDITOR_DEFAULT_ROOM="${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx")
+    if(NOT MSVC)
+      target_compile_options(bmeditor PRIVATE -Wall -Wextra)
+    endif()
+  endif()
   add_executable(bm_ppu_render tools/bm_ppu_render.c src/ppu/ppu.c)
   target_include_directories(bm_ppu_render PRIVATE src/ppu)
   target_compile_options(bm_ppu_render PRIVATE ${BM_WARNINGS})
@@ -196,6 +217,15 @@ if(BM_PLATFORM STREQUAL "host")
   add_test(NAME room_streaming_matches_midway
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/compare_images.py ${cooked}/room_midway_scrolled.ppm ${cooked}/room_midway_fresh.ppm)
   set_tests_properties(room_streaming_matches room_streaming_matches_midway PROPERTIES FIXTURES_REQUIRED room_renders)
+
+  if(BM_BUILD_EDITOR)
+    add_test(NAME editor_offscreen
+      COMMAND bmeditor --frames 3 --screenshot ${cooked}/editor.ppm ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx)
+    # Mesa's EGL driver, loaded by SDL's offscreen driver, leaks a few allocations at exit;
+    # they are not ours, so LeakSanitizer is off for this test.
+    set_tests_properties(editor_offscreen PROPERTIES
+      ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;EGL_PLATFORM=surfaceless;GALLIUM_DRIVER=llvmpipe;ASAN_OPTIONS=detect_leaks=0")
+  endif()
 
   add_test(NAME no_hardware_addresses
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/check_hw_addresses.py ${PROJECT_SOURCE_DIR})

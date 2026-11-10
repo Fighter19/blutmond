@@ -13,7 +13,11 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libmgba-dev
+          sudo apt-get install -y ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libmgba-dev \
+            libegl-dev libgles-dev libegl-mesa0 libgl1-mesa-dri \
+            libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libxfixes-dev \
+            libxtst-dev libxinerama-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
+            libdrm-dev libgbm-dev libasound2-dev libpulse-dev libibus-1.0-dev
 
       - name: GBA build
         run: |
@@ -31,3 +35,8 @@ jobs:
         with:
           name: gba-images
           path: build-gba/*.gba
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: build/test-output
