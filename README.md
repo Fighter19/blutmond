@@ -11,7 +11,7 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `src/core/` | platform-independent core: devices and memory heaps, pools, types |
 | `src/graphics/` | graphics API: video (modes, backgrounds, palettes, tiles, maps, sprites, line tables), backdrop, tilemaps |
 | `src/pack/` | packs: reader (ROM/RAM, in place), writer for tools, CRC-32 |
-| `src/world/` | rooms from packs (graphics layers, map streaming), collision, platformer physics, the game loop for the engine classes (player, camera, kill zones, doors) |
+| `src/world/` | rooms from packs (graphics layers, map streaming), collision, platformer physics, the game loop for the engine classes (player, camera, kill zones, doors, save points), the state schema and save states |
 | `src/ppu/` | software PPU: renders the GBA video state in C; reference for tests, host back end, PPU snapshots |
 | `src/hal/public/hal.h` | hardware abstraction layer: the only interface to a platform |
 | `src/hal/host/` | host back end: the GBA's memories and video state as plain data (tests, editor) |
@@ -80,6 +80,10 @@ build/room_viewer room.bmpk --frames 200 out.ppm
 build/bmcook -o level.bmpk assets/test_room/room.tmx assets/test_room/room2.tmx
 build/game level.bmpk --autoplay --trace --frames 700
 ```
+
+Save states: `build/game level.bmpk --autoplay --frames 400 --snapshot-at 300 snap.bmst` writes
+one, `--load snap.bmst` continues from it (also from a snapshot taken in mGBA; the format is
+the same on both).
 
 On the GBA: `build-gba/game.gba` (D-pad, A to jump, up/down on ladders, down + A to drop
 through platforms) and `build-gba/game_autoplay.gba`.

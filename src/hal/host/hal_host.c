@@ -15,6 +15,7 @@ static uint8_t s_iwram[32 * 1024];
 static BmPpuState s_ppu;
 static uint32_t s_frame;
 static uint16_t s_keys;
+static uint8_t s_save[BM_HAL_SAVE_SIZE];
 static int s_initialised;
 
 static void ensureInit(void)
@@ -154,4 +155,25 @@ uint16_t bmHalInputKeys(void)
 void bmHalHostSetKeys(uint16_t keys)
 {
   s_keys = keys;
+}
+
+void bmHalSaveRead(uint32_t offset, void *pData, uint32_t size)
+{
+  if (offset <= BM_HAL_SAVE_SIZE && size <= BM_HAL_SAVE_SIZE - offset)
+  {
+    memcpy(pData, s_save + offset, size);
+  }
+}
+
+void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size)
+{
+  if (offset <= BM_HAL_SAVE_SIZE && size <= BM_HAL_SAVE_SIZE - offset)
+  {
+    memcpy(s_save + offset, pData, size);
+  }
+}
+
+uint8_t *bmHalHostSaveMemory(void)
+{
+  return s_save;
 }

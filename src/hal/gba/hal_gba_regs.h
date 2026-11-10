@@ -15,6 +15,7 @@
 #define GBA_VRAM_SIZE     0x18000u
 #define GBA_PALETTE       ((volatile uint16_t *)0x05000000u)
 #define GBA_OAM           ((volatile uint16_t *)0x07000000u)
+#define GBA_SRAM          ((volatile uint8_t *)0x0E000000u)
 
 #define GBA_REG16(offset) (*(volatile uint16_t *)(GBA_IO + (offset)))
 #define GBA_REG32(offset) (*(volatile uint32_t *)(GBA_IO + (offset)))

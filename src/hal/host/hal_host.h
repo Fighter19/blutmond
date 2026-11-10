@@ -23,5 +23,8 @@ void bmHalHostRender(uint16_t *pOut);
 /// Buttons that bmHalInputKeys() reports from now on.
 void bmHalHostSetKeys(uint16_t keys);
 
+/// The save memory (BM_HAL_SAVE_SIZE bytes), e.g. to keep it in a file between runs.
+uint8_t *bmHalHostSaveMemory(void);
+
 /// Puts the virtual hardware back into its power-on state.
 void bmHalHostReset(void);

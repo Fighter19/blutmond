@@ -12,6 +12,10 @@
 // at the symbol's address (from the ELF's symbol table) and fails if it differs (or is larger). --print does the same
 // without checking. Lets tests look at the program's state on the emulated GBA.
 //
+// --poke <frame> <elf>:<symbol> <file>: at that frame, writes the file's size (u32) and bytes to
+// the symbol (a mailbox: struct { u32 size; u8 data[]; }). --dump <elf>:<symbol> <file> writes a
+// mailbox's bytes to a file after the run.
+//
 // --snapshot: writes the video state (registers, VRAM, palette, OAM) as a PPU snapshot that the
 // software PPU can render (tools/bm_ppu_render). Line tables are not captured.
 //
@@ -145,6 +149,50 @@ static bool checkValue(struct mCore *core, const char *spec, bool check)
   return true;
 }
 
+// "<elf>:<symbol>" -> address, or 0.
+static uint32_t symbolAddress(const char *target)
+{
+  char buf[512];
+  snprintf(buf, sizeof(buf), "%s", target);
+  char *colon = strrchr(buf, ':');
+  if (colon == NULL) return 0;
+  *colon = 0;
+  return elfSymbol(buf, colon + 1);
+}
+
+static bool pokeMailbox(struct mCore *core, const char *target, const char *file)
+{
+  uint32_t address = symbolAddress(target);
+  FILE *f = fopen(file, "rb");
+  if (address == 0 || f == NULL)
+  {
+    fprintf(stderr, "--poke: cannot use %s / %s\n", target, file);
+    if (f) fclose(f);
+    return false;
+  }
+  uint8_t data[4096];
+  size_t n = fread(data, 1, sizeof(data), f);
+  fclose(f);
+  for (size_t i = 0; i < n; i++) core->busWrite8(core, address + 4 + (uint32_t)i, data[i]);
+  core->busWrite32(core, address, (uint32_t)n);  // size last: the program checks it
+  printf("poked %zu bytes into %s\n", n, target);
+  return true;
+}
+
+static bool dumpMailbox(struct mCore *core, const char *target, const char *file)
+{
+  uint32_t address = symbolAddress(target);
+  if (address == 0) return false;
+  uint32_t n = core->busRead32(core, address);
+  if (n > 4096) return false;
+  FILE *f = fopen(file, "wb");
+  if (f == NULL) return false;
+  for (uint32_t i = 0; i < n; i++) fputc(core->busRead8(core, address + 4 + i), f);
+  fclose(f);
+  printf("dumped %u bytes from %s\n", n, target);
+  return true;
+}
+
 static int writeSnapshot(struct mCore *core, const char *path)
 {
   static BmPpuState state;
@@ -193,6 +241,8 @@ int main(int argc, char **argv)
   int frames = 60;
   int expectBackdrop = 0;
   const char *snapshot = NULL;
+  int pokeFrame = -1;
+  const char *pokeTarget = NULL, *pokeFile = NULL, *dumpTarget = NULL, *dumpFile = NULL;
   const char *checks[16];
   bool checkFlags[16];
   int checkCount = 0;
@@ -205,6 +255,17 @@ int main(int argc, char **argv)
       ppm = argv[++i];
     else if (strcmp(argv[i], "--snapshot") == 0 && i + 1 < argc)
       snapshot = argv[++i];
+    else if (strcmp(argv[i], "--poke") == 0 && i + 3 < argc)
+    {
+      pokeFrame = atoi(argv[++i]);
+      pokeTarget = argv[++i];
+      pokeFile = argv[++i];
+    }
+    else if (strcmp(argv[i], "--dump") == 0 && i + 2 < argc)
+    {
+      dumpTarget = argv[++i];
+      dumpFile = argv[++i];
+    }
     else if ((strcmp(argv[i], "--check") == 0 || strcmp(argv[i], "--print") == 0) && i + 1 < argc && checkCount < 16)
     {
       checkFlags[checkCount] = strcmp(argv[i], "--check") == 0;
@@ -250,6 +311,7 @@ int main(int argc, char **argv)
   core->reset(core);
   for (int i = 0; i < frames; i++)
   {
+    if (i == pokeFrame && !pokeMailbox(core, pokeTarget, pokeFile)) return 1;
     core->runFrame(core);
   }
 
@@ -271,6 +333,7 @@ int main(int argc, char **argv)
   {
     if (!checkValue(core, checks[i], checkFlags[i])) failed = 1;
   }
+  if (dumpTarget != NULL && !dumpMailbox(core, dumpTarget, dumpFile)) failed = 1;
   if (expectBackdrop)
   {
     unsigned mismatches = 0;

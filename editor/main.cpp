@@ -22,6 +22,11 @@
 #include "ui/widgets.h"
 #include "views.h"
 
+extern "C" {
+#include "game.h"
+#include "state.h"
+}
+
 using namespace ose::ui;
 using namespace bm::editor;
 
@@ -55,6 +60,9 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
       <ProgressBar id="hw_maps_bar"/>
       <Label id="hw_layers" text="Layers"/>
       <Label id="hw_pack" text="Pack"/>
+      <Label text="State" bold="1"/>
+      <Label id="state_totals" text=""/>
+      <ItemList id="state" min-size="0 150"/>
     </VBox></PanelContainer>
     <VBox expand="1">
       <RoomOverview id="overview" expand="1"/>
@@ -86,6 +94,34 @@ struct Editor
   Label *status = nullptr, *camera = nullptr;
   Label *hwTiles = nullptr, *hwBanks = nullptr, *hwMaps = nullptr, *hwLayers = nullptr, *hwPack = nullptr;
   ProgressBar *hwTilesBar = nullptr, *hwBanksBar = nullptr, *hwMapsBar = nullptr;
+  ItemList *state = nullptr;
+  Label *stateTotals = nullptr;
+
+  // The state map (docs/spec/state.md section 4): every field of the engine's game state with
+  // its type, size and flags, and how much a save game, a link transfer and a snapshot take.
+  void fillStateMap()
+  {
+    static BmGame game;
+    BmStateBlock block = bmGameStateBlock(&game);
+    static const char *types[] = {"u8", "s8", "u16", "s16", "u32", "s32", "bool", "fix"};
+    for (uint16_t i = 0; i < block.fieldCount; i++)
+    {
+      const BmStateField &f = block.pFields[i];
+      std::string flags;
+      if (f.flags & BM_STATE_SAVE) flags += " save";
+      if (f.flags & BM_STATE_LINK) flags += " link";
+      if (f.flags & BM_STATE_SNAPSHOT) flags += " snapshot";
+      if (f.flags & BM_STATE_TRANSIENT) flags += " transient";
+      if (f.flags & BM_STATE_DERIVED) flags += " derived";
+      bool unflagged = f.flags == 0;
+      std::string text = std::string(block.name) + "." + f.name + "  " + types[f.type] + "  " +
+                         std::to_string(bmStateTypeSize(f.type) * f.count) + " B " + (unflagged ? " (no flag: snapshot only)" : flags);
+      state->items.push_back({text, unflagged ? "warning" : (f.flags & BM_STATE_SAVE) ? "floppy-o" : "circle-o", {}, {}, {}, {}});
+    }
+    auto bytes = [&](uint8_t mask) { return std::to_string(bmStateSize(&block, 1, mask) - BM_STATE_HEADER_SIZE); };
+    stateTotals->text = "Save game " + bytes(BM_STATE_SAVE) + " B, link " + bytes(BM_STATE_LINK) + " B, snapshot " +
+                        bytes(BM_STATE_SNAPSHOT) + " B";
+  }
   float reloadTimer = 0;
 
   void replaceTexture(TextureHandle &h, const Rgba &img)
@@ -171,6 +207,10 @@ struct Editor
     hwTilesBar = root->findAs<ProgressBar>("hw_tiles_bar");
     hwBanksBar = root->findAs<ProgressBar>("hw_banks_bar");
     hwMapsBar = root->findAs<ProgressBar>("hw_maps_bar");
+    state = root->findAs<ItemList>("state");
+    stateTotals = root->findAs<Label>("state_totals");
+    state->tileSize = 0;
+    fillStateMap();
 
     rooms->tileSize = 0;  // list mode
     report->tileSize = 0;

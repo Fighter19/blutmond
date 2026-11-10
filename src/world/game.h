@@ -12,6 +12,7 @@
 #include "collision.h"
 #include "pack.h"
 #include "room.h"
+#include "state.h"
 
 #define BM_GAME_MAX_PLACEHOLDERS 24
 #define BM_GAME_MAX_OBJECTS 64
@@ -23,6 +24,7 @@ typedef enum BmObjectKind {
   BM_OBJECT_KILL_ZONE,
   BM_OBJECT_DOOR,
   BM_OBJECT_TRIGGER,
+  BM_OBJECT_SAVE_POINT,
 } BmObjectKind;
 
 typedef struct BmObjectView
@@ -51,7 +53,8 @@ typedef struct BmGame
   uint16_t keysPrevious;
   uint16_t hurtTimer;
   uint16_t doorCooldown;
-  uint32_t deaths, roomChanges, hurts;
+  uint32_t deaths, roomChanges, hurts, saves;
+  uint16_t saveCooldown;
   // Objects of the current room, read once when the room is entered.
   uint16_t objectCount;
   BmObjectView objects[BM_GAME_MAX_OBJECTS];
@@ -75,3 +78,15 @@ void bmGameFrame(BmGame *pGame, uint16_t keys);
 
 /// Id of the current room.
 const char *bmGameRoomId(const BmGame *pGame);
+
+/// The game's state as a schema block (docs/spec/state.md): room, player, counters.
+BmStateBlock bmGameStateBlock(BmGame *pGame);
+
+/// After the state was read: enters the stored room again and rebuilds everything derived
+/// (collision, objects, camera, streamed maps, sprites) without moving the player.
+BmResult bmGameAfterLoad(BmGame *pGame);
+
+/// Save game in the save memory: the `save` fields. Loading returns false if there is none
+/// or it was written by a different layout.
+bool bmGameWriteSaveGame(BmGame *pGame);
+bool bmGameReadSaveGame(BmGame *pGame);

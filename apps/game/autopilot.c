@@ -57,3 +57,13 @@ uint16_t bmAutopilotKeys(BmAutopilot *a, const BmGame *g)
   }
   return keys;
 }
+
+static const BmStateField s_pilotFields[] = {
+  BM_STATE_FIELD(BmAutopilot, jumpHold, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  BM_STATE_FIELD(BmAutopilot, idle, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+};
+
+BmStateBlock bmAutopilotStateBlock(BmAutopilot *pPilot)
+{
+  return (BmStateBlock){ "autopilot", s_pilotFields, 2, pPilot };
+}

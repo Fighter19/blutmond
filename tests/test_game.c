@@ -88,6 +88,27 @@ static void testDoorsLeadBothWays(void)
   TEST_ASSERT(s_game.roomChanges == 2);
 }
 
+static void testSavePointWritesASaveGame(void)
+{
+  start();
+  memset(bmHalHostSaveMemory(), 0xFF, BM_HAL_SAVE_SIZE);
+  BmGame fresh;
+  // Nothing saved yet: no save game to continue from.
+  fresh = s_game;
+  TEST_ASSERT(!bmGameReadSaveGame(&fresh));
+  // Walk onto the save point at x 400 (on the hill's plateau, y 144).
+  bmBodyPlace(&s_game.player, 380, 144);
+  frames(20, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.saves == 1);
+
+  // A new game continues there.
+  start();
+  TEST_ASSERT(bmGameReadSaveGame(&s_game));
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0);
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) >= 380 && BM_FIX_INT(s_game.player.x) <= 412);  // at the save point
+  TEST_ASSERT(s_game.saves == 1);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -107,6 +128,7 @@ int main(int argc, char **argv)
   RUN_TEST(testAutopilotPlaysThroughTheLevel);
   RUN_TEST(testFallingIntoAPitRespawnsOnSafeGround);
   RUN_TEST(testDoorsLeadBothWays);
+  RUN_TEST(testSavePointWritesASaveGame);
   free(s_data);
   return TEST_RESULT();
 }

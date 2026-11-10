@@ -159,3 +159,27 @@ uint16_t bmHalInputKeys(void)
   // KEYINPUT has 0 for pressed buttons; the bit order matches BM_KEY_*.
   return (uint16_t)(~GBA_REG_KEYINPUT & 0x03FF);
 }
+
+// Tells emulators and flash carts that the cartridge has 32 KB of SRAM.
+__attribute__((used, aligned(4))) const char bm_save_type[12] = "SRAM_V113";
+
+void bmHalSaveRead(uint32_t offset, void *pData, uint32_t size)
+{
+  if (offset > BM_HAL_SAVE_SIZE || size > BM_HAL_SAVE_SIZE - offset || bm_save_type[0] != 'S')
+  {
+    return;
+  }
+  // SRAM has an 8-bit bus: byte accesses only.
+  uint8_t *p = (uint8_t *)pData;
+  for (uint32_t i = 0; i < size; i++) p[i] = GBA_SRAM[offset + i];
+}
+
+void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size)
+{
+  if (offset > BM_HAL_SAVE_SIZE || size > BM_HAL_SAVE_SIZE - offset)
+  {
+    return;
+  }
+  const uint8_t *p = (const uint8_t *)pData;
+  for (uint32_t i = 0; i < size; i++) GBA_SRAM[offset + i] = p[i];
+}

@@ -20,6 +20,7 @@ static uint8_t kindOf(const char *cls)
   if (strcmp(cls, "KillZone") == 0) return BM_OBJECT_KILL_ZONE;
   if (strcmp(cls, "Door") == 0) return BM_OBJECT_DOOR;
   if (strcmp(cls, "Trigger") == 0) return BM_OBJECT_TRIGGER;
+  if (strcmp(cls, "SavePoint") == 0) return BM_OBJECT_SAVE_POINT;
   return BM_OBJECT_OTHER;
 }
 
@@ -199,7 +200,7 @@ static void updateSprites(BmGame *g)
   for (uint16_t i = 0; i < g->objectCount && next <= BM_GAME_MAX_PLACEHOLDERS; i++)
   {
     const BmObjectView *o = &g->objects[i];
-    if (o->kind != BM_OBJECT_OTHER || o->className[0] == 0) continue;
+    if ((o->kind != BM_OBJECT_OTHER && o->kind != BM_OBJECT_SAVE_POINT) || o->className[0] == 0) continue;
     int32_t ox = o->x - 8 - camX, oy = (o->w || o->h ? o->y : o->y - 16) - camY;
     if (ox < -16 || ox > 240 || oy < -16 || oy > 160) continue;
     BmSprite b = { .x = (int16_t)ox, .y = (int16_t)oy, .shape = BM_SPRITE_SQUARE, .size = 1, .tile = 8,
@@ -346,6 +347,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   uint32_t events = bmBodyStep(&g->player, &g->playerParams, &g->collision, &g->physics, in);
   if (g->hurtTimer) g->hurtTimer--;
   if (g->doorCooldown) g->doorCooldown--;
+  if (g->saveCooldown) g->saveCooldown--;
 
   if (events & BM_BODY_DEATH)
   {
@@ -365,6 +367,16 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   for (uint16_t i = 0; i < g->objectCount; i++)
   {
     const BmObjectView *o = &g->objects[i];
+    if (o->kind == BM_OBJECT_SAVE_POINT)
+    {
+      // Points: the area of a 16x32 marker standing on the point.
+      if (g->saveCooldown == 0 && g->player.onGround && overlaps(px - hw, py - h, hw * 2, h, o->x - 8, o->y - 32, 16, 32))
+      {
+        bmGameWriteSaveGame(g);
+        g->saveCooldown = 120;
+      }
+      continue;
+    }
     if ((o->kind != BM_OBJECT_KILL_ZONE && o->kind != BM_OBJECT_DOOR) || o->w == 0 || o->h == 0) continue;
     if (!overlaps(px - hw, py - h, hw * 2, h, o->x, o->y, o->w, o->h)) continue;
     if (o->kind == BM_OBJECT_KILL_ZONE)
@@ -387,4 +399,79 @@ void bmGameFrame(BmGame *g, uint16_t keys)
 
   updateCamera(g);
   updateSprites(g);
+}
+
+// --- State --------------------------------------------------------------------------------
+
+#define F(member, type, flags) BM_STATE_FIELD(BmGame, member, type, flags)
+static const BmStateField s_gameFields[] = {
+  F(roomIndex, BM_TYPE_U32, BM_STATE_SAVE | BM_STATE_LINK),
+  F(player.x, BM_TYPE_FIX, BM_STATE_SAVE | BM_STATE_LINK),
+  F(player.y, BM_TYPE_FIX, BM_STATE_SAVE | BM_STATE_LINK),
+  F(player.vx, BM_TYPE_FIX, BM_STATE_LINK),
+  F(player.vy, BM_TYPE_FIX, BM_STATE_LINK),
+  F(player.onGround, BM_TYPE_BOOL, BM_STATE_LINK),
+  F(player.climbing, BM_TYPE_BOOL, BM_STATE_LINK),
+  F(player.inWater, BM_TYPE_BOOL, BM_STATE_DERIVED),
+  F(player.jumpCutDone, BM_TYPE_BOOL, BM_STATE_SNAPSHOT),
+  F(player.facing, BM_TYPE_S8, BM_STATE_SAVE | BM_STATE_LINK),
+  F(player.coyote, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(player.jumpBuffer, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(player.dropThrough, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(player.safeX, BM_TYPE_S32, BM_STATE_SAVE),
+  F(player.safeY, BM_TYPE_S32, BM_STATE_SAVE),
+  F(frame, BM_TYPE_U32, BM_STATE_SNAPSHOT),
+  F(keysPrevious, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(hurtTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(doorCooldown, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(saveCooldown, BM_TYPE_U16, BM_STATE_TRANSIENT),
+  F(deaths, BM_TYPE_U32, BM_STATE_SAVE),
+  F(roomChanges, BM_TYPE_U32, BM_STATE_SAVE),
+  F(hurts, BM_TYPE_U32, BM_STATE_SAVE),
+  F(saves, BM_TYPE_U32, BM_STATE_SAVE),
+};
+#undef F
+
+BmStateBlock bmGameStateBlock(BmGame *pGame)
+{
+  return (BmStateBlock){ "game", s_gameFields, (uint16_t)(sizeof(s_gameFields) / sizeof(s_gameFields[0])), pGame };
+}
+
+BmResult bmGameAfterLoad(BmGame *g)
+{
+  BmBody player = g->player;
+  uint32_t roomIndex = g->roomIndex;
+  if (roomIndex >= bmRoomCount(g->pPack)) return BM_ERROR_INVALID_ARGUMENT;
+  BmResult r = enterRoom(g, roomIndex);
+  if (r != BM_SUCCESS) return r;
+  g->player = player;
+  g->saveCooldown = 0;
+  updateCamera(g);
+  updateSprites(g);
+  return BM_SUCCESS;
+}
+
+// Save memory layout: the save game at offset 0 (bmStateWrite format).
+#define SAVE_CAPACITY 512
+
+bool bmGameWriteSaveGame(BmGame *g)
+{
+  static uint8_t buffer[SAVE_CAPACITY] BM_EWRAM_BSS;
+  BmStateBlock block = bmGameStateBlock(g);
+  g->saves++;
+  uint32_t size = bmStateWrite(&block, 1, BM_STATE_SAVE, buffer, sizeof(buffer));
+  if (size == 0) return false;
+  bmHalSaveWrite(0, buffer, size);
+  return true;
+}
+
+bool bmGameReadSaveGame(BmGame *g)
+{
+  static uint8_t buffer[SAVE_CAPACITY] BM_EWRAM_BSS;
+  bmHalSaveRead(0, buffer, sizeof(buffer));
+  BmStateBlock block = bmGameStateBlock(g);
+  // Only the `save` fields are read; everything else stays as bmGameStart left it.
+  if (bmStateRead(&block, 1, buffer, sizeof(buffer)) != BM_STATE_OK) return false;
+  g->player.vx = g->player.vy = 0;
+  return bmGameAfterLoad(g) == BM_SUCCESS;
 }

@@ -68,6 +68,13 @@ enum {
 /// Buttons held right now.
 uint16_t bmHalInputKeys(void);
 
+/// Size of the save memory (SRAM on the GBA cartridge).
+#define BM_HAL_SAVE_SIZE (32 * 1024)
+
+/// Reads/writes the save memory (battery-backed SRAM on the GBA).
+void bmHalSaveRead(uint32_t offset, void *pData, uint32_t size);
+void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size);
+
 /// Number of line tables (registers that can take a new value on every line).
 #define BM_HAL_LINE_TABLES 1
 

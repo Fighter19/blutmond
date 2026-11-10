@@ -9,6 +9,7 @@
 // sequence of frames happens on the host and on the GBA.
 
 #include "game.h"
+#include "state.h"
 
 typedef struct BmAutopilot
 {
@@ -17,3 +18,6 @@ typedef struct BmAutopilot
 } BmAutopilot;
 
 uint16_t bmAutopilotKeys(BmAutopilot *pPilot, const BmGame *pGame);
+
+/// The autopilot's state as a schema block, so snapshots continue the same run.
+BmStateBlock bmAutopilotStateBlock(BmAutopilot *pPilot);

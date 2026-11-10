@@ -142,7 +142,8 @@ if(BM_PLATFORM STREQUAL "gba")
       target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/apps/game)
       target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
       if(variant STREQUAL "game_autoplay")
-        target_compile_definitions(${target} PRIVATE BM_AUTOPLAY=1)
+        # The autoplay image also writes a snapshot at game frame 300 (for the state tests).
+        target_compile_definitions(${target} PRIVATE BM_AUTOPLAY=1 BM_SNAPSHOT_FRAME=300)
       endif()
     endforeach()
   endforeach()
@@ -211,7 +212,7 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_ppu_render PRIVATE ${BM_WARNINGS})
 
   enable_testing()
-  foreach(test test_pool test_heaps test_backdrop test_ppu test_pack test_physics)
+  foreach(test test_pool test_heaps test_backdrop test_ppu test_pack test_physics test_state)
     add_executable(${test} tests/${test}.c)
     target_link_libraries(${test} PRIVATE blutmond)
     target_include_directories(${test} PRIVATE src/core/private)
@@ -331,6 +332,35 @@ if(BM_PLATFORM STREQUAL "host")
           COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --diff ${out}/${image}_diff.ppm)
         set_tests_properties(game_matches_${image} PROPERTIES FIXTURES_REQUIRED "game_host;game_${image}")
       endforeach()
+
+      # Save states move between the platforms (docs/spec/state.md):
+      #  - the GBA's snapshot at game frame 300 must be byte for byte the host's;
+      #  - the host continues from the GBA's snapshot to the same picture;
+      #  - the GBA, given the host's snapshot after 20 frames, continues to the same picture.
+      set(elf ${BM_GBA_BUILD_DIR}/game_autoplay.elf)
+      add_test(NAME state_snapshot_host
+        COMMAND game ${cooked}/test_level_gba.bmpk --autoplay --frames 400 --snapshot-at 300 ${out}/state_host_300.bmst)
+      set_tests_properties(state_snapshot_host PROPERTIES FIXTURES_REQUIRED test_level_pack FIXTURES_SETUP state_host)
+      add_test(NAME state_snapshot_gba
+        COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/game_autoplay.gba --frames 400 --dump ${elf}:bm_state_outbox ${out}/state_gba_300.bmst)
+      set_tests_properties(state_snapshot_gba PROPERTIES FIXTURES_SETUP state_gba)
+      add_test(NAME state_snapshots_identical
+        COMMAND ${CMAKE_COMMAND} -E compare_files ${out}/state_host_300.bmst ${out}/state_gba_300.bmst)
+      set_tests_properties(state_snapshots_identical PROPERTIES FIXTURES_REQUIRED "state_host;state_gba")
+      add_test(NAME state_gba_to_host
+        COMMAND game ${cooked}/test_level_gba.bmpk --autoplay --load ${out}/state_gba_300.bmst --frames 700 ${out}/state_gba_to_host.ppm)
+      set_tests_properties(state_gba_to_host PROPERTIES FIXTURES_REQUIRED "test_level_pack;state_gba" FIXTURES_SETUP state_gba_to_host)
+      add_test(NAME state_gba_to_host_matches
+        COMMAND ${compare} ${out}/game_host.ppm ${out}/state_gba_to_host.ppm)
+      set_tests_properties(state_gba_to_host_matches PROPERTIES FIXTURES_REQUIRED "game_host;state_gba_to_host")
+      add_test(NAME state_host_to_gba
+        COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/game_autoplay.gba --frames 1100 --poke 20 ${elf}:bm_state_inbox ${out}/state_host_300.bmst
+          --ppm ${out}/state_host_to_gba.ppm --check ${elf}:bm_game_stats+8=0 --check ${elf}:bm_game_stats+12=1
+          --check ${elf}:bm_game_stats+20=1 --print ${elf}:bm_game_stats+24)
+      set_tests_properties(state_host_to_gba PROPERTIES FIXTURES_REQUIRED state_host FIXTURES_SETUP state_host_to_gba)
+      add_test(NAME state_host_to_gba_matches
+        COMMAND ${compare} ${out}/game_host.ppm ${out}/state_host_to_gba.ppm)
+      set_tests_properties(state_host_to_gba_matches PROPERTIES FIXTURES_REQUIRED "game_host;state_host_to_gba")
 
       # PPU snapshot taken in mGBA, rendered by the software PPU, must match mGBA's picture.
       add_test(NAME snapshot_from_mgba
