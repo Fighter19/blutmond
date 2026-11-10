@@ -29,6 +29,7 @@ set(BM_WARNINGS -Wall -Wextra -Werror -pedantic)
 
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
+set(BM_PACK_SOURCES src/pack/pack.c)
 
 if(BM_PLATFORM STREQUAL "gba")
   # The software PPU is not needed on the device; only its register definitions are used.
@@ -39,9 +40,9 @@ else()
   set(BM_HAL_DIR src/hal/host)
 endif()
 
-add_library(blutmond STATIC ${BM_CORE_SOURCES} ${BM_GRAPHICS_SOURCES} ${BM_HAL_SOURCES})
+add_library(blutmond STATIC ${BM_CORE_SOURCES} ${BM_GRAPHICS_SOURCES} ${BM_PACK_SOURCES} ${BM_HAL_SOURCES})
 target_include_directories(blutmond
-  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu ${BM_HAL_DIR}
+  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu src/pack ${BM_HAL_DIR}
   PRIVATE src/core/private)
 target_compile_options(blutmond PRIVATE ${BM_WARNINGS})
 if(BM_PLATFORM STREQUAL "gba")
@@ -115,7 +116,7 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_ppu_render PRIVATE ${BM_WARNINGS})
 
   enable_testing()
-  foreach(test test_pool test_heaps test_backdrop test_ppu)
+  foreach(test test_pool test_heaps test_backdrop test_ppu test_pack)
     add_executable(${test} tests/${test}.c)
     target_link_libraries(${test} PRIVATE blutmond)
     target_include_directories(${test} PRIVATE src/core/private)
