@@ -22,6 +22,7 @@ Map-level custom properties:
 | `edges_solid` | bool | true | room edges without a `Door` behave as walls (left, right, top); the bottom edge is open |
 | `collision_cell` | int | 16 | collision cell size in px: 16 or 8 |
 | `music` | string | – | song started on entering the room (unless already playing) |
+| `area` | string | `default` | area the room belongs to; rooms of an area share graphics, palettes and VRAM layout ([pack-format.md](pack-format.md) §2) |
 
 The map's tile size MUST be a multiple of 8. Map width and height MUST be at least one screen
 of the profile (240×160 px on GBA).
@@ -317,7 +318,10 @@ Chunks written per room (see [pack-format.md](pack-format.md) for the container)
           fix gravity, max_fall_speed, water_gravity, water_max_fall_speed;
           u16 music_id;              // 0xFFFF = none
           u16 object_count;
+          u8  area;                  // area group, 0 = none
+          u8  dep_count;
           BmRoomLayer layers[layer_count];  // role, priority, parallax (fix), map chunk index
+          u16 deps[dep_count];       // chunk indices needed from the global and area groups
         }
 'COLL'  u16 width, height (cells); u8 cell_size; u8 pad[3];
         u8 cells[width * height][2];        // row major, §3.2
@@ -331,3 +335,4 @@ Chunks written per room (see [pack-format.md](pack-format.md) for the container)
 
 - 0.1: first draft.
 - 0.1.1: solid bodies, pushing with weight-based resistance, chains and loads (§4.5).
+- 0.1.2: room property `area`; dependency list in `ROOM`.

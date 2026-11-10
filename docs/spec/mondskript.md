@@ -148,7 +148,7 @@ defaultproperties {
 
 Initial values of the class's fields, including inherited and component fields. Values from
 Tiled object properties override them per object. The runtime resets an object to these values
-on `restart` (see [runtime-abi.md](runtime-abi.md) §4).
+on `restart` (see [runtime-abi.md](runtime-abi.md) §5).
 
 ## 9. Text and strings
 

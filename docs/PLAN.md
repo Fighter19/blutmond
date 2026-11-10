@@ -568,6 +568,11 @@ Rules that follow from this:
 - The **cooker reports what it had to change** for a profile: colours merged, palettes split,
   layers dropped, sprites over the per-line limit, effects replaced by fallbacks. The editor
   shows this per platform, so a developer sees early what a port would cost.
+- **Shared graphics** are stored once: the cooker puts each asset on the global, area or room
+  level depending on which rooms use it, deduplicates tiles per level, and plans a fixed VRAM
+  and palette layout per area, so rooms of one area reference the same tiles and banks and a
+  room change only uploads what is new ([spec/pack-format.md](spec/pack-format.md) §2,
+  [spec/runtime-abi.md](spec/runtime-abi.md) §4).
 - Platform-specific tweaks (a hand-made GB palette, a simpler effect for one target) are stored
   as **overrides** next to the source asset, never instead of it.
 - The GBA-specific editor views (palette banks, VRAM map, OAM) work on the cooked result for

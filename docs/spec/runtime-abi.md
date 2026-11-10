@@ -62,7 +62,24 @@ Rules:
   while game logic is paused or stuck in a loop.
 - A watchdog (timer interrupt checking a frame counter) reports a hang over the link.
 
-## 4. Reload modes
+## 4. Room changes and residency
+
+The runtime keeps a **residency table**: which chunk is loaded where (RAM, VRAM tiles, palette
+banks, OBJ VRAM), with the chunk's hash. On a room change:
+
+1. the new room's needs are its own group plus its `deps` list;
+2. chunks that are already resident with the same hash stay where they are, with no upload;
+3. missing chunks are loaded, preferably while the door transition fades out;
+4. chunks no longer needed are freed: room level always, area level when the area changes,
+   global level never.
+
+Moving between rooms of the same area therefore only uploads the new room's maps, collision
+and room-specific tiles. Entering another area also loads its `VLAY` and shared graphics.
+
+The same table drives live reloads: when a shared chunk changes, every room that depends on it
+sees the new version, and only that chunk is sent and uploaded.
+
+## 5. Reload modes
 
 A reload happens at a frame boundary: stop the frame, mute sound, blank the screen, apply,
 restart. It is only applied after all data for it has arrived and been checked (see
@@ -76,7 +93,7 @@ restart. It is only applied after all data for it has arrived and been checked (
 | `module` | one script module | module replaced in its slot; entities whose current state code changed restart that state at its beginning |
 | `state` | state arena or part of it | the given state is loaded, the room is reloaded |
 
-## 5. Native modules
+## 6. Native modules
 
 Native (AOT) modules can write anywhere and are therefore not protected by the rules above. In
 development the editor uses verified bytecode by default; native modules are for performance
@@ -86,3 +103,4 @@ the reset setting in [link-protocol.md](link-protocol.md)).
 ## History
 
 - 0.1: first draft.
+- 0.1.1: residency table and room changes (§4).

@@ -46,22 +46,80 @@ Every reference inside a chunk is either a chunk index (`u16`, position in the t
 contents) or an offset relative to the start of that chunk. Absolute addresses MUST NOT appear
 in a pack.
 
-## 2. Load order and groups
+## 2. Groups, areas and sharing
+
+Many rooms use the same graphics: all rooms of a castle wing share one tileset, every room
+shows the player and the HUD, enemies appear in many rooms. Shared data MUST be stored once in
+the pack and SHOULD stay in VRAM across room changes.
+
+### 2.1 Three levels
+
+| Level | Group value | Content | Lifetime at run time |
+|---|---|---|---|
+| global | 0 | class table, strings, schema, player and HUD graphics, common sprites, fonts, instruments and samples used by several areas | loaded once, never evicted |
+| area | 1–255 | everything shared by the rooms of one **area** (room property `area`, see [room-format.md](room-format.md) §1): tilesets, palettes, enemy sprites, the area's songs | loaded when entering the area, kept while inside it |
+| room | 256 and up | what only this room uses: its tile maps, collision, objects, room-specific tiles, effects | loaded per room |
+
+The cooker decides the level of each asset from its use: used by rooms of one area → area
+level; used by rooms of several areas → global level (or duplicated per area if the profile's
+memory budget is better served that way, which the cooker reports); used by one room → room
+level. The developer MAY pin an asset to a level (asset property `share = global | area |
+room`).
+
+Deduplication happens on two levels: identical assets are stored once (by content hash), and
+identical 8×8 tiles (including flipped copies) are stored once **within a level**, so two
+tilesets of an area that share tiles also share them in the pack.
+
+### 2.2 Dependencies instead of guessing
+
+Each `ROOM` chunk lists every chunk it needs outside its own group (`deps`, see
+[room-format.md](room-format.md) §7). The runtime loads exactly that list; nothing is found by
+naming conventions.
+
+### 2.3 Fixed VRAM layout per area
+
+Tile maps store VRAM tile numbers and palette bank numbers directly, so the cooker plans the
+VRAM of each area once and writes it as a `VLAY` chunk in the area group:
+
+```c
+struct BmVramLayout {
+    u16 shared_tile_base, shared_tile_count;   // area tiles: fixed place in BG VRAM
+    u16 room_tile_base,   room_tile_count;     // the rest: per room (and tile streaming)
+    u16 shared_obj_base,  shared_obj_count;    // sprite tiles of the area
+    u16 room_obj_base,    room_obj_count;
+    u8  bg_palette_shared_mask;                // bit n: BG palette bank n is area-wide
+    u8  pad;
+    u16 obj_palette_shared_mask;
+    u16 screen_blocks;                         // bit n: screen block n holds tile maps
+    u16 pad2;
+};
+```
+
+- Global data (player, HUD, font) has fixed places that are the same in every area.
+- Area tiles and area palette banks are at the same place in every room of the area, so tile
+  maps of those rooms reference them without any rebasing at load time.
+- Room tiles go into the room region; rooms larger than that use the tile cache (streaming)
+  inside the room region only.
+- The palette packer works over **all rooms of an area at once**, so a shared tileset gets the
+  same palette banks in every room.
+
+### 2.4 Load order in the file
 
 Reading a pack sequentially is fast, seeking asset by asset is slow (this was measured in
 SceneLoaderGBA with a CF card). Therefore:
 
-- Chunks are grouped: group 0 holds global data (class table, string table, shared tiles and
-  instruments), group *n* holds everything room *n* needs that is not global.
-- Within the file, chunks of one group MUST be contiguous and in the order the loader uses
-  them: `ROOM`, `PALE`, `TILE`, `TMAP`, `COLL`, `SHAP`, `OBJS`, `EFCT`, then sound and scripts.
-- The loader reads one group as a single sequential stream and only keeps the chunks it still
+- chunks of one group MUST be contiguous and in the order the loader uses them: `VLAY` (area
+  groups), `ROOM`, `PALE`, `TILE`, `TMAP`, `COLL`, `SHAP`, `OBJS`, `EFCT`, then sprites, sound
+  and scripts;
+- groups are ordered global, then each area followed by its rooms;
+- the loader reads one group as a single sequential stream and only keeps the chunks it still
   needs.
 
 ## 3. Chunk types
 
 | Id | Content |
 |---|---|
+| `VLAY` | VRAM and palette layout of an area, section 2.3 |
 | `META` | project name, build time, cooker version, source hash (for the live link) |
 | `STRS` | string table: `u16 count`, offsets, UTF-8 or profile encoding |
 | `CLAS` | class table: class IDs, names (string IDs), field layouts, component lists, method table offsets |
@@ -103,3 +161,5 @@ has.
 ## History
 
 - 0.1: first draft.
+- 0.1.1: global, area and room levels; deduplication; dependency lists; fixed VRAM layout
+  per area (`VLAY`).

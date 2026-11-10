@@ -86,7 +86,7 @@ Sequence numbers count per direction and wrap at 256.
 | 0x11 | `CHUNK_DATA` | M → S | transfer ID, offset, data |
 | 0x12 | `CHUNK_END` | M → S | transfer ID; the slave checks the hash and NAKs on mismatch |
 | 0x13 | `TOC` | M → S | new pack header and table of contents (see [pack-format.md](pack-format.md) §5) |
-| 0x18 | `APPLY` | M → S | reload mode, transfer IDs, start room/door (see [runtime-abi.md](runtime-abi.md) §4) |
+| 0x18 | `APPLY` | M → S | reload mode, transfer IDs, start room/door (see [runtime-abi.md](runtime-abi.md) §5) |
 | 0x20 | `STATE_GET` | M → S | flag mask (`save`, `link`, `snapshot`), optional range |
 | 0x21 | `STATE_DATA` | S → M | schema hash, data |
 | 0x22 | `STATE_PUT` | M → S | schema hash, data (applied with the `state` reload mode) |

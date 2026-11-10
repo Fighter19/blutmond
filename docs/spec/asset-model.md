@@ -38,6 +38,11 @@ Rules:
 - A platform-specific change (a hand-made palette for one profile, a simpler effect) MUST be
   stored as an **override** next to the source asset, keyed by profile. Overrides never replace
   the source.
+- Graphics, palettes, sprites and sounds are assets of their own that rooms **reference**; a
+  room never contains its own copy. How shared assets are cooked (global, area or room level,
+  deduplication, fixed VRAM layout per area) is in [pack-format.md](pack-format.md) §2.
+- The editor shows for every asset which rooms use it, and warns before a change to a shared
+  asset that it affects several rooms (and possibly the area's palettes and VRAM layout).
 - Editor views that show hardware details (palette banks, VRAM, OAM) work on the cooked result
   of the selected profile.
 
