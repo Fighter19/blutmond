@@ -11,7 +11,9 @@
 extern uint8_t __ewram_heap_start[], __ewram_heap_end[];
 extern uint8_t __iwram_heap_start[], __iwram_heap_end[];
 
-static uint32_t s_frame;
+extern volatile uint32_t bm_vblank_count;
+extern void bm_irq_handler(void);
+static bool s_irqReady;
 
 // Line table: register offset and its values. One extra entry because the H-blank DMA of the
 // last line reads one value past the end.
@@ -36,10 +38,22 @@ void bmHalGetMemoryRanges(BmHalMemoryRange *pRanges, uint32_t count)
   }
 }
 
+static void initInterrupts(void)
+{
+  if (s_irqReady) return;
+  GBA_REG_IME = 0;
+  GBA_BIOS_IRQ_VECTOR = bm_irq_handler;
+  GBA_REG_DISPSTAT |= 1u << 3;  // VBlank interrupt
+  GBA_REG_IE = 1u;              // VBlank
+  GBA_REG_IME = 1;
+  s_irqReady = true;
+}
+
 void bmHalVideoInit(void)
 {
   // Mode 0, no layers enabled, forced blank off: only the backdrop colour is visible.
   GBA_REG_DISPCNT = 0;
+  initInterrupts();
 }
 
 void bmHalPaletteWrite(uint16_t index, uint16_t bgr555)
@@ -72,12 +86,12 @@ static void restartLineTable(void)
 
 uint32_t bmHalVideoWaitVBlank(void)
 {
-  // Busy-wait for now: leave the current VBlank, then wait for the next one.
-  // Will be replaced by the BIOS VBlankIntrWait once the interrupt handler exists.
-  while (GBA_REG_VCOUNT >= GBA_SCREEN_HEIGHT) { }
-  while (GBA_REG_VCOUNT < GBA_SCREEN_HEIGHT) { }
+  initInterrupts();
+  // BIOS VBlankIntrWait: halts the CPU until the next VBlank interrupt. The returned count
+  // comes from the interrupt handler, so missed frames show up as gaps.
+  __asm__ volatile("swi 0x05" ::: "r0", "r1", "r2", "r3", "memory");
   restartLineTable();
-  return ++s_frame;
+  return bm_vblank_count;
 }
 
 void bmHalVideoWriteReg(uint16_t offset, uint16_t value)

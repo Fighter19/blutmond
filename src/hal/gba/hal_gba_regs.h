@@ -22,6 +22,12 @@
 #define GBA_REG_DISPCNT   GBA_REG16(0x000)
 #define GBA_REG_VCOUNT    GBA_REG16(0x006)
 #define GBA_REG_KEYINPUT  GBA_REG16(0x130)
+#define GBA_REG_DISPSTAT  GBA_REG16(0x004)
+#define GBA_REG_IE        GBA_REG16(0x200)
+#define GBA_REG_IME       GBA_REG16(0x208)
+
+// The BIOS jumps to the address stored here on interrupts.
+#define GBA_BIOS_IRQ_VECTOR (*(void (*volatile *)(void))0x03007FFCu)
 
 // DMA channel 0 (highest priority; used for line tables)
 #define GBA_REG_DMA0SAD   GBA_REG32(0x0B0)

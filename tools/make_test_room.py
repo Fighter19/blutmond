@@ -227,7 +227,6 @@ def build_layers():
         main[y][33] = gid("brick2" if y % 2 else "brick", hflip=True)
     for y in range(4, ground):
         main[y][31] = gid("ladder")
-    main[3][31] = gid("platform")
     main[ground - 1][36] = gid("pillar_top")
     for y in range(ground - 1, ground):
         main[y][37] = gid("pillar")
@@ -235,6 +234,9 @@ def build_layers():
         main[ground - 1][x] = gid("spikes")
     for x in (40, 41, 42):
         main[ground + 1][x] = gid("water")
+    # A step up to the stone block (80 px high, more than one jump)
+    for x in (58, 59):
+        main[7][x] = gid("platform")
     for x in (60, 61, 62, 63):
         for y in range(5, ground):
             main[y][x] = gid("stone" if (x + y) % 3 == 0 else ("stone2" if (x + y) % 3 == 1 else "stone3"))
@@ -267,6 +269,9 @@ def collision_layer(main, first):
             elif name == "slope_down":
                 col[y][x] = (first + SOLID + shapes["slope_1_1"]) | 0x80000000
             elif name == "platform":
+                col[y][x] = first + JUMP + shapes["full"]
+            elif name == "ladder" and (y == 0 or main[y - 1][x] == 0 or not str(main[y - 1][x])):
+                # top cell of a ladder: jump-through, so the player can stand on it
                 col[y][x] = first + JUMP + shapes["full"]
     return col
 
@@ -367,11 +372,85 @@ def write_tmx(path):
     ET.ElementTree(m).write(path, encoding="UTF-8", xml_declaration=True)
 
 
+def write_room2(path):
+    """A small second room behind the door of the first one."""
+    w, h = 32, 12
+    main_layer = [[0] * w for _ in range(h)]
+    bg = [[gid("sky_top" if y < 4 else ("sky_mid" if y < 8 else "sky_bottom")) for _ in range(w)] for y in range(h)]
+    ground = 10
+    for x in range(w):
+        main_layer[ground][x] = gid("grass" if x % 3 else "grass2")
+        main_layer[ground + 1][x] = gid("dirt" if x % 2 else "dirt2")
+    for x in range(10, 15):
+        main_layer[7][x] = gid("platform")
+    for y in range(5, ground):
+        for x in (28, 29, 30, 31):
+            main_layer[y][x] = gid("stone" if (x + y) % 2 else "stone2")
+    first_col = 1 + len(TILES)
+    first_mat = first_col + 30
+
+    m = ET.Element("map", {
+        "version": "1.8", "tiledversion": "1.8.0", "orientation": "orthogonal", "renderorder": "right-down",
+        "width": str(w), "height": str(h), "tilewidth": str(T), "tileheight": str(T), "infinite": "0",
+        "nextlayerid": "6", "nextobjectid": "1",
+    })
+    mp = ET.SubElement(m, "properties")
+    prop(mp, "room_id", "test_room_2")
+    prop(mp, "area", "test")
+    ts = ET.SubElement(m, "tileset", {"firstgid": "1", "name": "test_tiles", "tilewidth": str(T),
+                                      "tileheight": str(T), "tilecount": str(len(TILES)), "columns": str(COLS)})
+    rows = (len(TILES) + COLS - 1) // COLS
+    ET.SubElement(ts, "image", {"source": "tileset.png", "width": str(COLS * T), "height": str(rows * T)})
+    ET.SubElement(m, "tileset", {"firstgid": str(first_col), "source": "../engine/blutmond_collision.tsx"})
+    ET.SubElement(m, "tileset", {"firstgid": str(first_mat), "source": "../engine/blutmond_material.tsx"})
+    global W, H
+    saved = (W, H)
+    W, H = w, h
+    for lid, name, role, data, extra in (
+        (1, "background", "background", bg, {"parallaxx": "0.5"}),
+        (2, "main", "main", main_layer, None),
+        (3, "collision", "collision", collision_layer(main_layer, first_col), {"opacity": "0.5"}),
+    ):
+        a = {"id": str(lid), "name": name, "width": str(w), "height": str(h)}
+        if extra:
+            a.update(extra)
+        l = ET.SubElement(m, "layer", a)
+        lp = ET.SubElement(l, "properties")
+        prop(lp, "role", role)
+        ET.SubElement(l, "data", {"encoding": "csv"}).text = csv(data)
+    W, H = saved
+    og = ET.SubElement(m, "objectgroup", {"id": "5", "name": "objects"})
+    ogp = ET.SubElement(og, "properties")
+    prop(ogp, "role", "objects")
+    objects = [
+        ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "test_room"), ("target_door", "exit_east"), ("direction", "west")]),
+        ("CameraZone", "room", 0, 0, w * T, h * T, False, []),
+        ("Bat", "bat", 200, 80, 0, 0, True, []),
+    ]
+    oid = 1
+    for otype, name, x, y, ow, oh, point, props in objects:
+        a = {"id": str(oid), "name": name, "type": otype, "x": str(x), "y": str(y)}
+        if ow or oh:
+            a["width"], a["height"] = str(ow), str(oh)
+        o = ET.SubElement(og, "object", a)
+        if point:
+            ET.SubElement(o, "point")
+        if props:
+            pp = ET.SubElement(o, "properties")
+            for k, v in props:
+                prop(pp, k, v)
+        oid += 1
+    m.set("nextobjectid", str(oid))
+    ET.indent(m, " ")
+    ET.ElementTree(m).write(path, encoding="UTF-8", xml_declaration=True)
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "assets", "test_room")
     os.makedirs(out, exist_ok=True)
     draw_tileset().save(os.path.join(out, "tileset.png"))
     write_tmx(os.path.join(out, "room.tmx"))
+    write_room2(os.path.join(out, "room2.tmx"))
 
 
 if __name__ == "__main__":

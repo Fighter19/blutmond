@@ -8,6 +8,10 @@
 //
 //   bm_mgba_run <image.gba> [--frames N] [--ppm out.ppm] [--snapshot out.bmps] [--expect-backdrop]
 //
+// --check <elf>:<symbol>[+offset]=<value> (or <=<value>): after running, reads the 32-bit value
+// at the symbol's address (from the ELF's symbol table) and fails if it differs (or is larger). --print does the same
+// without checking. Lets tests look at the program's state on the emulated GBA.
+//
 // --snapshot: writes the video state (registers, VRAM, palette, OAM) as a PPU snapshot that the
 // software PPU can render (tools/bm_ppu_render). Line tables are not captured.
 //
@@ -61,6 +65,86 @@ static int writePpm(const char *path, const color_t *buffer, unsigned width, uns
   return 0;
 }
 
+// Looks up a symbol in an ELF32 file. Returns 0 if it is not there.
+static uint32_t elfSymbol(const char *path, const char *name)
+{
+  FILE *f = fopen(path, "rb");
+  if (f == NULL) return 0;
+  fseek(f, 0, SEEK_END);
+  long size = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  uint8_t *d = malloc((size_t)size);
+  uint32_t found = 0;
+  if (fread(d, 1, (size_t)size, f) == (size_t)size && size > 52 && memcmp(d, "\x7f" "ELF", 4) == 0 && d[4] == 1)
+  {
+#define R16(o) ((uint32_t)d[o] | ((uint32_t)d[(o) + 1] << 8))
+#define R32(o) (R16(o) | (R16((o) + 2) << 16))
+    uint32_t shoff = R32(32), shentsize = R16(46), shnum = R16(48);
+    for (uint32_t i = 0; i < shnum && !found; i++)
+    {
+      uint32_t sh = shoff + i * shentsize;
+      if (sh + 40 > (uint32_t)size || R32(sh + 4) != 2) continue;  // SHT_SYMTAB
+      uint32_t symOff = R32(sh + 16), symSize = R32(sh + 20), strSec = R32(sh + 24);
+      uint32_t strOff = R32(shoff + strSec * shentsize + 16);
+      for (uint32_t s = symOff; s + 16 <= symOff + symSize && s + 16 <= (uint32_t)size; s += 16)
+      {
+        uint32_t nameOff = strOff + R32(s);
+        if (nameOff < (uint32_t)size && strcmp((const char *)d + nameOff, name) == 0)
+        {
+          found = R32(s + 4);
+          break;
+        }
+      }
+    }
+#undef R16
+#undef R32
+  }
+  free(d);
+  fclose(f);
+  return found;
+}
+
+// "<elf>:<symbol>[+offset]=<value>" (value optional); returns false on a mismatch.
+static bool checkValue(struct mCore *core, const char *spec, bool check)
+{
+  char buf[512];
+  snprintf(buf, sizeof(buf), "%s", spec);
+  char *colon = strrchr(buf, ':');
+  char *eq = strchr(colon ? colon : buf, '=');
+  bool atMost = eq != NULL && eq > buf && eq[-1] == '<';
+  if (atMost) eq[-1] = 0;
+  if (colon == NULL)
+  {
+    fprintf(stderr, "bad --check %s\n", spec);
+    return false;
+  }
+  *colon = 0;
+  if (eq) *eq = 0;
+  char *plus = strchr(colon + 1, '+');
+  uint32_t offset = 0;
+  if (plus)
+  {
+    *plus = 0;
+    offset = (uint32_t)strtoul(plus + 1, NULL, 0);
+  }
+  uint32_t address = elfSymbol(buf, colon + 1);
+  if (address == 0)
+  {
+    fprintf(stderr, "symbol %s not found in %s\n", colon + 1, buf);
+    return false;
+  }
+  uint32_t value = core->busRead32(core, address + offset);
+  printf("%s%s%s = %u\n", colon + 1, plus ? "+" : "", plus ? plus + 1 : "", value);
+  uint32_t expected = eq ? (uint32_t)strtoul(eq + 1, NULL, 0) : 0;
+  if (check && eq && (atMost ? value > expected : value != expected))
+  {
+    fprintf(stderr, "%s%s%s: expected %s%s, found %u\n", colon + 1, plus ? "+" : "", plus ? plus + 1 : "",
+            atMost ? "at most " : "", eq + 1, value);
+    return false;
+  }
+  return true;
+}
+
 static int writeSnapshot(struct mCore *core, const char *path)
 {
   static BmPpuState state;
@@ -109,6 +193,9 @@ int main(int argc, char **argv)
   int frames = 60;
   int expectBackdrop = 0;
   const char *snapshot = NULL;
+  const char *checks[16];
+  bool checkFlags[16];
+  int checkCount = 0;
 
   for (int i = 1; i < argc; i++)
   {
@@ -118,6 +205,11 @@ int main(int argc, char **argv)
       ppm = argv[++i];
     else if (strcmp(argv[i], "--snapshot") == 0 && i + 1 < argc)
       snapshot = argv[++i];
+    else if ((strcmp(argv[i], "--check") == 0 || strcmp(argv[i], "--print") == 0) && i + 1 < argc && checkCount < 16)
+    {
+      checkFlags[checkCount] = strcmp(argv[i], "--check") == 0;
+      checks[checkCount++] = argv[++i];
+    }
     else if (strcmp(argv[i], "--expect-backdrop") == 0)
       expectBackdrop = 1;
     else if (argv[i][0] != '-' && rom == NULL)
@@ -174,6 +266,10 @@ int main(int argc, char **argv)
   if (snapshot != NULL && writeSnapshot(core, snapshot) != 0)
   {
     failed = 1;
+  }
+  for (int i = 0; i < checkCount; i++)
+  {
+    if (!checkValue(core, checks[i], checkFlags[i])) failed = 1;
   }
   if (expectBackdrop)
   {

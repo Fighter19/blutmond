@@ -11,13 +11,13 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `src/core/` | platform-independent core: devices and memory heaps, pools, types |
 | `src/graphics/` | graphics API: video (modes, backgrounds, palettes, tiles, maps, sprites, line tables), backdrop, tilemaps |
 | `src/pack/` | packs: reader (ROM/RAM, in place), writer for tools, CRC-32 |
-| `src/world/` | rooms from packs: graphics layers, map streaming for rooms larger than the hardware map |
+| `src/world/` | rooms from packs (graphics layers, map streaming), collision, platformer physics, the game loop for the engine classes (player, camera, kill zones, doors) |
 | `src/ppu/` | software PPU: renders the GBA video state in C; reference for tests, host back end, PPU snapshots |
 | `src/hal/public/hal.h` | hardware abstraction layer: the only interface to a platform |
 | `src/hal/host/` | host back end: the GBA's memories and video state as plain data (tests, editor) |
 | `src/hal/gba/` | GBA back end: registers, start code, linker scripts for cartridge and multiboot |
 | `editor/` | the editor (`bmeditor`, on [ose-ui](https://github.com/Fighter19/ose-ui) with SDL3 and GLES 2) |
-| `apps/` | small programs: `backdrop` (smallest), `scene_test` (test scene for the video API), `room_viewer` (shows a cooked room) |
+| `apps/` | small programs: `backdrop` (smallest), `scene_test` (test scene for the video API), `room_viewer` (shows a cooked room), `game` (the test level, playable; `game_autoplay` plays itself) |
 | `assets/` | `engine/` (Tiled tilesets for collision and materials), `test_room/` (own test room) |
 | `third_party/` | `stb_image.h` (public domain), used by the cooker |
 | `tests/` | host tests |
@@ -77,7 +77,12 @@ Cooking rooms by hand:
 ```
 build/bmcook --profile gba --report report.txt -o room.bmpk assets/test_room/room.tmx
 build/room_viewer room.bmpk --frames 200 out.ppm
+build/bmcook -o level.bmpk assets/test_room/room.tmx assets/test_room/room2.tmx
+build/game level.bmpk --autoplay --trace --frames 700
 ```
+
+On the GBA: `build-gba/game.gba` (D-pad, A to jump, up/down on ladders, down + A to drop
+through platforms) and `build-gba/game_autoplay.gba`.
 
 `-DUSE_SANITIZER=ON` adds AddressSanitizer and UBSan to the host build.
 

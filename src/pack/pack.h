@@ -123,6 +123,9 @@ int32_t bmPackFindChunk(const BmPack *pPack, uint32_t id, uint32_t start);
 /// In-place data of an uncompressed chunk, or NULL (bad index, compressed chunk).
 const uint8_t *bmPackChunkData(const BmPack *pPack, uint32_t index, uint32_t *pSize);
 
+/// String `id` from the pack's string table (STRS), NUL-terminated, or NULL.
+const char *bmPackString(const BmPack *pPack, uint16_t id);
+
 /// Reads little-endian values from chunk data (no alignment needed).
 static inline uint16_t bmRead16(const uint8_t *p)
 {

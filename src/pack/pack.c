@@ -146,6 +146,19 @@ const uint8_t *bmPackChunkData(const BmPack *pPack, uint32_t index, uint32_t *pS
   return pPack->pData + e.offset;
 }
 
+const char *bmPackString(const BmPack *pPack, uint16_t id)
+{
+  int32_t index = bmPackFindChunk(pPack, BM_CHUNK_STRS, 0);
+  uint32_t size = 0;
+  const uint8_t *p = index >= 0 ? bmPackChunkData(pPack, (uint32_t)index, &size) : NULL;
+  if (p == NULL || size < 4 || id >= bmRead16(p) || 4u + id * 4u + 4u > size)
+  {
+    return NULL;
+  }
+  uint32_t offset = bmRead32(p + 4 + id * 4u);
+  return offset < size ? (const char *)p + offset : NULL;
+}
+
 #ifdef BM_PLATFORM_HOST
 // --- Writer ------------------------------------------------------------------------------
 

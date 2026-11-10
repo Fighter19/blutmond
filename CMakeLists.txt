@@ -34,7 +34,7 @@ file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c)
 
 if(BM_PLATFORM STREQUAL "gba")
   # The software PPU is not needed on the device; only its register definitions are used.
-  set(BM_HAL_SOURCES src/hal/gba/hal_gba.c)
+  set(BM_HAL_SOURCES src/hal/gba/hal_gba.c src/hal/gba/irq.S)
   set(BM_HAL_DIR src/hal/gba)
 else()
   set(BM_HAL_SOURCES src/hal/host/hal_host.c src/ppu/ppu.c)
@@ -124,6 +124,30 @@ if(BM_PLATFORM STREQUAL "gba")
     COMMENT "Cooking the test room")
   add_custom_target(test_room_pack DEPENDS ${BM_TEST_ROOM_PACK})
 
+  set(BM_TEST_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
+  add_custom_command(OUTPUT ${BM_TEST_LEVEL_PACK}
+    COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK}
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
+    DEPENDS host_tools ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
+      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+    COMMENT "Cooking the test level")
+  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK})
+
+  # The game, played with the buttons, and the same with the autopilot (for tests and demos).
+  # embed_pack.S is compiled per target with that target's BM_PACK_PATH.
+  foreach(variant game game_autoplay)
+    bm_add_gba_image(${variant} apps/game/main.c apps/game/autopilot.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
+    foreach(target ${BM_GBA_TARGETS})
+      add_dependencies(${target} test_level_pack)
+      target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/apps/game)
+      target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
+      if(variant STREQUAL "game_autoplay")
+        target_compile_definitions(${target} PRIVATE BM_AUTOPLAY=1)
+      endif()
+    endforeach()
+  endforeach()
+  set_property(SOURCE ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S APPEND PROPERTY OBJECT_DEPENDS ${BM_TEST_LEVEL_PACK})
+
   bm_add_gba_image(room_viewer apps/room_viewer/main.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
   set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S PROPERTIES OBJECT_DEPENDS ${BM_TEST_ROOM_PACK})
   foreach(target ${BM_GBA_TARGETS})
@@ -131,11 +155,13 @@ if(BM_PLATFORM STREQUAL "gba")
     target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_ROOM_PACK}\"")
   endforeach()
 else()
-  foreach(app backdrop scene_test room_viewer)
+  foreach(app backdrop scene_test room_viewer game)
     if(app STREQUAL "backdrop")
       add_executable(${app} apps/backdrop/main.c)
     elseif(app STREQUAL "room_viewer")
       add_executable(${app} apps/room_viewer/main.c)
+    elseif(app STREQUAL "game")
+      add_executable(${app} apps/game/main.c apps/game/autopilot.c)
     else()
       add_executable(${app} ${BM_SCENE_SOURCES})
     endif()
@@ -185,7 +211,7 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_ppu_render PRIVATE ${BM_WARNINGS})
 
   enable_testing()
-  foreach(test test_pool test_heaps test_backdrop test_ppu test_pack)
+  foreach(test test_pool test_heaps test_backdrop test_ppu test_pack test_physics)
     add_executable(${test} tests/${test}.c)
     target_link_libraries(${test} PRIVATE blutmond)
     target_include_directories(${test} PRIVATE src/core/private)
@@ -203,6 +229,21 @@ if(BM_PLATFORM STREQUAL "host")
     COMMAND bmcook --profile snes --report ${cooked}/test_room_snes.txt -o ${cooked}/test_room_snes.bmpk
       ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx)
   set_tests_properties(cook_test_room_snes PROPERTIES PASS_REGULAR_EXPRESSION "layer-dropped.*foreground")
+
+  # The test level: both rooms in one pack.
+  add_test(NAME cook_test_level
+    COMMAND bmcook --profile gba -o ${cooked}/test_level_gba.bmpk
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
+  set_tests_properties(cook_test_level PROPERTIES FIXTURES_SETUP test_level_pack)
+  add_executable(test_game tests/test_game.c apps/game/autopilot.c)
+  target_link_libraries(test_game PRIVATE blutmond)
+  target_include_directories(test_game PRIVATE apps/game)
+  target_compile_options(test_game PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk)
+  set_tests_properties(test_game PROPERTIES FIXTURES_REQUIRED test_level_pack)
+  add_test(NAME game_autoplay_host COMMAND game ${cooked}/test_level_gba.bmpk --autoplay --frames 1000 ${cooked}/game_host.ppm)
+  set_tests_properties(game_autoplay_host PROPERTIES FIXTURES_REQUIRED test_level_pack FIXTURES_SETUP game_host
+    PASS_REGULAR_EXPRESSION "room test_room_2.*deaths 0")
 
   # Map streaming: scrolling to a position must give the same picture as showing the room
   # there directly.
@@ -274,6 +315,21 @@ if(BM_PLATFORM STREQUAL "host")
         add_test(NAME room_matches_${image}
           COMMAND ${compare} ${out}/room_scrolled.ppm ${out}/${image}.ppm --diff ${out}/${image}_diff.ppm)
         set_tests_properties(room_matches_${image} PROPERTIES FIXTURES_REQUIRED "room_renders;room_${image}")
+      endforeach()
+
+      # The autopilot plays the level on the GBA: after it has settled in the second room the
+      # picture must match the host's.
+      foreach(image game_autoplay game_autoplay_mb)
+        # On the GBA too: no deaths, one room change, and at most 4 frames missed (while the
+        # new room is loaded: 2 from ROM, 4 from EWRAM in the multiboot image).
+        set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
+        add_test(NAME game_render_${image}
+          COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 1100 --ppm ${out}/${image}.ppm
+            --check ${elf}:bm_game_stats+8=0 --check ${elf}:bm_game_stats+12=1 --check "${elf}:bm_game_stats+4<=4")
+        set_tests_properties(game_render_${image} PROPERTIES FIXTURES_SETUP game_${image})
+        add_test(NAME game_matches_${image}
+          COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --diff ${out}/${image}_diff.ppm)
+        set_tests_properties(game_matches_${image} PROPERTIES FIXTURES_REQUIRED "game_host;game_${image}")
       endforeach()
 
       # PPU snapshot taken in mGBA, rendered by the software PPU, must match mGBA's picture.
