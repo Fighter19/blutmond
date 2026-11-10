@@ -4,23 +4,21 @@
  */
 #pragma once
 
-// Host-only access to the virtual hardware, for tests and the editor.
+// Host-only access to the virtual hardware, for tests, tools and the editor.
 
-#include <stdbool.h>
 #include <stdint.h>
 
 #include "hal.h"
+#include "ppu.h"
 
-typedef struct BmHalHostVideo
-{
-  bool displayOn;
-  uint8_t mode;
-  uint8_t layerMask;
-  uint32_t frame;
-  uint16_t palette[BM_HAL_PALETTE_SIZE];
-} BmHalHostVideo;
+/// The video state as the software PPU sees it.
+const BmPpuState *bmHalHostGetPpu(void);
 
-const BmHalHostVideo *bmHalHostGetVideo(void);
+/// Frames waited for so far.
+uint32_t bmHalHostFrame(void);
+
+/// Renders the current video state (BGR555, 240x160).
+void bmHalHostRender(uint16_t *pOut);
 
 /// Puts the virtual hardware back into its power-on state.
 void bmHalHostReset(void);

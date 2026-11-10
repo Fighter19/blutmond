@@ -9,13 +9,14 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | Path | Content |
 |---|---|
 | `src/core/` | platform-independent core: devices and memory heaps, pools, types |
-| `src/graphics/` | graphics API (backdrop, tilemaps, ...) |
+| `src/graphics/` | graphics API: video (modes, backgrounds, palettes, tiles, maps, sprites, line tables), backdrop, tilemaps |
+| `src/ppu/` | software PPU: renders the GBA video state in C; reference for tests, host back end, PPU snapshots |
 | `src/hal/public/hal.h` | hardware abstraction layer: the only interface to a platform |
 | `src/hal/host/` | host back end: the GBA's memories and video state as plain data (tests, editor) |
 | `src/hal/gba/` | GBA back end: registers, start code, linker scripts for cartridge and multiboot |
-| `apps/` | small programs; `backdrop` is the smallest one |
+| `apps/` | small programs: `backdrop` (smallest), `scene_test` (test scene for the video API) |
 | `tests/` | host tests |
-| `tools/` | `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA) |
+| `tools/` | `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_ppu_render.c` (renders a snapshot), `compare_images.py` |
 
 Hardware addresses may only appear in `src/hal/gba/`; a test checks this.
 
@@ -45,6 +46,10 @@ ctest --test-dir build --output-on-failure
 ```
 
 `-DUSE_SANITIZER=ON` adds AddressSanitizer and UBSan to the host build.
+
+With `BM_GBA_BUILD_DIR` set, the tests also check that the test scene rendered by the software
+PPU on the host matches the GBA image running in mGBA pixel for pixel, and that a PPU snapshot
+taken in mGBA renders the same picture. The images land in `build/test-output/`.
 
 The Nintendo logo in the GBA header is not part of this repository. Emulators and multiboot
 tools such as xcomms do not need it (xcomms inserts it during upload); for a cartridge on real

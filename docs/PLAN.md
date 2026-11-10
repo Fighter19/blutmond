@@ -773,6 +773,13 @@ is meant for, and the cooker reports per profile what a port would change.
 | M10 | GBA to GBA: bootstrap, 2 MHz protocol; optional Raspberry Pi/RP2040 transport | runtime + content + state transferred, measured times documented |
 | M11 | shader PPU (HDMA effects), browser game, world map, polish | game runs in the browser with raster effects matching the software PPU |
 
+### Status
+
+| # | State |
+|---|---|
+| M0 | done: HAL, host and GBA builds, fixed core, tests in mGBA |
+| M1 | done for mode 0: backgrounds (4/8 bpp, all sizes, flips, banks, priorities), regular sprites, palettes, one line table (DMA0 in H-blank mode), software PPU, PPU snapshots; the test scene matches between the software PPU and mGBA pixel for pixel. Still open from M1's scope: affine backgrounds and sprites, bitmap modes, windows, blending, mosaic |
+
 ## 20. Risks, decisions, open questions
 
 **Risks**

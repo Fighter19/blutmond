@@ -6,13 +6,20 @@
 // Runs a GBA image headless in mGBA (libmgba) for a number of frames, then checks the
 // screen and/or writes it to a PPM file. Used by the tests to see that a ROM really runs.
 //
-//   bm_mgba_run <image.gba> [--frames N] [--ppm out.ppm] [--expect-backdrop]
+//   bm_mgba_run <image.gba> [--frames N] [--ppm out.ppm] [--snapshot out.bmps] [--expect-backdrop]
+//
+// --snapshot: writes the video state (registers, VRAM, palette, OAM) as a PPU snapshot that the
+// software PPU can render (tools/bm_ppu_render). Line tables are not captured.
 //
 // --expect-backdrop: every pixel must show BG palette entry 0 (the backdrop colour), and that
 // colour must not be black. This is what apps/backdrop draws.
 
+#include <mgba/core/config.h>
 #include <mgba/core/core.h>
 #include <mgba/core/log.h>
+#include <mgba/internal/gba/gba.h>
+
+#include "ppu.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -54,12 +61,54 @@ static int writePpm(const char *path, const color_t *buffer, unsigned width, uns
   return 0;
 }
 
+static int writeSnapshot(struct mCore *core, const char *path)
+{
+  static BmPpuState state;
+  bmPpuReset(&state);
+  // Video registers are write-only on the GBA, so they come from mGBA's internal copy.
+  const struct GBA *gba = core->board;
+  for (int i = 0; i < BM_PPU_REG_SIZE / 2; i++)
+  {
+    state.regs[i] = gba->memory.io[i];
+  }
+  for (uint32_t i = 0; i < BM_PPU_VRAM_SIZE; i += 2)
+  {
+    uint16_t v = (uint16_t)core->busRead16(core, 0x06000000u + i);
+    state.vram[i] = (uint8_t)v;
+    state.vram[i + 1] = (uint8_t)(v >> 8);
+  }
+  for (uint32_t i = 0; i < BM_PPU_PALETTE_SIZE; i++)
+  {
+    state.palette[i] = (uint16_t)core->busRead16(core, 0x05000000u + i * 2);
+  }
+  for (uint32_t i = 0; i < BM_PPU_OAM_SIZE; i++)
+  {
+    state.oam[i] = (uint16_t)core->busRead16(core, 0x07000000u + i * 2);
+  }
+
+  size_t size = bmPpuSnapshotSize();
+  uint8_t *data = malloc(size);
+  bmPpuSnapshotWrite(&state, data);
+  FILE *f = fopen(path, "wb");
+  if (f == NULL)
+  {
+    perror(path);
+    free(data);
+    return 1;
+  }
+  fwrite(data, 1, size, f);
+  fclose(f);
+  free(data);
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   const char *rom = NULL;
   const char *ppm = NULL;
   int frames = 60;
   int expectBackdrop = 0;
+  const char *snapshot = NULL;
 
   for (int i = 1; i < argc; i++)
   {
@@ -67,13 +116,15 @@ int main(int argc, char **argv)
       frames = atoi(argv[++i]);
     else if (strcmp(argv[i], "--ppm") == 0 && i + 1 < argc)
       ppm = argv[++i];
+    else if (strcmp(argv[i], "--snapshot") == 0 && i + 1 < argc)
+      snapshot = argv[++i];
     else if (strcmp(argv[i], "--expect-backdrop") == 0)
       expectBackdrop = 1;
     else if (argv[i][0] != '-' && rom == NULL)
       rom = argv[i];
     else
     {
-      fprintf(stderr, "usage: %s <image.gba> [--frames N] [--ppm out.ppm] [--expect-backdrop]\n", argv[0]);
+      fprintf(stderr, "usage: %s <image.gba> [--frames N] [--ppm out.ppm] [--snapshot out.bmps] [--expect-backdrop]\n", argv[0]);
       return 2;
     }
   }
@@ -120,6 +171,10 @@ int main(int argc, char **argv)
   {
     failed = 1;
   }
+  if (snapshot != NULL && writeSnapshot(core, snapshot) != 0)
+  {
+    failed = 1;
+  }
   if (expectBackdrop)
   {
     unsigned mismatches = 0;
@@ -137,6 +192,7 @@ int main(int argc, char **argv)
     }
   }
 
+  mCoreConfigDeinit(&core->config);
   core->deinit(core);
   free(buffer);
   return failed;

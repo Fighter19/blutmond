@@ -38,6 +38,12 @@ _start:
 #endif
 
 start_rom:
+    @ Faster cartridge access: 3/1 wait states for ROM, prefetch on (WAITCNT = 0x4317).
+    @ The BIOS default (4/2, no prefetch) makes code running from ROM much slower.
+    ldr     r0, =0x04000204
+    ldr     r1, =0x4317
+    strh    r1, [r0]
+
     @ IRQ stack, then system mode with the user stack.
     mov     r0, #0x12
     msr     cpsr_c, r0

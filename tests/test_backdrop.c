@@ -9,10 +9,14 @@ static void testBackdropGoesToPaletteEntryZero(void)
   bmHalHostReset();
   bmHalVideoInit();
   TEST_ASSERT(bmBackdropSetColor(bmColorRGB(31, 0, 8)) == BM_SUCCESS);
-  const BmHalHostVideo *video = bmHalHostGetVideo();
-  TEST_ASSERT(video->displayOn);
-  TEST_ASSERT(video->palette[0] == (31 | (8 << 10)));
-  TEST_ASSERT(bmBackdropGetColor().color == video->palette[0]);
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  TEST_ASSERT((bmPpuReg(ppu, BM_PPU_DISPCNT) & BM_PPU_DISPCNT_FORCED_BLANK) == 0);
+  TEST_ASSERT(ppu->palette[0] == (31 | (8 << 10)));
+  TEST_ASSERT(bmBackdropGetColor().color == ppu->palette[0]);
+
+  static uint16_t pixels[BM_PPU_WIDTH * BM_PPU_HEIGHT];
+  bmHalHostRender(pixels);
+  TEST_ASSERT(pixels[0] == ppu->palette[0] && pixels[BM_PPU_WIDTH * BM_PPU_HEIGHT - 1] == ppu->palette[0]);
 }
 
 static void testColorPacking(void)

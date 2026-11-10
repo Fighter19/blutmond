@@ -5,13 +5,27 @@
 #include "hal.h"
 #include "hal_host.h"
 
+#include <string.h>
+
 // The host back end models the GBA's memories as plain arrays of the same sizes, so memory
-// budgets behave the same on the PC and on the device.
+// budgets behave the same on the PC and on the device. Video memory, registers, palette, OAM
+// and line tables live in a BmPpuState that the software PPU renders.
 static uint8_t s_ewram[256 * 1024];
 static uint8_t s_iwram[32 * 1024];
-static uint8_t s_vram[96 * 1024];
+static BmPpuState s_ppu;
+static uint32_t s_frame;
+static int s_initialised;
 
-static BmHalHostVideo s_video;
+static void ensureInit(void)
+{
+  if (!s_initialised)
+  {
+    bmPpuReset(&s_ppu);
+    // Power-on: forced blank until the program sets up the display.
+    bmPpuSetReg(&s_ppu, BM_PPU_DISPCNT, BM_PPU_DISPCNT_FORCED_BLANK);
+    s_initialised = 1;
+  }
+}
 
 const char *bmHalPlatformName(void)
 {
@@ -20,10 +34,11 @@ const char *bmHalPlatformName(void)
 
 void bmHalGetMemoryRanges(BmHalMemoryRange *pRanges, uint32_t count)
 {
+  ensureInit();
   const BmHalMemoryRange ranges[3] = {
     { s_ewram, sizeof(s_ewram) },
     { s_iwram, sizeof(s_iwram) },
-    { s_vram, sizeof(s_vram) },
+    { s_ppu.vram, sizeof(s_ppu.vram) },
   };
   for (uint32_t i = 0; i < count; i++)
   {
@@ -33,35 +48,98 @@ void bmHalGetMemoryRanges(BmHalMemoryRange *pRanges, uint32_t count)
 
 void bmHalVideoInit(void)
 {
-  s_video.displayOn = true;
-  s_video.mode = 0;
-  s_video.layerMask = 0;
+  ensureInit();
+  bmPpuSetReg(&s_ppu, BM_PPU_DISPCNT, 0);
 }
 
 void bmHalPaletteWrite(uint16_t index, uint16_t bgr555)
 {
+  ensureInit();
   if (index < BM_HAL_PALETTE_SIZE)
   {
-    s_video.palette[index] = bgr555 & 0x7FFF;
+    s_ppu.palette[index] = bgr555 & 0x7FFF;
   }
 }
 
 uint16_t bmHalPaletteRead(uint16_t index)
 {
-  return index < BM_HAL_PALETTE_SIZE ? s_video.palette[index] : 0;
+  ensureInit();
+  return index < BM_HAL_PALETTE_SIZE ? s_ppu.palette[index] : 0;
 }
 
 uint32_t bmHalVideoWaitVBlank(void)
 {
-  return ++s_video.frame;
+  ensureInit();
+  return ++s_frame;
 }
 
-const BmHalHostVideo *bmHalHostGetVideo(void)
+void bmHalVideoWriteReg(uint16_t offset, uint16_t value)
 {
-  return &s_video;
+  ensureInit();
+  bmPpuSetReg(&s_ppu, offset, value);
+}
+
+uint16_t bmHalVideoReadReg(uint16_t offset)
+{
+  ensureInit();
+  return offset < BM_PPU_REG_SIZE ? bmPpuReg(&s_ppu, offset) : 0;
+}
+
+void bmHalVramWrite(uint32_t offset, const void *pData, uint32_t size)
+{
+  ensureInit();
+  if (offset < BM_PPU_VRAM_SIZE && size <= BM_PPU_VRAM_SIZE - offset)
+  {
+    memcpy(s_ppu.vram + offset, pData, size);
+  }
+}
+
+void bmHalOamWrite(uint32_t first, const uint16_t *pData, uint32_t count)
+{
+  ensureInit();
+  if (first < BM_PPU_OAM_SIZE && count <= BM_PPU_OAM_SIZE - first)
+  {
+    memcpy(&s_ppu.oam[first], pData, count * sizeof(uint16_t));
+  }
+}
+
+void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues)
+{
+  ensureInit();
+  if (slot >= BM_PPU_LINE_TABLES)
+  {
+    return;
+  }
+  BmPpuLineTable *pTable = &s_ppu.lineTables[slot];
+  if (pValues == NULL || reg >= BM_PPU_REG_SIZE)
+  {
+    pTable->reg = 0xFFFF;
+    return;
+  }
+  pTable->reg = reg;
+  memcpy(pTable->values, pValues, sizeof(pTable->values));
+}
+
+const BmPpuState *bmHalHostGetPpu(void)
+{
+  ensureInit();
+  return &s_ppu;
+}
+
+uint32_t bmHalHostFrame(void)
+{
+  return s_frame;
+}
+
+void bmHalHostRender(uint16_t *pOut)
+{
+  ensureInit();
+  bmPpuRender(&s_ppu, pOut);
 }
 
 void bmHalHostReset(void)
 {
-  s_video = (BmHalHostVideo){0};
+  s_initialised = 0;
+  s_frame = 0;
+  ensureInit();
 }
