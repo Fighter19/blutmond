@@ -5,6 +5,9 @@ on the Game Boy Advance, with an editor in the spirit of Lunar Magic, RPG Maker 
 Point&Click DK. Later extensions (RPG) are kept in mind but are not part of the first
 milestones.
 
+The normative formats, protocols and the language are in [spec/](spec/README.md); this plan
+keeps the research, the reasons and the roadmap.
+
 Contents:
 
 1. [Goals and constraints](#1-goals-and-constraints)
@@ -191,7 +194,8 @@ VRAM, palettes, OAM, line table). It is used for:
 ## 6. Runtime, content packs and a stable ABI
 
 Goal: fix engine bugs after the fact without rebuilding games, and place packs wherever there
-is room (ROM, EWRAM).
+is room (ROM, EWRAM). Specified in [spec/pack-format.md](spec/pack-format.md) and
+[spec/runtime-abi.md](spec/runtime-abi.md).
 
 - **Pack format**: a tagged chunk format, as in SceneCompiler's `GARCHIVE` (`PALE`, `MTIL`,
   `INDX`, `PIXL`, `AMAP`), extended with a header (magic, format version, ABI version, hash)
@@ -219,71 +223,28 @@ The runtime is uploaded (or started from the cartridge) **once**. After that the
 pushes new content; the GBA is not reset. For that the runtime has to know exactly where its
 state is, so it can reset it on its own.
 
-### Memory regions with an owner
+Specified in [spec/runtime-abi.md](spec/runtime-abi.md). In short: the runtime keeps a
+**region table** in which every byte of RAM, VRAM, palette and OAM has an owner (runtime or
+content); it never holds raw pointers into content (handles with a generation instead); content
+never touches interrupts, DMA or timers directly; the live-link handler runs from the serial
+interrupt. That lets the runtime reset or replace everything content owns on its own, in five
+**reload modes**: `restart`, `hot`, `hot_migrate`, `module` (one script) and `state`. A reload
+is applied at a frame boundary and only after all its data has arrived and been checked.
 
-The runtime keeps a **region table**. Every byte of RAM, VRAM, palette and OAM belongs to
-exactly one region:
-
-| Region | Owner | On "load new content" |
-|---|---|---|
-| runtime code and data | runtime | kept |
-| live-link handler, IRQ table, stack | runtime | kept |
-| content area (packs in EWRAM) | content | replaced |
-| script overlay slots (IWRAM/EWRAM) | content | unloaded, refilled |
-| state arena | content | reset to `defaultproperties`, or kept/migrated (see below) |
-| VRAM, palettes, OAM, line tables | runtime, filled from content | cleared, rebuilt by the room loader |
-| sound voices, mixer buffers, DMA/timers | runtime | voices stopped, mixer reset, songs from the new pack |
-| per-pack caches (tile cache, collision cache) | runtime | dropped |
-
-Rules that make this safe:
-
-- The runtime never holds raw pointers into content. It holds handles (index + generation) and
-  offsets. Bumping the generation on reload invalidates every old handle at once.
-- Content never registers its own interrupt handlers or DMA channels; it asks the runtime
-  through the API table. On reload the runtime can therefore switch all of them off.
-- The live-link handler runs on the SIO interrupt with high priority, so the editor can reach
-  the GBA even when the game logic hangs in a loop (bytecode) or is paused.
-- A reload happens at a frame boundary: stop the frame, mute sound, blank the screen (as
-  SceneLoaderGBA blanks while loading), apply, restart.
-
-### Reload modes
-
-| Mode | What is sent | What happens to the game state |
-|---|---|---|
-| **Restart content** | changed pack chunks | state arena reset, game starts at the chosen room/save point |
-| **Hot swap** | changed chunks, schema hash unchanged | state kept; the current room is reloaded around the player |
-| **Hot swap with migration** | changed chunks + migration table | the editor knows the old and new schema and sends a table (copy field X from offset A to B, fill new fields with defaults); the runtime applies it |
-| **Script swap** | one script module | module replaced in its slot; entities in a state whose code changed are put back to the start of that state |
-| **State only** | state arena (or part of it) | jump to a saved situation, e.g. "player in front of the boss with all upgrades" |
-
-What remains as a risk: AOT-compiled native code can overwrite runtime memory, and then only a
-reset helps. During development the editor therefore runs scripts as **verified bytecode** by
-default; AOT modules are an option for performance tests and release builds. A watchdog
-(timer IRQ that checks a frame counter) reports a hang to the editor instead of freezing.
+The remaining risk is native (AOT) script code, which can overwrite runtime memory; during
+development scripts therefore run as verified bytecode by default, and a watchdog reports hangs
+to the editor.
 
 ## 8. Game state, save states, link transfer
 
 ### State as a schema
 
-All mutable game state lives in a **state arena** (EWRAM, a hot part in IWRAM) **without
-pointers**: references are handles (index + generation) or offsets. The state can be copied
-with `memcpy` and has the same layout on every target.
-
-The layout is not written by hand in C. It comes from script classes (section 10) and engine
-types and is described as a schema. Every field carries flags:
-
-| Flag | Meaning |
-|---|---|
-| `save` | goes into the save game (SRAM/flash) |
-| `link` | is sent on link transfer |
-| `snapshot` | part of the save state (debugging, resetting) |
-| `transient` | not saved; reset on load |
-| `derived` | recomputed after loading (e.g. collision cache) |
-
-A generator produces C headers (`struct`s with `_Static_assert` on offsets and sizes),
-serialisers, migration tables (section 7) and a **state map**. The editor shows the map as a
-table and as a memory bar: field, type, offset, bytes, flags, how much of it is saved and
-transferred. Fields without a flag are clearly marked, so "forgot to save it" stands out.
+Specified in [spec/state.md](spec/state.md). All mutable game state lives in a pointer-free
+**state arena** whose layout is generated from engine types and Mondskript classes. Every
+field carries flags (`save`, `link`, `snapshot`, `transient`, `derived`); the editor shows the
+result as a **state map** with the size of a save game and of a link transfer, and marks fields
+without a flag. Per-object state is kept per persistent ID; a migration table converts state
+and old save games when the layout changes.
 
 ### Transfer between two GBAs
 
@@ -336,25 +297,10 @@ Possible improvements on the parallel port side:
 
 ### Robustness: wherever xcomms works, Blutmond works
 
-The baseline is the plain four-wire Xboo cable (SC, SI, SO, GND) as documented for xcomms:
-no SD wire, no reset wire required, any PC and cable length on which xcomms boots a GBA.
-Nothing in the protocol may need more than that, and it has to live with some bit errors:
-
-- **Initial boot** uses the same BIOS multiboot sequence as xcomms `NormalBoot` (handshake
-  `0x6202`/`0x72`, header, key exchange, CRC), with the same per-word delay setting. If xcomms
-  can boot the device, so can the editor.
-- **Packets** after that: sync word, type, sequence number, length, payload, CRC-32. The GBA
-  answers every packet with ACK or NAK (with the sequence number it expects).
-- **Retry**: on NAK, bad CRC or timeout the packet is sent again; after several failures the
-  link goes back to a resync pattern and continues where it stopped. A transfer never has to
-  start from the beginning, because chunks are confirmed one by one.
-- **Adaptive delay**: start with a safe delay per bit (as xcomms' "Transfer Delay"), lower it
-  while transfers are clean, raise it again on errors. The value that works is remembered per
-  device and transport.
-- **Applying is atomic**: a live update (section 7) is only applied after all its chunks have
-  arrived and been checked. A broken transfer leaves the running game untouched.
-- **Error counters** (CRC errors, retries, resyncs, effective rate) are shown in the editor's
-  live-link window, so a bad cable is visible instead of mysterious.
+Specified in [spec/link-protocol.md](spec/link-protocol.md). The baseline is the plain
+four-wire Xboo cable as documented for xcomms. Booting uses the same BIOS multiboot sequence as
+xcomms `NormalBoot`; after that, packets with sequence numbers and CRC-32, ACK/NAK, retry,
+resync, resumable transfers, atomic apply, adaptive per-bit delay and visible error counters.
 
 Because this link is slow, the live workflow (section 7) is built to **send little**:
 compressed chunks, only chunks whose hash changed (the editor remembers per device what is
@@ -378,6 +324,8 @@ KB and arrives in a fraction of a second even over the parallel port.
   editor asks the user to switch the GBA off and on instead.
 
 ## 10. Scripting language
+
+Specified in [spec/mondskript.md](spec/mondskript.md).
 
 Working name **Mondskript**. Goals: easy for beginners, fast on the GBA, serialisable. The
 model is the old **UnrealScript** (classes with declared fields, states as a language feature,
@@ -589,6 +537,8 @@ mixer runs in the editor, so the preview sounds exactly like the device. With th
 
 ### Assets are portable, packs are per platform
 
+Specified in [spec/asset-model.md](spec/asset-model.md).
+
 Everything a developer makes in the editor must be portable to other retro platforms in
 principle, even before the runtime is. That is why the project stores **source assets** in a
 platform-neutral model, and the GBA data is only a **build output**:
@@ -625,159 +575,25 @@ Rules that follow from this:
 
 ### Rooms: layers, collision, physics, objects
 
-A room is a Tiled map (`.tmx`, Tiled 1.8 or newer) or the same data made in the room editor.
-Both are the source format; the cooker reads either. Everything below is plain Tiled, so rooms
-can be edited without the Blutmond editor.
+Specified in [spec/room-format.md](spec/room-format.md). In short:
 
-**Layers** carry a `role` property:
-
-| Role | Content | Cooked to |
-|---|---|---|
-| `background` | tile layer, may use Tiled's `parallaxx`/`parallaxy` | BG layer with scroll factor (line table if it varies per line) |
-| `main` | tile layer the player walks in front of | BG layer |
-| `foreground` | tile layer drawn in front of sprites | BG layer with higher priority |
-| `collision` | tile layer using the Blutmond collision tileset | collision grid in the pack, not drawn |
-| `collision_material` | tile layer using the Blutmond material tileset | merged into the collision grid |
-| `objects` | object layer | entity spawn table |
-
-Layers without a role are ignored with a warning, so nothing is cooked by accident.
-
-**Collision** follows what 2D platformers of the era stored: a grid separate from the
-graphics with a few bits per cell for the **shape** and for **which sides are solid**, flip bits
-to mirror a shape, and a separate **material**. The closest model is the Castlevania games on
-GBA and DS (Harmony of Dissonance, Aria of Sorrow, Dawn of Sorrow): one byte per cell with a
-4-bit block shape (full, top half, bottom half, slopes 1, 2 or 4 cells wide), a "solid on top"
-bit, a "solid at sides and bottom" bit, H/V flip bits for slopes, a water bit and an "effect"
-bit (damage, or conveyor on half blocks). Top-only solidity is how those games make jump-through
-platforms, also for half blocks. Super Metroid works the same way in spirit: a block type per
-cell plus a second byte that, for slopes, picks the slope shape and its flip. Sonic stores a
-16-entry height array and an angle per tile, which is how the runtime resolves shapes
-internally (below).
-
-Cell size is 16 px by default (room property `collision_cell`; 8 px is possible). Each cell is
-cooked to **two bytes**:
-
-```
-byte 0: shape (bits 0-3) | hflip (4) | vflip (5) | solid_top (6) | solid_sides_bottom (7)
-byte 1: material (bits 0-3) | parameter (bits 4-7)
-```
-
-Shapes (mirrored with hflip for the other direction, with vflip for ceilings):
-
-| Id | Shape | Notes |
-|---|---|---|
-| 0 | empty | |
-| 1 | full | |
-| 2 | half, top | upper 8 px; ceilings, low passages |
-| 3 | half, bottom | lower 8 px; steps, low walls |
-| 4 | half, left | left 8 px; thin walls |
-| 5 | slope 1:1 (45°) | one cell |
-| 6, 7 | slope 1:2 (≈ 27°), part 1 and 2 | two cells |
-| 8–11 | slope 1:4 (≈ 14°), parts 1–4 | four cells; gentle ramps, as the long ramps in Aria of Sorrow |
-| 12, 13 | slope 2:1 (≈ 63°), lower and upper part | steep; the player slides down instead of walking |
-| 14 | custom height profile | uses a 16-entry height array from the room's shape table (Sonic style) for odd shapes |
-| 15 | reserved | |
-
-Solidity bits:
-
-| solid_top | solid_sides_bottom | Meaning |
-|---|---|---|
-| 1 | 1 | solid from every side |
-| 1 | 0 | **jump-through**: stand on it, jump up through it, drop down with down + jump. Works with every shape: full platforms, **half platforms** (shape 2/3), and **jump-through slopes** (e.g. stairs in the background) |
-| 0 | 1 | solid at the sides and from below, but no floor (rare; e.g. a ceiling lip you slide off) |
-| 0 | 0 | not solid; only the material applies (water, ladder, damage zone) |
-
-Materials (parameter in the upper 4 bits):
-
-| Id | Material | Parameter |
-|---|---|---|
-| 0 | normal | – |
-| 1 | water | – (room property `water_gravity`, slower movement; a cell with water and a shape is a solid shape under water) |
-| 2 | damage | damage amount (spikes, lava) |
-| 3 | instant death | – (bottomless pits inside a room) |
-| 4 | conveyor | speed, sign by hflip |
-| 5 | ice | friction level |
-| 6 | ladder / vine | – (up/down starts climbing; the top cell of a ladder is usually also jump-through) |
-| 7 | bounce | strength (springy or clinking surfaces) |
-| 8 | sticky / mud | slowdown |
-| 9–15 | game defined | free for the game, readable from scripts |
-
-Breakable, crumbling and switchable blocks (Super Metroid's shot and bomb blocks, crumbling
-floors) are not materials but objects that **write into the collision grid** when they change
-state (`collision.set(cell, shape)`); the change is stored per persistent ID so it survives
-saving.
-
-**In Tiled** this is two tile layers: `collision` uses the Blutmond collision tileset (one tile
-per shape and solidity; Tiled's own flip tools set hflip/vflip), and `collision_material`
-uses a material tileset. The cooker merges both into the two bytes. Graphics tilesets may also
-carry `shape`, `solid` and `material` properties per tile; the cooker then fills the grid
-automatically, and hand-drawn collision overrides it. Room edges without a `Door` are walls
-(`edges_solid`, default true); falling out of the bottom is handled by a `KillZone`.
-
-**How the runtime resolves shapes**: every shape is a precomputed 16-entry height array plus a
-surface angle (a table of 16 × 16 bytes in ROM, the same idea as Sonic's height masks). Flips
-mirror the lookup instead of needing more tables. A floor check is: find the cell under the
-sensor, read the height at the sensor's x, done. Slopes, half blocks and custom shapes all go
-through the same code path, so adding a shape is a table entry, not new code.
-
-**Physics** is a simple platformer model, not a rigid-body simulation. All values are fixed
-point (`fix`, 24.8) in pixels and frames; Tiled stores them as decimals, the cooker converts.
-
-| Where | Property | Default |
-|---|---|---|
-| room | `gravity` | 0.25 px/frame² |
-| room | `max_fall_speed` | 4.0 px/frame |
-| room | `water_gravity` | 0.08 px/frame² |
-| entity class (component `Body`) | `hitbox` (w, h, offset from the anchor) | per class |
-| `Body` | `gravity_scale` | 1.0 (0 for flying enemies) |
-| `Body` | `max_speed`, `accel`, `friction` | per class |
-| `Body` | `slope_speed` (factor walking up 1:1 / 1:2 / 1:4), `max_walk_angle` | 0.75 / 0.9 / 1.0, 45° (steeper: slide) |
-| player (component `PlatformerControl`) | `run_speed` | 2.0 px/frame |
-| `PlatformerControl` | `jump_speed` | 5.3 px/frame (about 3.5 tiles high with the default gravity) |
-| `PlatformerControl` | `jump_cut` (release early → lower jump), `coyote_frames`, `jump_buffer_frames` | 0.5, 6, 6 |
-| `PlatformerControl` | `drop_through` (down + jump on jump-through) | on |
-
-Per frame: apply input and gravity to the velocity, then move along X and resolve against the
-grid, then along Y and resolve. The details that make it feel right, as in the games above:
-
-- **Sensors**: two floor sensors at the hitbox's bottom corners, one ceiling sensor pair, wall
-  sensors at mid height. The higher floor result wins, so standing half over a slope works.
-- **Slope snapping**: when walking down a slope, the feet are kept on the surface up to a few
-  pixels per frame, so the player does not hop down a ramp. Walking off a slope's end at speed
-  launches normally.
-- **Steps**: a rise of up to 8 px (a half block) is climbed without jumping (`step_height`).
-- **Jump-through**: only collides while falling and when the feet were above the surface in
-  the previous frame; drop-through ignores it for a few frames.
-- **Ceiling slopes** (vflip) deflect a jump sideways instead of stopping it dead.
-- **Steep slopes** (2:1) make the player slide; `max_walk_angle` decides from where on.
-- **Conveyors and moving platforms** add their speed to whatever stands on them.
-
-Entity against entity uses axis-aligned hitboxes and calls script events (`touch`, `hit`), no
-pushing. The editor can check reachability: with the room's physics it draws the jump arcs
-from every standing spot and marks floors that cannot be reached.
-
-**Objects** are points or rectangles in the `objects` layer. The Tiled `type` (called `class`
-from Tiled 1.9 on) is the Mondskript class; the custom properties are that class's `var(...)`
-fields and override its `defaultproperties`. Points mark the anchor (bottom centre, where the
-feet are). Each object keeps its Tiled object ID as a **persistent ID**: state that must survive
-saving (`Defeated`, "collected", "door opened") is stored per persistent ID, so it does not get
-lost when objects are added or moved.
-
-Engine classes every room can use:
-
-| Class | Shape | Properties |
-|---|---|---|
-| `PlayerStart` | point | `facing` |
-| `Door` | rectangle | `target_room`, `target_door`, `direction` |
-| `CameraZone` | rectangle | camera bounds while the player is inside; `lock_x`, `lock_y` |
-| `KillZone` | rectangle | `respawn` (`last_ground`, `checkpoint`) |
-| `Trigger` | rectangle | `event` (`on_enter`, `on_leave`, `on_use`), `call` (script), `once` |
-| `SavePoint` | point | – |
-| `Pickup` | point | `item`, `persistent` |
-| `MovingPlatform` | rectangle + polyline path | `speed`, `wait_frames`, `loop` |
-
-Everything else (enemies, lanterns, NPCs) is a game class written in Mondskript, such as the
-`Bat` in section 10.
+- Rooms are Tiled maps; every layer has a `role` (`background`, `main`, `foreground`,
+  `collision`, `collision_material`, `objects`).
+- **Collision** follows what platformers of the era stored. The closest model is the GBA/DS
+  Castlevania games (one byte per cell: 4-bit block shape, "solid on top" and "solid at sides
+  and bottom" bits, H/V flips, water and effect bits, as documented by DSVEdit), with Super
+  Metroid (block type plus slope byte) and Sonic (height array and angle per shape) as further
+  references. Blutmond uses two bytes per cell: shape (full, half blocks, slopes 1:1, 1:2, 1:4,
+  2:1, custom), flips, separate top and side solidity (so full platforms, **half platforms**
+  and slopes can all be jump-through), and a material with a parameter (water, damage, death,
+  conveyor, ice, ladder, bounce, mud). Every shape is resolved through a 16-entry height
+  array, so new shapes are table entries.
+- **Physics** is a simple platformer model in fixed point: gravity per room, sensors, slope
+  speed and snapping, steps, jump-through with drop-through, ladders, water, coyote time and
+  jump buffering.
+- **Objects** are Mondskript classes placed in Tiled; their Tiled object ID is the persistent
+  ID for saved per-object state. Engine classes: `PlayerStart`, `Door`, `CameraZone`,
+  `KillZone`, `Trigger`, `SavePoint`, `Pickup`, `MovingPlatform`, `Breakable`.
 
 The test level (local only, see the test data decision in section 20) has these layers added:
 roles on the existing three tile layers (background with parallax 0.5), a collision layer
