@@ -59,7 +59,15 @@ Rules:
 - Content MUST NOT register interrupt handlers or use DMA channels or timers directly; it asks
   the runtime through the API table. On reload the runtime can therefore switch all of them off.
 - The live-link handler runs from the serial interrupt with high priority, so the link works
-  while game logic is paused or stuck in a loop.
+  while game logic is paused or stuck in a loop. The interrupt only receives words and keeps
+  whole packets in a few buffers; the packets are handled at the next frame boundary
+  (`bmLiveFrame`). While the game does not reach one, the buffers fill and the runtime answers
+  "busy" ([link-protocol.md](link-protocol.md) §3), so nothing is lost; handling packets while
+  the game hangs (memory reads, `WATCHDOG`) needs a second, lower-priority context and is
+  future work.
+- Implementation (version 0.2, `src/link/live.h`): the region table lists the link's own
+  memory (runtime) and two content buffers and the state buffer (content). Packs arrive in the
+  buffer the running pack does not use; after a successful `APPLY` the buffers swap roles.
 - A watchdog (timer interrupt checking a frame counter) reports a hang over the link.
 
 ## 4. Room changes and residency
@@ -95,6 +103,9 @@ restart. It is only applied after all data for it has arrived and been checked (
 | `hot_migrate` | changed chunks + migration table | state converted with the table (see [state.md](state.md)), then like `hot` |
 | `module` | one script module | module replaced in its slot; entities whose current state code changed restart that state at its beginning |
 | `state` | state arena or part of it | the given state is loaded, the room is reloaded |
+
+Version 0.2 implements `restart`, `hot` (the current room is found again by its ID in the new
+pack) and `state`; `hot_migrate` and `module` answer "mode not supported".
 
 ## 6. Native modules
 

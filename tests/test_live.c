@@ -93,9 +93,9 @@ static void testHello(void)
   start(&m);
   BmLiveRemote r;
   bool ok = bmLiveMasterHello(&m, &r);
-  if (!ok) printf("error %s; slave in %u out %u bad %u busy %u deferred %u txCount %u txSend %u words %u; master in %u bad %u inbox %u\n", m.pError,
+  if (!ok) printf("error %s; slave in %u out %u bad %u busy %u pending %u txCount %u txSend %u words %u; master in %u bad %u inbox %u\n", m.pError,
      (unsigned)s_live.slave.counters.packetsIn, (unsigned)s_live.slave.counters.packetsOut, (unsigned)s_live.slave.counters.badPackets,
-     (unsigned)s_live.slave.counters.busy, s_live.deferredCount, s_live.slave.txCount, s_live.slave.txSend, (unsigned)s_live.slave.counters.words, (unsigned)m.counters.packetsIn, (unsigned)m.counters.badPackets, (unsigned)m.inboxCount);
+     (unsigned)s_live.slave.counters.busy, s_live.pendingCount, s_live.slave.txCount, s_live.slave.txSend, (unsigned)s_live.slave.counters.words, (unsigned)m.counters.packetsIn, (unsigned)m.counters.badPackets, (unsigned)m.inboxCount);
   TEST_ASSERT(ok);
   TEST_ASSERT(r.hello.protocolVersion == BM_LINK_PROTOCOL_VERSION);
   TEST_ASSERT(r.hello.activeSize == s_levelSize);

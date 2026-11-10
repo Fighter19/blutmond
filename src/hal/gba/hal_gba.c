@@ -188,15 +188,18 @@ void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size)
 
 static BmHalLinkHandler s_linkHandler;
 static void *s_linkContext;
+static uint32_t s_linkNext BM_IWRAM_DATA = 0xFFFFFFFFu;
 
-/// Called from bm_irq_handler (irq.S) in system mode with the user stack.
+/// Called from bm_irq_handler (irq.S) in system mode with the user stack. The port is armed
+/// again first, with the word the handler prepared last time, so the master can clock the
+/// next word right away; the handler's answer goes out one transfer later.
 void bm_hal_serial_irq(void);
-void bm_hal_serial_irq(void)
+BM_IWRAM_CODE void bm_hal_serial_irq(void)
 {
   uint32_t in = GBA_REG_SIODATA32;
-  uint32_t out = s_linkHandler != NULL ? s_linkHandler(s_linkContext, in) : 0xFFFFFFFFu;
-  GBA_REG_SIODATA32 = out;
+  GBA_REG_SIODATA32 = s_linkNext;
   GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ | GBA_SIO_START;
+  s_linkNext = s_linkHandler != NULL ? s_linkHandler(s_linkContext, in) : 0xFFFFFFFFu;
 }
 
 void bmHalLinkStart(BmHalLinkHandler handler, void *pContext, uint32_t firstWord)
@@ -208,6 +211,7 @@ void bmHalLinkStart(BmHalLinkHandler handler, void *pContext, uint32_t firstWord
   GBA_REG_RCNT = 0;                 // serial port in normal/multiplayer modes
   GBA_REG_SIOCNT = GBA_SIO_32BIT;   // external clock
   GBA_REG_SIODATA32 = firstWord;
+  s_linkNext = firstWord;
   GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ;
   GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ | GBA_SIO_START;
   GBA_REG_IE |= GBA_IRQ_SERIAL;

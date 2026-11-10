@@ -4,17 +4,25 @@
  */
 #include "link.h"
 
-#include "pack.h"
+#include "shared.h"
 
 #include <string.h>
 
-uint32_t bmLinkCrcWord(uint32_t crc, uint32_t word)
+// The word path runs for every word in the serial interrupt, so on the GBA it is ARM code in
+// IWRAM with its own copy of the CRC table (the same CRC-32 as bmCrc32, four bits at a time).
+static const uint32_t s_crcNibble[16] BM_IWRAM_DATA = {
+  0x00000000, 0x1DB71064, 0x3B6E20C8, 0x26D930AC, 0x76DC4190, 0x6B6B51F4, 0x4DB26158, 0x5005713C,
+  0xEDB88320, 0xF00F9344, 0xD6D6A3E8, 0xCB61B38C, 0x9B64C2B0, 0x86D3D2D4, 0xA00AE278, 0xBDBDF21C,
+};
+
+BM_IWRAM_CODE uint32_t bmLinkCrcWord(uint32_t crc, uint32_t word)
 {
-  uint8_t b[4] = { (uint8_t)word, (uint8_t)(word >> 8), (uint8_t)(word >> 16), (uint8_t)(word >> 24) };
-  return bmCrc32(crc, b, 4);
+  crc = ~crc ^ word;  // the four bytes, lowest first
+  for (int i = 0; i < 8; i++) crc = (crc >> 4) ^ s_crcNibble[crc & 15];
+  return ~crc;
 }
 
-uint32_t bmLinkPacketWord(const BmLinkPacket *p, uint32_t index)
+BM_IWRAM_CODE uint32_t bmLinkPacketWord(const BmLinkPacket *p, uint32_t index)
 {
   if (index == 0) return 0x42000000u | ((uint32_t)p->type << 16) | ((uint32_t)p->seq << 8) | p->flags;
   if (index == 1) return p->length;
@@ -34,7 +42,7 @@ void bmLinkRxInit(BmLinkRx *pRx, BmLinkPacket *pBuffer)
   pRx->pPacket = pBuffer;
 }
 
-BmLinkRxEvent bmLinkRxWord(BmLinkRx *rx, uint32_t word, uint8_t *pSeq)
+BM_IWRAM_CODE BmLinkRxEvent bmLinkRxWord(BmLinkRx *rx, uint32_t word, uint8_t *pSeq)
 {
   // Resync: four fill words and SYNC, in any state.
   if (word == BM_LINK_WORD_FILL)
@@ -118,12 +126,12 @@ _Static_assert((BM_LINK_SLAVE_TX_SLOTS & (BM_LINK_SLAVE_TX_SLOTS - 1)) == 0, "tx
 void bmLinkSlaveInit(BmLinkSlave *s, BmLinkPacketHandler handler, void *pContext)
 {
   memset(s, 0, sizeof(*s));
-  bmLinkRxInit(&s->rx, &s->rxPacket);
+  bmLinkRxInit(&s->rx, &s->rxSlots[0]);
   s->handler = handler;
   s->pContext = pContext;
 }
 
-static void slaveRelease(BmLinkSlave *s, uint8_t count)
+BM_IWRAM_CODE static void slaveRelease(BmLinkSlave *s, uint8_t count)
 {
   s->txBase = (uint8_t)(s->txBase + count);
   s->txCount = (uint8_t)(s->txCount - count);
@@ -139,7 +147,7 @@ static void slaveRelease(BmLinkSlave *s, uint8_t count)
   s->pollsWithoutAck = 0;
 }
 
-static void slaveRewind(BmLinkSlave *s)
+BM_IWRAM_CODE static void slaveRewind(BmLinkSlave *s)
 {
   if (s->txSend != 0 || s->txWord != 0) s->counters.retransmits++;
   s->txSend = 0;
@@ -147,7 +155,7 @@ static void slaveRewind(BmLinkSlave *s)
   s->pollsWithoutAck = 0;
 }
 
-static void slaveReceive(BmLinkSlave *s, uint32_t received)
+BM_IWRAM_CODE static void slaveReceive(BmLinkSlave *s, uint32_t received)
 {
   uint8_t seq = 0;
   switch (bmLinkRxWord(&s->rx, received, &seq))
@@ -155,10 +163,13 @@ static void slaveReceive(BmLinkSlave *s, uint32_t received)
   case BM_LINK_RX_PACKET:
   {
     s->answerHold = 0;
-    uint8_t diff = (uint8_t)(s->rxPacket.seq - s->rxExpected);
+    BmLinkPacket *p = s->rx.pPacket;
+    uint8_t diff = (uint8_t)(p->seq - s->rxExpected);
     if (diff == 0)
     {
-      if (s->handler == NULL || s->handler(s->pContext, &s->rxPacket))
+      BmLinkTake take = s->handler != NULL ? s->handler(s->pContext, p) : BM_LINK_DONE;
+      if (take == BM_LINK_KEPT && bmLinkSlaveRxFree(s) < 2) take = BM_LINK_REFUSED;  // handler bug: refuse
+      if (take != BM_LINK_REFUSED)
       {
         s->rxExpected++;
         s->counters.packetsIn++;
@@ -167,6 +178,13 @@ static void slaveReceive(BmLinkSlave *s, uint32_t received)
       {
         s->counters.busy++;
         s->busyPending = true;
+      }
+      if (take == BM_LINK_KEPT)
+      {
+        uint32_t slot = (uint32_t)(p - s->rxSlots);
+        s->rxHeld |= (uint8_t)(1u << slot);
+        for (uint32_t i = 0; i < BM_LINK_SLAVE_RX_SLOTS; i++)
+          if (!(s->rxHeld & (1u << i))) { s->rx.pPacket = &s->rxSlots[i]; break; }
       }
     }
     else if (diff < 128)
@@ -221,7 +239,7 @@ static void slaveReceive(BmLinkSlave *s, uint32_t received)
   }
 }
 
-uint32_t bmLinkSlaveExchange(BmLinkSlave *s, uint32_t received)
+BM_IWRAM_CODE uint32_t bmLinkSlaveExchange(BmLinkSlave *s, uint32_t received)
 {
   s->counters.words++;
   slaveReceive(s, received);
@@ -269,17 +287,44 @@ uint32_t bmLinkSlaveExchange(BmLinkSlave *s, uint32_t received)
   return BM_LINK_WORD_IDLE;
 }
 
-bool bmLinkSlaveSend(BmLinkSlave *s, uint8_t type, const void *pPayload, uint16_t length)
+BM_IWRAM_CODE uint32_t bmLinkSlaveRxFree(const BmLinkSlave *s)
 {
-  if (s->txCount >= BM_LINK_SLAVE_TX_SLOTS || length > BM_LINK_MAX_PAYLOAD) return false;
+  uint32_t n = 0;
+  for (uint32_t i = 0; i < BM_LINK_SLAVE_RX_SLOTS; i++) n += !(s->rxHeld & (1u << i));
+  return n;
+}
+
+void bmLinkSlaveRelease(BmLinkSlave *s, const BmLinkPacket *p)
+{
+  uint32_t slot = (uint32_t)(p - s->rxSlots);
+  if (slot < BM_LINK_SLAVE_RX_SLOTS) s->rxHeld &= (uint8_t)~(1u << slot);
+}
+
+BmLinkPacket *bmLinkSlaveSendBegin(BmLinkSlave *s)
+{
+  // txBase + txCount only grows here: the interrupt adds to txBase what it takes from txCount.
+  if (s->txCount >= BM_LINK_SLAVE_TX_SLOTS) return NULL;
   uint8_t seq = (uint8_t)(s->txBase + s->txCount);
   BmLinkPacket *p = &s->tx[SLOT(seq)];
-  p->type = type;
   p->seq = seq;
   p->flags = 0;
+  return p;
+}
+
+void bmLinkSlaveSendCommit(BmLinkSlave *s)
+{
+  s->txCount++;
+}
+
+bool bmLinkSlaveSend(BmLinkSlave *s, uint8_t type, const void *pPayload, uint16_t length)
+{
+  if (length > BM_LINK_MAX_PAYLOAD) return false;
+  BmLinkPacket *p = bmLinkSlaveSendBegin(s);
+  if (p == NULL) return false;
+  p->type = type;
   p->length = length;
   if (length != 0) memcpy(p->payload, pPayload, length);
-  s->txCount++;
+  bmLinkSlaveSendCommit(s);
   return true;
 }
 

@@ -12,6 +12,7 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `src/graphics/` | graphics API: video (modes, backgrounds, palettes, tiles, maps, sprites, line tables), backdrop, tilemaps |
 | `src/pack/` | packs: reader (ROM/RAM, in place), writer for tools, CRC-32 |
 | `src/world/` | rooms from packs (graphics layers, map streaming), collision, platformer physics, the game loop for the engine classes (player, camera, kill zones, doors, save points), the state schema and save states |
+| `src/link/` | live link: protocol (both sides), the runtime's live reload module, the PC side's pack push |
 | `src/ppu/` | software PPU: renders the GBA video state in C; reference for tests, host back end, PPU snapshots |
 | `src/hal/public/hal.h` | hardware abstraction layer: the only interface to a platform |
 | `src/hal/host/` | host back end: the GBA's memories and video state as plain data (tests, editor) |
@@ -21,7 +22,7 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `assets/` | `engine/` (Tiled tilesets for collision and materials), `test_room/` (own test room) |
 | `third_party/` | `stb_image.h` (public domain), used by the cooker |
 | `tests/` | host tests |
-| `tools/` | `cooker/` (`bmcook`: Tiled rooms to packs), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_ppu_render.c` (renders a snapshot), `compare_images.py` |
+| `tools/` | `cooker/` (`bmcook`: Tiled rooms to packs), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_ppu_render.c` (renders a snapshot), `compare_images.py`, `bmlink/` (live link to a running game: Xboo cable or mGBA) |
 
 Hardware addresses may only appear in `src/hal/gba/`; a test checks this.
 
@@ -87,6 +88,18 @@ the same on both).
 
 On the GBA: `build-gba/game.gba` (D-pad, A to jump, up/down on ladders, down + A to drop
 through platforms) and `build-gba/game_autoplay.gba`.
+
+Live link: the game listens on the serial port. `bmlink` pushes a changed pack into it while
+it runs (only the chunks that changed are sent), and reads or loads state:
+
+```
+build/bmlink --mgba build-gba/game.gba run 60 push level.bmpk hot run 600 screenshot out.ppm
+build/bmlink --xboo /dev/parport0 --reset xboo boot build-gba/game_mb.gba hello push level.bmpk hot
+build/bmlink --xboo /dev/parport0 ping 50 stats
+```
+
+The comment at the top of `tools/bmlink/bmlink.c` lists all commands. `--adaptive` tunes the
+per-word delay and remembers it per device.
 
 `-DUSE_SANITIZER=ON` adds AddressSanitizer and UBSan to the host build.
 

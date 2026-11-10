@@ -55,11 +55,11 @@ static uint32_t wireExchange(void *pContext, uint32_t out)
   return in;
 }
 
-static bool handler(void *pContext, const BmLinkPacket *p)
+static BmLinkTake handler(void *pContext, BmLinkPacket *p)
 {
   Wire *w = pContext;
   w->handlerCalls++;
-  if (w->refuseEvery != 0 && w->handlerCalls % w->refuseEvery == 0) return false;
+  if (w->refuseEvery != 0 && w->handlerCalls % w->refuseEvery == 0) return BM_LINK_REFUSED;
   if (w->receivedSize + p->length + 1 > w->receivedCapacity)
   {
     w->receivedCapacity = (w->receivedSize + p->length + 1) * 2;
@@ -69,7 +69,7 @@ static bool handler(void *pContext, const BmLinkPacket *p)
   memcpy(w->pReceived + w->receivedSize, p->payload, p->length);
   w->receivedSize += p->length;
   w->packets++;
-  return true;
+  return BM_LINK_DONE;
 }
 
 static void wireInit(Wire *w, BmLinkMaster *m, uint32_t seed)

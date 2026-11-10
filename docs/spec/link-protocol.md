@@ -1,6 +1,6 @@
 # Link protocol
 
-Version 0.1, draft.
+Version 0.2, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
 
 How the editor (or another GBA) talks to a running Blutmond runtime: booting it, sending
 content, reading state and logs, debugging. Requirement: **wherever xcomms can boot a GBA over
@@ -59,6 +59,7 @@ Special single words:
 | `0x424D4944` (`BMID`) | slave | idle: nothing to send |
 | `0x4241ss00` (`BA`, seq) | both | ACK for packet `ss` |
 | `0x424Ess00` (`BN`, seq) | both | NAK, `ss` is the sequence number expected next |
+| `0x424Ess01` (`BN`, seq, busy) | both | the receiver could not take packet `ss` yet (no buffer); not an error: the sender waits a little and sends from `ss` again, without counting a failure |
 | `0xFFFFFFFF` ×4, then `0x53594E43` (`SYNC`) | master | resync, section 4 |
 
 Packets (both directions):
@@ -79,6 +80,17 @@ ACK (the last sequence number it received in order) or a NAK with the sequence n
 next; the sender then continues from there (go-back-N). The slave sends its own packets when
 polled; the master acknowledges them the same way. Sequence numbers count per direction and
 wrap at 256.
+
+The slave answers a burst of polls once (with the state at that moment) and then ignores the
+next 8 polls unless a packet arrives in between, so its own packets are not starved by
+answers; if an answer is lost the master's further polls get a new one. When the master waits
+for an answer, answers that report no progress may be left over from the previous window's
+polls; three of them in a row count as "nothing arrived".
+
+A slave may answer more than one word late. The GBA runtime arms the serial port again with a
+word prepared in the previous interrupt before it handles the word just received, so the
+master can clock the next word at once; its answers are therefore two words late. Nothing in
+the protocol depends on the exact delay.
 
 The master drives the transfer: it pushes content according to [streaming.md](streaming.md)
 and the slave does not request chunks one by one. The slave's `STATUS` is collected while
@@ -110,6 +122,29 @@ polling for window acknowledgements, so it needs no round trip of its own.
 | 0x50 | `WATCHDOG` | S → M | frame counter and program counter of a detected hang |
 | 0x7F | `ERROR` | both | error code and text |
 
+### Payloads (version 0.2)
+
+All values little endian.
+
+| Packet | Payload |
+|---|---|
+| `HELLO` M → S | empty |
+| `HELLO` S → M | u16 protocol, u16 runtime version, u16 ABI major, u16 ABI minor, u32 profile, u32 content buffer size, u32 size and u32 CRC of the running pack, u32 chunk count, u32 n, then n × (u32 hash, u32 size) of the running pack's chunks |
+| `PING` | any bytes; the slave sends them back |
+| `TOC` | u32 transfer ID, u32 pack size, u16 part, u16 parts, then bytes of the stream "pack header (36 bytes) + chunk table" split over the parts. Part 0 starts a transfer into the content buffer that the running pack does not use; after the last part the runtime copies the chunks it already has (same hash and size) |
+| `CHUNK_BEGIN` | u32 transfer ID, u16 chunk index, u16 0, u32 size, u32 hash |
+| `CHUNK_DATA` | u32 transfer ID, u16 chunk index, u16 0, u32 offset in the chunk, data (at most 1012 bytes) |
+| `CHUNK_END` | u32 transfer ID, u16 chunk index |
+| `APPLY` | u32 transfer ID, u8 mode ([runtime-abi.md](runtime-abi.md) §5), 3 × u8 0, optional room ID (for `restart`). The runtime checks that every chunk is there and the pack's CRC, then applies at a frame boundary and answers with `STATUS` |
+| `STATUS` | u8 kind (0 report, 1 answer to `APPLY`), u8 result (0 ok, 1 transfer incomplete, 2 CRC mismatch, 3 too large, 4 pack refused, 5 state of another layout, 6 mode not supported), u8 mode, u8 0, u32 transfer ID, u32 game frame, u32 room index, s16 x, s16 y, u32 reloads applied |
+| `STATE_GET` | u8 flag mask ([state.md](state.md)) |
+| `STATE_DATA`, `STATE_PUT` | the state as `bmStateWrite` writes it (header with schema hash and CRC) |
+| `LOG` | text |
+
+The master does not wait for chunk-level answers: a pack transfer is `TOC`, then for each
+missing chunk `CHUNK_BEGIN`, `CHUNK_DATA`…, `CHUNK_END`, in windows; the only round trip is
+`APPLY` → `STATUS`.
+
 ## 4. Error handling
 
 - **Retry**: on NAK, CRC mismatch or a timeout (no ACK after a set number of polls), the packet
@@ -140,8 +175,25 @@ used by xcomms `ResetGBA`). The protocol never needs it. With `xboo` the editor 
 a new runtime and to recover after a `WATCHDOG` report or when the runtime stops answering.
 With `none` the editor asks the user to switch the GBA off and on.
 
+## 7. Measurements
+
+In mGBA, with `bmlink` clocking the serial port word by word (the GBA side unchanged):
+
+- the runtime keeps up with one word every 600 CPU cycles (about 28,000 words/s, 110 KB/s
+  raw); its word handler runs from IWRAM as ARM code; at 400 cycles words are lost;
+- at 2048 cycles per word (about 8000 words/s, the expected range of the Xboo cable) a hot
+  reload of the test level's changed room (one 6 KB chunk, applied and answered) takes 0.43 s
+  with no lost words;
+- with 2000 flipped bits and 2000 lost words per million words in each direction, packs, state
+  and restarts still go through (one resync on average); at 5000 per million 1 KB packets
+  rarely arrive whole: smaller packets on bad cables are future work.
+
+The rate on a real Xboo cable still has to be measured (`bmlink --xboo /dev/parport0 ping 50`).
+
 ## History
 
 - 0.1: first draft.
 - 0.1.1: window acknowledgements; master-driven streaming with `DROP`, `SESSION`, `STATUS`,
   `TEST`.
+- 0.2: busy NAK, one answer per burst of polls, answers may be more than one word late,
+  payloads of `HELLO`, `TOC`, `CHUNK_*`, `APPLY`, `STATUS`, `STATE_*`; measurements.

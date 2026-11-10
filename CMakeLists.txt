@@ -216,6 +216,16 @@ if(BM_PLATFORM STREQUAL "host")
   add_library(bm_link_host STATIC src/link/link_master.c src/link/live_master.c)
   target_link_libraries(bm_link_host PUBLIC blutmond)
   target_compile_options(bm_link_host PRIVATE ${BM_WARNINGS})
+  # bmlink without mGBA (Xboo only); with libmgba it is built further down with both.
+  find_path(MGBA_INCLUDE_DIR mgba/core/core.h)
+  find_library(MGBA_LIBRARY mgba)
+  if(NOT (MGBA_INCLUDE_DIR AND MGBA_LIBRARY))
+    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c)
+    target_include_directories(bmlink PRIVATE tools tools/bmlink)
+    target_link_libraries(bmlink PRIVATE bm_link_host)
+    target_compile_definitions(bmlink PRIVATE _GNU_SOURCE)
+    target_compile_options(bmlink PRIVATE ${BM_WARNINGS})
+  endif()
 
   enable_testing()
   foreach(test test_pool test_heaps test_backdrop test_ppu test_pack test_physics test_state test_link)
@@ -300,10 +310,16 @@ if(BM_PLATFORM STREQUAL "host")
   find_library(MGBA_LIBRARY mgba)
   if(MGBA_INCLUDE_DIR AND MGBA_LIBRARY)
     add_executable(bm_mgba_run tools/bm_mgba_run.c src/ppu/ppu.c)
-    target_include_directories(bm_mgba_run PRIVATE ${MGBA_INCLUDE_DIR} src/ppu)
+    target_include_directories(bm_mgba_run PRIVATE ${MGBA_INCLUDE_DIR} src/ppu tools)
     target_link_libraries(bm_mgba_run PRIVATE ${MGBA_LIBRARY})
     # The libmgba headers need POSIX definitions such as PATH_MAX.
     target_compile_definitions(bm_mgba_run PRIVATE _GNU_SOURCE)
+
+    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c tools/bmlink/mgba_link.c)
+    target_include_directories(bmlink PRIVATE ${MGBA_INCLUDE_DIR} tools tools/bmlink)
+    target_link_libraries(bmlink PRIVATE bm_link_host ${MGBA_LIBRARY})
+    target_compile_definitions(bmlink PRIVATE _GNU_SOURCE BM_HAVE_MGBA)
+    target_compile_options(bmlink PRIVATE -Wall -Wextra -Werror)
 
     set(BM_GBA_BUILD_DIR "" CACHE PATH "GBA build directory whose images the tests run in mGBA")
     if(BM_GBA_BUILD_DIR)
@@ -382,6 +398,32 @@ if(BM_PLATFORM STREQUAL "host")
       add_test(NAME state_host_to_gba_matches
         COMMAND ${compare} ${out}/game_host.ppm ${out}/state_host_to_gba.ppm)
       set_tests_properties(state_host_to_gba_matches PROPERTIES FIXTURES_REQUIRED "game_host;state_host_to_gba")
+
+      # Live link (docs/spec/link-protocol.md) with the game running in mGBA, driven word by word
+      # through its serial port by bmlink:
+      #  - a changed room pushed hot changes exactly the one tile on screen, without a reset;
+      #  - with bit errors and lost words on the wire, the autoplaying game takes a changed pack,
+      #    a state and a restart and still plays through (cartridge and multiboot image).
+      set(elf ${BM_GBA_BUILD_DIR}/game.elf)
+      add_test(NAME live_mgba_hot
+        COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 screenshot ${out}/live_before.ppm
+          push ${cooked}/test_level_variant_gba.bmpk hot run 2 screenshot ${out}/live_after.ppm
+          check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+12=0 stats)
+      set_tests_properties(live_mgba_hot PROPERTIES FIXTURES_REQUIRED test_level_variant FIXTURES_SETUP live_mgba_hot)
+      add_test(NAME live_mgba_hot_changes_one_tile
+        COMMAND ${compare} ${out}/live_before.ppm ${out}/live_after.ppm --changed-in 0 0 15 15)
+      set_tests_properties(live_mgba_hot_changes_one_tile PROPERTIES FIXTURES_REQUIRED live_mgba_hot)
+      foreach(image game_autoplay game_autoplay_mb)
+        set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
+        add_test(NAME live_mgba_bit_errors_${image}
+          COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/${image}.gba --errors 2000 2000 run 30 hello
+            push ${cooked}/test_level_variant_gba.bmpk hot
+            state-get ${out}/live_${image}.bmst run 30 state-put ${out}/live_${image}.bmst
+            push ${cooked}/test_level_gba.bmpk restart:test_room
+            push ${cooked}/test_level_variant_gba.bmpk hot run 1200
+            check ${elf}:bm_game_stats+28=4 check ${elf}:bm_game_stats+8=0 check ${elf}:bm_game_stats+12=1 stats)
+        set_tests_properties(live_mgba_bit_errors_${image} PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_variant")
+      endforeach()
 
       # PPU snapshot taken in mGBA, rendered by the software PPU, must match mGBA's picture.
       add_test(NAME snapshot_from_mgba

@@ -3,7 +3,10 @@
 """Compares two binary PPM (P6) images pixel by pixel in 5-bit-per-channel colour (the GBA's
 colour depth). Exits with 1 and reports the differences if they are not equal.
 
-  compare_images.py <a.ppm> <b.ppm> [--diff out.ppm]
+  compare_images.py <a.ppm> <b.ppm> [--diff out.ppm] [--changed-in X0 Y0 X1 Y1]
+
+With --changed-in the images must differ, and only inside that box (inclusive): for checking
+that a live reload changed exactly what it should.
 """
 import sys
 
@@ -37,6 +40,11 @@ def main():
         i = args.index("--diff")
         diff_path = args[i + 1]
         del args[i:i + 2]
+    box = None
+    if "--changed-in" in args:
+        i = args.index("--changed-in")
+        box = tuple(int(v) for v in args[i + 1:i + 5])
+        del args[i:i + 5]
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
@@ -58,6 +66,14 @@ def main():
     if diff_path:
         with open(diff_path, "wb") as f:
             f.write(b"P6\n%d %d\n255\n" % (wa, ha) + bytes(out))
+    if box is not None:
+        x0, y0, x1, y1 = box
+        outside = [d for d in diffs if not (x0 <= d % wa <= x1 and y0 <= d // wa <= y1)]
+        if not diffs or outside:
+            print(f"expected changes only in {box}: {len(diffs)} pixels differ, {len(outside)} outside")
+            return 1
+        print(f"{len(diffs)} pixels changed, all inside {box}")
+        return 0
     if diffs:
         first = diffs[0]
         print(f"{len(diffs)} of {wa * ha} pixels differ; first at x={first % wa} y={first // wa}")

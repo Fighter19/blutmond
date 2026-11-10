@@ -100,10 +100,20 @@ BmLinkRxEvent bmLinkRxWord(BmLinkRx *pRx, uint32_t word, uint8_t *pSeq);
 
 // --- Slave ---------------------------------------------------------------------------------
 
+/// What a packet handler did with a packet.
+typedef enum BmLinkTake {
+  BM_LINK_REFUSED = 0,  // cannot take it now: not acknowledged, the master sends it again
+  BM_LINK_DONE = 1,     // handled; the buffer is reused
+  BM_LINK_KEPT = 2,     // the handler keeps the buffer until bmLinkSlaveRelease
+} BmLinkTake;
+
 /// Called (from the serial interrupt) for each packet received in order with a good CRC.
-/// Returns false if the packet cannot be taken now; it is then not acknowledged and the master
-/// sends it again.
-typedef bool (*BmLinkPacketHandler)(void *pContext, const BmLinkPacket *pPacket);
+/// Must be quick: the next word arrives soon. Long work is done later on kept packets.
+typedef BmLinkTake (*BmLinkPacketHandler)(void *pContext, BmLinkPacket *pPacket);
+
+#ifndef BM_LINK_SLAVE_RX_SLOTS
+#  define BM_LINK_SLAVE_RX_SLOTS 6
+#endif
 
 #ifndef BM_LINK_SLAVE_TX_SLOTS
 #  define BM_LINK_SLAVE_TX_SLOTS 4
@@ -123,7 +133,8 @@ typedef struct BmLinkCounters
 typedef struct BmLinkSlave
 {
   BmLinkRx rx;
-  BmLinkPacket rxPacket;
+  BmLinkPacket rxSlots[BM_LINK_SLAVE_RX_SLOTS];
+  uint8_t rxHeld;          // bit per slot kept by the handler
   BmLinkPacketHandler handler;
   void *pContext;
   uint8_t rxExpected;      // next sequence number from the master
@@ -150,9 +161,22 @@ void bmLinkSlaveInit(BmLinkSlave *pSlave, BmLinkPacketHandler handler, void *pCo
 /// next exchange. Call from the serial interrupt.
 uint32_t bmLinkSlaveExchange(BmLinkSlave *pSlave, uint32_t received);
 
-/// Queues a packet to the master. Returns false if the ring is full. The caller makes sure the
-/// serial interrupt does not run at the same time (bmHalLinkLock).
+/// Receive buffers not kept by the handler. A handler may only keep a packet while at least
+/// two are free (one keeps receiving).
+uint32_t bmLinkSlaveRxFree(const BmLinkSlave *pSlave);
+
+/// Gives a kept packet's buffer back (bmHalLinkLock around it from the main loop).
+void bmLinkSlaveRelease(BmLinkSlave *pSlave, const BmLinkPacket *pPacket);
+
+/// Queues a packet to the master. Returns false if the ring is full. Not for the main loop
+/// while the serial interrupt can run; use Begin/Commit there.
 bool bmLinkSlaveSend(BmLinkSlave *pSlave, uint8_t type, const void *pPayload, uint16_t length);
+
+/// Sending from the main loop: Begin returns a free transmit buffer (or NULL) that the caller
+/// fills (type, length, payload) without blocking the interrupt; Commit (with the interrupt
+/// blocked, it only counts) queues it.
+BmLinkPacket *bmLinkSlaveSendBegin(BmLinkSlave *pSlave);
+void bmLinkSlaveSendCommit(BmLinkSlave *pSlave);
 
 /// Free transmit slots.
 uint32_t bmLinkSlaveTxFree(const BmLinkSlave *pSlave);

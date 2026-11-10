@@ -9,8 +9,9 @@
 // applies the result at a frame boundary without a reset. Also answers HELLO, PING,
 // STATE_GET and takes STATE_PUT.
 //
-// Packets arrive in the serial interrupt (bmLiveHandler); the parts that touch the game run
-// in bmLiveFrame, which the game calls once per frame.
+// Packets arrive in the serial interrupt (bmLiveHandler), which only keeps them in the link's
+// receive buffers; bmLiveFrame, called once per frame, works through them in order. So the
+// interrupt stays short enough not to miss words; a slow frame only delays acknowledgements.
 
 #include "link.h"
 #include "pack.h"
@@ -19,7 +20,6 @@
 #define BM_LIVE_RUNTIME_VERSION 1
 #define BM_LIVE_MAX_CHUNKS 512
 #define BM_LIVE_STATE_CAPACITY 1024
-#define BM_LIVE_DEFERRED 4
 
 /// Reload modes (runtime-abi.md §5).
 typedef enum BmLiveMode {
@@ -86,12 +86,12 @@ typedef struct BmLive
   uint32_t tocStreamSize, tocReceived;
   uint32_t tocOffset;
   uint32_t chunkCount;
-  bool tocComplete, copyPending, transferFailed;
+  bool tocComplete, transferFailed;
   uint8_t present[BM_LIVE_MAX_CHUNKS / 8];
 
-  // Packets handled at the frame boundary.
-  BmLinkPacket deferred[BM_LIVE_DEFERRED];
-  uint8_t deferredCount;
+  // Packets kept by the interrupt, handled at the frame boundary in this order.
+  BmLinkPacket *pending[BM_LINK_SLAVE_RX_SLOTS];
+  uint8_t pendingCount;
 
   uint8_t statePut[BM_LIVE_STATE_CAPACITY];
   uint32_t statePutSize;
@@ -108,10 +108,10 @@ void bmLiveInit(BmLive *pLive, const BmLiveHooks *pHooks, uint8_t *pBuffer0, uin
 void bmLiveStart(BmLive *pLive);
 
 /// The packet handler (serial interrupt). Public for tests that drive the slave directly.
-bool bmLiveHandler(void *pContext, const BmLinkPacket *pPacket);
+BmLinkTake bmLiveHandler(void *pContext, BmLinkPacket *pPacket);
 
-/// Call once per frame, between game frames: handles HELLO, STATE_GET, APPLY and copies
-/// resident chunks.
+/// Call once per frame, between game frames: handles the packets received since the last
+/// call (chunk data, state, HELLO, APPLY, ...).
 void bmLiveFrame(BmLive *pLive);
 
 /// Sends a LOG packet (dropped if the link is busy).

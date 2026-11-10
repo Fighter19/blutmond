@@ -9,7 +9,7 @@
 
 #include <string.h>
 
-static uint32_t exchange(void *pContext, uint32_t received)
+BM_IWRAM_CODE static uint32_t exchange(void *pContext, uint32_t received)
 {
   return bmLinkSlaveExchange(&((BmLive *)pContext)->slave, received);
 }
@@ -38,10 +38,29 @@ void bmLiveStart(BmLive *l)
 
 // --- Serial interrupt ----------------------------------------------------------------------
 
-static bool defer(BmLive *l, const BmLinkPacket *p)
+BM_IWRAM_CODE BmLinkTake bmLiveHandler(void *pContext, BmLinkPacket *p)
 {
-  if (l->deferredCount >= BM_LIVE_DEFERRED) return false;
-  l->deferred[l->deferredCount++] = *p;
+  BmLive *l = pContext;
+  // Keep it for bmLiveFrame; one buffer must stay free for receiving.
+  if (l->pendingCount >= BM_LINK_SLAVE_RX_SLOTS || bmLinkSlaveRxFree(&l->slave) < 2) return BM_LINK_REFUSED;
+  l->pending[l->pendingCount++] = p;
+  return BM_LINK_KEPT;
+}
+
+// --- Frame boundary ------------------------------------------------------------------------
+
+static bool send(BmLive *l, uint8_t type, const void *pPayload, uint16_t length)
+{
+  uint32_t lock = bmHalLinkLock();
+  BmLinkPacket *p = bmLinkSlaveSendBegin(&l->slave);
+  bmHalLinkUnlock(lock);
+  if (p == NULL) return false;
+  p->type = type;
+  p->length = length;
+  if (length != 0) memcpy(p->payload, pPayload, length);
+  lock = bmHalLinkLock();
+  bmLinkSlaveSendCommit(&l->slave);
+  bmHalLinkUnlock(lock);
   return true;
 }
 
@@ -52,6 +71,27 @@ static bool chunkEntry(const BmLive *l, uint32_t index, uint32_t *pOffset, uint3
   *pOffset = bmRead32(e + 4);
   *pSize = bmRead32(e + 8);
   return *pOffset <= l->totalSize && *pSize <= l->totalSize - *pOffset;
+}
+
+/// Copies the chunks of the new pack that the running one already has (same hash and size).
+static void copyResidentChunks(BmLive *l)
+{
+  uint32_t activeCount = bmPackChunkCount(&l->active);
+  for (uint32_t i = 0; i < l->chunkCount; i++)
+  {
+    const uint8_t *e = l->pStaging + l->tocOffset + i * BM_PACK_CHUNK_ENTRY_SIZE;
+    uint32_t offset = bmRead32(e + 4), size = bmRead32(e + 8), hash = bmRead32(e + 20);
+    if (offset > l->totalSize || size > l->totalSize - offset) continue;
+    for (uint32_t k = 0; k < activeCount; k++)
+    {
+      BmChunkEntry a;
+      if (!bmPackGetChunk(&l->active, k, &a) || a.hash != hash || a.size != size) continue;
+      memcpy(l->pStaging + offset, l->active.pData + a.offset, size);
+      l->present[i / 8] |= (uint8_t)(1u << (i % 8));
+      l->chunksCopied++;
+      break;
+    }
+  }
 }
 
 static void receiveToc(BmLive *l, const BmLinkPacket *p)
@@ -69,7 +109,7 @@ static void receiveToc(BmLive *l, const BmLinkPacket *p)
     l->transferId = id;
     l->totalSize = total;
     l->tocReceived = 0;
-    l->tocComplete = l->copyPending = false;
+    l->tocComplete = false;
     l->transferFailed = total > l->capacity || n < BM_PACK_HEADER_SIZE;
     l->pStaging = l->pBuffers[l->activeBuffer == 0 ? 1 : 0];
     memset(l->present, 0, sizeof(l->present));
@@ -95,7 +135,7 @@ static void receiveToc(BmLive *l, const BmLinkPacket *p)
   {
     l->tocComplete = l->tocReceived == l->tocStreamSize;
     l->transferFailed = !l->tocComplete;
-    l->copyPending = l->tocComplete;  // resident chunks are copied in bmLiveFrame
+    if (l->tocComplete) copyResidentChunks(l);
   }
 }
 
@@ -112,78 +152,6 @@ static void receiveChunkData(BmLive *l, const BmLinkPacket *p)
     return;
   }
   memcpy(l->pStaging + offset + at, p->payload + BM_LIVE_CHUNK_DATA_HEADER, n);
-}
-
-bool bmLiveHandler(void *pContext, const BmLinkPacket *p)
-{
-  BmLive *l = pContext;
-  switch (p->type)
-  {
-  case BM_LINK_PING:
-    return bmLinkSlaveSend(&l->slave, BM_LINK_PING, p->payload, p->length);
-  case BM_LINK_TOC:
-    if (l->copyPending) return false;  // the frame has not copied the last one yet
-    receiveToc(l, p);
-    return true;
-  case BM_LINK_CHUNK_BEGIN:
-    return true;
-  case BM_LINK_CHUNK_DATA:
-    receiveChunkData(l, p);
-    return true;
-  case BM_LINK_CHUNK_END:
-    if (p->length >= 6 && bmLinkGet32(p->payload) == l->transferId)
-    {
-      uint32_t index = bmLinkGet16(p->payload + 4);
-      if (index < BM_LIVE_MAX_CHUNKS) l->present[index / 8] |= (uint8_t)(1u << (index % 8));
-      l->chunksReceived++;
-    }
-    return true;
-  case BM_LINK_STATE_PUT:
-    if (p->length > sizeof(l->statePut)) return true;  // refused when applied
-    memcpy(l->statePut, p->payload, p->length);
-    l->statePutSize = p->length;
-    return true;
-  case BM_LINK_HELLO:
-  case BM_LINK_STATE_GET:
-  case BM_LINK_APPLY:
-    return defer(l, p);
-  default:
-    return true;  // not handled by this runtime; dropped
-  }
-}
-
-// --- Frame boundary ------------------------------------------------------------------------
-
-static bool send(BmLive *l, uint8_t type, const void *pPayload, uint16_t length)
-{
-  uint32_t lock = bmHalLinkLock();
-  bool ok = bmLinkSlaveSend(&l->slave, type, pPayload, length);
-  bmHalLinkUnlock(lock);
-  return ok;
-}
-
-/// Copies the chunks of the new pack that the running one already has (same hash and size).
-static void copyResidentChunks(BmLive *l)
-{
-  uint32_t activeCount = bmPackChunkCount(&l->active);
-  for (uint32_t i = 0; i < l->chunkCount; i++)
-  {
-    const uint8_t *e = l->pStaging + l->tocOffset + i * BM_PACK_CHUNK_ENTRY_SIZE;
-    uint32_t offset = bmRead32(e + 4), size = bmRead32(e + 8), hash = bmRead32(e + 20);
-    if (offset > l->totalSize || size > l->totalSize - offset) continue;
-    for (uint32_t k = 0; k < activeCount; k++)
-    {
-      BmChunkEntry a;
-      if (!bmPackGetChunk(&l->active, k, &a) || a.hash != hash || a.size != size) continue;
-      memcpy(l->pStaging + offset, l->active.pData + a.offset, size);
-      uint32_t lock = bmHalLinkLock();
-      l->present[i / 8] |= (uint8_t)(1u << (i % 8));
-      bmHalLinkUnlock(lock);
-      l->chunksCopied++;
-      break;
-    }
-  }
-  l->copyPending = false;
 }
 
 static bool sendHello(BmLive *l)
@@ -224,7 +192,6 @@ static bool sendState(BmLive *l, uint8_t mask)
 static BmLiveResult applyPack(BmLive *l, uint32_t id, BmLiveMode mode, const char *roomId)
 {
   if (id != l->transferId || l->pStaging == NULL || !l->tocComplete || l->transferFailed) return BM_LIVE_ERROR_TRANSFER;
-  if (l->copyPending) copyResidentChunks(l);
   for (uint32_t i = 0; i < l->chunkCount; i++)
     if (!(l->present[i / 8] & (1u << (i % 8)))) return BM_LIVE_ERROR_TRANSFER;
   BmPack pack;
@@ -284,29 +251,57 @@ static bool handleApply(BmLive *l, const BmLinkPacket *p)
   return true;
 }
 
+/// Handles one received packet; false if it has to wait (no room to answer yet).
+static bool handle(BmLive *l, const BmLinkPacket *p)
+{
+  switch (p->type)
+  {
+  case BM_LINK_PING:
+    return send(l, BM_LINK_PING, p->payload, p->length);
+  case BM_LINK_TOC:
+    receiveToc(l, p);
+    return true;
+  case BM_LINK_CHUNK_DATA:
+    receiveChunkData(l, p);
+    return true;
+  case BM_LINK_CHUNK_END:
+    if (p->length >= 6 && bmLinkGet32(p->payload) == l->transferId)
+    {
+      uint32_t index = bmLinkGet16(p->payload + 4);
+      if (index < BM_LIVE_MAX_CHUNKS) l->present[index / 8] |= (uint8_t)(1u << (index % 8));
+      l->chunksReceived++;
+    }
+    return true;
+  case BM_LINK_STATE_PUT:
+    if (p->length <= sizeof(l->statePut))
+    {
+      memcpy(l->statePut, p->payload, p->length);
+      l->statePutSize = p->length;
+    }
+    return true;
+  case BM_LINK_HELLO:
+    return sendHello(l);
+  case BM_LINK_STATE_GET:
+    return sendState(l, p->length >= 1 ? p->payload[0] : BM_STATE_SNAPSHOT);
+  case BM_LINK_APPLY:
+    return handleApply(l, p);
+  default:
+    return true;  // not handled by this runtime (CHUNK_BEGIN carries nothing needed here)
+  }
+}
+
 void bmLiveFrame(BmLive *l)
 {
-  if (l->copyPending) copyResidentChunks(l);
-  // Work through the deferred packets in order; one that cannot be answered yet stays.
   for (;;)
   {
     uint32_t lock = bmHalLinkLock();
-    bool any = l->deferredCount != 0;
-    BmLinkPacket *p = &l->deferred[0];
+    BmLinkPacket *p = l->pendingCount != 0 ? l->pending[0] : NULL;
     bmHalLinkUnlock(lock);
-    if (!any) break;
-    bool done;
-    switch (p->type)
-    {
-    case BM_LINK_HELLO: done = sendHello(l); break;
-    case BM_LINK_STATE_GET: done = sendState(l, p->length >= 1 ? p->payload[0] : BM_STATE_SNAPSHOT); break;
-    case BM_LINK_APPLY: done = handleApply(l, p); break;
-    default: done = true; break;
-    }
-    if (!done) break;
+    if (p == NULL || !handle(l, p)) break;
     lock = bmHalLinkLock();
-    l->deferredCount--;
-    memmove(&l->deferred[0], &l->deferred[1], l->deferredCount * sizeof(BmLinkPacket));
+    l->pendingCount--;
+    for (uint32_t i = 0; i < l->pendingCount; i++) l->pending[i] = l->pending[i + 1];
+    bmLinkSlaveRelease(&l->slave, p);
     bmHalLinkUnlock(lock);
   }
 }
