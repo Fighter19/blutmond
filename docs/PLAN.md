@@ -302,7 +302,7 @@ second; the real number has to be measured on hardware.
 ## 9. Transports: Xboo, Raspberry Pi, GBA to GBA
 
 The editor talks to the GBA through one **transport interface** (`bm_link`): open, exchange
-32-bit words, measured rate. The packet protocol on top (upload, live
+32-bit words, optional reset, measured rate. The packet protocol on top (upload, live
 reload, state, log, GDB) is the same for every transport.
 
 | Transport | Who makes the clock | Expected rate | Status |
@@ -337,8 +337,8 @@ Possible improvements on the parallel port side:
 ### Robustness: wherever xcomms works, Blutmond works
 
 The baseline is the plain four-wire Xboo cable (SC, SI, SO, GND) as documented for xcomms:
-no SD wire, no reset wire, any PC and cable length on which xcomms boots a GBA. Nothing in the
-protocol may need more than that, and it has to live with some bit errors:
+no SD wire, no reset wire required, any PC and cable length on which xcomms boots a GBA.
+Nothing in the protocol may need more than that, and it has to live with some bit errors:
 
 - **Initial boot** uses the same BIOS multiboot sequence as xcomms `NormalBoot` (handshake
   `0x6202`/`0x72`, header, key exchange, CRC), with the same per-word delay setting. If xcomms
@@ -371,8 +371,11 @@ KB and arrives in a fraction of a second even over the parallel port.
   the GBA, which is also how the live-link handler and the GDB stub are reached.
 - The parallel port code is rewritten for Blutmond as a small library (`xboo`) with
   `parport.cxx` as the template; the FLTK user interface of xcomms is not needed.
-- The reset line is not used; the live workflow does not need it. The device is started once
-  by switching it on with no cartridge (or with the runtime on a cartridge), as with xcomms.
+- **Reset is a setting** per device: `none` or `xboo` (the reset wire from the original Xboo
+  documentation, as used by xcomms `ResetGBA`). The live workflow never needs it. When it is
+  set, the editor uses it to upload a new runtime, and to recover when the runtime no longer
+  answers (after a crash in AOT code, or when the watchdog reports a hang). With `none` the
+  editor asks the user to switch the GBA off and on instead.
 
 ## 10. Scripting language
 
@@ -620,6 +623,95 @@ Rules that follow from this:
 - The GBA-specific editor views (palette banks, VRAM map, OAM) work on the cooked result for
   the GBA profile; the source asset stays as it was.
 
+### Rooms: layers, collision, physics, objects
+
+A room is a Tiled map (`.tmx`, Tiled 1.8 or newer) or the same data made in the room editor.
+Both are the source format; the cooker reads either. Everything below is plain Tiled, so rooms
+can be edited without the Blutmond editor.
+
+**Layers** carry a `role` property:
+
+| Role | Content | Cooked to |
+|---|---|---|
+| `background` | tile layer, may use Tiled's `parallaxx`/`parallaxy` | BG layer with scroll factor (line table if it varies per line) |
+| `main` | tile layer the player walks in front of | BG layer |
+| `foreground` | tile layer drawn in front of sprites | BG layer with higher priority |
+| `collision` | tile layer using the Blutmond collision tileset | collision grid in the pack, not drawn |
+| `objects` | object layer | entity spawn table |
+
+Layers without a role are ignored with a warning, so nothing is cooked by accident.
+
+**Collision** is a grid separate from the graphics, cell size 16 px by default (room property
+`collision_cell`). It uses a small tileset shipped with Blutmond (`blutmond_collision.tsx`);
+each tile has a `collision` property:
+
+| Type | Behaviour |
+|---|---|
+| `empty` | nothing |
+| `solid` | blocks from every side |
+| `platform` | one-way: solid from above, can be jumped through from below and dropped through (down + jump) |
+| `slope_up_45`, `slope_down_45` | 45° floor; walking follows the surface |
+| `slope_up_22_low/high`, `slope_down_22_high/low` | 22.5° floor made of two cells |
+| `ladder` | climbable; up/down switches to climbing |
+| `water` | swimming: room property `water_gravity`, slower movement |
+| `hazard` | damage on touch (spikes) |
+
+Graphics tilesets may also carry a `collision` property per tile; the cooker then fills the
+collision grid automatically, and a hand-drawn collision layer overrides it. Room edges without
+a `Door` are walls (`edges_solid`, default true); falling out of the bottom is handled by a
+`KillZone`.
+
+**Physics** is a simple platformer model, not a rigid-body simulation. All values are fixed
+point (`fix`, 24.8) in pixels and frames; Tiled stores them as decimals, the cooker converts.
+
+| Where | Property | Default |
+|---|---|---|
+| room | `gravity` | 0.25 px/frame² |
+| room | `max_fall_speed` | 4.0 px/frame |
+| room | `water_gravity` | 0.08 px/frame² |
+| entity class (component `Body`) | `hitbox` (w, h, offset from the anchor) | per class |
+| `Body` | `gravity_scale` | 1.0 (0 for flying enemies) |
+| `Body` | `max_speed`, `accel`, `friction` | per class |
+| player (component `PlatformerControl`) | `run_speed` | 2.0 px/frame |
+| `PlatformerControl` | `jump_speed` | 5.3 px/frame (about 3.5 tiles high with the default gravity) |
+| `PlatformerControl` | `jump_cut` (release early → lower jump), `coyote_frames`, `jump_buffer_frames` | 0.5, 6, 6 |
+
+Per frame: apply input and gravity to the velocity, then move along X and resolve against the
+grid, then along Y and resolve (slopes snap the feet to the surface, platforms only block when
+falling onto them from above). Entities stand on moving platforms by being carried with them.
+Entity against entity uses axis-aligned hitboxes and calls script events (`touch`,
+`hit`), no pushing. The editor can check reachability: with the room's physics it draws the
+jump arcs from every standing spot and marks floors that cannot be reached.
+
+**Objects** are points or rectangles in the `objects` layer. The Tiled `type` (called `class`
+from Tiled 1.9 on) is the Mondskript class; the custom properties are that class's `var(...)`
+fields and override its `defaultproperties`. Points mark the anchor (bottom centre, where the
+feet are). Each object keeps its Tiled object ID as a **persistent ID**: state that must survive
+saving (`Defeated`, "collected", "door opened") is stored per persistent ID, so it does not get
+lost when objects are added or moved.
+
+Engine classes every room can use:
+
+| Class | Shape | Properties |
+|---|---|---|
+| `PlayerStart` | point | `facing` |
+| `Door` | rectangle | `target_room`, `target_door`, `direction` |
+| `CameraZone` | rectangle | camera bounds while the player is inside; `lock_x`, `lock_y` |
+| `KillZone` | rectangle | `respawn` (`last_ground`, `checkpoint`) |
+| `Trigger` | rectangle | `event` (`on_enter`, `on_leave`, `on_use`), `call` (script), `once` |
+| `SavePoint` | point | – |
+| `Pickup` | point | `item`, `persistent` |
+| `MovingPlatform` | rectangle + polyline path | `speed`, `wait_frames`, `loop` |
+
+Everything else (enemies, lanterns, NPCs) is a game class written in Mondskript, such as the
+`Bat` in section 10.
+
+The test level (local only, see the test data decision in section 20) has these layers added:
+roles on the existing three tile layers (background with parallax 0.5), a collision layer
+(two ground parts, a floating ledge between two pits, a cliff with an overhang) and objects
+(player start, camera zone, kill zone below the pits, door at the cliff top, save point,
+pickup on the ledge, lanterns, a bat, a patrolling zombie, a music trigger).
+
 ### Ideas from SceneCompiler/SceneLoaderGBA
 
 The earlier SceneCompiler/SceneLoaderGBA pipeline (Tiled maps → binary archive → multiboot
@@ -727,7 +819,7 @@ hardware does and which ways out there are.
 |---|---|---|
 | PC (Linux/Windows/macOS) | yes | host back end of the HAL |
 | Browser | yes | Emscripten, WebGL 1, SDL3 audio (WebAudio), scripts in the interpreter or as WASM from the generated C |
-| SNES | partly | C compilers for the 65816 produce slow code; data formats, bytecode and interpreter can be ported, the runtime would probably need assembly parts; the PPU model fits well (mode 7, HDMA) |
+| SNES (next target) | partly | C compilers for the 65816 produce slow code; data formats, bytecode and interpreter can be ported, the runtime would probably need assembly parts; the PPU model fits well (mode 7, HDMA) |
 | Game Boy / GBC | data only | 8 KB of RAM and an 8-bit CPU: the runtime does not fit. A reduced runtime (e.g. with GBDK) for simple games that reads packs in a GB profile is possible |
 
 The runtime is written so it can be ported later (HAL, fixed point, no pointers in state, C
@@ -751,7 +843,9 @@ is meant for, and the cooker reports per profile what a port would change.
     the expected migration;
   - sound: mixer output bit exact between host and the GBA build in mGBA;
   - asset pipeline: palette packer and tile dedup against fixed inputs; cooking one project
-    for two profiles (GBA and a GB/GBC profile) with the expected change report;
+    for two profiles (GBA and SNES) with the expected change report;
+  - test level (from `BM_TESTDATA_DIR`): cook it, load it on the host, run a recorded input that
+    crosses both pits and climbs the cliff, compare the state hash;
   - link robustness: a transport test double that flips bits and drops words at a set rate;
     transfers must still complete and apply correctly;
   - size budgets: runtime size and IWRAM use per module in CI.
@@ -764,7 +858,7 @@ is meant for, and the cooker reports per profile what a port would change.
 | M1 | graphics core: BG layers, sprites, palettes, line table; software PPU; PPU snapshots | test scene looks the same on GBA and host (golden image) |
 | M2 | asset pipeline: source asset model, cooker with change report, pack format, Tiled import, tile dedup, palette packer, colour correction | a room made in Tiled is shown on GBA and host from a Blutmond pack; the same room cooks for a second profile with a report |
 | M3 | editor shell: `ose-ui` split out, GLES2 canvas, SDL3, classic theme; tile/palette windows, hardware window | editor runs on the desktop and in the browser (WebGL 1) |
-| M4 | room editor, collision, player physics, camera, room changes, VRAM tile streaming | a playable room with doors on the GBA |
+| M4 | room editor, collision grid, player physics, objects and engine classes, camera, room changes, VRAM tile streaming | the test level is playable on the GBA: both pits can be jumped, the cliff can be climbed, the kill zone respawns the player, the door leads to a second room |
 | M5 | state schema, save states, state map in the editor | save state taken on the host loads in mGBA (and back) |
 | M6 | live link: `xboo` library (measure the rate first), packet protocol with CRC/retry/resync, adaptive delay, region table, reload modes | the runtime stays on the GBA; a changed room and a changed state are pushed without a reset over a four-wire Xboo cable; the bit-error test passes |
 | M7 | scripting: parser, types, bytecode, verifier, interpreter; text view; then node view | enemy and door scripted; text/node switch is lossless; script swap over the live link |
@@ -796,7 +890,9 @@ is meant for, and the cooker reports per profile what a port would change.
 | Window/input | SDL3, downloaded by CMake when needed, also for WASM |
 | Toolkit | split out as its own repository [Fighter19/ose-ui](https://github.com/Fighter19/ose-ui) |
 | Portability | runtime portable later; all assets portable to other retro platforms from the start (section 14) |
-| Cable features | only the four basic Xboo wires are assumed; SD burst is used only if detected; no reset wire; the protocol tolerates bit errors (section 9) |
+| Cable features | only the four basic Xboo wires are assumed; SD burst is used only if detected; the reset wire is a setting per device; the protocol tolerates bit errors (section 9) |
+| Second target | SNES is the next platform after the GBA, and the second cooker profile that proves the asset model |
+| Test data | third-party test data is used locally only and never committed (`testdata/` is ignored; tests read it from `BM_TESTDATA_DIR` and are skipped without it) |
 | SceneCompiler/SceneLoaderGBA | ideas are taken over, code is not |
 | Syntax | modelled on UnrealScript (classes, fixed fields, states, few strings), avoiding UnrealScript's mistakes (section 10) |
 | PC ↔ GBA cable | Xboo cable on the parallel port with the own `ppdev` driver (xcomms, branch `parport`); Raspberry Pi/RP2040 as later options |
@@ -806,10 +902,9 @@ is meant for, and the cooker reports per profile what a port would change.
 
 **Still open**
 
-1. **Second asset profile**: which platform should be the second cooker target to prove the
-   asset model (GBC is the cheapest check, SNES the closest match)?
-2. **Test maps**: the Tiled rooms used by SceneCompiler are not in its repository. Can they be
-   shared as test data, or should new test rooms be made?
+1. **Test level tileset**: the test map references `Global_Tileset.png`, which is not in the
+   test data. Its collision was derived from the tile structure alone (section 14) and should
+   be checked against the real graphics.
 
 ## 21. Sources
 

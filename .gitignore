@@ -1,1 +1,2 @@
-build
+# Third-party test data: used locally, never committed (see docs/PLAN.md)
+/testdata/
