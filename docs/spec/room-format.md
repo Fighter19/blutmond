@@ -307,32 +307,71 @@ missing below open bottom edges.
 
 ## 7. Cooked form
 
-Chunks written per room (see [pack-format.md](pack-format.md) for the container):
+Chunks written per room (see [pack-format.md](pack-format.md) for the container). All values
+little endian; offsets are from the start of the chunk.
 
 ```
-'ROOM'  struct BmRoomHeader {
+'ROOM'  struct BmRoomHeader {              // 44 bytes
           u16 width_px, height_px;
-          u8  collision_cell;        // 8 or 16
-          u8  layer_count;
-          u16 flags;                 // bit 0: edges_solid
+          u8  collision_cell;              // 8 or 16
+          u8  layer_count;                 // graphics layers, at most 4
+          u16 flags;                       // bit 0: edges_solid
           fix gravity, max_fall_speed, water_gravity, water_max_fall_speed;
-          u16 music_id;              // 0xFFFF = none
+          u16 music;                       // string ID, 0xFFFF = none
           u16 object_count;
-          u8  area;                  // area group, 0 = none
+          u8  area;                        // area group
           u8  dep_count;
-          BmRoomLayer layers[layer_count];  // role, priority, parallax (fix), map chunk index
-          u16 deps[dep_count];       // chunk indices needed from the global and area groups
+          u16 tiles_chunk, palette_chunk;  // in the area group
+          u16 collision_chunk, objects_chunk;
+          u16 vram_layout_chunk;           // VLAY of the area
+          u16 room_id;                     // string ID
+          u16 reserved;
         }
-'COLL'  u16 width, height (cells); u8 cell_size; u8 pad[3];
-        u8 cells[width * height][2];        // row major, §3.2
+        struct BmRoomLayer {               // 12 bytes, layer_count times
+          u8  role;                        // 0 background, 1 main, 2 foreground
+          u8  priority;                    // 0 front .. 3 back
+          u16 map_chunk;                   // TMAP
+          fix parallax_x, parallax_y;
+        }
+        u16 deps[dep_count];               // chunk indices needed from other groups
+'TMAP'  u16 width, height;                 // in 8x8 cells
+        u8  format;                        // 0 GBA map entries, 1 SNES map entries
+        u8  reserved; u16 reserved;
+        u16 entries[width * height];       // row major, the profile's map entry format
+'COLL'  u16 width, height;                 // in cells
+        u8  cell_size; u8 pad[3];
+        u8  cells[width * height][2];      // row major, §3.2
 'SHAP'  u8 count; u8 pad[3]; { u8 heights[16]; u8 angle; u8 pad[3]; } [count]
-'OBJS'  { u16 class_id; u16 persistent_id; s16 x, y; u16 w, h;
-          u16 props_offset; u16 props_size; } [object_count]
-        followed by the property blobs (class field layout, see state.md)
+'OBJS'  u16 count; u16 reserved;
+        { u16 class;                       // string ID of the class name
+          u16 persistent_id;               // Tiled object ID
+          s16 x, y; u16 w, h;              // anchor (points) or top-left (rectangles)
+          u16 name;                        // string ID
+          u16 property_count;
+          u32 properties_offset;           // to property_count pairs of u16 string IDs (key, value)
+        } [count]                          // 20 bytes each
 ```
+
+Object properties are stored as string pairs until class layouts exist
+([mondskript.md](mondskript.md)); then they become field values in the class layout.
+
+Chunks of the area (pack-format.md §2): `VLAY`, `PALE` and `TILE`:
+
+```
+'PALE'  u8 kind;                           // 0 background, 1 sprites
+        u8 first_bank, bank_count, reserved;
+        u16 colours[bank_count * 16];      // entry 0 of bank 0 is the backdrop colour
+'TILE'  u16 count; u8 bpp;                 // 4
+        u8 format;                         // 0 GBA (linear, low nibble = left pixel), 1 SNES planar
+        u8 data[count * 32];               // tile 0 is always the empty tile
+```
+
+The string table (`STRS`, group 0) holds class names, object names, property keys and values,
+room IDs and song names.
 
 ## History
 
 - 0.1: first draft.
 - 0.1.1: solid bodies, pushing with weight-based resistance, chains and loads (§4.5).
 - 0.1.2: room property `area`; dependency list in `ROOM`.
+- 0.1.3: exact layouts of `ROOM`, `TMAP`, `OBJS`, `PALE` and `TILE` as implemented by the cooker.

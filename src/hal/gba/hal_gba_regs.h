@@ -21,6 +21,7 @@
 
 #define GBA_REG_DISPCNT   GBA_REG16(0x000)
 #define GBA_REG_VCOUNT    GBA_REG16(0x006)
+#define GBA_REG_KEYINPUT  GBA_REG16(0x130)
 
 // DMA channel 0 (highest priority; used for line tables)
 #define GBA_REG_DMA0SAD   GBA_REG32(0x0B0)

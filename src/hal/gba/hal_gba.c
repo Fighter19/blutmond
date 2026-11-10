@@ -139,3 +139,9 @@ void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues)
   s_lineValues[GBA_SCREEN_HEIGHT] = pValues[GBA_SCREEN_HEIGHT - 1];
   s_lineReg = reg;
 }
+
+uint16_t bmHalInputKeys(void)
+{
+  // KEYINPUT has 0 for pressed buttons; the bit order matches BM_KEY_*.
+  return (uint16_t)(~GBA_REG_KEYINPUT & 0x03FF);
+}

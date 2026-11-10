@@ -14,6 +14,7 @@ static uint8_t s_ewram[256 * 1024];
 static uint8_t s_iwram[32 * 1024];
 static BmPpuState s_ppu;
 static uint32_t s_frame;
+static uint16_t s_keys;
 static int s_initialised;
 
 static void ensureInit(void)
@@ -141,5 +142,16 @@ void bmHalHostReset(void)
 {
   s_initialised = 0;
   s_frame = 0;
+  s_keys = 0;
   ensureInit();
+}
+
+uint16_t bmHalInputKeys(void)
+{
+  return s_keys;
+}
+
+void bmHalHostSetKeys(uint16_t keys)
+{
+  s_keys = keys;
 }

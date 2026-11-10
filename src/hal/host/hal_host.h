@@ -20,5 +20,8 @@ uint32_t bmHalHostFrame(void);
 /// Renders the current video state (BGR555, 240x160).
 void bmHalHostRender(uint16_t *pOut);
 
+/// Buttons that bmHalInputKeys() reports from now on.
+void bmHalHostSetKeys(uint16_t keys);
+
 /// Puts the virtual hardware back into its power-on state.
 void bmHalHostReset(void);
