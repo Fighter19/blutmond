@@ -157,9 +157,11 @@ entity with a `Body`:
 
 1. apply input (for `PlatformerControl`) and gravity (`gravity × gravity_scale`, water values
    inside water) to the velocity; clamp to `max_fall_speed`;
-2. add the speed of what the entity stands on (conveyor, moving platform);
-3. move along X, resolve against the grid (walls, slopes, steps);
-4. move along Y, resolve against the grid (floors, ceilings, jump-through);
+2. add the speed of what the entity stands on (conveyor, moving platform, another body);
+3. move along X: resolve against solid bodies (pushing, §4.5), then against the grid (walls,
+   slopes, steps);
+4. move along Y, resolve against the grid (floors, ceilings, jump-through) and against the tops
+   of solid bodies (standing on them);
 5. update `on_ground`, `on_slope`, `in_water`, `on_ladder`, and send material events.
 
 Entities are updated in the order of their slot in the entity table, which is deterministic.
@@ -203,12 +205,61 @@ Entities are updated in the order of their slot in the entity table, which is de
 | `PlatformerControl` | `coyote_frames`, `jump_buffer_frames` | int | 6, 6 |
 | `PlatformerControl` | `drop_through` | bool | true |
 | `PlatformerControl` | `climb_speed` | fix | 1.0 |
+| `Body` | `solid` | bool | false (true: other solid bodies cannot overlap it, §4.5) |
+| `Body` | `weight` | fix | 1.0 (player 1.0; a light crate 0.5, a heavy block 4.0) |
+| `Body` | `pushable` | bool | false |
+| `Body` | `can_push` | bool | true for the player, false otherwise |
+| `Body` | `push_start_frames` | int | 0 (frames of leaning before a push starts; e.g. 8 for heavy blocks) |
+| `Body` | `push_max_speed` | fix | 1.0 (upper limit while being pushed) |
 
 ### 4.5 Entity against entity
 
-Axis-aligned hitboxes. Overlaps call the script events `touch(other)` on both sides and
-`hit(other, damage)` where attack boxes are involved. There is no pushing between entities;
-solid entities (moving platforms, blocks) act on others through the collision rules above.
+All entity hitboxes are axis aligned.
+
+**Overlap without solidity.** Bodies with `solid = false` (the default: enemies, pickups,
+projectiles) overlap freely. Overlaps call the script events `touch(other)` on both sides and
+`hit(other, damage)` where attack boxes are involved.
+
+**Solid bodies.** Two bodies that are both `solid` never overlap. Resolution happens in the X
+step (§4.1, step 3) before the grid, and in the Y step for standing on top. A contact counts
+when the vertical overlap of the two hitboxes is more than 2 px (so grazing a corner does not
+push).
+
+**Pushing.** When a body A moves horizontally into a solid body B:
+
+- If B is not `pushable`, or A has `can_push = false`, B acts like a wall for A.
+- Otherwise both move together with a **shared speed**, like an inelastic collision weighted by
+  `weight`:
+
+  ```
+  v = (wA · vA + wB · vB) / (wA + wB)          (clamped to B's push_max_speed)
+  ```
+
+  A standing B (vB = 0) is therefore pushed with resistance: a player of weight 1 pushes a
+  crate of weight 1 at half speed, a block of weight 4 at a fifth of the speed. Two bodies
+  walking into each other with equal weight and speed stop. A keeps applying its input every
+  frame, so a steady push gives a steady, slower speed.
+- With `push_start_frames > 0` the push only starts after A has pressed against B for that many
+  consecutive frames; until then B acts like a wall. This gives heavy blocks the "lean in first"
+  feel.
+- B is then moved by the grid rules like any body: it follows slopes and steps, falls off
+  ledges, stops at walls. If B cannot move (wall, or another non-pushable body), A stops too.
+- **Chains**: if B touches a third solid body C in the direction of the push, C joins: the
+  weights of all bodies in the chain are added for the shared speed. Chains are limited to 4
+  bodies; a longer chain acts like a wall.
+- **Loads**: bodies standing on B are carried with it (step 2 of §4.1), and their weight is
+  added to B's while B is pushed. A crate with another crate on it is harder to push.
+- When the push ends, B keeps its speed and slows down with its own `friction` (and the
+  material: on ice it slides on).
+- Pushing is horizontal only. Bodies do not push each other vertically: a body landing on a
+  solid body stands on it; a solid body cannot be pushed up by something below it.
+- Events: `push(other)` on A and `pushed(by)` on B while the push lasts, `push_end()` on both
+  when it ends. Scripts can use them for sounds, effort animations and puzzle checks.
+
+**Order.** Pushes are resolved while the pushing entity is updated, in slot order (§4.1). A
+body that was already moved by a push this frame is not updated a second time; its own update
+uses the speed it was given. This keeps the result independent of how entities are stored
+beyond the slot order and identical on every target.
 
 ### 4.6 Reachability check
 
@@ -241,6 +292,7 @@ Objects live in the `objects` layer.
 | `Pickup` | point | `item`, `persistent` (bool) |
 | `MovingPlatform` | rectangle, with a polyline object named by `path` | `path`, `speed`, `wait_frames`, `loop` |
 | `Breakable` | rectangle (whole cells) | `cell` (collision cell after breaking), `by` (attack kinds), `drop` |
+| `PushBlock` | rectangle | solid and pushable body for puzzles: `weight`, `push_start_frames`, `push_max_speed`, `friction` |
 
 Game classes (enemies, NPCs, lanterns) are written in Mondskript and used the same way.
 
@@ -278,3 +330,4 @@ Chunks written per room (see [pack-format.md](pack-format.md) for the container)
 ## History
 
 - 0.1: first draft.
+- 0.1.1: solid bodies, pushing with weight-based resistance, chains and loads (§4.5).

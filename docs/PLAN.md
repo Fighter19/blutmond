@@ -590,10 +590,12 @@ Specified in [spec/room-format.md](spec/room-format.md). In short:
   array, so new shapes are table entries.
 - **Physics** is a simple platformer model in fixed point: gravity per room, sensors, slope
   speed and snapping, steps, jump-through with drop-through, ladders, water, coyote time and
-  jump buffering.
+  jump buffering. Solid bodies can **push** each other: a standing body is moved with
+  resistance (shared speed weighted by `weight`), with chains, loads on top and an optional
+  "lean in first" delay, enough for simple push-block puzzles.
 - **Objects** are Mondskript classes placed in Tiled; their Tiled object ID is the persistent
   ID for saved per-object state. Engine classes: `PlayerStart`, `Door`, `CameraZone`,
-  `KillZone`, `Trigger`, `SavePoint`, `Pickup`, `MovingPlatform`, `Breakable`.
+  `KillZone`, `Trigger`, `SavePoint`, `Pickup`, `MovingPlatform`, `Breakable`, `PushBlock`.
 
 The test level (local only, see the test data decision in section 20) has these layers added:
 roles on the existing three tile layers (background with parallax 0.5), a collision layer
