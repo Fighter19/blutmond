@@ -1,93 +1,121 @@
 #include "shared.h"
 #include "tilemap.h"
 
-#include "../../public/memory.h"
-
+#include "memory.h"
 #include "pool.h"
-
 #include "type.h"
 #include "type_manager.h"
 
-#include "errors.h"
-
-typedef struct BmTilemap
+struct BmTilemap
 {
   BmTilemapUsageFlags usage;
   BmExtent3D extent;
 
   bool blending;
   BmDeviceMemoryHandle memory;
-} BmTilemap;
+  BmDeviceSize memoryOffset;
+};
 
-/*
-BmResult bmBackdropAllocate(BmTilemap **ppTilemap)
+static BmPool s_tilemapPool;
+static BmTypeHandle s_tilemapType;
+static BmDeviceMemoryHandle s_tilemapPoolMemory;
+
+// The pool of tilemap objects lives in EWRAM and is created on first use.
+static BmResult ensureTilemapPool(BmDeviceHandle device)
 {
-  // TODO: Get 1024*2 bytes of VRAM, aligned to multiples of 2048 bytes
-  BmResult result = bmAllocateMemory(NULL, &(BmMemoryAllocateInfo) {
-    .allocationSize = 1024*2,
-    .memoryTypeIndex = 0,
-  }, (BmDeviceMemoryHandle*)ppTilemap);
-
-  return BmResult();
-}
-*/
-
-static BmPool tilemapPool;
-static BmTypeHandle tilemapType;
-
-static BmResult ensureTilemapPool()
-{
-  BmResult result = BM_SUCCESS;
-  if (tilemapPool.device == NULL)
+  if (s_tilemapPool.device != NULL)
   {
-    result = bmTypeManagerCreate(g_typeManager, &(BmTypeCreateInfo) {
-      .name = "BmTilemap",
-      .size = sizeof(BmTilemap),
-      .init = NULL,
-      .free = NULL,
-    }, &tilemapType);
-
-    if (result != BM_SUCCESS)
-    {
-      return result;
-    }
-
-    return bmPoolInit(&tilemapPool, g_defaultDevice, g_defaultMemory, tilemapType);
+    return s_tilemapPool.device == device ? BM_SUCCESS : BM_ERROR_INVALID_ARGUMENT;
   }
-  return BM_SUCCESS;
-}
+  if (g_typeManager == NULL)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
+  }
 
-BmResult bmCreateTilemap(BmDeviceHandle device, struct BmTilemapCreateInfo *pCreateInfo, struct BmTilemap **ppTilemap)
-{
-  BmResult result = ensureTilemapPool();
+  BmResult result = bmTypeManagerCreate(g_typeManager, &(BmTypeCreateInfo) {
+    .name = "BmTilemap",
+    .size = sizeof(BmTilemap),
+  }, &s_tilemapType);
   if (result != BM_SUCCESS)
   {
     return result;
   }
 
-  result = bmPoolAllocate(&tilemapPool, (void**)ppTilemap);
+  BmDeviceSize size = (BmDeviceSize)bmPoolRequiredSize(sizeof(BmTilemap), BM_MAX_TILEMAPS);
+  result = bmAllocateMemory(device, &(BmMemoryAllocateInfo) {
+    .allocationSize = size,
+    .memoryTypeIndex = BM_MEMORY_HEAP_EWRAM,
+  }, &s_tilemapPoolMemory);
   if (result != BM_SUCCESS)
   {
     return result;
   }
-  
-  BmTilemap *pTilemap = *ppTilemap;
+
+  return bmPoolInit(&s_tilemapPool, device, s_tilemapPoolMemory, size, s_tilemapType);
+}
+
+BmResult bmCreateTilemap(BmDeviceHandle device, const BmTilemapCreateInfo *pCreateInfo, BmTilemap **ppTilemap)
+{
+  if (device == NULL || pCreateInfo == NULL || ppTilemap == NULL)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
+  }
+
+  BmResult result = ensureTilemapPool(device);
+  if (result != BM_SUCCESS)
+  {
+    return result;
+  }
+
+  BmTilemap *pTilemap = NULL;
+  result = bmPoolAllocate(&s_tilemapPool, (void **)&pTilemap);
+  if (result != BM_SUCCESS)
+  {
+    return result;
+  }
+
   pTilemap->usage = pCreateInfo->usage;
   pTilemap->extent = pCreateInfo->extent;
   pTilemap->blending = false;
   pTilemap->memory = NULL;
+  pTilemap->memoryOffset = 0;
 
+  *ppTilemap = pTilemap;
   return BM_SUCCESS;
 }
 
-BmResult bmBindTilemapMemory(BmDeviceHandle hDevice, unsigned char bindInfoCount, const BmBindTilemapInfo *pBindInfos)
+BmResult bmDestroyTilemap(BmDeviceHandle device, BmTilemap *pTilemap)
 {
-  for (unsigned char i = 0; i < bindInfoCount; i++)
-  {
-    BmBindTilemapInfo bindInfo = pBindInfos[i];
-    BmTilemap *pTilemap = bindInfo.pTilemap;
+  (void)device;
+  return bmPoolFree(&s_tilemapPool, pTilemap);
+}
 
-    pTilemap->memory = bindInfo.hMemory;
+BmResult bmBindTilemapMemory(BmDeviceHandle device, uint32_t bindInfoCount, const BmBindTilemapInfo *pBindInfos)
+{
+  (void)device;
+  if (bindInfoCount > 0 && pBindInfos == NULL)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
   }
+  for (uint32_t i = 0; i < bindInfoCount; i++)
+  {
+    const BmBindTilemapInfo *pInfo = &pBindInfos[i];
+    if (pInfo->pTilemap == NULL)
+    {
+      return BM_ERROR_INVALID_ARGUMENT;
+    }
+    pInfo->pTilemap->memory = pInfo->hMemory;
+    pInfo->pTilemap->memoryOffset = pInfo->memoryOffset;
+  }
+  return BM_SUCCESS;
+}
+
+BmResult bmTilemapSetBlending(BmTilemap *pTilemap, bool enable)
+{
+  if (pTilemap == NULL)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
+  }
+  pTilemap->blending = enable;
   return BM_SUCCESS;
 }

@@ -1,16 +1,13 @@
 #include "backdrop.h"
-#include "errors.h"
-
-#ifndef GBA
-BmColor g_backdropColor = {0};
-#endif
+#include "hal.h"
 
 BmResult bmBackdropSetColor(BmColor color)
 {
-#ifdef GBA
-  *(volatile BmColor*)0x05000000 = color;
-#else
-  g_backdropColor = color;
-#endif
+  bmHalPaletteWrite(0, color.color);
   return BM_SUCCESS;
+}
+
+BmColor bmBackdropGetColor(void)
+{
+  return (BmColor){ bmHalPaletteRead(0) };
 }

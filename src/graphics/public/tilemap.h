@@ -3,9 +3,6 @@
 #include "shared.h"
 #include "device.h"
 
-BmResult bmCreateTilemap(BmDeviceHandle device, struct BmTilemapCreateInfo *pCreateInfo, struct BmTilemap **ppTilemap);
-BmResult bmTilemapSetBlending(struct BmTilemap *pTilemap, bool enable);
-
 typedef enum BmTilemapUsageFlagBits {
   /// Indicates that the tilemap can be used as a source for copy operations
   BM_TILEMAP_USAGE_TRANSFER_SRC_BIT = 0x00000001,
@@ -35,9 +32,19 @@ typedef struct BmTilemapCreateInfo
   BmExtent3D extent;
 } BmTilemapCreateInfo;
 
+typedef struct BmTilemap BmTilemap;
+
 typedef struct BmBindTilemapInfo
 {
-  struct BmTilemap *pTilemap;
+  BmTilemap *pTilemap;
   BmDeviceMemoryHandle hMemory;
   BmDeviceSize memoryOffset;
 } BmBindTilemapInfo;
+
+/// Maximum number of tilemap objects that exist at the same time.
+#define BM_MAX_TILEMAPS 16
+
+BmResult bmCreateTilemap(BmDeviceHandle device, const BmTilemapCreateInfo *pCreateInfo, BmTilemap **ppTilemap);
+BmResult bmDestroyTilemap(BmDeviceHandle device, BmTilemap *pTilemap);
+BmResult bmBindTilemapMemory(BmDeviceHandle device, uint32_t bindInfoCount, const BmBindTilemapInfo *pBindInfos);
+BmResult bmTilemapSetBlending(BmTilemap *pTilemap, bool enable);

@@ -79,6 +79,10 @@ Found while reading (not built in this session):
 | `pool.c` | `bmPoolFinalize` calls `free` on indices `0..elementCount`, not on the used slots | used bitmap or a generation per slot |
 | general | pointers in engine structs | unsuitable for save states, link transfer and live reloads, see [7](#7-live-content-load-the-runtime-once-push-content) and [8](#8-game-state-save-states-link-transfer) |
 
+All findings in this table are fixed in milestone M0 (heaps come from the HAL, a first-fit
+allocator with merging and heap-relative alignment, the pool maps its capacity and tracks used
+elements in a bitmap, the type manager starts empty, `tilemap.c` compiles).
+
 The Vulkan shape (create infos, explicit memory binding) fits the goal "the developer sees the
 hardware". I would keep it for **creation and resources**, but use lean functions without
 `sType`/`pNext` and without function pointer indirection on the per-frame path (Thumb code

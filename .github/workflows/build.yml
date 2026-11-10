@@ -1,0 +1,33 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libmgba-dev
+
+      - name: GBA build
+        run: |
+          cmake -S . -B build-gba -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-gba.cmake -DCMAKE_BUILD_TYPE=MinSizeRel
+          cmake --build build-gba
+          arm-none-eabi-size build-gba/*.elf
+
+      - name: Host build and tests (including the GBA images in mGBA)
+        run: |
+          cmake -S . -B build -G Ninja -DUSE_SANITIZER=ON -DBM_GBA_BUILD_DIR=$PWD/build-gba
+          cmake --build build
+          ctest --test-dir build --output-on-failure
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gba-images
+          path: build-gba/*.gba

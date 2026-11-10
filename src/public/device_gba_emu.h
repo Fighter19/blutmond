@@ -1,3 +1,0 @@
-#pragma once
-
-BmDeviceHandle bmDeviceGbaCreate();
