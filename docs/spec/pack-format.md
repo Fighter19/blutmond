@@ -18,7 +18,7 @@ chunk data ...            (each chunk 4-byte aligned, zero padded)
 ```
 
 ```c
-struct BmPackHeader {          // 32 bytes
+struct BmPackHeader {          // 36 bytes
     char magic[4];             // "BMPK"
     u16  format_major;         // 0 in this draft
     u16  format_minor;         // 1
@@ -27,7 +27,9 @@ struct BmPackHeader {          // 32 bytes
     char profile[4];           // "GBA ", "SNES", "HOST"
     u32  total_size;           // whole pack in bytes
     u32  chunk_count;
-    u32  toc_offset;           // usually 32
+    u32  toc_offset;           // usually 36
+    u16  flags;                // bits 0-1: storage mode (0 rom, 1 ram, 2 stream)
+    u16  reserved;
     u32  crc32;                // CRC-32 (IEEE) of everything after this header
 };
 
@@ -61,14 +63,16 @@ the pack and SHOULD stay in VRAM across room changes.
 | room | 256 and up | what only this room uses: its tile maps, collision, objects, room-specific tiles, effects | loaded per room |
 
 The cooker decides the level of each asset from its use: used by rooms of one area → area
-level; used by rooms of several areas → global level (or duplicated per area if the profile's
-memory budget is better served that way, which the cooker reports); used by one room → room
-level. The developer MAY pin an asset to a level (asset property `share = global | area |
-room`).
+level; used by rooms of several areas → global level; used by one room → room level. The
+developer MAY pin an asset to a level (asset property `share = global | area | room`).
 
-Deduplication happens on two levels: identical assets are stored once (by content hash), and
-identical 8×8 tiles (including flipped copies) are stored once **within a level**, so two
-tilesets of an area that share tiles also share them in the pack.
+Every asset is stored **exactly once** in a pack: identical assets are merged by content hash,
+and identical 8×8 tiles (including flipped copies) are stored once per level. The only
+exception is the opt-in described in §2.5 for streamed packs; it never applies to ROM packs.
+
+The levels serve two purposes that must not be confused: they decide **what is resident in
+VRAM and RAM** at run time (all storage modes), and they decide **how the file is ordered**
+(only relevant for streamed packs, §2.4).
 
 ### 2.2 Dependencies instead of guessing
 
@@ -103,10 +107,17 @@ struct BmVramLayout {
 - The palette packer works over **all rooms of an area at once**, so a shared tileset gets the
   same palette banks in every room.
 
-### 2.4 Load order in the file
+### 2.4 Storage modes and file order
 
-Reading a pack sequentially is fast, seeking asset by asset is slow (this was measured in
-SceneLoaderGBA with a CF card). Therefore:
+A pack is cooked for one storage mode (`flags` in the header, bit 0–1):
+
+| Mode | Where the pack is | Access | Consequences |
+|---|---|---|---|
+| `rom` | cartridge ROM (release) | memory mapped, random access is cheap | chunks are used **in place**: uncompressed tiles and maps go from ROM to VRAM by DMA, tables are read directly; only compressed chunks are unpacked. Nothing is copied to RAM just to keep it, so no asset ever needs a second copy. File order only matters for the cooker's convenience |
+| `ram` | EWRAM (multiboot) | random access | the whole pack (global + current area + current room, or all of it if it fits) is in RAM; same rules as `rom` |
+| `stream` | CF/SD card, live link | sequential is fast, seeking is slow (measured in SceneLoaderGBA with a CF card) | the ordering rules below apply |
+
+For `stream` packs:
 
 - chunks of one group MUST be contiguous and in the order the loader uses them: `VLAY` (area
   groups), `ROOM`, `PALE`, `TILE`, `TMAP`, `COLL`, `SHAP`, `OBJS`, `EFCT`, then sprites, sound
@@ -114,6 +125,14 @@ SceneLoaderGBA with a CF card). Therefore:
 - groups are ordered global, then each area followed by its rooms;
 - the loader reads one group as a single sequential stream and only keeps the chunks it still
   needs.
+
+### 2.5 Copies (streamed packs only, opt-in)
+
+In `stream` mode an asset shared by several areas sits on the global level and therefore stays
+in RAM for the whole game. If RAM is short, the developer MAY allow the cooker to place a copy
+in each area group instead (`share = per_area`), so it is only resident inside those areas. This
+trades card space for RAM. The cooker lists every copy in its report with the bytes it costs.
+`rom` and `ram` packs MUST NOT contain copies; the cooker ignores `per_area` for them.
 
 ## 3. Chunk types
 
@@ -161,5 +180,7 @@ has.
 ## History
 
 - 0.1: first draft.
+- 0.1.2: storage modes `rom`, `ram`, `stream`; assets stored exactly once, copies only as an
+  opt-in for streamed packs.
 - 0.1.1: global, area and room levels; deduplication; dependency lists; fixed VRAM layout
   per area (`VLAY`).
