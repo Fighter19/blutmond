@@ -103,7 +103,26 @@ development the editor uses verified bytecode by default; native modules are for
 tests and release builds. If a native module breaks the runtime, recovery needs a reset (see
 the reset setting in [link-protocol.md](link-protocol.md)).
 
+## 7. Storage back ends
+
+The runtime reads content through one interface, so new sources can be added without touching
+the loaders:
+
+```c
+struct BmStorage {
+    u16  layout;                                        // layouts it can read (bit mask)
+    int  (*open)(void *ctx, const struct BmPackHeader *h);
+    int  (*read_chunk)(void *ctx, u16 index, void *dst, u32 offset, u32 size);
+    const void *(*map_chunk)(void *ctx, u16 index);     // in-place access, or NULL
+};
+```
+
+Back ends in this version: `rom` (maps chunks in place, any layout) and `link` (chunks arrive
+from the live link). A CF/SD back end would read the `sequential` layout
+([pack-format.md](pack-format.md) §2.6) and use a small read buffer.
+
 ## History
 
 - 0.1: first draft.
 - 0.1.1: residency table and room changes (§4).
+- 0.1.2: storage back end interface (§7).

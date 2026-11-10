@@ -217,7 +217,11 @@ are streamed over the live link (development). Specified in [spec/pack-format.md
 - **Nothing in a pack calls the runtime at a fixed address.** A new runtime can load old packs,
   and a pack can live in ROM or RAM.
 - **Storage back ends** behind one reader interface (the C version of SceneLoaderGBA's
-  `AssetLoader<File>`): ROM and the live link. CF/SD on flash carts is not planned.
+  `AssetLoader<File>`): ROM and the live link. CF/SD on flash carts is not planned now, but
+  kept possible: a pack's content (chunks, indices, hashes) is separate from its layout (file
+  order), `bmpack relayout` changes the order without cooking again, and the streaming planner
+  on the PC is replaceable ([spec/pack-format.md](spec/pack-format.md) §2.6,
+  [spec/streaming.md](spec/streaming.md) §7).
 
 ## 7. Live content: load the runtime once, push content
 

@@ -28,7 +28,7 @@ struct BmPackHeader {          // 36 bytes
     u32  total_size;           // whole pack in bytes
     u32  chunk_count;
     u32  toc_offset;           // usually 36
-    u16  flags;                // bits 0-1: storage mode (0 rom, 1 stream)
+    u16  flags;                // bits 0-3: layout (section 2.6): 0 rom, 1 room_chain
     u16  reserved;
     u32  crc32;                // CRC-32 (IEEE) of everything after this header
 };
@@ -46,7 +46,8 @@ struct BmChunkEntry {          // 24 bytes
 ```
 
 Every reference inside a chunk is either a chunk index (`u16`, position in the table of
-contents) or an offset relative to the start of that chunk. Absolute addresses MUST NOT appear
+contents, which is fixed by the cooker and never changes when the file is re-laid out, §2.6)
+or an offset relative to the start of that chunk. Absolute addresses MUST NOT appear
 in a pack.
 
 ## 2. Groups, areas and sharing
@@ -108,11 +109,12 @@ struct BmVramLayout {
 - The palette packer works over **all rooms of an area at once**, so a shared tileset gets the
   same palette banks in every room.
 
-### 2.4 Storage modes
+### 2.4 How content reaches the runtime
 
-A pack is cooked for one storage mode (`flags` in the header, bits 0–1):
+Two ways are supported in this version. Each uses its own layout (§2.6), recorded in the
+header's `flags`:
 
-| Mode | Where the pack is | Consequences |
+| Way | Where the pack is | Consequences |
 |---|---|---|
 | `rom` | cartridge ROM; the only release mode | random access is cheap, so chunks are used **in place**: uncompressed tiles and maps go from ROM to VRAM by DMA, tables are read directly, only compressed chunks are unpacked. Nothing is copied to RAM just to keep it. Every asset exists exactly once |
 | `stream` | on the PC, during development | the runtime was booted by multiboot or runs from a cartridge, and the PC sends chunks over the live link as described in [streaming.md](streaming.md). The GBA only holds what the current scene needs |
@@ -120,14 +122,49 @@ A pack is cooked for one storage mode (`flags` in the header, bits 0–1):
 A multiboot image that carries all content in RAM is not a supported release mode; multiboot
 exists only together with the live link.
 
-### 2.5 File order of stream packs
+### 2.5 File order for the live link (`room_chain` layout)
 
-For `stream` packs the chunks are written in **room chain** order ([streaming.md](streaming.md)
+For streamed packs the chunks are written in **room chain** order ([streaming.md](streaming.md)
 §1): global data first, then for each room in the chain the chunks it adds, followed by its own
 level data, with an `RCHN` chunk at the start that lists the chain and each room's added and
 dropped chunks. The PC reads the pack in that order and skips every chunk the GBA already has
 or the session's load profile excludes. No asset is stored twice; a room that needs an asset
 from far back in the chain references it by chunk index.
+
+### 2.6 Content and layout are separate
+
+The strategies above (ROM in place, room chain for the live link) are **layouts**, and a layout
+can be changed or added without cooking again. A pack therefore has two independent parts:
+
+- **Content**: the chunks themselves and the table of contents. The order of the table of
+  contents is the **logical order**; it is fixed by the cooker, and chunk indices refer to it.
+  Each chunk carries its category, group and hash. Nothing in the content depends on where a
+  chunk lies in the file.
+- **Layout**: where each chunk's bytes lie in the file (`offset` in the table of contents),
+  the layout ID in the header, and optional layout metadata chunks (such as `RCHN`).
+
+Rules:
+
+- A reader MUST find chunks only through the table of contents and MUST NOT assume that
+  chunks follow each other in any order.
+- Readers that need a particular order (a sequential source) MUST check the layout ID and
+  refuse layouts they cannot read efficiently, instead of misreading them.
+- The tool `bmpack relayout <in> <layout> <out>` rewrites only the offsets, the layout ID and
+  the layout metadata. Chunk contents, indices and hashes stay the same, so a re-laid-out pack
+  is the same pack for the runtime, the live link (which compares hashes) and save games.
+
+Layouts:
+
+| Id | Name | Order | Used by |
+|---|---|---|---|
+| 0 | `rom` | any; the cooker groups global, area and room data for readability | cartridge release |
+| 1 | `room_chain` | room chain order with `RCHN` (§2.5) | live link |
+| 2 | `sequential` | reserved: one group after another in load order, for sources where seeking is slow (CF/SD on flash carts, as measured in SceneLoaderGBA) | not planned yet |
+| 3–15 | – | reserved for future layouts | |
+
+A new layout is added by defining its order and metadata here, adding it to `bmpack relayout`,
+and, if the runtime reads it directly, adding a storage back end (see
+[runtime-abi.md](runtime-abi.md) §7). The cooker and the content format do not change.
 
 ## 3. Chunk types
 
@@ -176,6 +213,8 @@ has.
 ## History
 
 - 0.1: first draft.
+- 0.1.4: content and layout separated (§2.6); layout ID in the header; `relayout` tool;
+  `sequential` layout reserved for CF/SD.
 - 0.1.3: only `rom` (release) and `stream` (live link, multiboot); stream packs in room
   chain order with `RCHN`; chunk category in the table of contents; no copies in any mode.
 - 0.1.2: storage modes `rom`, `ram`, `stream`; assets stored exactly once, copies only as an

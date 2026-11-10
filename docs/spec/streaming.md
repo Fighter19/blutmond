@@ -129,6 +129,23 @@ The editor shows for the current room and profile: bytes to send, expected time 
 transport, RAM and VRAM used on the GBA, and what prefetching would add. It warns when a room
 cannot be shown with the selected profile in the available memory.
 
+## 7. Replaceable strategy
+
+Everything above is one **streaming strategy** (`room_chain`). It is kept replaceable:
+
+- The PC side computes what to send through a **planner** interface: input is the room graph,
+  the mirror of the GBA's residency, the load profile, the player's position and the free
+  memory; output is an ordered list of chunks to send and to drop. The room chain planner is
+  the first implementation; others (e.g. one that sends whole areas, or one for a different
+  transport speed) can be added and chosen per session.
+- The runtime side does not depend on the strategy: it receives chunks, `DROP` and `APPLY`
+  ([link-protocol.md](link-protocol.md)) and keeps its residency table. A new planner needs no
+  runtime change.
+- The file order of a pack is a separate layout ([pack-format.md](pack-format.md) §2.6) and can
+  be changed with `bmpack relayout` without cooking again, e.g. to the reserved `sequential`
+  layout if CF/SD cards are supported later.
+
 ## History
 
 - 0.1: first draft.
+- 0.1.1: replaceable planner and layout (§7).
