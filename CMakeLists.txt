@@ -31,6 +31,7 @@ file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
 file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c)
+set(BM_LINK_SOURCES src/link/link.c src/link/live.c)
 
 if(BM_PLATFORM STREQUAL "gba")
   # The software PPU is not needed on the device; only its register definitions are used.
@@ -41,9 +42,9 @@ else()
   set(BM_HAL_DIR src/hal/host)
 endif()
 
-add_library(blutmond STATIC ${BM_CORE_SOURCES} ${BM_GRAPHICS_SOURCES} ${BM_PACK_SOURCES} ${BM_WORLD_SOURCES} ${BM_HAL_SOURCES})
+add_library(blutmond STATIC ${BM_CORE_SOURCES} ${BM_GRAPHICS_SOURCES} ${BM_PACK_SOURCES} ${BM_WORLD_SOURCES} ${BM_LINK_SOURCES} ${BM_HAL_SOURCES})
 target_include_directories(blutmond
-  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu src/pack src/world ${BM_HAL_DIR}
+  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu src/pack src/world src/link ${BM_HAL_DIR}
   PRIVATE src/core/private)
 target_compile_options(blutmond PRIVATE ${BM_WARNINGS})
 if(BM_PLATFORM STREQUAL "gba")
@@ -136,7 +137,7 @@ if(BM_PLATFORM STREQUAL "gba")
   # The game, played with the buttons, and the same with the autopilot (for tests and demos).
   # embed_pack.S is compiled per target with that target's BM_PACK_PATH.
   foreach(variant game game_autoplay)
-    bm_add_gba_image(${variant} apps/game/main.c apps/game/autopilot.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
+    bm_add_gba_image(${variant} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
     foreach(target ${BM_GBA_TARGETS})
       add_dependencies(${target} test_level_pack)
       target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/apps/game)
@@ -162,7 +163,7 @@ else()
     elseif(app STREQUAL "room_viewer")
       add_executable(${app} apps/room_viewer/main.c)
     elseif(app STREQUAL "game")
-      add_executable(${app} apps/game/main.c apps/game/autopilot.c)
+      add_executable(${app} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c)
     else()
       add_executable(${app} ${BM_SCENE_SOURCES})
     endif()
@@ -211,10 +212,15 @@ if(BM_PLATFORM STREQUAL "host")
   target_include_directories(bm_ppu_render PRIVATE src/ppu)
   target_compile_options(bm_ppu_render PRIVATE ${BM_WARNINGS})
 
+  # Master side of the live link (PC tools and tests).
+  add_library(bm_link_host STATIC src/link/link_master.c src/link/live_master.c)
+  target_link_libraries(bm_link_host PUBLIC blutmond)
+  target_compile_options(bm_link_host PRIVATE ${BM_WARNINGS})
+
   enable_testing()
-  foreach(test test_pool test_heaps test_backdrop test_ppu test_pack test_physics test_state)
+  foreach(test test_pool test_heaps test_backdrop test_ppu test_pack test_physics test_state test_link)
     add_executable(${test} tests/${test}.c)
-    target_link_libraries(${test} PRIVATE blutmond)
+    target_link_libraries(${test} PRIVATE blutmond bm_link_host)
     target_include_directories(${test} PRIVATE src/core/private)
     target_compile_options(${test} PRIVATE ${BM_WARNINGS})
     add_test(NAME ${test} COMMAND ${test})
@@ -236,12 +242,27 @@ if(BM_PLATFORM STREQUAL "host")
     COMMAND bmcook --profile gba -o ${cooked}/test_level_gba.bmpk
       ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
   set_tests_properties(cook_test_level PROPERTIES FIXTURES_SETUP test_level_pack)
-  add_executable(test_game tests/test_game.c apps/game/autopilot.c)
+  add_executable(test_game tests/test_game.c apps/game/autopilot.c apps/game/game_live.c)
   target_link_libraries(test_game PRIVATE blutmond)
   target_include_directories(test_game PRIVATE apps/game)
   target_compile_options(test_game PRIVATE ${BM_WARNINGS})
   add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk)
   set_tests_properties(test_game PROPERTIES FIXTURES_REQUIRED test_level_pack)
+  # Live reload: a variant of the level with one background tile changed.
+  add_test(NAME make_room_variant
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/make_room_variant.py
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${cooked}/room_variant.tmx)
+  set_tests_properties(make_room_variant PROPERTIES FIXTURES_SETUP room_variant_tmx)
+  add_test(NAME cook_test_level_variant
+    COMMAND bmcook --profile gba -o ${cooked}/test_level_variant_gba.bmpk
+      ${cooked}/room_variant.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
+  set_tests_properties(cook_test_level_variant PROPERTIES FIXTURES_REQUIRED room_variant_tmx FIXTURES_SETUP test_level_variant)
+  add_executable(test_live tests/test_live.c apps/game/autopilot.c apps/game/game_live.c)
+  target_link_libraries(test_live PRIVATE blutmond bm_link_host)
+  target_include_directories(test_live PRIVATE apps/game)
+  target_compile_options(test_live PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_live COMMAND test_live ${cooked}/test_level_gba.bmpk ${cooked}/test_level_variant_gba.bmpk)
+  set_tests_properties(test_live PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_variant")
   add_test(NAME game_autoplay_host COMMAND game ${cooked}/test_level_gba.bmpk --autoplay --frames 1000 ${cooked}/game_host.ppm)
   set_tests_properties(game_autoplay_host PROPERTIES FIXTURES_REQUIRED test_level_pack FIXTURES_SETUP game_host
     PASS_REGULAR_EXPRESSION "room test_room_2.*deaths 0")

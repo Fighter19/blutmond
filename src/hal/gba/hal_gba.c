@@ -183,3 +183,51 @@ void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size)
   const uint8_t *p = (const uint8_t *)pData;
   for (uint32_t i = 0; i < size; i++) GBA_SRAM[offset + i] = p[i];
 }
+
+// --- Live link: normal mode, 32 bits, external clock (the PC or the other GBA is master) ---
+
+static BmHalLinkHandler s_linkHandler;
+static void *s_linkContext;
+
+/// Called from bm_irq_handler (irq.S) in system mode with the user stack.
+void bm_hal_serial_irq(void);
+void bm_hal_serial_irq(void)
+{
+  uint32_t in = GBA_REG_SIODATA32;
+  uint32_t out = s_linkHandler != NULL ? s_linkHandler(s_linkContext, in) : 0xFFFFFFFFu;
+  GBA_REG_SIODATA32 = out;
+  GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ | GBA_SIO_START;
+}
+
+void bmHalLinkStart(BmHalLinkHandler handler, void *pContext, uint32_t firstWord)
+{
+  initInterrupts();
+  GBA_REG_IE &= ~GBA_IRQ_SERIAL;
+  s_linkHandler = handler;
+  s_linkContext = pContext;
+  GBA_REG_RCNT = 0;                 // serial port in normal/multiplayer modes
+  GBA_REG_SIOCNT = GBA_SIO_32BIT;   // external clock
+  GBA_REG_SIODATA32 = firstWord;
+  GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ;
+  GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ | GBA_SIO_START;
+  GBA_REG_IE |= GBA_IRQ_SERIAL;
+}
+
+void bmHalLinkStop(void)
+{
+  GBA_REG_IE &= ~GBA_IRQ_SERIAL;
+  GBA_REG_SIOCNT = GBA_SIO_32BIT;
+  s_linkHandler = NULL;
+}
+
+uint32_t bmHalLinkLock(void)
+{
+  uint32_t state = GBA_REG_IE & GBA_IRQ_SERIAL;
+  GBA_REG_IE &= ~GBA_IRQ_SERIAL;
+  return state;
+}
+
+void bmHalLinkUnlock(uint32_t state)
+{
+  GBA_REG_IE |= (uint16_t)state;
+}

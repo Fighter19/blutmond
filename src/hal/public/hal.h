@@ -82,3 +82,15 @@ void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size);
 /// `pValues` must hold BM_HAL_SCREEN_HEIGHT entries; the HAL keeps its own copy.
 /// `pValues == NULL` switches the line table off.
 void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues);
+
+/// Live link (docs/spec/link-protocol.md): the serial port as the clocked side, 32 bits per
+/// transfer. `handler` runs in the serial interrupt for every word received and returns the
+/// word to send in the next transfer. `firstWord` is sent in the first one.
+typedef uint32_t (*BmHalLinkHandler)(void *pContext, uint32_t received);
+void bmHalLinkStart(BmHalLinkHandler handler, void *pContext, uint32_t firstWord);
+void bmHalLinkStop(void);
+
+/// Keeps the link interrupt from running (while the main loop changes what it uses).
+/// Returns a value for bmHalLinkUnlock.
+uint32_t bmHalLinkLock(void);
+void bmHalLinkUnlock(uint32_t state);

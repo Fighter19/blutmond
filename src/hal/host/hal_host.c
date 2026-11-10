@@ -177,3 +177,39 @@ uint8_t *bmHalHostSaveMemory(void)
 {
   return s_save;
 }
+
+static BmHalLinkHandler s_linkHandler;
+static void *s_linkContext;
+static uint32_t s_linkPrepared;
+static uint32_t s_linkLocked;
+
+void bmHalLinkStart(BmHalLinkHandler handler, void *pContext, uint32_t firstWord)
+{
+  s_linkHandler = handler;
+  s_linkContext = pContext;
+  s_linkPrepared = firstWord;
+}
+
+void bmHalLinkStop(void)
+{
+  s_linkHandler = NULL;
+}
+
+uint32_t bmHalLinkLock(void)
+{
+  return s_linkLocked++;
+}
+
+void bmHalLinkUnlock(uint32_t state)
+{
+  s_linkLocked = state;
+}
+
+uint32_t bmHalHostLinkExchange(uint32_t masterWord)
+{
+  // A locked link behaves like a slave that is not ready: the word is lost.
+  if (s_linkHandler == NULL || s_linkLocked != 0) return 0xFFFFFFFFu;
+  uint32_t in = s_linkPrepared;
+  s_linkPrepared = s_linkHandler(s_linkContext, masterWord);
+  return in;
+}

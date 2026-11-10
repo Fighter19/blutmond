@@ -13,11 +13,16 @@
 // frame; with BM_SNAPSHOT_FRAME the game writes one into bm_state_outbox at that frame.
 // The manual game continues from the save game if there is one.
 //
+// Live link: the game listens on the serial port (docs/spec/link-protocol.md); a master can
+// push packs and state into it while it runs (tools/bmlink, tools/bm_mgba_run --link).
+//
 // Host: game <pack.bmpk> [--frames N] [--autoplay] [--snapshot-at N file] [--load file] [out.ppm]
 
 #include "autopilot.h"
 #include "device.h"
 #include "game.h"
+#include "game_live.h"
+#include "live.h"
 #include "hal.h"
 #include "pack.h"
 #include "physical_device.h"
@@ -68,6 +73,7 @@ typedef struct BmGameStats
   uint32_t roomIndex;
   uint32_t snapshotsLoaded;
   uint32_t gameFrame;    // the game's own frame counter (part of the state)
+  uint32_t liveApplied;  // live reloads applied (packs and state)
 } BmGameStats;
 BmGameStats bm_game_stats;
 
@@ -75,11 +81,16 @@ static BmPack s_pack;
 static BmGame s_game BM_EWRAM_BSS;
 static BmAutopilot s_pilot;
 
+#ifndef BM_LIVE_CONTENT_SIZE
+#  define BM_LIVE_CONTENT_SIZE (64 * 1024)
+#endif
+static uint8_t s_content[2][BM_LIVE_CONTENT_SIZE] BM_EWRAM_BSS;
+static BmLive s_live BM_EWRAM_BSS;
+static BmGameLive s_gameLive = { &s_game, &s_pack, &s_pilot };
+
 static uint32_t stateBlocks(BmStateBlock blocks[2])
 {
-  blocks[0] = bmGameStateBlock(&s_game);
-  blocks[1] = bmAutopilotStateBlock(&s_pilot);
-  return 2;
+  return bmGameLiveStateBlocks(&s_gameLive, blocks, 2);
 }
 
 static void takeSnapshot(BmStateMailbox *pBox)
@@ -111,6 +122,9 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
 #ifdef BM_PLATFORM_HOST
   if (s_loadPath != NULL && !loadSnapshot(s_load, s_loadSize)) return 4;
 #endif
+  BmLiveHooks hooks = bmGameLiveHooks(&s_gameLive);
+  bmLiveInit(&s_live, &hooks, s_content[0], s_content[1], BM_LIVE_CONTENT_SIZE, &s_pack);
+  bmLiveStart(&s_live);
 
   uint32_t lastVideoFrame = bmVideoWaitFrame();
   for (uint32_t frame = 0; frames == 0 || frame < frames; frame++)
@@ -123,6 +137,7 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
       if (loadSnapshot(bm_state_inbox.data, bm_state_inbox.size)) bm_game_stats.snapshotsLoaded++;
       bm_state_inbox.size = 0;
     }
+    bmLiveFrame(&s_live);
     uint16_t keys = autoplay ? bmAutopilotKeys(&s_pilot, &s_game) : bmHalInputKeys();
     bmGameFrame(&s_game, keys);
     if (s_snapshotFrame != 0 && s_game.frame == s_snapshotFrame)
@@ -137,6 +152,7 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
     bm_game_stats.roomChanges = s_game.roomChanges;
     bm_game_stats.roomIndex = s_game.roomIndex;
     bm_game_stats.gameFrame = s_game.frame;
+    bm_game_stats.liveApplied = s_live.applied;
   }
   return 0;
 }

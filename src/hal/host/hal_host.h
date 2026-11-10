@@ -28,3 +28,8 @@ uint8_t *bmHalHostSaveMemory(void);
 
 /// Puts the virtual hardware back into its power-on state.
 void bmHalHostReset(void);
+
+/// Live link: the master clocks one word. Returns the word the slave had prepared, then runs
+/// the link handler with `masterWord` (as the serial interrupt would). 0xFFFFFFFF if no link
+/// is started.
+uint32_t bmHalHostLinkExchange(uint32_t masterWord);

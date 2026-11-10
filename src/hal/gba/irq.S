@@ -2,7 +2,7 @@
 @ Copyright (C) 2025 Blutmond contributors
 @
 @ Interrupt handler, called by the BIOS (IRQ mode, ARM). Acknowledges the interrupts in
-@ IF and in the BIOS's copy (for VBlankIntrWait) and counts VBlanks.
+@ IF and in the BIOS's copy (for VBlankIntrWait), counts VBlanks and runs the link handler.
 
     .section .iwram.text, "ax"
     .arm
@@ -22,6 +22,23 @@ bm_irq_handler:
     ldrne   r3, [r2]
     addne   r3, r3, #1
     strne   r3, [r2]
+    tst     r1, #0x80               @ serial?
+    bxeq    lr
+    @ The link handler is C: run it in system mode on the user stack (the IRQ stack is
+    @ small). Interrupts stay off; the BIOS saved r0-r3, r12 and lr.
+    mrs     r3, spsr
+    stmfd   sp!, {r3, lr}
+    mov     r3, #0x9F               @ system mode, IRQ disabled
+    msr     cpsr_c, r3
+    stmfd   sp!, {r2, lr}           @ keeps the stack 8-byte aligned
+    ldr     r3, =bm_hal_serial_irq
+    mov     lr, pc
+    bx      r3
+    ldmfd   sp!, {r2, lr}
+    mov     r3, #0x92               @ back to IRQ mode, IRQ disabled
+    msr     cpsr_c, r3
+    ldmfd   sp!, {r3, lr}
+    msr     spsr_cxsf, r3
     bx      lr
     .pool
 

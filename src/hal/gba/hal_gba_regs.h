@@ -40,3 +40,12 @@
 #define GBA_DMA_REPEAT       (1u << 9)
 #define GBA_DMA_START_HBLANK (2u << 12)
 #define GBA_DMA_ENABLE       (1u << 15)
+
+// Serial port
+#define GBA_REG_SIODATA32 GBA_REG32(0x120)
+#define GBA_REG_SIOCNT    GBA_REG16(0x128)
+#define GBA_REG_RCNT      GBA_REG16(0x134)
+#define GBA_SIO_START     (1u << 7)
+#define GBA_SIO_32BIT     (1u << 12)
+#define GBA_SIO_IRQ       (1u << 14)
+#define GBA_IRQ_SERIAL    (1u << 7)
