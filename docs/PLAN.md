@@ -44,9 +44,9 @@ Contents:
 | Graphics on PC/web | OpenGL ES 2.0 / WebGL 1 only; HDMA effects done in shaders |
 | Scripts | simple language, text and node views that can be toggled, bytecode, AOT through C to ARM, relocatable, can run from IWRAM |
 | Emulation | game logic testable on the PC |
-| Replaceability | runtime can be swapped, content pack can be moved (ROM or RAM) |
+| Replaceability | runtime can be swapped; content comes from ROM (release) or is streamed over the live link (development) |
 | Live content | the runtime is loaded once; after that the editor only pushes new content, no GBA reset |
-| Link | state and content move quickly over the link cable / multiboot |
+| Link | multiboot only together with the live link; content is streamed per room, only what the scene needs |
 | Save states | the developer sees exactly which fields are saved and which are not |
 | Debugging | GDB stub |
 | Sound | feature parity with the strongest GBA sound engine; own "LMMS lite" editor |
@@ -125,17 +125,19 @@ running from ROM is slow, and every indirect call costs).
 |---|---|---|---|
 | BIOS | 16 KB | – | SWIs for division, LZ77/Huffman decompression, multiboot |
 | IWRAM | 32 KB | 32 bit, 1 cycle | ARM code: mixer, script dispatch, collision, IRQ, live-link handler (≈ 10 KB); stack (≈ 3 KB); script overlays (≈ 8 KB); hot state (≈ 4 KB); mixer buffers (≈ 3 KB); rest free |
-| EWRAM | 256 KB | 16 bit, 3 cycles | multiboot case: runtime (target ≤ 96 KB Thumb) + content of the current level + state; cartridge case: state, decompressed room data, stream buffers |
+| EWRAM | 256 KB | 16 bit, 3 cycles | multiboot (live link): runtime (target ≤ 96 KB Thumb) + streamed content of the current scene + state; cartridge: state, decompressed data, tile cache |
 | VRAM | 96 KB | 16 bit | BG char blocks/screen blocks, OBJ tiles (16 or 32 KB depending on the mode) |
 | Palette | 1 KB | 16 bit | 16×16 BG + 16×16 OBJ, BGR555 |
 | OAM | 1 KB | 32 bit | 128 sprites, 32 affine matrices |
 | ROM | up to 32 MB | 16 bit, wait states | runtime + all packs (cartridge case) |
 | SRAM/flash | 32–128 KB | 8 bit | save games |
 
-Multiboot loads at most 256 KB into EWRAM. "The runtime fits into RAM" therefore means:
-runtime + one level of content + state ≤ 256 KB. The earlier SceneLoaderGBA project could
-multiboot archives up to 215.7 KiB on a Movie Player v2, which shows the margin is real but
-not large. I think ≤ 96 KB for the runtime is doable if it is built as Thumb and only the hot
+Multiboot loads at most 256 KB into EWRAM, and it is only used with the live link: the runtime
+comes over multiboot, content is streamed per room and only what the current scene needs is
+in RAM ([spec/streaming.md](spec/streaming.md)). "The runtime fits into RAM" therefore means:
+runtime + the current scene's content (with the chosen load profile) + state ≤ 256 KB.
+Releases run from ROM. The earlier SceneLoaderGBA project could multiboot archives up to
+215.7 KiB on a Movie Player v2, which shows the margin is real but not large. I think ≤ 96 KB for the runtime is doable if it is built as Thumb and only the hot
 paths are ARM in IWRAM. A size budget per module goes into CI (section 18) so it does not
 grow unnoticed.
 
@@ -193,8 +195,8 @@ VRAM, palettes, OAM, line table). It is used for:
 
 ## 6. Runtime, content packs and a stable ABI
 
-Goal: fix engine bugs after the fact without rebuilding games, and place packs wherever there
-is room (ROM, EWRAM). Specified in [spec/pack-format.md](spec/pack-format.md) and
+Goal: fix engine bugs after the fact without rebuilding games. Packs run from ROM (release) or
+are streamed over the live link (development). Specified in [spec/pack-format.md](spec/pack-format.md) and
 [spec/runtime-abi.md](spec/runtime-abi.md).
 
 - **Pack format**: a tagged chunk format, as in SceneCompiler's `GARCHIVE` (`PALE`, `MTIL`,
@@ -202,20 +204,20 @@ is room (ROM, EWRAM). Specified in [spec/pack-format.md](spec/pack-format.md) an
   and a table of contents. Chunks are padded to 32-bit alignment. Every reference is an offset
   from the start of the pack. Data stays compressed (LZ77 in BIOS format so `LZ77UnCompVram`
   can unpack straight to VRAM; LZ4 as a faster option for EWRAM).
-- **Order matters**: SceneLoaderGBA found that reading the whole archive at once is fast and
-  seeking to and reading assets one at a time is slow. Packs are therefore laid out **in load
-  order**: one room's chunks lie next to each other, and the runtime reads them as one
-  sequential stream, buffering only the chunks still in use. Random access is only for small
-  tables that stay in RAM.
+- **Every asset exists once.** In ROM, random access is cheap, so chunks are used in place.
+  For streaming, rooms are the anchor points: they are put in a chain where neighbours follow
+  each other, each room only adds what the previous one did not have (most rooms share their
+  assets and differ in level data), and the PC sends what the current room needs first, then
+  prefetches the rooms behind the nearest doors. Load profiles skip what is not needed (only
+  the level: no enemies, no music), and every asset can be tested alone in a test scene
+  ([spec/streaming.md](spec/streaming.md)).
 - **Runtime API table**: the runtime exports a versioned table of function pointers (`BmApi`,
   like a syscall table). Script modules receive a pointer to it when they are loaded. New
   functions are only appended; the major version only goes up on breaking changes.
 - **Nothing in a pack calls the runtime at a fixed address.** A new runtime can load old packs,
   and a pack can live in ROM or RAM.
 - **Storage back ends** behind one reader interface (the C version of SceneLoaderGBA's
-  `AssetLoader<File>` with `MemoryFile`, `InputStreamFile`, `FatFile`): ROM/RAM, live link,
-  and CF/SD on flash carts such as the Movie Player v2 (with a read buffer of a few KB, as the
-  4 KiB buffer in `FatFile`).
+  `AssetLoader<File>`): ROM and the live link. CF/SD on flash carts is not planned.
 
 ## 7. Live content: load the runtime once, push content
 
@@ -623,10 +625,10 @@ code: it is written from scratch in C and C++ to fit the model above.
 | palette generation: histogram per tile, merge similar colours with a distance threshold, sort by brightness, pack into 16×16, error if it does not fit | the same algorithm as an **interactive palette packer**: shows which tiles force which palette, what was merged, and *why* it does not fit (which tiles need too many colours), with suggestions (merge threshold, split tileset, 8 bpp layer). Pinned colours and palettes reserved for animation can be locked |
 | magenta forced into slot 0, black after it, so slot 0 is never needed | slot 0 is **reserved explicitly** as transparent in the data model; the editor shows it as such, no magic colour needed in source images (magenta still accepted as a transparency key on import) |
 | `GARCHIVE` tagged format, 32-bit aligned | basis of the pack format (section 6) |
-| `AssetLoader<File>` with memory, stream and FAT back ends | C reader interface with ROM/RAM, live link and CF/SD back ends (section 6) |
+| `AssetLoader<File>` with memory, stream and FAT back ends | C reader interface with ROM and live-link back ends (section 6) |
 | per-layer tile cache in VRAM with LRU eviction | **VRAM tile streaming** for rooms larger than VRAM: tiles are uploaded as the camera moves, LRU per char block; the editor shows how full the cache gets along a path through the room |
-| loading is slow when seeking asset by asset | packs in load order, read sequentially (section 6) |
-| software 4-way set-associative cache (`cache.h`) | candidate for the stream reader when a room does not fit into RAM; tested on the host first |
+| loading is slow when seeking asset by asset | streamed content in room chain order, the PC pushes and skips what is not needed (section 6) |
+| software 4-way set-associative cache (`cache.h`) | not needed: ROM has random access, streaming is planned per room |
 | `FunctionProfiler` with hardware timers, results on screen | **profiler** in the runtime: named timer zones, results sent over the live link to the editor's hardware view (section 16), on-screen as fallback |
 | raw VRAM/OAM/register scene dump | PPU snapshot format (section 5) |
 | debug output: palette `.hex`, mapping files, extracted tiles | editor views of the same data; export stays available for debugging the packer |
@@ -704,8 +706,8 @@ hardware does and which ways out there are.
 - **Windows, blending, mosaic** with live preview.
 - **CPU**: frame budget (280 896 cycles) split into logic, scripts, sound, PPU updates, measured
   in mGBA or on hardware through the profiler zones.
-- **Memory**: IWRAM/EWRAM/ROM bars per module, with a warning when runtime + content no longer
-  fit into 256 KB of multiboot.
+- **Memory**: IWRAM/EWRAM/ROM bars per module, with a warning when runtime + the current
+  scene's streamed content no longer fit into 256 KB of multiboot.
 - **Link**: size of each pending update and the expected time on the current transport.
 - One profile per target platform; the profile decides which limits are shown.
 
@@ -793,6 +795,7 @@ is meant for, and the cooker reports per profile what a port would change.
 | Syntax | modelled on UnrealScript (classes, fixed fields, states, few strings), avoiding UnrealScript's mistakes (section 10) |
 | PC ↔ GBA cable | Xboo cable on the parallel port with the own `ppdev` driver (xcomms, branch `parport`); Raspberry Pi/RP2040 as later options |
 | Development workflow | runtime loaded once, content pushed live, no reset (section 7) |
+| Multiboot | only together with the live link; content streamed per room with priorities and load profiles; releases run from ROM |
 | Parallel port code | rewritten for Blutmond with `parport.cxx` as the template |
 | Repository language | English |
 

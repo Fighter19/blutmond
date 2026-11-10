@@ -64,6 +64,11 @@ profile, per asset:
 Each entry names the asset, the profile, the kind, and a human-readable reason with a
 suggestion. The editor shows the report per profile.
 
+## Testing single assets
+
+Every asset MUST be testable on its own, on the host and on the device, through a mini pack
+and a test scene; see [streaming.md](streaming.md) §5.
+
 ## Test data
 
 Third-party test data MUST NOT be committed. It lives in `testdata/` (ignored by git) or in

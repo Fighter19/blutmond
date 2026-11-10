@@ -28,7 +28,7 @@ struct BmPackHeader {          // 36 bytes
     u32  total_size;           // whole pack in bytes
     u32  chunk_count;
     u32  toc_offset;           // usually 36
-    u16  flags;                // bits 0-1: storage mode (0 rom, 1 ram, 2 stream)
+    u16  flags;                // bits 0-1: storage mode (0 rom, 1 stream)
     u16  reserved;
     u32  crc32;                // CRC-32 (IEEE) of everything after this header
 };
@@ -38,7 +38,8 @@ struct BmChunkEntry {          // 24 bytes
     u32  offset;               // from the start of the pack
     u32  size;                 // stored size
     u32  unpacked_size;        // size after decompression (= size when not compressed)
-    u16  compression;          // section 4
+    u8   compression;          // section 4
+    u8   category;             // streaming.md §3: level, graphics, objects, actors, ...
     u16  group;                // load group, section 2; 0 = global
     u32  hash;                 // CRC-32 of the unpacked data; used by the live link
 };
@@ -66,13 +67,13 @@ The cooker decides the level of each asset from its use: used by rooms of one ar
 level; used by rooms of several areas → global level; used by one room → room level. The
 developer MAY pin an asset to a level (asset property `share = global | area | room`).
 
-Every asset is stored **exactly once** in a pack: identical assets are merged by content hash,
-and identical 8×8 tiles (including flipped copies) are stored once per level. The only
-exception is the opt-in described in §2.5 for streamed packs; it never applies to ROM packs.
+Every asset is stored **exactly once** in a pack, in every storage mode: identical assets are
+merged by content hash, and identical 8×8 tiles (including flipped copies) are stored once per
+level.
 
-The levels serve two purposes that must not be confused: they decide **what is resident in
-VRAM and RAM** at run time (all storage modes), and they decide **how the file is ordered**
-(only relevant for streamed packs, §2.4).
+The levels decide **what is resident in VRAM and RAM** at run time and where shared data sits
+in VRAM (§2.3). How the content of a `stream` pack reaches the GBA is decided per room, not per
+level ([streaming.md](streaming.md)).
 
 ### 2.2 Dependencies instead of guessing
 
@@ -107,38 +108,33 @@ struct BmVramLayout {
 - The palette packer works over **all rooms of an area at once**, so a shared tileset gets the
   same palette banks in every room.
 
-### 2.4 Storage modes and file order
+### 2.4 Storage modes
 
-A pack is cooked for one storage mode (`flags` in the header, bit 0–1):
+A pack is cooked for one storage mode (`flags` in the header, bits 0–1):
 
-| Mode | Where the pack is | Access | Consequences |
-|---|---|---|---|
-| `rom` | cartridge ROM (release) | memory mapped, random access is cheap | chunks are used **in place**: uncompressed tiles and maps go from ROM to VRAM by DMA, tables are read directly; only compressed chunks are unpacked. Nothing is copied to RAM just to keep it, so no asset ever needs a second copy. File order only matters for the cooker's convenience |
-| `ram` | EWRAM (multiboot) | random access | the whole pack (global + current area + current room, or all of it if it fits) is in RAM; same rules as `rom` |
-| `stream` | CF/SD card, live link | sequential is fast, seeking is slow (measured in SceneLoaderGBA with a CF card) | the ordering rules below apply |
+| Mode | Where the pack is | Consequences |
+|---|---|---|
+| `rom` | cartridge ROM; the only release mode | random access is cheap, so chunks are used **in place**: uncompressed tiles and maps go from ROM to VRAM by DMA, tables are read directly, only compressed chunks are unpacked. Nothing is copied to RAM just to keep it. Every asset exists exactly once |
+| `stream` | on the PC, during development | the runtime was booted by multiboot or runs from a cartridge, and the PC sends chunks over the live link as described in [streaming.md](streaming.md). The GBA only holds what the current scene needs |
 
-For `stream` packs:
+A multiboot image that carries all content in RAM is not a supported release mode; multiboot
+exists only together with the live link.
 
-- chunks of one group MUST be contiguous and in the order the loader uses them: `VLAY` (area
-  groups), `ROOM`, `PALE`, `TILE`, `TMAP`, `COLL`, `SHAP`, `OBJS`, `EFCT`, then sprites, sound
-  and scripts;
-- groups are ordered global, then each area followed by its rooms;
-- the loader reads one group as a single sequential stream and only keeps the chunks it still
-  needs.
+### 2.5 File order of stream packs
 
-### 2.5 Copies (streamed packs only, opt-in)
-
-In `stream` mode an asset shared by several areas sits on the global level and therefore stays
-in RAM for the whole game. If RAM is short, the developer MAY allow the cooker to place a copy
-in each area group instead (`share = per_area`), so it is only resident inside those areas. This
-trades card space for RAM. The cooker lists every copy in its report with the bytes it costs.
-`rom` and `ram` packs MUST NOT contain copies; the cooker ignores `per_area` for them.
+For `stream` packs the chunks are written in **room chain** order ([streaming.md](streaming.md)
+§1): global data first, then for each room in the chain the chunks it adds, followed by its own
+level data, with an `RCHN` chunk at the start that lists the chain and each room's added and
+dropped chunks. The PC reads the pack in that order and skips every chunk the GBA already has
+or the session's load profile excludes. No asset is stored twice; a room that needs an asset
+from far back in the chain references it by chunk index.
 
 ## 3. Chunk types
 
 | Id | Content |
 |---|---|
 | `VLAY` | VRAM and palette layout of an area, section 2.3 |
+| `RCHN` | room chain for streaming: order of rooms, chunks each room adds and drops (`stream` packs only) |
 | `META` | project name, build time, cooker version, source hash (for the live link) |
 | `STRS` | string table: `u16 count`, offsets, UTF-8 or profile encoding |
 | `CLAS` | class table: class IDs, names (string IDs), field layouts, component lists, method table offsets |
@@ -180,6 +176,8 @@ has.
 ## History
 
 - 0.1: first draft.
+- 0.1.3: only `rom` (release) and `stream` (live link, multiboot); stream packs in room
+  chain order with `RCHN`; chunk category in the table of contents; no copies in any mode.
 - 0.1.2: storage modes `rom`, `ram`, `stream`; assets stored exactly once, copies only as an
   opt-in for streamed packs.
 - 0.1.1: global, area and room levels; deduplication; dependency lists; fixed VRAM layout

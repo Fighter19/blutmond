@@ -9,6 +9,7 @@ protocols and language. The reasons behind them, the research and the roadmap ar
 | [asset-model.md](asset-model.md) | platform-neutral source assets, cooking per platform profile, overrides, change report |
 | [room-format.md](room-format.md) | rooms: layers, collision cells, materials, physics, objects, engine classes, Tiled mapping |
 | [pack-format.md](pack-format.md) | the cooked binary pack: header, table of contents, chunk types, compression, load order |
+| [streaming.md](streaming.md) | live-link streaming: rooms as anchors, room chain, priorities, load profiles, testing single assets |
 | [runtime-abi.md](runtime-abi.md) | API table, handles, memory regions, live reload modes |
 | [state.md](state.md) | state arena, field flags, schema, state map, save games, migration |
 | [link-protocol.md](link-protocol.md) | transports, boot, packets, error handling, reset setting |

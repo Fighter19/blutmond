@@ -76,6 +76,9 @@ banks, OBJ VRAM), with the chunk's hash. On a room change:
 Moving between rooms of the same area therefore only uploads the new room's maps, collision
 and room-specific tiles. Entering another area also loads its `VLAY` and shared graphics.
 
+With streamed content ([streaming.md](streaming.md)) the PC keeps a mirror of this table and
+decides what is loaded and dropped; the runtime follows `DROP` and reports `STATUS`.
+
 The same table drives live reloads: when a shared chunk changes, every room that depends on it
 sees the new version, and only that chunk is sent and uploaded.
 

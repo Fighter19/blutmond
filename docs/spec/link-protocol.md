@@ -38,8 +38,9 @@ talking to a PC.
    does: attention handshake (`0x6202` until the reply has `0x72` in the top byte), header
    (`0x6102`, 0x60 halfwords), key exchange (`0x63xx`, `0x64xx`), length, encrypted data,
    CRC check. The per-word delay is the same setting as xcomms' "Transfer Delay".
-2. The image is either the full runtime (multiboot case) or a small bootstrap that starts the
-   runtime from the cartridge.
+2. The image is either the runtime (multiboot) or a small bootstrap that starts the runtime
+   from the cartridge. Multiboot is only used together with the live link; content is then
+   streamed ([streaming.md](streaming.md)).
 3. The runtime then waits for packets (section 3) and answers `HELLO`.
 
 The runtime is only booted once per session; afterwards only packets are exchanged.
@@ -72,9 +73,16 @@ last word   CRC-32 (IEEE) over word 0 .. last payload word
 Type values `0x41`, `0x4D` and `0x4E` are reserved, because the single words above use them in
 the same position.
 
-After the last word of a packet the receiver answers ACK or NAK (the master polls for it).
-The slave sends its own packets when polled; the master acknowledges them the same way.
-Sequence numbers count per direction and wrap at 256.
+Packets are acknowledged per **window** to keep the number of turnarounds low: the sender
+sends up to 16 packets back to back, then polls once. The receiver answers with a cumulative
+ACK (the last sequence number it received in order) or a NAK with the sequence number it expects
+next; the sender then continues from there (go-back-N). The slave sends its own packets when
+polled; the master acknowledges them the same way. Sequence numbers count per direction and
+wrap at 256.
+
+The master drives the transfer: it pushes content according to [streaming.md](streaming.md)
+and the slave does not request chunks one by one. The slave's `STATUS` is collected while
+polling for window acknowledgements, so it needs no round trip of its own.
 
 ### Packet types
 
@@ -86,6 +94,10 @@ Sequence numbers count per direction and wrap at 256.
 | 0x11 | `CHUNK_DATA` | M → S | transfer ID, offset, data |
 | 0x12 | `CHUNK_END` | M → S | transfer ID; the slave checks the hash and NAKs on mismatch |
 | 0x13 | `TOC` | M → S | new pack header and table of contents (see [pack-format.md](pack-format.md) §5) |
+| 0x14 | `DROP` | M → S | chunk indices the runtime may free (eviction decided by the master, streaming.md §4) |
+| 0x15 | `SESSION` | M → S | load profile and categories (streaming.md §3) |
+| 0x16 | `STATUS` | S → M | current room, coarse player position, free memory per region, events (door entered, out of memory) |
+| 0x17 | `TEST` | M → S | open the test scene for a mini pack (streaming.md §5) |
 | 0x18 | `APPLY` | M → S | reload mode, transfer IDs, start room/door (see [runtime-abi.md](runtime-abi.md) §5) |
 | 0x20 | `STATE_GET` | M → S | flag mask (`save`, `link`, `snapshot`), optional range |
 | 0x21 | `STATE_DATA` | S → M | schema hash, data |
@@ -105,7 +117,7 @@ Sequence numbers count per direction and wrap at 256.
 - **Resync**: after 4 failed attempts the master sends four `0xFFFFFFFF` and `SYNC`. The slave
   drops any partial packet and answers the next poll with `SYNC`. Both sides then continue with
   the sequence numbers from the last ACK.
-- **Resume**: chunks are confirmed packet by packet, so a transfer continues where it stopped.
+- **Resume**: chunks are confirmed window by window, so a transfer continues where it stopped.
 - **Atomic apply**: the slave applies nothing until `APPLY` arrives and every chunk it refers to
   has passed its hash check.
 - **Adaptive delay**: the master starts with a safe per-bit delay, lowers it step by step while
@@ -131,3 +143,5 @@ With `none` the editor asks the user to switch the GBA off and on.
 ## History
 
 - 0.1: first draft.
+- 0.1.1: window acknowledgements; master-driven streaming with `DROP`, `SESSION`, `STATUS`,
+  `TEST`.
