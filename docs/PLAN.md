@@ -637,29 +637,88 @@ can be edited without the Blutmond editor.
 | `main` | tile layer the player walks in front of | BG layer |
 | `foreground` | tile layer drawn in front of sprites | BG layer with higher priority |
 | `collision` | tile layer using the Blutmond collision tileset | collision grid in the pack, not drawn |
+| `collision_material` | tile layer using the Blutmond material tileset | merged into the collision grid |
 | `objects` | object layer | entity spawn table |
 
 Layers without a role are ignored with a warning, so nothing is cooked by accident.
 
-**Collision** is a grid separate from the graphics, cell size 16 px by default (room property
-`collision_cell`). It uses a small tileset shipped with Blutmond (`blutmond_collision.tsx`);
-each tile has a `collision` property:
+**Collision** follows what 2D platformers of the era stored: a grid separate from the
+graphics with a few bits per cell for the **shape** and for **which sides are solid**, flip bits
+to mirror a shape, and a separate **material**. The closest model is the Castlevania games on
+GBA and DS (Harmony of Dissonance, Aria of Sorrow, Dawn of Sorrow): one byte per cell with a
+4-bit block shape (full, top half, bottom half, slopes 1, 2 or 4 cells wide), a "solid on top"
+bit, a "solid at sides and bottom" bit, H/V flip bits for slopes, a water bit and an "effect"
+bit (damage, or conveyor on half blocks). Top-only solidity is how those games make jump-through
+platforms, also for half blocks. Super Metroid works the same way in spirit: a block type per
+cell plus a second byte that, for slopes, picks the slope shape and its flip. Sonic stores a
+16-entry height array and an angle per tile, which is how the runtime resolves shapes
+internally (below).
 
-| Type | Behaviour |
-|---|---|
-| `empty` | nothing |
-| `solid` | blocks from every side |
-| `platform` | one-way: solid from above, can be jumped through from below and dropped through (down + jump) |
-| `slope_up_45`, `slope_down_45` | 45° floor; walking follows the surface |
-| `slope_up_22_low/high`, `slope_down_22_high/low` | 22.5° floor made of two cells |
-| `ladder` | climbable; up/down switches to climbing |
-| `water` | swimming: room property `water_gravity`, slower movement |
-| `hazard` | damage on touch (spikes) |
+Cell size is 16 px by default (room property `collision_cell`; 8 px is possible). Each cell is
+cooked to **two bytes**:
 
-Graphics tilesets may also carry a `collision` property per tile; the cooker then fills the
-collision grid automatically, and a hand-drawn collision layer overrides it. Room edges without
-a `Door` are walls (`edges_solid`, default true); falling out of the bottom is handled by a
-`KillZone`.
+```
+byte 0: shape (bits 0-3) | hflip (4) | vflip (5) | solid_top (6) | solid_sides_bottom (7)
+byte 1: material (bits 0-3) | parameter (bits 4-7)
+```
+
+Shapes (mirrored with hflip for the other direction, with vflip for ceilings):
+
+| Id | Shape | Notes |
+|---|---|---|
+| 0 | empty | |
+| 1 | full | |
+| 2 | half, top | upper 8 px; ceilings, low passages |
+| 3 | half, bottom | lower 8 px; steps, low walls |
+| 4 | half, left | left 8 px; thin walls |
+| 5 | slope 1:1 (45°) | one cell |
+| 6, 7 | slope 1:2 (≈ 27°), part 1 and 2 | two cells |
+| 8–11 | slope 1:4 (≈ 14°), parts 1–4 | four cells; gentle ramps, as the long ramps in Aria of Sorrow |
+| 12, 13 | slope 2:1 (≈ 63°), lower and upper part | steep; the player slides down instead of walking |
+| 14 | custom height profile | uses a 16-entry height array from the room's shape table (Sonic style) for odd shapes |
+| 15 | reserved | |
+
+Solidity bits:
+
+| solid_top | solid_sides_bottom | Meaning |
+|---|---|---|
+| 1 | 1 | solid from every side |
+| 1 | 0 | **jump-through**: stand on it, jump up through it, drop down with down + jump. Works with every shape: full platforms, **half platforms** (shape 2/3), and **jump-through slopes** (e.g. stairs in the background) |
+| 0 | 1 | solid at the sides and from below, but no floor (rare; e.g. a ceiling lip you slide off) |
+| 0 | 0 | not solid; only the material applies (water, ladder, damage zone) |
+
+Materials (parameter in the upper 4 bits):
+
+| Id | Material | Parameter |
+|---|---|---|
+| 0 | normal | – |
+| 1 | water | – (room property `water_gravity`, slower movement; a cell with water and a shape is a solid shape under water) |
+| 2 | damage | damage amount (spikes, lava) |
+| 3 | instant death | – (bottomless pits inside a room) |
+| 4 | conveyor | speed, sign by hflip |
+| 5 | ice | friction level |
+| 6 | ladder / vine | – (up/down starts climbing; the top cell of a ladder is usually also jump-through) |
+| 7 | bounce | strength (springy or clinking surfaces) |
+| 8 | sticky / mud | slowdown |
+| 9–15 | game defined | free for the game, readable from scripts |
+
+Breakable, crumbling and switchable blocks (Super Metroid's shot and bomb blocks, crumbling
+floors) are not materials but objects that **write into the collision grid** when they change
+state (`collision.set(cell, shape)`); the change is stored per persistent ID so it survives
+saving.
+
+**In Tiled** this is two tile layers: `collision` uses the Blutmond collision tileset (one tile
+per shape and solidity; Tiled's own flip tools set hflip/vflip), and `collision_material`
+uses a material tileset. The cooker merges both into the two bytes. Graphics tilesets may also
+carry `shape`, `solid` and `material` properties per tile; the cooker then fills the grid
+automatically, and hand-drawn collision overrides it. Room edges without a `Door` are walls
+(`edges_solid`, default true); falling out of the bottom is handled by a `KillZone`.
+
+**How the runtime resolves shapes**: every shape is a precomputed 16-entry height array plus a
+surface angle (a table of 16 × 16 bytes in ROM, the same idea as Sonic's height masks). Flips
+mirror the lookup instead of needing more tables. A floor check is: find the cell under the
+sensor, read the height at the sensor's x, done. Slopes, half blocks and custom shapes all go
+through the same code path, so adding a shape is a table entry, not new code.
 
 **Physics** is a simple platformer model, not a rigid-body simulation. All values are fixed
 point (`fix`, 24.8) in pixels and frames; Tiled stores them as decimals, the cooker converts.
@@ -672,16 +731,30 @@ point (`fix`, 24.8) in pixels and frames; Tiled stores them as decimals, the coo
 | entity class (component `Body`) | `hitbox` (w, h, offset from the anchor) | per class |
 | `Body` | `gravity_scale` | 1.0 (0 for flying enemies) |
 | `Body` | `max_speed`, `accel`, `friction` | per class |
+| `Body` | `slope_speed` (factor walking up 1:1 / 1:2 / 1:4), `max_walk_angle` | 0.75 / 0.9 / 1.0, 45° (steeper: slide) |
 | player (component `PlatformerControl`) | `run_speed` | 2.0 px/frame |
 | `PlatformerControl` | `jump_speed` | 5.3 px/frame (about 3.5 tiles high with the default gravity) |
 | `PlatformerControl` | `jump_cut` (release early → lower jump), `coyote_frames`, `jump_buffer_frames` | 0.5, 6, 6 |
+| `PlatformerControl` | `drop_through` (down + jump on jump-through) | on |
 
 Per frame: apply input and gravity to the velocity, then move along X and resolve against the
-grid, then along Y and resolve (slopes snap the feet to the surface, platforms only block when
-falling onto them from above). Entities stand on moving platforms by being carried with them.
-Entity against entity uses axis-aligned hitboxes and calls script events (`touch`,
-`hit`), no pushing. The editor can check reachability: with the room's physics it draws the
-jump arcs from every standing spot and marks floors that cannot be reached.
+grid, then along Y and resolve. The details that make it feel right, as in the games above:
+
+- **Sensors**: two floor sensors at the hitbox's bottom corners, one ceiling sensor pair, wall
+  sensors at mid height. The higher floor result wins, so standing half over a slope works.
+- **Slope snapping**: when walking down a slope, the feet are kept on the surface up to a few
+  pixels per frame, so the player does not hop down a ramp. Walking off a slope's end at speed
+  launches normally.
+- **Steps**: a rise of up to 8 px (a half block) is climbed without jumping (`step_height`).
+- **Jump-through**: only collides while falling and when the feet were above the surface in
+  the previous frame; drop-through ignores it for a few frames.
+- **Ceiling slopes** (vflip) deflect a jump sideways instead of stopping it dead.
+- **Steep slopes** (2:1) make the player slide; `max_walk_angle` decides from where on.
+- **Conveyors and moving platforms** add their speed to whatever stands on them.
+
+Entity against entity uses axis-aligned hitboxes and calls script events (`touch`, `hit`), no
+pushing. The editor can check reachability: with the room's physics it draws the jump arcs
+from every standing spot and marks floors that cannot be reached.
 
 **Objects** are points or rectangles in the `objects` layer. The Tiled `type` (called `class`
 from Tiled 1.9 on) is the Mondskript class; the custom properties are that class's `var(...)`
@@ -923,6 +996,11 @@ is meant for, and the cooker reports per profile what a port would change.
   [FE Universe: Improved Sound Mixer](https://feuniverse.us/t/improved-sound-mixer-by-ipatix/1107/6)
 - Maxmod: [Battle of the Bits: Maxmod](https://battleofthebits.com/lyceum/View/Maxmod)
 - Hardware facts (memory, PPU, OAM cycles, SIO modes, DMA): GBATEK (Martin Korth)
+- Collision data of comparable games: [LagoLunatic/DSVEdit](https://github.com/LagoLunatic/DSVEdit)
+  (`dsvlib/tileset.rb`, `CollisionTile`: block shapes, solidity bits, flips, water, damage and
+  conveyors for the GBA and DS Castlevania games),
+  [Sonic Physics Guide](https://info.sonicretro.org/Sonic_Physics_Guide) (height arrays and
+  angles per tile), [Data Crystal: Super Metroid](https://datacrystal.tcrf.net/wiki/Super_Metroid)
 - Xboo cable and parallel port driver: [Fighter19/xcomms, branch `parport`](https://github.com/Fighter19/xcomms/tree/parport)
   (`source/parport.cxx`, `source/xboo.cxx`, `include/xcomms_cmd.h`, `docs/xcomms.html`)
 - Raspberry Pi / RP2040 link projects: [afska/gba-remote-play](https://github.com/afska/gba-remote-play),
