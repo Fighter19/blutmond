@@ -285,8 +285,41 @@ static bool handle(BmLive *l, const BmLinkPacket *p)
     return sendState(l, p->length >= 1 ? p->payload[0] : BM_STATE_SNAPSHOT);
   case BM_LINK_APPLY:
     return handleApply(l, p);
+  case BM_LINK_PPU_SNAPSHOT:
+  {
+    uint32_t offset = p->length >= 4 ? bmLinkGet32(p->payload) : 0;
+    uint32_t length = p->length >= 8 ? bmLinkGet32(p->payload + 4) : 0;
+    uint8_t dummy;
+    uint32_t total = bmHalVideoSnapshotPart(0, &dummy, 0);
+    l->snapshotOffset = offset < total ? offset : total;
+    l->snapshotEnd = length == 0 || length > total - l->snapshotOffset ? total : l->snapshotOffset + length;
+    return true;
+  }
   default:
     return true;  // not handled by this runtime (CHUNK_BEGIN carries nothing needed here)
+  }
+}
+
+// Sends the next parts of a requested PPU snapshot, straight into the send ring.
+static void pumpSnapshot(BmLive *l)
+{
+  while (l->snapshotOffset < l->snapshotEnd)
+  {
+    uint32_t lock = bmHalLinkLock();
+    BmLinkPacket *p = bmLinkSlaveSendBegin(&l->slave);
+    bmHalLinkUnlock(lock);
+    if (p == NULL) return;
+    uint32_t n = l->snapshotEnd - l->snapshotOffset;
+    if (n > BM_LIVE_SNAPSHOT_DATA_MAX) n = BM_LIVE_SNAPSHOT_DATA_MAX;
+    p->type = BM_LINK_PPU_SNAPSHOT;
+    p->length = (uint16_t)(BM_LIVE_SNAPSHOT_HEADER + n);
+    uint32_t total = bmHalVideoSnapshotPart(l->snapshotOffset, p->payload + BM_LIVE_SNAPSHOT_HEADER, n);
+    bmLinkPut32(p->payload, l->snapshotOffset);
+    bmLinkPut32(p->payload + 4, total);
+    l->snapshotOffset += n;
+    lock = bmHalLinkLock();
+    bmLinkSlaveSendCommit(&l->slave);
+    bmHalLinkUnlock(lock);
   }
 }
 
@@ -304,6 +337,7 @@ void bmLiveFrame(BmLive *l)
     bmLinkSlaveRelease(&l->slave, p);
     bmHalLinkUnlock(lock);
   }
+  pumpSnapshot(l);
 }
 
 bool bmLiveLog(BmLive *l, const char *pText)

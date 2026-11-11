@@ -107,6 +107,8 @@ bool Project::cook()
     std::vector<tmx::Map> maps{tmx::load(path)};
     CookOptions options;
     options.profile = *profile;
+    info_ = CookInfo{};
+    options.pInfo = &info_;
     pack_ = bm::cook(maps, options, report_);
   }
   catch (const std::exception &e)

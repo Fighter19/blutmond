@@ -49,7 +49,14 @@ uint32_t bmHalVideoWaitVBlank(void);
 /// Writes a video register. `offset` is the byte offset in the GBA's I/O layout
 /// (BM_PPU_DISPCNT, BM_PPU_BGCNT(n), ... in ppu.h), the platform-neutral register model.
 void bmHalVideoWriteReg(uint16_t offset, uint16_t value);
+/// Reads a video register back as last written (the GBA keeps copies: most video registers
+/// are write-only there).
 uint16_t bmHalVideoReadReg(uint16_t offset);
+
+/// The current video state as a PPU snapshot (BMPS, src/ppu/ppu.h): copies `size` bytes from
+/// `offset` into `pOut` and returns the snapshot's total size. For inspecting what is loaded
+/// (PPU_SNAPSHOT over the live link).
+uint32_t bmHalVideoSnapshotPart(uint32_t offset, uint8_t *pOut, uint32_t size);
 
 /// Copies data into video memory. `offset` and `size` must be even (VRAM only takes 16- and
 /// 32-bit writes on the GBA).

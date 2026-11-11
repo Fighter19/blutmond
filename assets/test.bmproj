@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="1" name="Blutmond test level">
+ <room path="test_room/room.tmx"/>
+ <room path="test_room/room2.tmx"/>
+ <assets path="test_room"/>
+ <assets path="engine"/>
+</project>

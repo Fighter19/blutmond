@@ -44,12 +44,13 @@ typedef struct Wire
   uint32_t flips;
 } Wire;
 static Wire s_wire;
+static bool s_paused;  // frames go on for the link, the game stands still
 
 static void frame(void)
 {
   bmVideoWaitFrame();
   bmLiveFrame(&s_live);
-  bmGameFrame(&s_game, bmAutopilotKeys(&s_pilot, &s_game));
+  if (!s_paused) bmGameFrame(&s_game, bmAutopilotKeys(&s_pilot, &s_game));
 }
 
 static uint32_t rnd(void)
@@ -84,6 +85,7 @@ static void start(BmLinkMaster *m)
   s_wire.rng = 99;
   BmLinkTransport t = { NULL, exchange, NULL, NULL, 0 };
   bmLinkMasterInit(m, &t);
+  s_paused = false;
   for (int i = 0; i < 30; i++) frame();
 }
 
@@ -255,6 +257,28 @@ static uint8_t *readFile(const char *path, uint32_t *pSize)
   return p;
 }
 
+static void testPpuSnapshot(void)
+{
+  BmLinkMaster m;
+  start(&m);
+  for (int i = 0; i < 60; i++) frame();  // sprites and scrolling set up
+  s_paused = true;
+  frame();
+  static uint8_t got[128 * 1024], expected[128 * 1024];
+  uint32_t size = 0;
+  uint32_t frame0 = bmHalHostFrame();
+  TEST_ASSERT(bmLiveMasterPpuSnapshot(&m, got, sizeof(got), &size));
+  TEST_ASSERT(size == bmPpuSnapshotSize());
+  bmPpuSnapshotWrite(bmHalHostGetPpu(), expected);
+  TEST_ASSERT(memcmp(got, expected, size) == 0);
+  static BmPpuState state;
+  TEST_ASSERT(bmPpuSnapshotRead(&state, got, size));
+  TEST_ASSERT((bmPpuReg(&state, BM_PPU_DISPCNT) & BM_PPU_DISPCNT_OBJ) != 0);
+  printf("  snapshot of %u bytes in %u frames, %u packets, %u bad\n", (unsigned)size, (unsigned)(bmHalHostFrame() - frame0),
+         (unsigned)m.counters.packetsIn, (unsigned)m.counters.badPackets);
+  bmLinkMasterFree(&m);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 3) { fprintf(stderr, "usage: test_live <level.bmpk> <variant.bmpk>\n"); return 2; }
@@ -267,6 +291,7 @@ int main(int argc, char **argv)
   RUN_TEST(testRestartInAnotherRoom);
   RUN_TEST(testFailedTransferLeavesTheGameAlone);
   RUN_TEST(testPushWithBitErrors);
+  RUN_TEST(testPpuSnapshot);
   free(s_level);
   free(s_variant);
   return TEST_RESULT();

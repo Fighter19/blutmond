@@ -94,7 +94,7 @@ void Runner::run(RunTarget target, const std::string &packPath)
     {
       std::vector<std::string> args = linkArgs(target);
       args.insert(args.end(), {"push", packPath, "restart"});
-      queue({args, "Restart on the PC", false});
+      queue({args, "Restart on the PC", false, {}, false});
       return;
     }
     game_ = spawn({settings.game, packPath, "--listen", std::to_string(settings.port)}, false);
@@ -116,7 +116,7 @@ void Runner::run(RunTarget target, const std::string &packPath)
   }
   std::vector<std::string> args = linkArgs(target);
   args.insert(args.end(), {"boot-if-needed", settings.gbaImage, "push", packPath, "restart"});
-  queue({args, "Run on the GBA", true});
+  queue({args, "Run on the GBA", true, {}, false});
 }
 
 bool Runner::pushHot(const std::string &packPath)
@@ -128,7 +128,23 @@ bool Runner::pushHot(const std::string &packPath)
   while (!jobs_.empty() && jobs_.back().what == "Hot reload") jobs_.pop_back();
   std::vector<std::string> args = linkArgs(target);
   args.insert(args.end(), {"push", packPath, "hot"});
-  queue({args, "Hot reload", target == RunTarget::Gba});
+  queue({args, "Hot reload", target == RunTarget::Gba, {}, false});
+  return true;
+}
+
+bool Runner::capture(const std::string &path, std::function<void(bool)> done)
+{
+  RunTarget target = liveTarget_;
+  if (target == RunTarget::Pc && !game_) target = RunTarget::Gba;
+  if (target == RunTarget::Gba && !gbaActive_) return false;
+  // One capture at a time is enough.
+  for (const Job &j : jobs_)
+    if (j.what == "Capture") return true;
+  if (job_ && current_.what == "Capture") return true;
+  std::vector<std::string> args = linkArgs(target);
+  args.insert(args.end(), {"ppu-snapshot", path});
+  Job job{args, "Capture", target == RunTarget::Gba, std::move(done), true};
+  queue(std::move(job));
   return true;
 }
 
@@ -170,6 +186,7 @@ void Runner::startNext()
 
 void Runner::drain(bool final)
 {
+  bool quiet = current_.quiet;
   SDL_IOStream *out = job_ ? SDL_GetProcessOutput(job_) : nullptr;
   char buf[512];
   while (out)
@@ -181,12 +198,12 @@ void Runner::drain(bool final)
   size_t nl;
   while ((nl = partial_.find('\n')) != std::string::npos)
   {
-    if (log) log(partial_.substr(0, nl), false);
+    if (log && !quiet) log(partial_.substr(0, nl), false);
     partial_.erase(0, nl + 1);
   }
   if (final && !partial_.empty())
   {
-    if (log) log(partial_, false);
+    if (log && !quiet) log(partial_, false);
     partial_.clear();
   }
 }
@@ -207,14 +224,16 @@ void Runner::update()
   drain(true);
   SDL_DestroyProcess(job_);
   job_ = nullptr;
-  if (current_.gba && code == 0)
+  // Only a run decides whether the GBA counts as running; pushes and captures may fail on a
+  // bad cable without that.
+  if (current_.gba && current_.what == "Run on the GBA")
   {
-    gbaActive_ = true;
-    if (current_.what != "Hot reload") liveTarget_ = RunTarget::Gba;
+    gbaActive_ = code == 0;
+    if (code == 0) liveTarget_ = RunTarget::Gba;
   }
-  else if (current_.gba && current_.what != "Hot reload")
-    gbaActive_ = false;
-  if (log) log(current_.what + (code == 0 ? ": done" : ": failed (exit code " + std::to_string(code) + ")"), code != 0);
+  if (log && (code != 0 || !current_.quiet))
+    log(current_.what + (code == 0 ? ": done" : ": failed (exit code " + std::to_string(code) + ")"), code != 0);
+  if (current_.done) current_.done(code == 0);
   state_ = liveTarget_ == RunTarget::Gba && gbaActive_ ? "Running on the GBA" : game_ ? "Running on the PC" : gbaActive_ ? "Running on the GBA" : "Not running";
   startNext();
 }

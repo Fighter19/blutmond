@@ -4,6 +4,7 @@
  */
 #include "hal.h"
 #include "hal_host.h"
+#include "ppu_snapshot_part.h"
 
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -122,6 +123,18 @@ void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues)
   }
   pTable->reg = reg;
   memcpy(pTable->values, pValues, sizeof(pTable->values));
+}
+
+uint32_t bmHalVideoSnapshotPart(uint32_t offset, uint8_t *pOut, uint32_t size)
+{
+  ensureInit();
+  BmPpuSnapshotSource source = { s_ppu.regs, s_ppu.vram, s_ppu.palette, s_ppu.oam, { 0 }, { NULL } };
+  for (int t = 0; t < BM_PPU_LINE_TABLES; t++)
+  {
+    source.lineRegs[t] = s_ppu.lineTables[t].reg;
+    source.pLineValues[t] = s_ppu.lineTables[t].values;
+  }
+  return bmPpuSnapshotPart(&source, offset, pOut, size);
 }
 
 const BmPpuState *bmHalHostGetPpu(void)

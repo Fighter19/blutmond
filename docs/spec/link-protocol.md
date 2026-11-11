@@ -141,6 +141,8 @@ All values little endian.
 | `STATE_GET` | u8 flag mask ([state.md](state.md)) |
 | `STATE_DATA`, `STATE_PUT` | the state as `bmStateWrite` writes it (header with schema hash and CRC) |
 | `LOG` | text |
+| `PPU_SNAPSHOT` M → S | u32 offset, u32 length (0: to the end) of the runtime's video state as a PPU snapshot (`BMPS`, `src/ppu/ppu.h`: registers, VRAM, palettes, OAM, line tables; about 100 KB) |
+| `PPU_SNAPSHOT` S → M | u32 offset, u32 total size, then data (at most 1016 bytes). The runtime sends the parts at frame boundaries, as many per frame as its send buffers take; the registers are the values last written (the GBA HAL keeps copies, most video registers are write-only) |
 
 The master does not wait for chunk-level answers: a pack transfer is `TOC`, then for each
 missing chunk `CHUNK_BEGIN`, `CHUNK_DATA`…, `CHUNK_END`, in windows; the only round trip is
@@ -198,3 +200,6 @@ The rate on a real Xboo cable still has to be measured (`bmlink --xboo /dev/parp
   `TEST`.
 - 0.2: busy NAK, one answer per burst of polls, answers may be more than one word late,
   payloads of `HELLO`, `TOC`, `CHUNK_*`, `APPLY`, `STATUS`, `STATE_*`; measurements.
+- 0.2.1: `PPU_SNAPSHOT` payloads. An acknowledgement that arrives while the slave is in the
+  middle of its next packet must not restart that packet (fixed in the slave: before, every
+  packet that followed another one directly was sent twice).

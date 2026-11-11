@@ -31,7 +31,7 @@ file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
 file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c)
-set(BM_LINK_SOURCES src/link/link.c src/link/live.c)
+set(BM_LINK_SOURCES src/link/link.c src/link/live.c src/ppu/ppu_snapshot_part.c)
 
 if(BM_PLATFORM STREQUAL "gba")
   # The software PPU is not needed on the device; only its register definitions are used.
@@ -185,10 +185,15 @@ if(BM_PLATFORM STREQUAL "host")
   # Cooker: Tiled rooms -> pack (tools/cooker), as a library for bmcook and the editor.
   # Uses stb_image from third_party.
   add_library(bm_cooker STATIC
-    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp src/pack/pack.c)
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp src/pack/pack.c)
   target_include_directories(bm_cooker PUBLIC tools/cooker src/pack PRIVATE third_party/stb)
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST)
   target_compile_options(bm_cooker PRIVATE ${BM_WARNINGS})
+  # The editor's project model (project file, asset catalogue, new rooms), without UI.
+  add_library(bm_editor_model STATIC editor/project_file.cpp editor/vram.cpp)
+  target_include_directories(bm_editor_model PUBLIC editor)
+  target_link_libraries(bm_editor_model PUBLIC bm_cooker blutmond)
+  target_compile_options(bm_editor_model PRIVATE ${BM_WARNINGS})
   add_executable(bmcook tools/cooker/main.cpp)
   target_link_libraries(bmcook PRIVATE bm_cooker)
   target_compile_options(bmcook PRIVATE ${BM_WARNINGS})
@@ -202,11 +207,13 @@ if(BM_PLATFORM STREQUAL "host")
       GIT_REPOSITORY https://github.com/Fighter19/ose-ui.git
       GIT_TAG 81846abb402362fd542952a58e648844a6551520)
     FetchContent_MakeAvailable(ose_ui)
-    add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp)
+    add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
+      editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
-    target_link_libraries(bmeditor PRIVATE bm_cooker blutmond ose_ui_sdl3)
+    target_link_libraries(bmeditor PRIVATE bm_editor_model bm_cooker blutmond ose_ui_sdl3)
     target_compile_definitions(bmeditor PRIVATE
-      "BM_EDITOR_DEFAULT_ROOMS=\"${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx|${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx\""
+      "BM_EDITOR_DEFAULT_PROJECT=\"${PROJECT_SOURCE_DIR}/assets/test.bmproj\""
+      "BM_EDITOR_ENGINE_DIR=\"${PROJECT_SOURCE_DIR}/assets/engine\""
       "BM_EDITOR_GAME=\"$<TARGET_FILE:game>\""
       "BM_EDITOR_BMLINK=\"$<TARGET_FILE:bmlink>\"")
     # Run on the GBA multiboots the runtime from a GBA build (or set gba-image in editor.conf).
@@ -272,6 +279,16 @@ if(BM_PLATFORM STREQUAL "host")
     target_compile_options(${test} PRIVATE ${BM_WARNINGS})
     add_test(NAME ${test} COMMAND ${test})
   endforeach()
+  add_executable(test_project tests/test_project.cpp)
+  target_link_libraries(test_project PRIVATE bm_editor_model)
+  target_include_directories(test_project PRIVATE tests)
+  target_compile_options(test_project PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_project COMMAND test_project ${PROJECT_SOURCE_DIR}/assets ${CMAKE_CURRENT_BINARY_DIR}/test-output/project)
+  add_executable(test_vram tests/test_vram.cpp)
+  target_link_libraries(test_vram PRIVATE bm_editor_model)
+  target_include_directories(test_vram PRIVATE tests)
+  target_compile_options(test_vram PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_vram COMMAND test_vram)
   # Cooking the test room: GBA pack, SNES report (must cook without errors).
   set(cooked ${CMAKE_CURRENT_BINARY_DIR}/test-output)
   file(MAKE_DIRECTORY ${cooked})
@@ -450,6 +467,16 @@ if(BM_PLATFORM STREQUAL "host")
       add_test(NAME live_mgba_hot_changes_one_tile
         COMMAND ${compare} ${out}/live_before.ppm ${out}/live_after.ppm --changed-in 0 0 15 15)
       set_tests_properties(live_mgba_hot_changes_one_tile PROPERTIES FIXTURES_REQUIRED live_mgba_hot)
+      # The video state read over the link (PPU_SNAPSHOT), rendered by the software PPU, is
+      # what mGBA shows; with bit errors none of its 100 packets may be lost.
+      add_test(NAME live_mgba_ppu_snapshot
+        COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba --errors 1000 1000 run 120 ppu-snapshot ${out}/live_snapshot.bmps
+          screenshot ${out}/live_snapshot_mgba.ppm stats)
+      set_tests_properties(live_mgba_ppu_snapshot PROPERTIES FIXTURES_SETUP live_mgba_ppu_snapshot)
+      add_test(NAME live_mgba_ppu_snapshot_render COMMAND bm_ppu_render ${out}/live_snapshot.bmps ${out}/live_snapshot_ppu.ppm)
+      set_tests_properties(live_mgba_ppu_snapshot_render PROPERTIES FIXTURES_REQUIRED live_mgba_ppu_snapshot FIXTURES_SETUP live_mgba_ppu_render)
+      add_test(NAME live_mgba_ppu_snapshot_matches COMMAND ${compare} ${out}/live_snapshot_mgba.ppm ${out}/live_snapshot_ppu.ppm)
+      set_tests_properties(live_mgba_ppu_snapshot_matches PROPERTIES FIXTURES_REQUIRED live_mgba_ppu_render)
       foreach(image game_autoplay game_autoplay_mb)
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         add_test(NAME live_mgba_bit_errors_${image}

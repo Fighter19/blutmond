@@ -135,7 +135,9 @@ BM_IWRAM_CODE static void slaveRelease(BmLinkSlave *s, uint8_t count)
 {
   s->txBase = (uint8_t)(s->txBase + count);
   s->txCount = (uint8_t)(s->txCount - count);
-  if (s->txSend > count)
+  // Keep the packet being sent going: an ACK for earlier packets often arrives while the next
+  // one is half out (txSend == count, txWord != 0).
+  if (s->txSend >= count)
   {
     s->txSend = (uint8_t)(s->txSend - count);
   }

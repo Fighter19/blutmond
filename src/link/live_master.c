@@ -125,3 +125,25 @@ bool bmLiveMasterPutState(BmLinkMaster *m, const uint8_t *pData, uint32_t size, 
   if (size > BM_LINK_MAX_PAYLOAD || !bmLinkMasterQueue(m, BM_LINK_STATE_PUT, pData, (uint16_t)size)) return false;
   return bmLiveMasterApply(m, 0, BM_LIVE_STATE, NULL, pStatus);
 }
+
+bool bmLiveMasterPpuSnapshot(BmLinkMaster *m, uint8_t *pOut, uint32_t capacity, uint32_t *pSize)
+{
+  uint8_t request[8] = { 0 };
+  BmLinkPacket p;
+  if (!bmLinkMasterRequest(m, BM_LINK_PPU_SNAPSHOT, request, sizeof(request), BM_LINK_PPU_SNAPSHOT, &p, BM_LIVE_ANSWER_POLLS))
+    return false;
+  uint32_t received = 0, total = 0;
+  for (;;)
+  {
+    if (p.length < BM_LIVE_SNAPSHOT_HEADER) return false;
+    uint32_t offset = bmLinkGet32(p.payload), n = p.length - BM_LIVE_SNAPSHOT_HEADER;
+    total = bmLinkGet32(p.payload + 4);
+    if (total > capacity || offset > total || n > total - offset) return false;
+    memcpy(pOut + offset, p.payload + BM_LIVE_SNAPSHOT_HEADER, n);
+    received += n;
+    if (received >= total) break;
+    if (!bmLinkMasterReceive(m, BM_LINK_PPU_SNAPSHOT, &p, BM_LIVE_ANSWER_POLLS)) return false;
+  }
+  *pSize = total;
+  return true;
+}

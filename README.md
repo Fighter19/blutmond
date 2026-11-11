@@ -72,14 +72,33 @@ the game runs headless as before (`--headless` forces it).
 The editor:
 
 ```
-build/bmeditor            # the test rooms
-build/bmeditor room.tmx room2.tmx
+build/bmeditor                       # assets/test.bmproj
+build/bmeditor game.bmproj
+build/bmeditor room.tmx room2.tmx    # a project that is not saved yet
 ```
 
 It cooks the room, shows it as the runtime renders it (with collision and object overlays), the
 GBA screen at the camera (click into the room), the palette banks, the tiles, the hardware
 budget and the cooker's report, for the GBA or SNES profile. It cooks again when the file
 changes, so it can run next to Tiled.
+
+- **Project** (left): the project's rooms and the files in its asset folders
+  ([docs/spec/project-format.md](docs/spec/project-format.md)), with how many rooms use each
+  asset and which are unused. New room, Add room, Remove room, Import (or drop files onto the
+  editor), Open (in the program the system uses for it, e.g. Tiled), Delete (refused while a
+  room uses the file).
+- **Palette** (Room tab, right): click a colour of the cooked palette to see which source
+  colours of which images became it, and change it with R, G and B (0-31). The change is saved
+  as an override next to the image (`tileset.png.bmasset`, for this profile or for all;
+  [docs/spec/asset-model.md](docs/spec/asset-model.md)), never in the image itself; the room
+  cooks again at once and, with Live on, the running game shows the new colour. Reset removes
+  the override.
+- **Graphics** (centre tab): what is loaded in video memory and how much of the hardware it
+  takes: all 96 KB of VRAM as tiles with the maps of each background, overlaps in red and data
+  nothing shows; the backgrounds, the sprites in OAM, both palettes, sprite time per line, and
+  budget bars for background VRAM, screen blocks, sprite VRAM, OAM, palette banks and line
+  tables. It shows the editor's preview, or the running game: Capture (F8) reads the video
+  state over the live link (PC or GBA), Follow repeats that every second.
 
 **Run** (F6) cooks all rooms into one pack and plays it on the target chosen next to the button:
 
@@ -117,6 +136,7 @@ build/bmlink --mgba build-gba/game.gba run 60 push level.bmpk hot run 600 screen
 build/bmlink --xboo /dev/parport0 --reset xboo boot build-gba/game_mb.gba hello push level.bmpk hot
 build/bmlink --xboo /dev/parport0 ping 50 stats
 build/bmlink --tcp 7414 push level.bmpk hot      # the PC game in its window
+build/bmlink --tcp 7414 ppu-snapshot vram.bmps   # its video state (build/bm_ppu_render renders it)
 ```
 
 The comment at the top of `tools/bmlink/bmlink.c` lists all commands. `--adaptive` tunes the

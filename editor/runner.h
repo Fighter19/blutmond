@@ -45,6 +45,9 @@ public:
   void run(RunTarget target, const std::string &packPath);
   /// Pushes the pack into what runs as a hot reload; false if nothing runs.
   bool pushHot(const std::string &packPath);
+  /// Reads the video state of what runs (a PPU snapshot over the link) into `path` and calls
+  /// `done` with the result. False if nothing runs.
+  bool capture(const std::string &path, std::function<void(bool ok)> done);
   /// Ends the PC game; forgets the GBA (it keeps running).
   void stop();
   /// Call every frame: collects output and notices ended processes.
@@ -62,6 +65,8 @@ private:
     std::vector<std::string> args;
     std::string what;
     bool gba = false;
+    std::function<void(bool)> done;
+    bool quiet = false;  // no log line when it worked
   };
   void queue(Job job);
   void startNext();

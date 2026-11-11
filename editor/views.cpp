@@ -12,13 +12,6 @@ using ose::Vec2;
 
 namespace bm::editor {
 
-namespace {
-Color fromBgr555(uint16_t c)
-{
-  return {float(c & 31) / 31.0f, float((c >> 5) & 31) / 31.0f, float((c >> 10) & 31) / 31.0f, 1};
-}
-}  // namespace
-
 void RoomOverview::draw(Canvas &c)
 {
   c.rect(rect_, parseColor("#404040"));
@@ -127,33 +120,6 @@ bool RoomOverview::event(const InputEvent &e)
   default:
     return false;
   }
-}
-
-void PaletteGrid::draw(Canvas &c)
-{
-  const float s = 14;
-  c.rect(rect_, parseColor("#808080"));
-  if (!project) return;
-  const auto &pal = project->palette();
-  for (int bank = 0; bank < 16; bank++)
-    for (int i = 0; i < 16; i++)
-    {
-      Rect r{rect_.x + 1 + i * s, rect_.y + 1 + bank * s, s - 1, s - 1};
-      bool used = bank < project->usedBanks();
-      if (!used)
-      {
-        c.rect(r, parseColor("#a0a0a0"));
-        continue;
-      }
-      if (i == 0 && bank != 0)
-      {
-        // transparent: hatched
-        c.rect(r, parseColor("#ffffff"));
-        c.line({r.x, r.bottom()}, {r.right(), r.y}, parseColor("#c0c0c0"), 1);
-        continue;
-      }
-      c.rect(r, fromBgr555(pal[size_t(bank * 16 + i)]));
-    }
 }
 
 }  // namespace bm::editor

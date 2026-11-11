@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 #include "cook.h"
+#include "overrides.h"
 
 #include <algorithm>
 #include <cmath>
@@ -155,13 +156,46 @@ struct ColorConverter
 {
   std::optional<std::array<float, 9>> matrix;
   std::map<uint16_t, std::set<uint32_t>> sources;  // BGR555 -> distinct 24-bit colours
+  std::string profile;
+  Report *report = nullptr;
+  CookInfo *info = nullptr;
+  std::map<std::string, AssetOverrides> overrides;  // per image, loaded on first use
+  std::map<std::string, std::set<uint32_t>> overridesUsed;
 
-  uint16_t convert(const uint8_t *rgba)
+  const AssetOverrides &overridesOf(const std::string &asset)
+  {
+    auto it = overrides.find(asset);
+    if (it != overrides.end()) return it->second;
+    AssetOverrides o;
+    try
+    {
+      o = loadOverrides(asset);
+    }
+    catch (const std::exception &e)
+    {
+      if (report) report->error("does-not-fit", overridesPath(asset), e.what());
+    }
+    return overrides[asset] = o;
+  }
+
+  uint16_t convert(const uint8_t *rgba, const std::string &asset = std::string())
   {
     // Fully or mostly transparent pixels, and magenta as the classic colour key.
     if (rgba[3] < 128 || (rgba[0] == 255 && rgba[1] == 0 && rgba[2] == 255)) return TRANSPARENT;
+    uint32_t source = uint32_t(rgba[0]) << 16 | uint32_t(rgba[1]) << 8 | rgba[2];
     float r = rgba[0] / 255.0f, g = rgba[1] / 255.0f, b = rgba[2] / 255.0f;
-    if (matrix)
+    uint32_t replacement = 0;
+    bool overridden = !asset.empty() && overridesOf(asset).colourFor(profile, source, &replacement);
+    if (overridden)
+    {
+      // A hand-made colour: used as it is, without the colour matrix.
+      r = float((replacement >> 16) & 255) / 255.0f;
+      g = float((replacement >> 8) & 255) / 255.0f;
+      b = float(replacement & 255) / 255.0f;
+      overridesUsed[asset].insert(source);
+      if (info) info->overridden[{asset, source}] = replacement;
+    }
+    else if (matrix)
     {
       const auto &m = *matrix;
       float nr = m[0] * r + m[1] * g + m[2] * b;
@@ -173,7 +207,8 @@ struct ColorConverter
     }
     auto q = [](float v) { return uint16_t(std::lround(v * 31.0f)); };
     uint16_t c = uint16_t(q(r) | (q(g) << 5) | (q(b) << 10));
-    sources[c].insert(uint32_t(rgba[0]) << 16 | uint32_t(rgba[1]) << 8 | rgba[2]);
+    sources[c].insert(source);
+    if (info && !asset.empty()) info->colourSources[c].insert({asset, source});
     return c;
   }
 };
@@ -314,7 +349,7 @@ void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const 
               for (int px = 0; px < 8; px++)
               {
                 int ix = tx + srcX * 8 + px, iy = ty + srcY * 8 + py;
-                t[py * 8 + px] = (ix < ts->image->width && iy < ts->image->height) ? colors.convert(ts->image->pixel(ix, iy)) : TRANSPARENT;
+                t[py * 8 + px] = (ix < ts->image->width && iy < ts->image->height) ? colors.convert(ts->image->pixel(ix, iy), ts->imagePath) : TRANSPARENT;
               }
             int flip = (fh ? FLIP_H : 0) | (fv ? FLIP_V : 0);
             t = flipped(t, flip);  // pixels as they appear on screen
@@ -691,6 +726,9 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
 
   ColorConverter colors;
   colors.matrix = options.colorMatrix;
+  colors.profile = profile.name;
+  colors.report = &report;
+  colors.info = options.pInfo;
 
   BmPackWriter writer;
   bmPackWriterInit(&writer, profile.fourcc, options.layout);
@@ -806,6 +844,10 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
   }
 
   add(writer, BM_CHUNK_STRS, BM_CATEGORY_TEXT, 0, strings.chunk());
+
+  for (const auto &[asset, used] : colors.overridesUsed)
+    report.info("colour-override", asset,
+                std::to_string(used.size()) + " source colours replaced for profile " + profile.name + " (" + overridesPath(asset) + ")");
 
   std::vector<uint8_t> out;
   if (!report.hasErrors())

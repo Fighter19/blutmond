@@ -96,6 +96,10 @@ typedef struct BmLive
   uint8_t statePut[BM_LIVE_STATE_CAPACITY];
   uint32_t statePutSize;
 
+  // PPU_SNAPSHOT being sent: parts from snapshotOffset up to snapshotEnd, as the send ring
+  // has room (a few per frame).
+  uint32_t snapshotOffset, snapshotEnd;
+
   BmLiveRegion regions[BM_LIVE_REGIONS];
   uint32_t applied, chunksCopied, chunksReceived;
 } BmLive;
@@ -124,6 +128,11 @@ bool bmLiveLog(BmLive *pLive, const char *pText);
 /// CHUNK_DATA: transfer id, chunk index, reserved, offset in the chunk, then data.
 #define BM_LIVE_CHUNK_DATA_HEADER 12
 #define BM_LIVE_CHUNK_DATA_MAX (BM_LINK_MAX_PAYLOAD - BM_LIVE_CHUNK_DATA_HEADER)
+
+/// PPU_SNAPSHOT: request u32 offset, u32 length (0: to the end); each answer u32 offset,
+/// u32 total size, then data.
+#define BM_LIVE_SNAPSHOT_HEADER 8
+#define BM_LIVE_SNAPSHOT_DATA_MAX (BM_LINK_MAX_PAYLOAD - BM_LIVE_SNAPSHOT_HEADER)
 
 /// HELLO answer, fixed part (followed by `hashCount` pairs of u32 hash and u32 size).
 typedef struct BmLiveHello

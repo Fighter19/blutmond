@@ -32,15 +32,4 @@ private:
   void placeCamera(ose::Vec2 p);
 };
 
-/// 16 x 16 palette entries (BG), unused banks dimmed, entry 0 of each bank hatched as
-/// transparent (bank 0 entry 0 is the backdrop).
-class PaletteGrid : public ose::ui::Control
-{
-public:
-  const char *typeName() const override { return "PaletteGrid"; }
-  ose::Vec2 computeMinSize() override { return {16 * 14 + 2, 16 * 14 + 2}; }
-  void draw(ose::ui::Canvas &c) override;
-  const Project *project = nullptr;
-};
-
 }  // namespace bm::editor

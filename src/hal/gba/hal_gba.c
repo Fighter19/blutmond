@@ -5,6 +5,7 @@
 #include "hal.h"
 #include "hal_gba_regs.h"
 #include "ppu.h"
+#include "ppu_snapshot_part.h"
 #include "shared.h"
 
 // Provided by the linker script: the parts of EWRAM and IWRAM not used by the program.
@@ -94,18 +95,29 @@ uint32_t bmHalVideoWaitVBlank(void)
   return bm_vblank_count;
 }
 
+// Most video registers are write-only on the GBA, so the HAL keeps what it wrote.
+static uint16_t s_regs[BM_PPU_REG_SIZE / 2] BM_EWRAM_BSS;
+
 void bmHalVideoWriteReg(uint16_t offset, uint16_t value)
 {
   if (offset < BM_PPU_REG_SIZE)
   {
     GBA_REG16(offset) = value;
+    s_regs[offset / 2] = value;
   }
 }
 
 uint16_t bmHalVideoReadReg(uint16_t offset)
 {
-  // Most video registers are write-only on the GBA; only DISPCNT and VCOUNT read back.
-  return offset < BM_PPU_REG_SIZE ? GBA_REG16(offset) : 0;
+  return offset < BM_PPU_REG_SIZE ? s_regs[offset / 2] : 0;
+}
+
+uint32_t bmHalVideoSnapshotPart(uint32_t offset, uint8_t *pOut, uint32_t size)
+{
+  BmPpuSnapshotSource source = {
+    s_regs, (const volatile uint8_t *)GBA_VRAM, GBA_PALETTE, GBA_OAM, { s_lineReg }, { s_lineValues },
+  };
+  return bmPpuSnapshotPart(&source, offset, pOut, size);
 }
 
 void bmHalVramWrite(uint32_t offset, const void *pData, uint32_t size)

@@ -7,22 +7,31 @@
 // Run (F6) plays all rooms: on the PC in the game's window, or on a GBA over the Xboo cable
 // (editor/runner.h). With "Live" on, every cook while it runs is pushed in as a hot reload.
 //
-//   bmeditor [--profile gba|snes] [--dark] [--frames N --screenshot out.ppm]
+//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--dark] [--frames N --screenshot out.ppm] [--tab N]
 //            [--game path] [--bmlink path] [--gba-image path] [--xboo device] [--reset none|xboo]
-//            [--port N] room.tmx...
+//            [--port N]
+//
+// Without arguments it opens assets/test.bmproj.
 
 #include <GLES2/gl2.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "platform/sdl3/ui_sdl3.h"
+#include "dialogs.h"
+#include "graphics_view.h"
+#include "palette_panel.h"
 #include "project.h"
+#include "project_panel.h"
 #include "runner.h"
+#include "ui/containers.h"
 #include "ui/lists.h"
 #include "ui/loader.h"
 #include "ui/menus.h"
@@ -31,6 +40,7 @@
 
 extern "C" {
 #include "game.h"
+#include "hal_host.h"
 #include "state.h"
 }
 
@@ -41,8 +51,13 @@ namespace {
 
 const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox anchors="full" separation="0">
   <MenuBar>
-    <Menu title="File"><Item action="room.reload"/><Item action="app.quit"/></Menu>
-    <Menu title="Run"><Item action="run.start"/><Item action="run.pc"/><Item action="run.gba"/><Item action="run.stop"/></Menu>
+    <Menu title="File">
+      <Item action="project.open"/><Item action="project.save_as"/>
+      <Item action="room.new"/><Item action="room.add"/><Item action="room.remove"/>
+      <Item action="asset.import"/><Item action="asset.open"/><Item action="asset.delete"/>
+      <Item action="room.reload"/><Item action="app.quit"/>
+    </Menu>
+    <Menu title="Run"><Item action="run.start"/><Item action="run.pc"/><Item action="run.gba"/><Item action="run.stop"/><Item action="gfx.capture"/></Menu>
     <Menu title="View"><Item action="view.collision"/><Item action="view.objects"/><Item action="view.grid"/></Menu>
   </MenuBar>
   <PanelContainer theme-type="Toolbar"><HBox>
@@ -57,48 +72,110 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
     <CheckBox id="objects" text="Objects" pressed="1"/>
     <CheckBox id="grid" text="Grid"/>
     <Control expand="1"/>
-    <Label id="camera" text="Camera 0,0"/>
+    <Label id="camera" text="Camera 0,0" clip-text="1"/>
   </HBox></PanelContainer>
   <HBox expand="1" separation="2">
-    <PanelContainer><VBox>
-      <Label text="Rooms" bold="1"/>
-      <ItemList id="rooms" expand="1" min-width="160"/>
-      <Label text="Hardware" bold="1"/>
-      <Label id="hw_tiles" text="Tiles"/>
-      <ProgressBar id="hw_tiles_bar"/>
-      <Label id="hw_banks" text="Palette banks"/>
-      <ProgressBar id="hw_banks_bar"/>
-      <Label id="hw_maps" text="Maps"/>
-      <ProgressBar id="hw_maps_bar"/>
-      <Label id="hw_layers" text="Layers"/>
-      <Label id="hw_pack" text="Pack"/>
-      <Label text="State" bold="1"/>
-      <Label id="state_totals" text=""/>
-      <ItemList id="state" min-size="0 150"/>
-    </VBox></PanelContainer>
+    <PanelContainer min-width="300"><TabContainer>
+      <VBox title="Project">
+        <Label id="project_name" bold="1" clip-text="1"/>
+        <Tree id="project_tree" expand="1"/>
+        <Flow>
+          <Button text="New room" action="room.new"/>
+          <Button text="Add room" action="room.add"/>
+          <Button text="Remove room" action="room.remove"/>
+          <Button text="Import" action="asset.import"/>
+          <Button text="Open" action="asset.open"/>
+          <Button text="Delete" action="asset.delete"/>
+          <Button text="Rescan" action="project.refresh"/>
+        </Flow>
+        <ItemList id="asset_info" min-size="0 120"/>
+      </VBox>
+      <VBox title="State">
+        <Label id="state_totals" text="" clip-text="1"/>
+        <ItemList id="state" expand="1"/>
+      </VBox>
+    </TabContainer></PanelContainer>
     <VBox expand="1">
-      <RoomOverview id="overview" expand="1"/>
+      <TabContainer id="center" expand="1">
+        <HBox title="Room" separation="2">
+          <RoomOverview id="overview" expand="1"/>
+          <PanelContainer min-width="330"><Scroll><VBox>
+            <Label text="GBA screen" bold="1"/>
+            <TextureRect id="screen" min-size="240 160"/>
+            <Label text="Palette: click a colour to change it" bold="1"/>
+            <PaletteView id="room_palette"/>
+            <HBox>
+              <ColorRect id="colour_swatch" min-size="28 28"/>
+              <Label id="colour_title" text="" expand="1" clip-text="1"/>
+            </HBox>
+            <HBox>
+              <Label text="R"/><SpinBox id="colour_r" expand="1"/>
+              <Label text="G"/><SpinBox id="colour_g" expand="1"/>
+              <Label text="B"/><SpinBox id="colour_b" expand="1"/>
+            </HBox>
+            <HBox>
+              <OptionButton id="colour_scope" expand="1" items="Only for this profile;For all profiles"/>
+              <Button id="colour_reset" text="Reset"/>
+            </HBox>
+            <ItemList id="colour_sources" min-size="0 80"/>
+            <Label text="Hardware (this room, cooked)" bold="1"/>
+            <Label id="hw_tiles" text="Tiles"/>
+            <ProgressBar id="hw_tiles_bar"/>
+            <Label id="hw_banks" text="Palette banks"/>
+            <ProgressBar id="hw_banks_bar"/>
+            <Label id="hw_maps" text="Maps"/>
+            <ProgressBar id="hw_maps_bar"/>
+            <Label id="hw_layers" text="Layers"/>
+            <Label id="hw_pack" text="Pack"/>
+            <Label text="Tiles" bold="1"/>
+            <TextureRect id="tiles"/>
+          </VBox></Scroll></PanelContainer>
+        </HBox>
+        <VBox title="Graphics" separation="0">
+          <PanelContainer theme-type="Toolbar"><HBox>
+            <Label text="Show"/>
+            <OptionButton id="gfx_from" items="Editor preview;Running game"/>
+            <Button text="Capture" action="gfx.capture"/>
+            <CheckBox id="gfx_follow" text="Follow"/>
+            <Label id="gfx_source" text="" expand="1" clip-text="1"/>
+          </HBox></PanelContainer>
+          <HBox expand="1" separation="2">
+            <Scroll expand="1"><VramView id="gfx_vram"/></Scroll>
+            <Scroll min-width="400"><VBox>
+              <Label text="Screen" bold="1"/>
+              <TextureRect id="gfx_screen" min-size="240 160"/>
+              <Label text="Budget" bold="1"/>
+              <VBox id="gfx_budgets"/>
+              <Label text="Notes" bold="1"/>
+              <ItemList id="gfx_notes" min-size="0 60"/>
+              <Label text="Backgrounds" bold="1"/>
+              <ItemList id="gfx_layers" min-size="0 80"/>
+              <Label text="Sprites (OAM)" bold="1"/>
+              <ItemList id="gfx_sprites" min-size="0 120"/>
+              <HBox>
+                <VBox><Label text="BG palette" bold="1"/><PaletteView id="gfx_bg_palette"/></VBox>
+                <VBox><Label text="OBJ palette" bold="1"/><PaletteView id="gfx_obj_palette"/></VBox>
+              </HBox>
+              <Label text="Sprite time per line (white line = hardware limit)" bold="1"/>
+              <LineCostView id="gfx_line_cost"/>
+            </VBox></Scroll>
+          </HBox>
+          <PanelContainer theme-type="StatusBar"><HBox><Label id="gfx_hover" text="Point at video memory to see what it holds" clip-text="1"/></HBox></PanelContainer>
+        </VBox>
+      </TabContainer>
       <HBox separation="2">
         <PanelContainer expand="1"><VBox>
           <Label text="Report" bold="1"/>
           <ItemList id="report" min-size="0 110"/>
         </VBox></PanelContainer>
         <PanelContainer expand="1"><VBox>
-          <Label text="Run" bold="1"/>
+          <Label text="Messages" bold="1"/>
           <ItemList id="runlog" min-size="0 110"/>
         </VBox></PanelContainer>
       </HBox>
     </VBox>
-    <PanelContainer><VBox>
-      <Label text="GBA screen" bold="1"/>
-      <TextureRect id="screen" min-size="240 160"/>
-      <Label text="Palette (BG)" bold="1"/>
-      <PaletteGrid id="palette"/>
-      <Label text="Tiles" bold="1"/>
-      <Scroll expand="1"><TextureRect id="tiles"/></Scroll>
-    </VBox></PanelContainer>
   </HBox>
-  <PanelContainer theme-type="StatusBar"><HBox><Label id="status" text="Ready" expand="1"/><Label id="run_state" text="Not running"/></HBox></PanelContainer>
+  <PanelContainer theme-type="StatusBar"><HBox><Label id="status" text="Ready" expand="1" clip-text="1"/><Label id="run_state" text="Not running"/></HBox></PanelContainer>
 </VBox></Panel>)XML";
 
 struct Editor
@@ -107,9 +184,11 @@ struct Editor
   sdl3::App &app;
   Project project;
   RoomOverview *overview = nullptr;
-  PaletteGrid *palette = nullptr;
   TextureRect *screen = nullptr, *tiles = nullptr;
-  ItemList *rooms = nullptr, *report = nullptr;
+  ItemList *report = nullptr;
+  ProjectPanel projectPanel;
+  ProjectFile projectFile;  // as loaded at start
+  PalettePanel palettePanel;
   Label *status = nullptr, *camera = nullptr;
   Label *hwTiles = nullptr, *hwBanks = nullptr, *hwMaps = nullptr, *hwLayers = nullptr, *hwPack = nullptr;
   ProgressBar *hwTilesBar = nullptr, *hwBanksBar = nullptr, *hwMapsBar = nullptr;
@@ -118,6 +197,47 @@ struct Editor
   ItemList *runLog = nullptr;
   Label *runState = nullptr;
   Runner runner;
+  GraphicsInspector graphics;
+  bool graphicsFromGame = false, graphicsFollow = false;
+  float followTimer = 0;
+  std::string previewSource;
+
+  std::string snapshotPath() const
+  {
+    std::error_code ec;
+    return (std::filesystem::temp_directory_path(ec) / "blutmond-editor-snapshot.bmps").string();
+  }
+
+  // The Graphics tab shows the preview's video state or a snapshot of the running game.
+  void capture()
+  {
+    std::string path = snapshotPath();
+    bool started = runner.capture(path, [this, path](bool ok) {
+      if (!ok) return;
+      std::vector<uint8_t> data;
+      if (FILE *f = std::fopen(path.c_str(), "rb"))
+      {
+        data.resize(bmPpuSnapshotSize());
+        data.resize(std::fread(data.data(), 1, data.size(), f));
+        std::fclose(f);
+      }
+      static BmPpuState state;
+      if (graphicsFromGame && bmPpuSnapshotRead(&state, data.data(), data.size()))
+      {
+        time_t t = time(nullptr);
+        char when[32];
+        std::strftime(when, sizeof(when), "%H:%M:%S", std::localtime(&t));
+        graphics.show(state, std::string("The running game (") + (runner.gameRunning() ? "PC" : "GBA") + "), captured at " + when);
+      }
+    });
+    if (!started && graphicsFromGame) graphicsSourceLabel("Nothing runs: press Run (F6), then Capture");
+  }
+
+  void graphicsSourceLabel(const std::string &text)
+  {
+    if (auto *l = app.ui().root()->findAs<Label>("gfx_source")) l->text = text;
+  }
+
   RunTarget target = RunTarget::Pc;
   bool live = true;
 
@@ -199,13 +319,28 @@ struct Editor
     overview->cameraX = cx;
     overview->cameraY = cy;
     replaceTexture(screen->texture, img);
+    previewSource = "Editor preview: " + (project.currentRoom() >= 0 ? project.rooms()[size_t(project.currentRoom())] : std::string()) +
+                    " at " + std::to_string(cx) + "," + std::to_string(cy) + " (backgrounds only; capture the running game for sprites)";
+    if (!graphicsFromGame && img.width) graphics.show(*bmHalHostGetPpu(), previewSource);
     screen->textureSize = {float(img.width), float(img.height)};
     camera->text = "Camera " + std::to_string(cx) + "," + std::to_string(cy);
+  }
+
+  // The room list of the project changed: keep the room that was shown, if it is still there.
+  void roomsChanged()
+  {
+    std::string current = project.currentRoom() >= 0 ? project.rooms()[size_t(project.currentRoom())] : std::string();
+    project.setRooms(projectPanel.file().rooms);
+    for (size_t i = 0; i < project.rooms().size(); i++)
+      if (project.rooms()[i] == current) project.selectRoom(int(i));
+    projectPanel.showRoom(project.currentRoom());
+    cook();
   }
 
   void cook()
   {
     bool ok = project.cook();
+    palettePanel.refresh();
     replaceTexture(overview->texture, project.roomImage());
     replaceTexture(tiles->texture, project.tileSheet());
     tiles->textureSize = {float(project.tileSheet().width * 2), float(project.tileSheet().height * 2)};
@@ -253,15 +388,27 @@ struct Editor
     ui.actions().add({"view.grid", "Grid", "", "G", "", [this] { overview->showGrid = !overview->showGrid; }, nullptr, nullptr});
 
     registerControlType("RoomOverview", [] { return std::make_unique<RoomOverview>(); });
-    registerControlType("PaletteGrid", [] { return std::make_unique<PaletteGrid>(); });
+    ui.actions().add({"project.open", "Open project...", "folder-open", "Ctrl+O", "", [this] { projectPanel.openProject(); }, nullptr, nullptr});
+    ui.actions().add({"project.save_as", "Save project as...", "save", "", "", [this] { projectPanel.saveProjectAs(); }, nullptr, nullptr});
+    ui.actions().add({"project.refresh", "Rescan the asset folders", "refresh", "", "", [this] { projectPanel.refresh(); }, nullptr, nullptr});
+    ui.actions().add({"room.new", "New room...", "plus", "Ctrl+N", "", [this] { projectPanel.newRoom(); }, nullptr, nullptr});
+    ui.actions().add({"room.add", "Add room...", "map", "", "", [this] { projectPanel.addRoom(); }, nullptr, nullptr});
+    ui.actions().add({"room.remove", "Remove room from the project", "minus", "", "", [this] { projectPanel.removeRoom(); }, nullptr, nullptr});
+    ui.actions().add({"asset.import", "Import assets...", "copy", "Ctrl+I", "", [this] { projectPanel.importAssets(); }, nullptr, nullptr});
+    ui.actions().add({"asset.open", "Open in its program", "pencil", "", "", [this] { projectPanel.openSelected(); }, nullptr, nullptr});
+    ui.actions().add({"asset.delete", "Delete asset...", "trash", "", "", [this] { projectPanel.deleteSelected(); }, nullptr, nullptr});
+    registerGraphicsControls();
+    ui.actions().add({"gfx.capture", "Capture the running game's graphics", "eye", "F8", "", [this] {
+                        graphicsFromGame = true;
+                        app.ui().root()->findAs<OptionButton>("gfx_from")->select(1, false);
+                        capture();
+                      }, nullptr, nullptr});
     LayoutLoader loader(ui);
     auto root = loader.loadText(kLayout);
     for (const auto &e : loader.errors()) std::fprintf(stderr, "layout: %s\n", e.c_str());
     overview = root->findAs<RoomOverview>("overview");
-    palette = root->findAs<PaletteGrid>("palette");
     screen = root->findAs<TextureRect>("screen");
     tiles = root->findAs<TextureRect>("tiles");
-    rooms = root->findAs<ItemList>("rooms");
     report = root->findAs<ItemList>("report");
     status = root->findAs<Label>("status");
     camera = root->findAs<Label>("camera");
@@ -275,6 +422,31 @@ struct Editor
     hwMapsBar = root->findAs<ProgressBar>("hw_maps_bar");
     state = root->findAs<ItemList>("state");
     stateTotals = root->findAs<Label>("state_totals");
+    graphics.bind(*root, app.renderer());
+    projectPanel.bind(*root, ui);
+    projectPanel.log = [this](const std::string &line, bool error) { runLine(line, error); };
+    projectPanel.roomsChanged = [this] { roomsChanged(); };
+    projectPanel.roomPicked = [this](int i) {
+      projectPanel.showRoom(i);
+      if (i == project.currentRoom()) return;
+      project.selectRoom(i);
+      cook();
+    };
+    palettePanel.bind(*root, project);
+    palettePanel.catalog = &projectPanel.catalog();
+    palettePanel.log = projectPanel.log;
+    palettePanel.changed = [this] {
+      cook();
+      pushLive();
+      projectPanel.refresh();
+    };
+    ui.filesDropped = [this](const std::vector<std::string> &files, ose::Vec2) { projectPanel.importFiles(files); };
+    root->findAs<OptionButton>("gfx_from")->itemSelected.connect([this](int i) {
+      graphicsFromGame = i == 1;
+      if (graphicsFromGame) capture();
+      else updateScreen();
+    });
+    root->findAs<CheckBox>("gfx_follow")->toggled.connect([this](bool on) { graphicsFollow = on; });
     runLog = root->findAs<ItemList>("runlog");
     runLog->tileSize = 0;
     runState = root->findAs<Label>("run_state");
@@ -284,23 +456,18 @@ struct Editor
     state->tileSize = 0;
     fillStateMap();
 
-    rooms->tileSize = 0;  // list mode
     report->tileSize = 0;
     tiles->keepAspect = false;
     overview->project = &project;
-    palette->project = &project;
     screen->keepAspect = true;
     overview->cameraMoved = [this](int x, int y) {
       overview->cameraX = x;
       overview->cameraY = y;
       updateScreen();
     };
-    for (const std::string &r : project.rooms()) rooms->items.push_back({r, "map", {}, {}, {}, {}});
-    rooms->selected = project.currentRoom();
-    rooms->selectedChanged.connect([this](int i) {
-      project.selectRoom(i);
-      cook();
-    });
+    projectPanel.setProject(projectFile);
+    project.setRooms(projectFile.rooms);
+    projectPanel.showRoom(project.currentRoom());
     auto *profile = root->findAs<OptionButton>("profile");
     profile->itemSelected.connect([this](int i) {
       static const char *names[] = {"gba", "snes", "host"};
@@ -317,6 +484,8 @@ struct Editor
 
   void update(float dt)
   {
+    pollFileDialogs();
+    palettePanel.update(dt);
     reloadTimer += dt;
     if (reloadTimer > 1.0f)
     {
@@ -328,6 +497,12 @@ struct Editor
       }
     }
     runner.update();
+    followTimer += dt;
+    if (graphicsFromGame && graphicsFollow && runner.active() && !runner.busy() && followTimer > 1.0f)
+    {
+      followTimer = 0;
+      capture();
+    }
     runState->text = runner.busy() ? runner.state() : runner.state() + (runner.active() && live ? " (live)" : "");
   }
 };
@@ -352,10 +527,12 @@ int writeScreenshot(const char *path)
 int main(int argc, char **argv)
 {
   std::vector<std::string> roomFiles;
+  std::string projectPath;
   std::string profile = "gba";
   bool dark = false;
   int frames = 0;
   const char *screenshot = nullptr;
+  int tab = 0;
   RunSettings run;
 #ifdef BM_EDITOR_GAME
   run.game = BM_EDITOR_GAME;
@@ -373,27 +550,46 @@ int main(int argc, char **argv)
     else if (std::strcmp(argv[i], "--dark") == 0) dark = true;
     else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshot = argv[++i];
+    else if (std::strcmp(argv[i], "--tab") == 0 && i + 1 < argc) tab = std::atoi(argv[++i]);
     else if (std::strncmp(argv[i], "--", 2) == 0 && i + 1 < argc && run.set(argv[i] + 2, argv[i + 1])) i++;
+    else if (std::filesystem::path(argv[i]).extension() == ".bmproj") projectPath = argv[i];
     else roomFiles.push_back(argv[i]);
   }
-#ifdef BM_EDITOR_DEFAULT_ROOMS
-  if (roomFiles.empty())
+#ifdef BM_EDITOR_DEFAULT_PROJECT
+  if (roomFiles.empty() && projectPath.empty()) projectPath = BM_EDITOR_DEFAULT_PROJECT;
+#endif
+
+  // A project file, or rooms given on the command line (a project that is not saved yet;
+  // their folders are its asset folders).
+  ProjectFile projectFile;
+  if (!projectPath.empty())
   {
-    std::string list = BM_EDITOR_DEFAULT_ROOMS;
-    for (size_t a = 0, b; a <= list.size(); a = b + 1)
+    try
     {
-      b = list.find('|', a);
-      if (b == std::string::npos) b = list.size();
-      if (b > a) roomFiles.push_back(list.substr(a, b - a));
+      projectFile = ProjectFile::load(projectPath);
+    }
+    catch (const std::exception &e)
+    {
+      std::fprintf(stderr, "%s\n", e.what());
+      return 1;
     }
   }
-#endif
+  else
+  {
+    for (const std::string &r : roomFiles)
+    {
+      projectFile.addRoom(r);
+      std::string dir = normalPath(std::filesystem::path(normalPath(r)).parent_path().string());
+      if (std::find(projectFile.assetDirs.begin(), projectFile.assetDirs.end(), dir) == projectFile.assetDirs.end())
+        projectFile.assetDirs.push_back(dir);
+    }
+  }
 
   sdl3::App app;
   sdl3::AppDesc desc;
   desc.title = "Blutmond";
-  desc.width = 1280;
-  desc.height = 760;
+  desc.width = 1440;
+  desc.height = 860;
   desc.theme = dark ? Theme::makeDark(OSE_UI_FONT_DIR) : Theme::makeClassic(OSE_UI_FONT_DIR);
   std::string error;
   if (!app.init(desc, &error))
@@ -404,9 +600,13 @@ int main(int argc, char **argv)
 
   Editor editor(app);
   editor.runner.settings = run;
-  editor.project.setRooms(roomFiles);
+  editor.projectFile = projectFile;
+#ifdef BM_EDITOR_ENGINE_DIR
+  editor.projectPanel.engineDir = BM_EDITOR_ENGINE_DIR;
+#endif
   editor.project.setProfile(profile);
   editor.build();
+  if (auto *center = app.ui().root()->findAs<TabContainer>("center")) center->setCurrent(tab);
 
   if (frames > 0)
   {

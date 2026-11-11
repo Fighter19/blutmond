@@ -10,7 +10,9 @@ extern "C" {
 }
 
 #include <array>
+#include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -53,6 +55,15 @@ struct Report
   std::string text() const;
 };
 
+/// What the editor needs to trace cooked data back to its sources.
+struct CookInfo
+{
+  /// Hardware colour (BGR555) -> (source image, source colour 0xRRGGBB) that became it.
+  std::map<uint16_t, std::set<std::pair<std::string, uint32_t>>> colourSources;
+  /// Source colours replaced by an override: (image, source colour) -> replacement.
+  std::map<std::pair<std::string, uint32_t>, uint32_t> overridden;
+};
+
 struct CookOptions
 {
   Profile profile;
@@ -60,6 +71,8 @@ struct CookOptions
   /// Optional 3x3 matrix applied to colours (0..1 RGB) before converting to the profile's
   /// format, e.g. to compensate for the GBA screen. Row major.
   std::optional<std::array<float, 9>> colorMatrix;
+  /// Filled when given.
+  CookInfo *pInfo = nullptr;
 };
 
 /// Cooks the given rooms. Rooms with the same `area` property share tiles, palettes and the

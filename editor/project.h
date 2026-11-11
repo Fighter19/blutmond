@@ -73,6 +73,8 @@ public:
   int cellSize() const { return cellSize_; }
   const std::vector<ObjectMarker> &objects() const { return objects_; }
   const HardwareUse &hardware() const { return hardware_; }
+  /// Where each cooked colour came from, and which colours overrides replaced.
+  const CookInfo &cookInfo() const { return info_; }
 
   /// The GBA screen with the camera at (x, y), with real parallax. Clamped like the runtime.
   Rgba renderScreen(int cameraX, int cameraY, int *pClampedX = nullptr, int *pClampedY = nullptr);
@@ -94,6 +96,7 @@ private:
   int collisionW_ = 0, collisionH_ = 0, cellSize_ = 16;
   std::vector<ObjectMarker> objects_;
   HardwareUse hardware_;
+  CookInfo info_;
 };
 
 /// BGR555 to RGBA8, expanded the way mGBA does.

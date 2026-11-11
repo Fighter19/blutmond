@@ -7,6 +7,7 @@ protocols and language. The reasons behind them, the research and the roadmap ar
 | Document | Covers |
 |---|---|
 | [asset-model.md](asset-model.md) | platform-neutral source assets, cooking per platform profile, overrides, change report |
+| [project-format.md](project-format.md) | the project file: rooms, asset folders, editor operations on them |
 | [room-format.md](room-format.md) | rooms: layers, collision cells, materials, physics, objects, engine classes, Tiled mapping |
 | [pack-format.md](pack-format.md) | the cooked binary pack: header, table of contents, chunk types, compression, load order |
 | [streaming.md](streaming.md) | live-link streaming: rooms as anchors, room chain, priorities, load profiles, testing single assets |

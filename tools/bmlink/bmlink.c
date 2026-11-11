@@ -32,6 +32,8 @@
 //   run <frames>          mGBA: let the game run
 //   check <elf>:<sym>[+off][=|<=]<value>   mGBA: read the program's memory
 //   screenshot <file.ppm> mGBA
+//   ppu-snapshot <file.bmps>   the video state (VRAM, palettes, OAM, registers) as a PPU
+//                         snapshot, for the editor's graphics view and bm_ppu_render
 //   stats                 link counters
 
 #include "link_master.h"
@@ -301,6 +303,18 @@ int main(int argc, char **argv)
       if (f == NULL || fwrite(data, 1, size, f) != size) failed = 1;
       if (f) fclose(f);
       printf("state-get: %u bytes to %s\n", (unsigned)size, a1);
+    }
+    else if (strcmp(cmd, "ppu-snapshot") == 0 && a1 != NULL)
+    {
+      i++;
+      static uint8_t data[128 * 1024];
+      uint32_t size = 0;
+      double t0 = now();
+      if (!bmLiveMasterPpuSnapshot(&m, data, sizeof(data), &size)) { failed = 1; break; }
+      FILE *f = fopen(a1, "wb");
+      if (f == NULL || fwrite(data, 1, size, f) != size) failed = 1;
+      if (f) fclose(f);
+      printf("ppu-snapshot: %u bytes to %s, %.2f s\n", (unsigned)size, a1, now() - t0);
     }
     else if (strcmp(cmd, "state-put") == 0 && a1 != NULL)
     {

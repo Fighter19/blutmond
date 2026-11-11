@@ -46,6 +46,33 @@ Rules:
 - Editor views that show hardware details (palette banks, VRAM, OAM) work on the cooked result
   of the selected profile.
 
+## Overrides
+
+Overrides of an asset are kept in `<asset file>.bmasset` next to it (e.g. `tileset.png.bmasset`),
+an XML file with a version:
+
+```xml
+<asset version="1">
+ <override profile="gba">                  <!-- or "*" for every profile -->
+  <colour from="#8c2c28" to="#ff2929"/>    <!-- source colour -> colour to cook instead -->
+ </override>
+</asset>
+```
+
+| Override | Meaning |
+|---|---|
+| `colour` | every pixel of the image with the source colour `from` is cooked as `to` instead. The replacement is a hand-made colour: the profile's colour matrix is not applied to it. An entry for the profile being cooked wins over one for `*` |
+
+Rules:
+
+- The cooker MUST apply the overrides of every image it reads and MUST list them in the change
+  report (`colour-override`, per asset).
+- An override names source colours, not palette slots, so it survives re-packing palettes.
+- The editor writes colour overrides when a colour of a cooked palette is changed: for every
+  source colour that became that hardware colour, in every image it came from. It shows which
+  rooms share those images before the change takes effect.
+- When no override is left, the file is removed.
+
 ## Change report
 
 For every cook the cooker MUST produce a report listing what it had to change to fit the
@@ -60,6 +87,7 @@ profile, per asset:
 | `effect-fallback` | a raster effect was replaced by its fallback |
 | `sound-reduced` | an instrument was simplified (voices, effect, sample rate) |
 | `does-not-fit` | the asset cannot be cooked; the cook fails |
+| `colour-override` | colours of the asset were replaced by its overrides for this profile |
 
 Each entry names the asset, the profile, the kind, and a human-readable reason with a
 suggestion. The editor shows the report per profile.

@@ -38,4 +38,8 @@ bool bmLiveMasterApply(BmLinkMaster *pMaster, uint32_t transferId, BmLiveMode mo
                        BmLiveStatus *pStatus);
 
 bool bmLiveMasterGetState(BmLinkMaster *pMaster, uint8_t flagMask, uint8_t *pOut, uint32_t capacity, uint32_t *pSize);
+/// Reads the runtime's video state (a BMPS PPU snapshot, src/ppu/ppu.h: registers, VRAM,
+/// palettes, OAM, line tables) into `pOut`; about 100 KB.
+bool bmLiveMasterPpuSnapshot(BmLinkMaster *pMaster, uint8_t *pOut, uint32_t capacity, uint32_t *pSize);
+
 bool bmLiveMasterPutState(BmLinkMaster *pMaster, const uint8_t *pData, uint32_t size, BmLiveStatus *pStatus);
