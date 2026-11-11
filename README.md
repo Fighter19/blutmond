@@ -22,7 +22,7 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `assets/` | `engine/` (Tiled tilesets for collision and materials), `test_room/` (own test room) |
 | `third_party/` | `stb_image.h` (public domain), used by the cooker |
 | `tests/` | host tests |
-| `tools/` | `cooker/` (`bmcook`: Tiled rooms to packs), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_ppu_render.c` (renders a snapshot), `compare_images.py`, `bmlink/` (live link to a running game: Xboo cable or mGBA) |
+| `tools/` | `cooker/` (`bmcook`: Tiled rooms to packs), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_ppu_render.c` (renders a snapshot), `compare_images.py`, `bmlink/` (live link to a running game: Xboo cable, the PC game over TCP, or mGBA) |
 
 Hardware addresses may only appear in `src/hal/gba/`; a test checks this.
 
@@ -62,16 +62,36 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+Playing on the PC: `build/game` opens a window with the test level (or `build/game level.bmpk`).
+Arrows move, X or Space jumps (A), Z is B, A and S are L and R, Enter is Start, Backspace is
+Select, F11 toggles fullscreen and Esc quits; gamepads work too. The save game is kept in
+`~/.local/share/blutmond/save.bin`. The window also listens for the live link on
+127.0.0.1:7414 (`--listen N`, `--no-listen`). With `--frames N`, `--trace` or an output picture
+the game runs headless as before (`--headless` forces it).
+
 The editor:
 
 ```
-build/bmeditor assets/test_room/room.tmx
+build/bmeditor            # the test rooms
+build/bmeditor room.tmx room2.tmx
 ```
 
 It cooks the room, shows it as the runtime renders it (with collision and object overlays), the
 GBA screen at the camera (click into the room), the palette banks, the tiles, the hardware
 budget and the cooker's report, for the GBA or SNES profile. It cooks again when the file
 changes, so it can run next to Tiled.
+
+**Run** (F6) cooks all rooms into one pack and plays it on the target chosen next to the button:
+
+- **PC**: starts the game in its own window; Run again restarts it with the new pack.
+- **GBA (Xboo)**: multiboots the runtime if none answers on the cable, then pushes the pack.
+  This needs the multiboot image: configure with `-DBM_GBA_BUILD_DIR=...`, or set `gba-image`.
+
+With **Live** on, every cook while a target runs (a saved room, F5) is pushed in as a hot
+reload: only the changed chunks are sent and the player stays where they are. Stop ends the PC
+game. Settings go in `~/.config/blutmond/editor.conf` (`key = value` lines) or on the command
+line as `--key value`: `xboo` (default `/dev/parport0`), `reset` (`none` or `xboo`),
+`gba-image`, `port` (7414), `game` and `bmlink` (program paths).
 
 Cooking rooms by hand:
 
@@ -96,6 +116,7 @@ it runs (only the chunks that changed are sent), and reads or loads state:
 build/bmlink --mgba build-gba/game.gba run 60 push level.bmpk hot run 600 screenshot out.ppm
 build/bmlink --xboo /dev/parport0 --reset xboo boot build-gba/game_mb.gba hello push level.bmpk hot
 build/bmlink --xboo /dev/parport0 ping 50 stats
+build/bmlink --tcp 7414 push level.bmpk hot      # the PC game in its window
 ```
 
 The comment at the top of `tools/bmlink/bmlink.c` lists all commands. `--adaptive` tunes the

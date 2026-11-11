@@ -33,3 +33,7 @@ void bmHalHostReset(void);
 /// the link handler with `masterWord` (as the serial interrupt would). 0xFFFFFFFF if no link
 /// is started.
 uint32_t bmHalHostLinkExchange(uint32_t masterWord);
+
+/// The same from another thread (the game's socket link): waits while the main loop holds the
+/// link lock instead of losing the word.
+uint32_t bmHalHostLinkExchangeWait(uint32_t masterWord);

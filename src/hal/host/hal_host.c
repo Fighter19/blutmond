@@ -5,6 +5,8 @@
 #include "hal.h"
 #include "hal_host.h"
 
+#include <stdatomic.h>
+#include <stdbool.h>
 #include <string.h>
 
 // The host back end models the GBA's memories as plain arrays of the same sizes, so memory
@@ -178,16 +180,20 @@ uint8_t *bmHalHostSaveMemory(void)
   return s_save;
 }
 
+// The link handler may run on another thread (a socket thread in the game, the way the serial
+// interrupt runs on the GBA). Lock and handler exclude each other: bmHalLinkLock waits for a
+// running handler to finish, and a handler does not start while the link is locked.
 static BmHalLinkHandler s_linkHandler;
 static void *s_linkContext;
 static uint32_t s_linkPrepared;
-static uint32_t s_linkLocked;
+static atomic_uint s_linkLocked;
+static atomic_bool s_linkInHandler;
 
 void bmHalLinkStart(BmHalLinkHandler handler, void *pContext, uint32_t firstWord)
 {
-  s_linkHandler = handler;
   s_linkContext = pContext;
   s_linkPrepared = firstWord;
+  s_linkHandler = handler;
 }
 
 void bmHalLinkStop(void)
@@ -197,19 +203,42 @@ void bmHalLinkStop(void)
 
 uint32_t bmHalLinkLock(void)
 {
-  return s_linkLocked++;
+  uint32_t state = atomic_fetch_add(&s_linkLocked, 1u);
+  while (atomic_load(&s_linkInHandler)) {}
+  return state;
 }
 
 void bmHalLinkUnlock(uint32_t state)
 {
-  s_linkLocked = state;
+  atomic_store(&s_linkLocked, state);
+}
+
+static bool tryExchange(uint32_t masterWord, uint32_t *pIn)
+{
+  atomic_store(&s_linkInHandler, true);
+  if (atomic_load(&s_linkLocked) != 0)
+  {
+    atomic_store(&s_linkInHandler, false);
+    return false;
+  }
+  *pIn = s_linkPrepared;
+  s_linkPrepared = s_linkHandler(s_linkContext, masterWord);
+  atomic_store(&s_linkInHandler, false);
+  return true;
 }
 
 uint32_t bmHalHostLinkExchange(uint32_t masterWord)
 {
   // A locked link behaves like a slave that is not ready: the word is lost.
-  if (s_linkHandler == NULL || s_linkLocked != 0) return 0xFFFFFFFFu;
-  uint32_t in = s_linkPrepared;
-  s_linkPrepared = s_linkHandler(s_linkContext, masterWord);
+  uint32_t in;
+  if (s_linkHandler == NULL || !tryExchange(masterWord, &in)) return 0xFFFFFFFFu;
+  return in;
+}
+
+uint32_t bmHalHostLinkExchangeWait(uint32_t masterWord)
+{
+  uint32_t in;
+  if (s_linkHandler == NULL) return 0xFFFFFFFFu;
+  while (!tryExchange(masterWord, &in)) {}
   return in;
 }

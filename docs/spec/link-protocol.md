@@ -28,6 +28,7 @@ struct BmTransport {
 | `rp2040-usb` | RP2040 over USB | optional |
 | `gba` | the other GBA | GBA to GBA, 2 MHz or 256 kHz |
 | `host` | – | in-process, for tests against the PC runtime |
+| `tcp` | PC | the PC game (`apps/game/host_link.h`): 127.0.0.1:7414 by default, 4 bytes little-endian per word each way; a thread in the game runs the link handler as the serial interrupt does on the GBA |
 
 The device that makes the clock is the **master**; the runtime is always the **slave** when
 talking to a PC.

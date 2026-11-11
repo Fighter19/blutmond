@@ -2,6 +2,7 @@
 #include "project.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 extern "C" {
@@ -120,6 +121,32 @@ bool Project::cook()
   hardware_.tileBytesMax = profile->maxTiles * 32;
   analyse();
   return true;
+}
+
+bool Project::cookLevel(const std::string &path, std::string *pError) const
+{
+  try
+  {
+    std::vector<tmx::Map> maps;
+    for (const std::string &r : rooms_) maps.push_back(tmx::load(r));
+    CookOptions options;
+    options.profile = *profileByName("gba");
+    Report report;
+    std::vector<uint8_t> pack = bm::cook(maps, options, report);
+    for (const auto &e : report.entries)
+      if (e.level == ReportEntry::Level::Error && pError) *pError = e.kind + ": " + e.message;
+    if (pack.empty()) return false;
+    FILE *f = std::fopen(path.c_str(), "wb");
+    bool ok = f && std::fwrite(pack.data(), 1, pack.size(), f) == pack.size();
+    if (f) std::fclose(f);
+    if (!ok && pError) *pError = "cannot write " + path;
+    return ok;
+  }
+  catch (const std::exception &e)
+  {
+    if (pError) *pError = e.what();
+    return false;
+  }
 }
 
 void Project::analyse()

@@ -10,6 +10,7 @@
 // Transports:
 //   --xboo <device>       Xboo cable on a parallel port (Linux ppdev, e.g. /dev/parport0)
 //   --mgba <image.gba>    the image running in mGBA (tests; only if built with libmgba)
+//   --tcp [host:]port     the PC game (apps/game, listens on 127.0.0.1:7414 by default)
 //
 // Options (before the commands they affect):
 //   --delay N             per-word delay (xcomms "Transfer Delay"); remembered per device
@@ -20,6 +21,8 @@
 //
 // Commands, run in order:
 //   boot <image.gba>      xboo: multiboot the runtime (as xcomms does)
+//   boot-if-needed <image.gba>   xboo: boot only if no runtime answers (the runtime is loaded
+//                         once; after that content is pushed into it)
 //   reset                 pull the reset wire (with --reset xboo)
 //   hello                 what the runtime runs and has
 //   ping [count]          round trips, prints the rate
@@ -33,6 +36,7 @@
 
 #include "link_master.h"
 #include "live_master.h"
+#include "tcp_link.h"
 #include "xboo.h"
 #ifdef BM_HAVE_MGBA
 #  include "mgba_link.h"
@@ -138,7 +142,7 @@ static const char *resultName(uint8_t r)
 
 int main(int argc, char **argv)
 {
-  const char *xbooDevice = NULL, *mgbaImage = NULL;
+  const char *xbooDevice = NULL, *mgbaImage = NULL, *tcpAddress = NULL;
   int i = 1;
   uint32_t delay = 1;
   bool delayGiven = false, adaptive = false, resetWired = false;
@@ -147,6 +151,7 @@ int main(int argc, char **argv)
   {
     if (strcmp(argv[i], "--xboo") == 0 && i + 1 < argc) xbooDevice = argv[++i];
     else if (strcmp(argv[i], "--mgba") == 0 && i + 1 < argc) mgbaImage = argv[++i];
+    else if (strcmp(argv[i], "--tcp") == 0 && i + 1 < argc) tcpAddress = argv[++i];
     else if (strcmp(argv[i], "--delay") == 0 && i + 1 < argc) { delay = (uint32_t)atoi(argv[++i]); delayGiven = true; }
     else if (strcmp(argv[i], "--adaptive") == 0) adaptive = true;
     else if (strcmp(argv[i], "--reset") == 0 && i + 1 < argc) resetWired = strcmp(argv[++i], "xboo") == 0;
@@ -165,6 +170,7 @@ int main(int argc, char **argv)
 
   BmLinkTransport transport;
   static BmXboo xboo;
+  static BmTcpLink tcp;
 #ifdef BM_HAVE_MGBA
   BmMgbaLink *mgba = NULL;
 #endif
@@ -179,6 +185,16 @@ int main(int argc, char **argv)
     if (!delayGiven) loadDelay(xbooDevice, &delay);
     xboo.delay = delay;
     transport = bmXbooTransport(&xboo);
+  }
+  else if (tcpAddress != NULL)
+  {
+    if (!bmTcpLinkOpen(&tcp, tcpAddress))
+    {
+      fprintf(stderr, "%s\n", tcp.error);
+      return 1;
+    }
+    transport = bmTcpLinkTransport(&tcp);
+    delay = 0;
   }
   else if (mgbaImage != NULL)
   {
@@ -195,7 +211,7 @@ int main(int argc, char **argv)
   }
   else
   {
-    fprintf(stderr, "usage: bmlink --xboo <device> | --mgba <image.gba> [options] <command>...\n");
+    fprintf(stderr, "usage: bmlink --xboo <device> | --tcp [host:]port | --mgba <image.gba> [options] <command>...\n");
     return 2;
   }
   (void)cyclesPerWord;
@@ -298,14 +314,39 @@ int main(int argc, char **argv)
              (unsigned)status.frame, (unsigned)status.roomIndex, status.x, status.y);
       if (status.result != BM_LIVE_OK) failed = 1;
     }
-    else if (strcmp(cmd, "boot") == 0 && a1 != NULL)
+    else if ((strcmp(cmd, "boot") == 0 || strcmp(cmd, "boot-if-needed") == 0) && a1 != NULL)
     {
       i++;
+      if (strcmp(cmd, "boot-if-needed") == 0)
+      {
+        // Without a runtime nobody acknowledges, so a short try is enough.
+        uint32_t resyncs = m.maxResyncs;
+        m.maxResyncs = 2;
+        haveRemote = bmLiveMasterHello(&m, &remote);
+        m.maxResyncs = resyncs;
+        if (haveRemote)
+        {
+          printf("boot: the runtime is already running\n");
+          continue;
+        }
+        if (xbooDevice == NULL) { fprintf(stderr, "boot-if-needed: no runtime answers\n"); failed = 1; break; }
+      }
       if (xbooDevice == NULL) { fprintf(stderr, "boot needs --xboo\n"); failed = 1; break; }
       uint32_t size;
       uint8_t *image = readFile(a1, &size);
       if (image == NULL || !bmXbooBoot(&xboo, image, size)) { fprintf(stderr, "boot: %s\n", xboo.error); failed = 1; }
-      else printf("boot: %s sent (%u bytes)\n", a1, (unsigned)size);
+      else
+      {
+        printf("boot: %s sent (%u bytes)\n", a1, (unsigned)size);
+        // A new runtime: start the master over (nothing queued, sequence numbers from 0).
+        uint32_t d = m.delay;
+        bmLinkMasterFree(&m);
+        bmLinkMasterInit(&m, &transport);
+        m.adaptive = adaptive;
+        m.minDelay = 0;
+        bmLinkMasterSetDelay(&m, d);
+        haveRemote = false;
+      }
       free(image);
     }
     else if (strcmp(cmd, "reset") == 0)

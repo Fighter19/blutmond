@@ -4,18 +4,25 @@
 // tiles, the palette banks, the hardware budget and the cooker's report. Rooms reload when
 // the file changes, so it can be used next to Tiled.
 //
-//   bmeditor [--profile gba|snes] [--dark] [--frames N --screenshot out.ppm] room.tmx...
+// Run (F6) plays all rooms: on the PC in the game's window, or on a GBA over the Xboo cable
+// (editor/runner.h). With "Live" on, every cook while it runs is pushed in as a hot reload.
+//
+//   bmeditor [--profile gba|snes] [--dark] [--frames N --screenshot out.ppm]
+//            [--game path] [--bmlink path] [--gba-image path] [--xboo device] [--reset none|xboo]
+//            [--port N] room.tmx...
 
 #include <GLES2/gl2.h>
 
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "platform/sdl3/ui_sdl3.h"
 #include "project.h"
+#include "runner.h"
 #include "ui/lists.h"
 #include "ui/loader.h"
 #include "ui/menus.h"
@@ -35,12 +42,17 @@ namespace {
 const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox anchors="full" separation="0">
   <MenuBar>
     <Menu title="File"><Item action="room.reload"/><Item action="app.quit"/></Menu>
+    <Menu title="Run"><Item action="run.start"/><Item action="run.pc"/><Item action="run.gba"/><Item action="run.stop"/></Menu>
     <Menu title="View"><Item action="view.collision"/><Item action="view.objects"/><Item action="view.grid"/></Menu>
   </MenuBar>
   <PanelContainer theme-type="Toolbar"><HBox>
     <Label text="Profile"/>
     <OptionButton id="profile" items="GBA;SNES;Host"/>
     <Button text="Cook" action="room.reload"/>
+    <Button text="Run" action="run.start"/>
+    <OptionButton id="run_target" items="PC;GBA (Xboo)"/>
+    <Button text="Stop" action="run.stop"/>
+    <CheckBox id="live" text="Live" pressed="1"/>
     <CheckBox id="collision" text="Collision" pressed="1"/>
     <CheckBox id="objects" text="Objects" pressed="1"/>
     <CheckBox id="grid" text="Grid"/>
@@ -66,10 +78,16 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
     </VBox></PanelContainer>
     <VBox expand="1">
       <RoomOverview id="overview" expand="1"/>
-      <PanelContainer><VBox>
-        <Label text="Report" bold="1"/>
-        <ItemList id="report" min-size="0 110"/>
-      </VBox></PanelContainer>
+      <HBox separation="2">
+        <PanelContainer expand="1"><VBox>
+          <Label text="Report" bold="1"/>
+          <ItemList id="report" min-size="0 110"/>
+        </VBox></PanelContainer>
+        <PanelContainer expand="1"><VBox>
+          <Label text="Run" bold="1"/>
+          <ItemList id="runlog" min-size="0 110"/>
+        </VBox></PanelContainer>
+      </HBox>
     </VBox>
     <PanelContainer><VBox>
       <Label text="GBA screen" bold="1"/>
@@ -80,11 +98,12 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
       <Scroll expand="1"><TextureRect id="tiles"/></Scroll>
     </VBox></PanelContainer>
   </HBox>
-  <PanelContainer theme-type="StatusBar"><HBox><Label id="status" text="Ready"/></HBox></PanelContainer>
+  <PanelContainer theme-type="StatusBar"><HBox><Label id="status" text="Ready" expand="1"/><Label id="run_state" text="Not running"/></HBox></PanelContainer>
 </VBox></Panel>)XML";
 
 struct Editor
 {
+  explicit Editor(sdl3::App &a) : app(a) {}
   sdl3::App &app;
   Project project;
   RoomOverview *overview = nullptr;
@@ -96,6 +115,49 @@ struct Editor
   ProgressBar *hwTilesBar = nullptr, *hwBanksBar = nullptr, *hwMapsBar = nullptr;
   ItemList *state = nullptr;
   Label *stateTotals = nullptr;
+  ItemList *runLog = nullptr;
+  Label *runState = nullptr;
+  Runner runner;
+  RunTarget target = RunTarget::Pc;
+  bool live = true;
+
+  std::string runPackPath() const
+  {
+    std::error_code ec;
+    return (std::filesystem::temp_directory_path(ec) / "blutmond-editor-run.bmpk").string();
+  }
+
+  void runLine(const std::string &line, bool error)
+  {
+    std::fprintf(stderr, "run: %s\n", line.c_str());
+    // Newest first, so the latest line is always in view.
+    runLog->items.insert(runLog->items.begin(), {line, error ? "error" : "info", {}, {}, {}, {}});
+    if (runLog->items.size() > 200) runLog->items.pop_back();
+  }
+
+  bool cookLevel(std::string &path)
+  {
+    path = runPackPath();
+    std::string error;
+    if (project.cookLevel(path, &error)) return true;
+    runLine("cannot cook the level: " + error, true);
+    return false;
+  }
+
+  void startRun(RunTarget t)
+  {
+    std::string path;
+    if (!cookLevel(path)) return;
+    runner.run(t, path);
+  }
+
+  // After a cook asked for by the user or a changed file: into the running game.
+  void pushLive()
+  {
+    if (!live || !runner.active()) return;
+    std::string path;
+    if (cookLevel(path)) runner.pushHot(path);
+  }
 
   // The state map (docs/spec/state.md section 4): every field of the engine's game state with
   // its type, size and flags, and how much a save game, a link transfer and a snapshot take.
@@ -180,7 +242,11 @@ struct Editor
   void build()
   {
     Context &ui = app.ui();
-    ui.actions().add({"room.reload", "Cook again", "refresh", "F5", "", [this] { cook(); }, nullptr, nullptr});
+    ui.actions().add({"room.reload", "Cook again", "refresh", "F5", "", [this] { cook(); pushLive(); }, nullptr, nullptr});
+    ui.actions().add({"run.start", "Run", "play", "F6", "Play all rooms on the chosen target", [this] { startRun(target); }, nullptr, nullptr});
+    ui.actions().add({"run.pc", "Run on the PC", "play", "", "", [this] { startRun(RunTarget::Pc); }, nullptr, nullptr});
+    ui.actions().add({"run.gba", "Run on the GBA (Xboo)", "gamepad", "F7", "", [this] { startRun(RunTarget::Gba); }, nullptr, nullptr});
+    ui.actions().add({"run.stop", "Stop", "stop", "Shift+F6", "", [this] { runner.stop(); }, [this] { return runner.active(); }, nullptr});
     ui.actions().add({"app.quit", "Quit", "", "Ctrl+Q", "", [this] { app.quit(); }, nullptr, nullptr});
     ui.actions().add({"view.collision", "Collision", "", "C", "", [this] { overview->showCollision = !overview->showCollision; }, nullptr, nullptr});
     ui.actions().add({"view.objects", "Objects", "", "O", "", [this] { overview->showObjects = !overview->showObjects; }, nullptr, nullptr});
@@ -209,6 +275,12 @@ struct Editor
     hwMapsBar = root->findAs<ProgressBar>("hw_maps_bar");
     state = root->findAs<ItemList>("state");
     stateTotals = root->findAs<Label>("state_totals");
+    runLog = root->findAs<ItemList>("runlog");
+    runLog->tileSize = 0;
+    runState = root->findAs<Label>("run_state");
+    runner.log = [this](const std::string &line, bool error) { runLine(line, error); };
+    root->findAs<OptionButton>("run_target")->itemSelected.connect([this](int i) { target = RunTarget(i); });
+    root->findAs<CheckBox>("live")->toggled.connect([this](bool on) { live = on; });
     state->tileSize = 0;
     fillStateMap();
 
@@ -249,8 +321,14 @@ struct Editor
     if (reloadTimer > 1.0f)
     {
       reloadTimer = 0;
-      if (project.changedOnDisk()) cook();
+      if (project.changedOnDisk())
+      {
+        cook();
+        pushLive();
+      }
     }
+    runner.update();
+    runState->text = runner.busy() ? runner.state() : runner.state() + (runner.active() && live ? " (live)" : "");
   }
 };
 
@@ -278,16 +356,37 @@ int main(int argc, char **argv)
   bool dark = false;
   int frames = 0;
   const char *screenshot = nullptr;
+  RunSettings run;
+#ifdef BM_EDITOR_GAME
+  run.game = BM_EDITOR_GAME;
+#endif
+#ifdef BM_EDITOR_BMLINK
+  run.bmlink = BM_EDITOR_BMLINK;
+#endif
+#ifdef BM_EDITOR_GBA_IMAGE
+  run.gbaImage = BM_EDITOR_GBA_IMAGE;
+#endif
+  run.load();
   for (int i = 1; i < argc; i++)
   {
     if (std::strcmp(argv[i], "--profile") == 0 && i + 1 < argc) profile = argv[++i];
     else if (std::strcmp(argv[i], "--dark") == 0) dark = true;
     else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshot = argv[++i];
+    else if (std::strncmp(argv[i], "--", 2) == 0 && i + 1 < argc && run.set(argv[i] + 2, argv[i + 1])) i++;
     else roomFiles.push_back(argv[i]);
   }
-#ifdef BM_EDITOR_DEFAULT_ROOM
-  if (roomFiles.empty()) roomFiles.push_back(BM_EDITOR_DEFAULT_ROOM);
+#ifdef BM_EDITOR_DEFAULT_ROOMS
+  if (roomFiles.empty())
+  {
+    std::string list = BM_EDITOR_DEFAULT_ROOMS;
+    for (size_t a = 0, b; a <= list.size(); a = b + 1)
+    {
+      b = list.find('|', a);
+      if (b == std::string::npos) b = list.size();
+      if (b > a) roomFiles.push_back(list.substr(a, b - a));
+    }
+  }
 #endif
 
   sdl3::App app;
@@ -303,7 +402,8 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  Editor editor{app, {}};
+  Editor editor(app);
+  editor.runner.settings = run;
   editor.project.setRooms(roomFiles);
   editor.project.setProfile(profile);
   editor.build();

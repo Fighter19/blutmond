@@ -53,6 +53,9 @@ public:
   /// Cooks the current room for the profile and, for GBA-like profiles, renders it with the
   /// runtime. Returns false if cooking failed (the report says why).
   bool cook();
+  /// Cooks all rooms into one pack for running (GBA format: the runtime on the PC and on the
+  /// GBA uses it) and writes it to `path`. False with `*pError` set if that fails.
+  bool cookLevel(const std::string &path, std::string *pError) const;
   /// True if a room file changed on disk since the last cook (for hot reload).
   bool changedOnDisk() const;
 

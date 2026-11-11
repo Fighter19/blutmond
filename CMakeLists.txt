@@ -163,7 +163,9 @@ else()
     elseif(app STREQUAL "room_viewer")
       add_executable(${app} apps/room_viewer/main.c)
     elseif(app STREQUAL "game")
-      add_executable(${app} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c)
+      add_executable(${app} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c apps/game/host_link.c)
+      find_package(Threads REQUIRED)
+      target_link_libraries(${app} PRIVATE Threads::Threads)
     else()
       add_executable(${app} ${BM_SCENE_SOURCES})
     endif()
@@ -200,14 +202,49 @@ if(BM_PLATFORM STREQUAL "host")
       GIT_REPOSITORY https://github.com/Fighter19/ose-ui.git
       GIT_TAG 81846abb402362fd542952a58e648844a6551520)
     FetchContent_MakeAvailable(ose_ui)
-    add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp)
+    add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
     target_link_libraries(bmeditor PRIVATE bm_cooker blutmond ose_ui_sdl3)
-    target_compile_definitions(bmeditor PRIVATE BM_EDITOR_DEFAULT_ROOM="${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx")
+    target_compile_definitions(bmeditor PRIVATE
+      "BM_EDITOR_DEFAULT_ROOMS=\"${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx|${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx\""
+      "BM_EDITOR_GAME=\"$<TARGET_FILE:game>\""
+      "BM_EDITOR_BMLINK=\"$<TARGET_FILE:bmlink>\"")
+    # Run on the GBA multiboots the runtime from a GBA build (or set gba-image in editor.conf).
+    set(BM_GBA_BUILD_DIR "" CACHE PATH "GBA build directory (runtime images for the editor and the mGBA tests)")
+    if(BM_GBA_BUILD_DIR)
+      target_compile_definitions(bmeditor PRIVATE "BM_EDITOR_GBA_IMAGE=\"${BM_GBA_BUILD_DIR}/game_mb.gba\"")
+    endif()
+    # Run needs the game and bmlink next to the editor.
+    add_dependencies(bmeditor game bmlink)
     if(NOT MSVC)
       target_compile_options(bmeditor PRIVATE -Wall -Wextra)
     endif()
   endif()
+  # The PC game plays in a window when SDL3 is there (from ose-ui, or installed), and plays the
+  # test level when started without a pack.
+  if(NOT TARGET SDL3::SDL3)
+    find_package(SDL3 CONFIG QUIET)
+  endif()
+  if(TARGET SDL3::SDL3)
+    target_sources(game PRIVATE apps/game/host_window.c)
+    target_link_libraries(game PRIVATE SDL3::SDL3)
+    if(NOT EMSCRIPTEN)
+      find_library(BM_GLESV2 GLESv2 REQUIRED)
+      target_link_libraries(game PRIVATE ${BM_GLESV2})
+    endif()
+    target_compile_definitions(game PRIVATE BM_GAME_WINDOW=1)
+  endif()
+  set(BM_GAME_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
+  add_custom_command(OUTPUT ${BM_GAME_LEVEL_PACK}
+    COMMAND bmcook --profile gba -o ${BM_GAME_LEVEL_PACK}
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
+    DEPENDS bmcook ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
+      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+    COMMENT "Cooking the test level for the game")
+  add_custom_target(game_level_pack ALL DEPENDS ${BM_GAME_LEVEL_PACK})
+  add_dependencies(game game_level_pack)
+  target_compile_definitions(game PRIVATE "BM_GAME_DEFAULT_PACK=\"${BM_GAME_LEVEL_PACK}\"")
+
   add_executable(bm_ppu_render tools/bm_ppu_render.c src/ppu/ppu.c)
   target_include_directories(bm_ppu_render PRIVATE src/ppu)
   target_compile_options(bm_ppu_render PRIVATE ${BM_WARNINGS})
@@ -220,7 +257,7 @@ if(BM_PLATFORM STREQUAL "host")
   find_path(MGBA_INCLUDE_DIR mgba/core/core.h)
   find_library(MGBA_LIBRARY mgba)
   if(NOT (MGBA_INCLUDE_DIR AND MGBA_LIBRARY))
-    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c)
+    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c tools/bmlink/tcp_link.c)
     target_include_directories(bmlink PRIVATE tools tools/bmlink)
     target_link_libraries(bmlink PRIVATE bm_link_host)
     target_compile_definitions(bmlink PRIVATE _GNU_SOURCE)
@@ -315,7 +352,7 @@ if(BM_PLATFORM STREQUAL "host")
     # The libmgba headers need POSIX definitions such as PATH_MAX.
     target_compile_definitions(bm_mgba_run PRIVATE _GNU_SOURCE)
 
-    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c tools/bmlink/mgba_link.c)
+    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c tools/bmlink/tcp_link.c tools/bmlink/mgba_link.c)
     target_include_directories(bmlink PRIVATE ${MGBA_INCLUDE_DIR} tools tools/bmlink)
     target_link_libraries(bmlink PRIVATE bm_link_host ${MGBA_LIBRARY})
     target_compile_definitions(bmlink PRIVATE _GNU_SOURCE BM_HAVE_MGBA)
