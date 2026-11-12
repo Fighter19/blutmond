@@ -148,7 +148,10 @@ int main(int argc, char **argv)
   int i = 1;
   uint32_t delay = 1;
   bool delayGiven = false, adaptive = false, resetWired = false;
-  uint32_t cyclesPerWord = 0, flip = 0, miss = 0;
+  uint32_t cyclesPerWord = 0;
+#ifdef BM_HAVE_MGBA
+  uint32_t flip = 0, miss = 0;
+#endif
   for (; i < argc && strncmp(argv[i], "--", 2) == 0; i++)
   {
     if (strcmp(argv[i], "--xboo") == 0 && i + 1 < argc) xbooDevice = argv[++i];
@@ -158,11 +161,13 @@ int main(int argc, char **argv)
     else if (strcmp(argv[i], "--adaptive") == 0) adaptive = true;
     else if (strcmp(argv[i], "--reset") == 0 && i + 1 < argc) resetWired = strcmp(argv[++i], "xboo") == 0;
     else if (strcmp(argv[i], "--cycles-per-word") == 0 && i + 1 < argc) cyclesPerWord = (uint32_t)atoi(argv[++i]);
+#ifdef BM_HAVE_MGBA
     else if (strcmp(argv[i], "--errors") == 0 && i + 2 < argc)
     {
       flip = (uint32_t)atoi(argv[++i]);
       miss = (uint32_t)atoi(argv[++i]);
     }
+#endif
     else
     {
       fprintf(stderr, "unknown option %s (see the comment at the top of tools/bmlink/bmlink.c)\n", argv[i]);
