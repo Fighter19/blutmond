@@ -9,3 +9,4 @@ content moves into the spec and the plan shrinks to what is still open.
 |---|---|
 | [structures.md](structures.md) | custom structures and records: the data behind weapons, spells, abilities, consumables and armour |
 | [ui.md](ui.md) | menus: screens, widgets, text, the Start and Equipment menus, animated backdrops that keep running |
+| [attachable-scripts.md](attachable-scripts.md) | scripts that are attached to the player, an object or an item at run time; one module per script |
