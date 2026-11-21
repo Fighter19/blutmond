@@ -8,3 +8,4 @@ content moves into the spec and the plan shrinks to what is still open.
 | Plan | Covers |
 |---|---|
 | [structures.md](structures.md) | custom structures and records: the data behind weapons, spells, abilities, consumables and armour |
+| [ui.md](ui.md) | menus: screens, widgets, text, the Start and Equipment menus, animated backdrops that keep running |

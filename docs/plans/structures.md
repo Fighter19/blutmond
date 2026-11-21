@@ -48,9 +48,8 @@ struct Weapon is Item {
   attached script.
 - Enums come with this plan: `enum E { ... }`, one byte, values in order from 0.
 
-Limits to start with: 32 fields per structure, 16 bytes of padding-free layout rules as for
-state (fields laid out in declaration order, aligned to their size), a record at most 64
-bytes. The cooker reports the size of every structure.
+Limits to start with: 32 fields per structure, a record at most 64 bytes. Fields are laid
+out in declaration order, each aligned to its size. The cooker reports the size of every structure.
 
 ## 3. Records
 
@@ -181,7 +180,7 @@ Luck, ... }`). The total of a stat is `stat_base` plus the `stats` of every equi
 with the role `stat_source` plus what attached scripts add. Totals are `derived`: worked
 out again after loading and whenever equipment changes, never saved.
 
-The four names items of today become records of a structure `KeyItem`; `give_item` and
+Today's items (names only) become records of a structure `KeyItem`; `give_item` and
 `has_item` keep working on the inventory.
 
 ## 8. Steps
