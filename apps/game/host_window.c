@@ -5,6 +5,7 @@
 #include "host_window.h"
 
 #include "hal.h"
+#include "hal_host.h"
 
 #include <GLES2/gl2.h>
 #include <SDL3/SDL.h>
@@ -20,6 +21,7 @@ static SDL_Window *s_window;
 static SDL_GLContext s_gl;
 static GLuint s_texture, s_program, s_buffer;
 static Uint64 s_next;
+static SDL_AudioStream *s_audio;
 static uint8_t s_rgba[BM_HAL_SCREEN_WIDTH * BM_HAL_SCREEN_HEIGHT * 4];
 
 static GLuint shader(GLenum type, const char *pSource)
@@ -81,6 +83,14 @@ bool bmWindowOpen(const char *pTitle, int scale)
     return false;
   }
   SDL_GL_SetSwapInterval(0);  // paced below at the GBA's rate, not the monitor's
+  // Sound: what the game mixes, at the GBA's rate; SDL converts it for the sound card. No
+  // sound device is not an error.
+  if (SDL_InitSubSystem(SDL_INIT_AUDIO))
+  {
+    SDL_AudioSpec spec = { SDL_AUDIO_S8, 2, BM_HAL_AUDIO_RATE };
+    s_audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
+    if (s_audio != NULL) SDL_ResumeAudioStreamDevice(s_audio);
+  }
   s_next = SDL_GetTicksNS();
   return true;
 }
@@ -162,6 +172,21 @@ bool bmWindowFrame(const uint16_t *pPixels, uint16_t *pKeys)
 
   draw(pPixels);
 
+  // The frames of sound that became audible, left and right interleaved.
+  if (s_audio != NULL)
+  {
+    static int8_t left[8 * BM_HAL_AUDIO_FRAME_SAMPLES], right[8 * BM_HAL_AUDIO_FRAME_SAMPLES], both[16 * BM_HAL_AUDIO_FRAME_SAMPLES];
+    uint32_t samples = bmHalHostAudioRead(left, right, 8) * BM_HAL_AUDIO_FRAME_SAMPLES;
+    for (uint32_t i = 0; i < samples; i++)
+    {
+      both[2 * i] = left[i];
+      both[2 * i + 1] = right[i];
+    }
+    // After a stall do not let sound pile up behind the picture.
+    if (SDL_GetAudioStreamQueued(s_audio) > BM_HAL_AUDIO_RATE / 2) SDL_ClearAudioStream(s_audio);
+    if (samples != 0) SDL_PutAudioStreamData(s_audio, both, (int)(samples * 2));
+  }
+
   const bool *k = SDL_GetKeyboardState(NULL);
   uint16_t keys = gamepadKeys();
   if (k[SDL_SCANCODE_UP]) keys |= BM_KEY_UP;
@@ -186,6 +211,8 @@ bool bmWindowFrame(const uint16_t *pPixels, uint16_t *pKeys)
 
 void bmWindowClose(void)
 {
+  if (s_audio) SDL_DestroyAudioStream(s_audio);
+  s_audio = NULL;
   if (s_gl)
   {
     glDeleteTextures(1, &s_texture);

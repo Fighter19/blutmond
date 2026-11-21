@@ -36,6 +36,22 @@
 #define GBA_REG_DMA0CNT_L GBA_REG16(0x0B8)
 #define GBA_REG_DMA0CNT_H GBA_REG16(0x0BA)
 
+// DMA channels 1 and 2 feed the sound FIFOs; timer 0 sets the sample rate.
+#define GBA_REG_DMA1SAD   GBA_REG32(0x0BC)
+#define GBA_REG_DMA1DAD   GBA_REG32(0x0C0)
+#define GBA_REG_DMA1CNT_H GBA_REG16(0x0C6)
+#define GBA_REG_DMA2SAD   GBA_REG32(0x0C8)
+#define GBA_REG_DMA2DAD   GBA_REG32(0x0CC)
+#define GBA_REG_DMA2CNT_H GBA_REG16(0x0D2)
+#define GBA_REG_SOUNDCNT_H GBA_REG16(0x082)
+#define GBA_REG_SOUNDCNT_X GBA_REG16(0x084)
+#define GBA_FIFO_A        (GBA_IO + 0x0A0)
+#define GBA_FIFO_B        (GBA_IO + 0x0A4)
+#define GBA_REG_TM0CNT_L  GBA_REG16(0x100)
+#define GBA_REG_TM0CNT_H  GBA_REG16(0x102)
+#define GBA_DMA_START_FIFO   (3u << 12)
+#define GBA_DMA_32BIT        (1u << 10)
+
 #define GBA_DMA_DEST_FIXED   (2u << 5)
 #define GBA_DMA_REPEAT       (1u << 9)
 #define GBA_DMA_START_HBLANK (2u << 12)

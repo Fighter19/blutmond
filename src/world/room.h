@@ -41,6 +41,7 @@ typedef struct BmRoom
   uint16_t flags;
   int32_t gravity, maxFallSpeed, waterGravity, waterMaxFallSpeed;
   uint16_t objectCount;
+  uint16_t musicId;          // string id of the room's song, 0xFFFF: none
   uint16_t tilesChunk, paletteChunk, collisionChunk, objectsChunk;
   uint8_t layerCount;
   BmRoomLayer layers[BM_ROOM_MAX_LAYERS];

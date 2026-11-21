@@ -85,6 +85,56 @@ static void restartLineTable(void)
   GBA_REG_DMA0CNT_H = GBA_DMA_ENABLE | GBA_DMA_START_HBLANK | GBA_DMA_REPEAT | GBA_DMA_DEST_FIXED;
 }
 
+uint16_t bmHalVideoLine(void)
+{
+  return GBA_REG16(0x006) & 0xFF;
+}
+
+// --- Sound ----------------------------------------------------------------------------------
+//
+// Two buffers per side: one plays (DMA 1 and 2 feed FIFO A and B, timer 0 asks for a sample
+// every 924 cycles, so a video frame is exactly 304 samples) while the program fills the
+// other; at each vertical blank they swap. The buffers are a little longer than a frame, so a
+// DMA request that falls just before the swap reads silence instead of something else.
+
+#define AUDIO_BUFFER (BM_HAL_AUDIO_FRAME_SAMPLES + 16)
+static int8_t s_audio[2][2][AUDIO_BUFFER];   // in fast memory: written once per sample
+static uint8_t s_audioFill;   // the pair being filled
+static bool s_audioOn;
+
+void bmHalAudioStart(void)
+{
+  if (s_audioOn) return;
+  GBA_REG_SOUNDCNT_X = 0x80;     // sound on
+  // Both direct sound channels at full volume, timer 0; A on the left, B on the right; FIFOs reset.
+  GBA_REG_SOUNDCNT_H = 0x0004 | 0x0008 | 0x0200 | 0x0800 | 0x1000 | 0x8000;
+  GBA_REG_TM0CNT_H = 0;
+  GBA_REG_TM0CNT_L = (uint16_t)(65536 - 924);
+  GBA_REG_TM0CNT_H = 0x80;
+  s_audioOn = true;
+}
+
+void bmHalAudioBuffers(int8_t **ppLeft, int8_t **ppRight)
+{
+  *ppLeft = s_audio[s_audioFill][0];
+  *ppRight = s_audio[s_audioFill][1];
+}
+
+static void swapAudio(void)
+{
+  if (!s_audioOn) return;
+  GBA_REG_DMA1CNT_H = 0;
+  GBA_REG_DMA2CNT_H = 0;
+  GBA_REG_DMA1SAD = (uint32_t)s_audio[s_audioFill][0];
+  GBA_REG_DMA1DAD = GBA_FIFO_A;
+  GBA_REG_DMA2SAD = (uint32_t)s_audio[s_audioFill][1];
+  GBA_REG_DMA2DAD = GBA_FIFO_B;
+  uint16_t control = GBA_DMA_ENABLE | GBA_DMA_START_FIFO | GBA_DMA_32BIT | GBA_DMA_REPEAT | GBA_DMA_DEST_FIXED;
+  GBA_REG_DMA1CNT_H = control;
+  GBA_REG_DMA2CNT_H = control;
+  s_audioFill ^= 1;
+}
+
 uint32_t bmHalVideoWaitVBlank(void)
 {
   initInterrupts();
@@ -92,6 +142,7 @@ uint32_t bmHalVideoWaitVBlank(void)
   // comes from the interrupt handler, so missed frames show up as gaps.
   __asm__ volatile("swi 0x05" ::: "r0", "r1", "r2", "r3", "memory");
   restartLineTable();
+  swapAudio();
   return bm_vblank_count;
 }
 

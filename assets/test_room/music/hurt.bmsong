@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="36" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="buzz" wave="saw" attack="0" decay="10" sustain="0" release="3" volume="170" pan="0"/>
+ <instrument name="hiss" wave="noise" attack="0" decay="8" sustain="0" release="2" volume="140" pan="0"/>
+ <track name="buzz" instrument="buzz">
+  <note t="0" key="52" len="6" vel="120"/>
+  <note t="6" key="47" len="6" vel="120"/>
+  <note t="12" key="43" len="10" vel="120"/>
+ </track>
+ <track name="hiss" instrument="hiss">
+  <note t="0" key="60" len="10" vel="110"/>
+ </track>
+</song>

@@ -72,9 +72,57 @@ uint16_t bmHalPaletteRead(uint16_t index)
   return index < BM_HAL_PALETTE_SIZE ? s_ppu.palette[index] : 0;
 }
 
+uint16_t bmHalVideoLine(void)
+{
+  return 160;  // the PC has no time limit per frame
+}
+
+// Sound: the buffers the program fills, and a short queue of frames for whoever plays them.
+#define AUDIO_QUEUE 8
+static int8_t s_audio[2][BM_HAL_AUDIO_FRAME_SAMPLES];
+static int8_t s_audioQueue[AUDIO_QUEUE][2][BM_HAL_AUDIO_FRAME_SAMPLES];
+static uint32_t s_audioQueued;
+static bool s_audioOn;
+
+void bmHalAudioStart(void)
+{
+  s_audioOn = true;
+}
+
+void bmHalAudioBuffers(int8_t **ppLeft, int8_t **ppRight)
+{
+  *ppLeft = s_audio[0];
+  *ppRight = s_audio[1];
+}
+
+uint32_t bmHalHostAudioRead(int8_t *pLeft, int8_t *pRight, uint32_t maxFrames)
+{
+  uint32_t n = s_audioQueued < maxFrames ? s_audioQueued : maxFrames;
+  for (uint32_t i = 0; i < n; i++)
+  {
+    memcpy(pLeft + i * BM_HAL_AUDIO_FRAME_SAMPLES, s_audioQueue[i][0], BM_HAL_AUDIO_FRAME_SAMPLES);
+    memcpy(pRight + i * BM_HAL_AUDIO_FRAME_SAMPLES, s_audioQueue[i][1], BM_HAL_AUDIO_FRAME_SAMPLES);
+  }
+  memmove(s_audioQueue[0], s_audioQueue[n], (s_audioQueued - n) * sizeof(s_audioQueue[0]));
+  s_audioQueued -= n;
+  return n;
+}
+
 uint32_t bmHalVideoWaitVBlank(void)
 {
   ensureInit();
+  if (s_audioOn)
+  {
+    // What was filled during this frame starts playing now. If nobody listens, old frames go.
+    if (s_audioQueued == AUDIO_QUEUE)
+    {
+      memmove(s_audioQueue[0], s_audioQueue[1], (AUDIO_QUEUE - 1) * sizeof(s_audioQueue[0]));
+      s_audioQueued--;
+    }
+    memcpy(s_audioQueue[s_audioQueued][0], s_audio[0], BM_HAL_AUDIO_FRAME_SAMPLES);
+    memcpy(s_audioQueue[s_audioQueued][1], s_audio[1], BM_HAL_AUDIO_FRAME_SAMPLES);
+    s_audioQueued++;
+  }
   return ++s_frame;
 }
 
@@ -159,6 +207,8 @@ void bmHalHostReset(void)
   s_initialised = 0;
   s_frame = 0;
   s_keys = 0;
+  s_audioOn = false;
+  s_audioQueued = 0;
   ensureInit();
 }
 

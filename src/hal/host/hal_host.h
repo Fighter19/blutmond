@@ -29,6 +29,10 @@ uint8_t *bmHalHostSaveMemory(void);
 /// Puts the virtual hardware back into its power-on state.
 void bmHalHostReset(void);
 
+/// Sound: copies the frames (BM_HAL_AUDIO_FRAME_SAMPLES per side each) that became audible
+/// since the last call, at most `maxFrames`; returns how many. For the game's window.
+uint32_t bmHalHostAudioRead(int8_t *pLeft, int8_t *pRight, uint32_t maxFrames);
+
 /// Live link: the master clocks one word. Returns the word the slave had prepared, then runs
 /// the link handler with `masterWord` (as the serial interrupt would). 0xFFFFFFFF if no link
 /// is started.

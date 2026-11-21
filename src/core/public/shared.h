@@ -13,7 +13,8 @@
 #if defined(BM_PLATFORM_GBA)
 #  define BM_EWRAM_BSS  __attribute__((section(".sbss")))
 #  define BM_IWRAM_DATA __attribute__((section(".iwram.data")))
-#  define BM_IWRAM_CODE __attribute__((section(".iwram.text"), target("arm"), noinline))
+// Optimised for speed whatever the rest of the build does (the images are built for size).
+#  define BM_IWRAM_CODE __attribute__((section(".iwram.text"), target("arm"), noinline, optimize("O2")))
 #else
 #  define BM_EWRAM_BSS
 #  define BM_IWRAM_DATA

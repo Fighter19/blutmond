@@ -345,6 +345,23 @@ static void updateCamera(BmGame *g)
   bmRoomSetCamera(&g->room, cx, cy);
 }
 
+// The echo's delay lines.
+static int8_t s_echo[2 * BM_SOUND_ECHO_MAX] BM_EWRAM_BSS;
+
+// The sound engine reads songs in place: a new pack means starting over. Then the room's song,
+// unless it is the one playing.
+static void enterRoomSound(BmGame *g)
+{
+  if (g->pSoundFrom != g->pPack->pData || g->sound.pPack != g->pPack)
+  {
+    bmSoundInit(&g->sound, g->pPack, s_echo);
+    g->pSoundFrom = g->pPack->pData;
+    bmHalAudioStart();
+  }
+  const char *music = g->room.musicId != 0xFFFF ? bmPackString(g->pPack, g->room.musicId) : NULL;
+  if (music != NULL) bmSoundPlayMusic(&g->sound, music);
+}
+
 static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
 {
   BmResult r = bmRoomOpen(&g->room, g->pPack, index);
@@ -360,6 +377,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   readObjects(g);
   loadSprites(g);
   bmActorsEnterRoom(g, fresh);
+  enterRoomSound(g);
   return bmRoomShow(&g->room, 0, 0);
 }
 
@@ -438,6 +456,7 @@ static void useDoor(BmGame *g, const BmObjectView *door)
 void bmGameHurtPlayer(BmGame *g, int32_t damage)
 {
   if (damage <= 0 || g->hurtTimer != 0) return;
+  bmSoundPlayEffect(&g->sound, "hurt");
   g->hurts++;
   g->hurtTimer = 60;
   g->player.vy = -BM_FIX(3);
@@ -461,6 +480,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   if (g->doorCooldown) g->doorCooldown--;
   if (g->saveCooldown) g->saveCooldown--;
 
+  if (events & BM_BODY_JUMPED) bmSoundPlayEffect(&g->sound, "jump");
   if (events & BM_BODY_DEATH)
   {
     respawn(g);
@@ -522,6 +542,11 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   animatePlayer(g);
   updateCamera(g);
   updateSprites(g);
+
+  // This frame's sound; it plays from the next vertical blank.
+  int8_t *left, *right;
+  bmHalAudioBuffers(&left, &right);
+  bmSoundFrame(&g->sound, left, right, BM_HAL_AUDIO_FRAME_SAMPLES);
 }
 
 // --- State --------------------------------------------------------------------------------

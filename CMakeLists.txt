@@ -33,7 +33,10 @@ set(BM_TEST_LEVEL_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/bat.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bat.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/door.ms
-  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms)
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong)
 
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
@@ -41,6 +44,7 @@ set(BM_PACK_SOURCES src/pack/pack.c)
 file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c)
 set(BM_LINK_SOURCES src/link/link.c src/link/live.c src/ppu/ppu_snapshot_part.c)
 set(BM_SCRIPT_SOURCES src/script/vm.c)
+set(BM_SOUND_SOURCES src/sound/sound.c)
 
 if(BM_PLATFORM STREQUAL "gba")
   # The software PPU is not needed on the device; only its register definitions are used.
@@ -52,9 +56,9 @@ else()
 endif()
 
 add_library(blutmond STATIC ${BM_CORE_SOURCES} ${BM_GRAPHICS_SOURCES} ${BM_PACK_SOURCES} ${BM_WORLD_SOURCES} ${BM_LINK_SOURCES}
-  ${BM_SCRIPT_SOURCES} ${BM_HAL_SOURCES})
+  ${BM_SCRIPT_SOURCES} ${BM_SOUND_SOURCES} ${BM_HAL_SOURCES})
 target_include_directories(blutmond
-  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu src/pack src/world src/link src/script ${BM_HAL_DIR}
+  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu src/pack src/world src/link src/script src/sound ${BM_HAL_DIR}
   PRIVATE src/core/private)
 target_compile_options(blutmond PRIVATE ${BM_WARNINGS})
 if(BM_PLATFORM STREQUAL "gba")
@@ -204,8 +208,8 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_script PRIVATE ${BM_WARNINGS})
 
   add_library(bm_cooker STATIC
-    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp src/pack/pack.c)
-  target_include_directories(bm_cooker PUBLIC tools/cooker src/pack PRIVATE third_party/stb)
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp src/sound/sound.c src/pack/pack.c)
+  target_include_directories(bm_cooker PUBLIC tools/cooker src/pack src/sound src/core/public PRIVATE third_party/stb)
   target_link_libraries(bm_cooker PUBLIC bm_script)
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST)
   target_compile_options(bm_cooker PRIVATE ${BM_WARNINGS})
@@ -319,6 +323,11 @@ if(BM_PLATFORM STREQUAL "host")
   target_include_directories(test_script PRIVATE tests)
   target_compile_options(test_script PRIVATE ${BM_WARNINGS})
   add_test(NAME test_script COMMAND test_script)
+  add_executable(test_sound tests/test_sound.cpp)
+  target_link_libraries(test_sound PRIVATE bm_cooker)
+  target_include_directories(test_sound PRIVATE tests)
+  target_compile_options(test_sound PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_sound COMMAND test_sound ${PROJECT_SOURCE_DIR}/assets)
   add_executable(test_sprite tests/test_sprite.cpp)
   target_link_libraries(test_sprite PRIVATE bm_editor_model)
   target_include_directories(test_sprite PRIVATE tests)
@@ -374,12 +383,15 @@ if(BM_PLATFORM STREQUAL "host")
     COMMAND bmcook --profile gba -o ${cooked}/test_level_scripts_gba.bmpk
       ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
       ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmsprite ${PROJECT_SOURCE_DIR}/assets/test_room/bat.bmsprite
-      ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bat.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms ${cooked}/door.ms)
+      ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bat.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms ${cooked}/door.ms
+      ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong
+      ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong)
   set_tests_properties(cook_test_level_scripts PROPERTIES FIXTURES_REQUIRED script_variant_source FIXTURES_SETUP test_level_scripts)
   add_test(NAME test_live COMMAND test_live ${cooked}/test_level_gba.bmpk ${cooked}/test_level_variant_gba.bmpk
     ${cooked}/test_level_scripts_gba.bmpk)
   set_tests_properties(test_live PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_variant;test_level_scripts")
-  add_test(NAME game_autoplay_host COMMAND game ${cooked}/test_level_gba.bmpk --autoplay --frames 1000 ${cooked}/game_host.ppm)
+  add_test(NAME game_autoplay_host COMMAND game ${cooked}/test_level_gba.bmpk --autoplay --frames 1000
+    --sound-check ${cooked}/sound_host.txt ${cooked}/game_host.ppm)
   set_tests_properties(game_autoplay_host PROPERTIES FIXTURES_REQUIRED test_level_pack FIXTURES_SETUP game_host
     PASS_REGULAR_EXPRESSION "room test_room_2.*deaths 0")
 
@@ -462,13 +474,21 @@ if(BM_PLATFORM STREQUAL "host")
       # The autopilot plays the level on the GBA: after it has settled in the second room the
       # picture must match the host's.
       foreach(image game_autoplay game_autoplay_mb)
-        # On the GBA too: no deaths, one room change, and at most 4 frames missed (while the
-        # new room is loaded: 2 from ROM, 4 from EWRAM in the multiboot image).
+        # On the GBA too: no deaths, one room change, the same sound as on the host (checksum
+        # over every sample mixed), and few frames missed. From ROM: at most 4 (2 while the new
+        # room is loaded). The multiboot image runs everything from slow RAM (it is for
+        # development): there the room load takes 3, the save point 1, and with music playing a
+        # busy frame can go over once more, so 6 are allowed.
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
+        set(lag 4)
+        if(image STREQUAL "game_autoplay_mb")
+          set(lag 6)
+        endif()
         add_test(NAME game_render_${image}
           COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 1300 --until ${elf}:bm_game_stats+24=1000
-            --ppm ${out}/${image}.ppm --check ${elf}:bm_game_stats+8=0 --check ${elf}:bm_game_stats+12=1 --check "${elf}:bm_game_stats+4<=4")
-        set_tests_properties(game_render_${image} PROPERTIES FIXTURES_SETUP game_${image})
+            --check-file ${elf}:bm_game_stats+32 ${cooked}/sound_host.txt
+            --ppm ${out}/${image}.ppm --check ${elf}:bm_game_stats+8=0 --check ${elf}:bm_game_stats+12=1 --check "${elf}:bm_game_stats+4<=${lag}")
+        set_tests_properties(game_render_${image} PROPERTIES FIXTURES_REQUIRED game_host FIXTURES_SETUP game_${image})
         add_test(NAME game_matches_${image}
           COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --diff ${out}/${image}_diff.ppm)
         set_tests_properties(game_matches_${image} PROPERTIES FIXTURES_REQUIRED "game_host;game_${image}")

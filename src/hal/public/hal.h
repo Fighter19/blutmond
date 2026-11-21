@@ -90,6 +90,19 @@ void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size);
 /// `pValues == NULL` switches the line table off.
 void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues);
 
+/// The line the display is drawing now (0-227 on the GBA; 160 and up is the vertical blank).
+/// A frame starts at line 160, so this tells how much of a frame's time has been used.
+uint16_t bmHalVideoLine(void);
+
+/// Sound output: two channels (left, right) of signed 8-bit samples at BM_HAL_AUDIO_RATE,
+/// BM_HAL_AUDIO_FRAME_SAMPLES per video frame (exactly one frame on the GBA: timer 0 and the
+/// two sound FIFOs). After bmHalAudioStart, fill the buffers bmHalAudioBuffers returns once per
+/// frame; they start playing at the next bmHalVideoWaitVBlank.
+#define BM_HAL_AUDIO_RATE 18157
+#define BM_HAL_AUDIO_FRAME_SAMPLES 304
+void bmHalAudioStart(void);
+void bmHalAudioBuffers(int8_t **ppLeft, int8_t **ppRight);
+
 /// Live link (docs/spec/link-protocol.md): the serial port as the clocked side, 32 bits per
 /// transfer. `handler` runs in the serial interrupt for every word received and returns the
 /// word to send in the next transfer. `firstWord` is sent in the first one.

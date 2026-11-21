@@ -13,6 +13,7 @@
 #include "collision.h"
 #include "pack.h"
 #include "room.h"
+#include "sound.h"
 #include "sprite.h"
 #include "state.h"
 
@@ -76,6 +77,10 @@ typedef struct BmGame
   BmAnimState playerAnim;
   // Scripted objects of the room (docs/spec/mondskript.md).
   BmActors actors;
+  // Music and sound effects. Not part of the game state yet: a loaded state starts the room's
+  // song from its beginning.
+  BmSound sound;
+  const uint8_t *pSoundFrom;
 } BmGame;
 
 /// Hurts the player as a hazard does (unless still blinking from the last hit).

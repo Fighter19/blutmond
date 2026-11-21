@@ -202,7 +202,8 @@ What scripts can call is one table shared by compiler, verifier and runtime
 added at the end. This version: `sleep`, `finish_anim`, `play_anim(name)`, `anim_done`,
 `player_x`, `player_y`, `player_distance`, `move_toward_player(fix)`, `move_toward(fix, fix,
 fix)`, `hurt_player(int)`, `enter_door`, `hide`, `show`, `face_player`, `log(int)`,
-`random(int)`, `touching_player`, `give_item(name)`, `has_item(name)`, `abs(int)`; and the
+`random(int)`, `touching_player`, `give_item(name)`, `has_item(name)`, `abs(int)`,
+`play_sound(name)`, `play_music(name)`; and the
 actor variables `x`, `y`, `facing` and (read only) `home_x`, `home_y`.
 
 Objects of a room whose Tiled class is a script class are scripted; the engine then leaves them

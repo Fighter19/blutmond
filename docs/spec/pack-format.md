@@ -182,9 +182,7 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `ROOM`, `COLL`, `SHAP`, `OBJS` | room data, see [room-format.md](room-format.md) §7 |
 | `EFCT` | raster effect: per-line register tables |
 | `SPRT` | one sprite: palette bank, tiles, frames as hardware sprite pieces, hitboxes, animations ([sprite-format.md](sprite-format.md)) |
-| `SONG` | music sequence |
-| `INST` | instruments |
-| `SMPL` | samples (8-bit signed PCM, loop points) |
+| `SONG` | one song or sound effect: instruments, note events and its samples ([sound-format.md](sound-format.md)) |
 | `SFX ` | sound effects |
 | `MODB` | script module: classes, variables, states, functions and bytecode ([mondskript.md](mondskript.md) §11) |
 | `MODN` | script module, native code with relocations |

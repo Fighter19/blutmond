@@ -2,6 +2,7 @@
 #include "cook.h"
 #include "mondskript.h"
 #include "overrides.h"
+#include "song_asset.h"
 #include "sprite_asset.h"
 
 #include <algorithm>
@@ -868,6 +869,35 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     {
       report.error("does-not-fit", path, e.what());
     }
+  }
+
+  // Songs and sound effects, one chunk each.
+  std::set<std::string> songNames;
+  for (const std::string &path : options.songs)
+  {
+    try
+    {
+      song::Song s = song::load(path);
+      if (!songNames.insert(s.name).second)
+      {
+        report.error("does-not-fit", path, "song name '" + s.name + "' is used twice");
+        continue;
+      }
+      Bytes b;
+      b.data = song::chunk(s, strings.id(s.name), report);
+      if (!b.data.empty()) add(writer, BM_CHUNK_SONG, s.effect ? BM_CATEGORY_SFX : BM_CATEGORY_MUSIC, 0, b);
+    }
+    catch (const std::exception &e)
+    {
+      report.error("does-not-fit", path, e.what());
+    }
+  }
+  // A room's music must be a song of this cook.
+  for (const tmx::Map &map : maps)
+  {
+    std::string music = map.property("music");
+    if (!music.empty() && !songNames.count(music))
+      report.warning("music", map.path, "the room's music '" + music + "' is not a song of this cook");
   }
 
   // Scripts: all classes in one module.

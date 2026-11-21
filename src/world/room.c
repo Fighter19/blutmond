@@ -58,6 +58,7 @@ BmResult bmRoomOpen(BmRoom *pRoom, const BmPack *pPack, uint32_t index)
   pRoom->maxFallSpeed = (int32_t)bmRead32(p + 12);
   pRoom->waterGravity = (int32_t)bmRead32(p + 16);
   pRoom->waterMaxFallSpeed = (int32_t)bmRead32(p + 20);
+  pRoom->musicId = bmRead16(p + 24);
   pRoom->objectCount = bmRead16(p + 26);
   pRoom->tilesChunk = bmRead16(p + 30);
   pRoom->paletteChunk = bmRead16(p + 32);

@@ -77,6 +77,8 @@ struct CookOptions
   std::vector<std::string> sprites;
   /// Script files (.ms, mondskript.md), compiled into the pack's bytecode module.
   std::vector<std::string> scripts;
+  /// Songs and sound effects (.bmsong, sound-format.md).
+  std::vector<std::string> songs;
 };
 
 /// Cooks the given rooms. Rooms with the same `area` property share tiles, palettes and the

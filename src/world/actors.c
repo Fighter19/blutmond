@@ -230,6 +230,12 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_abs:
     *result = absolute(args[0]);
     break;
+  case BM_SCRIPT_API_play_sound:
+    bmSoundPlayEffect(&g->sound, bmPackString(g->pPack, (uint16_t)args[0]));
+    break;
+  case BM_SCRIPT_API_play_music:
+    bmSoundPlayMusic(&g->sound, bmPackString(g->pPack, (uint16_t)args[0]));
+    break;
   default:
     break;
   }

@@ -22,7 +22,7 @@
 //   The window keeps the save game in a file and listens for the live link on 127.0.0.1:7414
 //   (bmlink --tcp, the editor's Run button). Options:
 //   --frames N  --autoplay  --trace  --snapshot-at N file  --load file  --headless  --window
-//   --scale N  --listen PORT  --no-listen  --save file  --no-save
+//   --scale N  --listen PORT  --no-listen  --save file  --no-save  --sound-check file
 
 #include "autopilot.h"
 #include "device.h"
@@ -89,6 +89,10 @@ typedef struct BmGameStats
   uint32_t snapshotsLoaded;
   uint32_t gameFrame;    // the game's own frame counter (part of the state)
   uint32_t liveApplied;  // live reloads applied (packs and state)
+  uint32_t soundCheck;   // checksum over every sample mixed so far
+  uint32_t soundVoices;  // most voices in use at once
+  uint32_t loadPeak;     // most display lines a game frame took (228 = a whole frame)
+  uint32_t loadTotal;    // lines of all game frames together
 } BmGameStats;
 BmGameStats bm_game_stats;
 
@@ -179,6 +183,12 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
     bm_game_stats.roomIndex = s_game.roomIndex;
     bm_game_stats.gameFrame = s_game.frame;
     bm_game_stats.liveApplied = s_live.applied;
+    bm_game_stats.soundCheck = s_game.sound.outputCrc;
+    bm_game_stats.soundVoices = s_game.sound.voicesPeak;
+    // How long the frame took: lines since the vertical blank began (at line 160).
+    uint32_t lines = (uint32_t)(bmHalVideoLine() + 228 - 160) % 228;
+    if (lines > bm_game_stats.loadPeak) bm_game_stats.loadPeak = lines;
+    bm_game_stats.loadTotal += lines;
 #ifdef BM_PLATFORM_HOST
     if (s_frameHook != NULL && !s_frameHook()) break;
 #endif
@@ -279,6 +289,7 @@ int main(int argc, char **argv)
   bool autoplay = BM_AUTOPLAY;
   bool trace = false;
   bool framesGiven = false, headless = false, window = false, listen = true, save = true;
+  const char *soundCheckPath = NULL;
   int scale = 3, port = BM_HOST_LINK_DEFAULT_PORT;
   for (int i = 1; i < argc; i++)
   {
@@ -290,6 +301,7 @@ int main(int argc, char **argv)
     else if (strcmp(argv[i], "--no-listen") == 0) listen = false;
     else if (strcmp(argv[i], "--save") == 0 && i + 1 < argc) s_savePath = argv[++i];
     else if (strcmp(argv[i], "--no-save") == 0) save = false;
+    else if (strcmp(argv[i], "--sound-check") == 0 && i + 1 < argc) soundCheckPath = argv[++i];
     else if (strcmp(argv[i], "--autoplay") == 0) autoplay = true;
     else if (strcmp(argv[i], "--trace") == 0) trace = true;
     else if (strcmp(argv[i], "--snapshot-at") == 0 && i + 2 < argc)
@@ -381,6 +393,16 @@ int main(int argc, char **argv)
     frames = bm_game_stats.frames;
   }
 #  endif
+  if (result == 0 && soundCheckPath != NULL)
+  {
+    // The checksum of all sound mixed, to compare with the GBA's (bm_mgba_run --check-file).
+    FILE *cf = fopen(soundCheckPath, "w");
+    if (cf != NULL)
+    {
+      fprintf(cf, "%u\n", (unsigned)bm_game_stats.soundCheck);
+      fclose(cf);
+    }
+  }
   if (result == 0 && out != NULL)
   {
     // The picture after the last frame: sprites reach the screen at the next vertical blank.

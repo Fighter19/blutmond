@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="24" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="blip" wave="pulse50" attack="0" decay="5" sustain="0" release="2" volume="120" pan="0"/>
+ <track name="blip" instrument="blip">
+  <note t="0" key="72" len="3" vel="100"/>
+  <note t="3" key="79" len="3" vel="100"/>
+  <note t="6" key="84" len="5" vel="100"/>
+ </track>
+</song>

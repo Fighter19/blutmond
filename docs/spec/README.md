@@ -10,6 +10,7 @@ protocols and language. The reasons behind them, the research and the roadmap ar
 | [project-format.md](project-format.md) | the project file: rooms, asset folders, editor operations on them |
 | [room-format.md](room-format.md) | rooms: layers, collision cells, materials, physics, objects, engine classes, Tiled mapping |
 | [sprite-format.md](sprite-format.md) | sprites: sheet, frames, anchors, hitboxes, animations; the cooked `SPRT` chunk |
+| [sound-format.md](sound-format.md) | songs and sound effects: instruments, notes, the mixer and sequencer, the cooked `SONG` chunk |
 | [pack-format.md](pack-format.md) | the cooked binary pack: header, table of contents, chunk types, compression, load order |
 | [streaming.md](streaming.md) | live-link streaming: rooms as anchors, room chain, priorities, load profiles, testing single assets |
 | [runtime-abi.md](runtime-abi.md) | API table, handles, memory regions, live reload modes |

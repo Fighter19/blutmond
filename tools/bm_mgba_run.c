@@ -143,7 +143,16 @@ static uint32_t symbolAddress(const char *target)
   char *colon = strrchr(buf, ':');
   if (colon == NULL) return 0;
   *colon = 0;
-  return elfSymbol(buf, colon + 1);
+  // "<elf>:<symbol>" or "<elf>:<symbol>+<offset>".
+  uint32_t offset = 0;
+  char *plus = strchr(colon + 1, '+');
+  if (plus != NULL)
+  {
+    *plus = 0;
+    offset = (uint32_t)strtoul(plus + 1, NULL, 0);
+  }
+  uint32_t address = elfSymbol(buf, colon + 1);
+  return address == 0 ? 0 : address + offset;
 }
 
 static bool pokeMailbox(struct mCore *core, const char *target, const char *file)
@@ -230,6 +239,11 @@ int main(int argc, char **argv)
   int pokeFrame = -1;
   const char *pokeTarget = NULL, *pokeFile = NULL, *dumpTarget = NULL, *dumpFile = NULL;
   const char *until = NULL;
+  // A value in memory that must equal the number in a file (written by the PC game), read
+  // when --until is reached: what the program had computed by exactly that point.
+  const char *checkFileTarget = NULL, *checkFilePath = NULL;
+  uint32_t checkFileValue = 0;
+  bool checkFileRead = false;
   const char *checks[16];
   bool checkFlags[16];
   int checkCount = 0;
@@ -260,6 +274,11 @@ int main(int argc, char **argv)
     }
     else if (strcmp(argv[i], "--until") == 0 && i + 1 < argc)
       until = argv[++i];
+    else if (strcmp(argv[i], "--check-file") == 0 && i + 2 < argc)
+    {
+      checkFileTarget = argv[++i];
+      checkFilePath = argv[++i];
+    }
     else if (strcmp(argv[i], "--expect-backdrop") == 0)
       expectBackdrop = 1;
     else if (argv[i][0] != '-' && rom == NULL)
@@ -311,6 +330,15 @@ int main(int argc, char **argv)
     core->runFrame(core);
     if (until != NULL && core->busRead32(core, untilAddress) >= untilValue)
     {
+      if (checkFileTarget != NULL)
+      {
+        uint32_t address = symbolAddress(checkFileTarget);
+        if (address != 0)
+        {
+          checkFileValue = core->busRead32(core, address);
+          checkFileRead = true;
+        }
+      }
       // One more frame: the picture then shows what the program had set up by that point
       // (sprites reach the screen at the next vertical blank).
       core->runFrame(core);
@@ -338,6 +366,18 @@ int main(int argc, char **argv)
   if (snapshot != NULL && writeSnapshot(core, snapshot) != 0)
   {
     failed = 1;
+  }
+  if (checkFileTarget != NULL)
+  {
+    FILE *cf = fopen(checkFilePath, "r");
+    unsigned expected = 0;
+    if (!checkFileRead || cf == NULL || fscanf(cf, "%u", &expected) != 1 || expected != checkFileValue)
+    {
+      fprintf(stderr, "%s: found %u, %s says %u\n", checkFileTarget, (unsigned)checkFileValue, checkFilePath, expected);
+      failed = 1;
+    }
+    else printf("%s = %u, as in %s\n", checkFileTarget, (unsigned)checkFileValue, checkFilePath);
+    if (cf) fclose(cf);
   }
   for (int i = 0; i < checkCount; i++)
   {

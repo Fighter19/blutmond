@@ -41,7 +41,9 @@ typedef enum BmScriptType {
   X(touching_player,    BOOL, 0, VOID, VOID, VOID, 0) \
   X(give_item,          VOID, 1, NAME, VOID, VOID, 0) \
   X(has_item,           BOOL, 1, NAME, VOID, VOID, 0) \
-  X(abs,                INT,  1, INT,  VOID, VOID, 0)
+  X(abs,                INT,  1, INT,  VOID, VOID, 0) \
+  X(play_sound,         VOID, 1, NAME, VOID, VOID, 0) \
+  X(play_music,         VOID, 1, NAME, VOID, VOID, 0)
 
 typedef enum BmScriptApi {
 #define X(name, result, argc, a0, a1, a2, latent) BM_SCRIPT_API_##name,
