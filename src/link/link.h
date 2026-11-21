@@ -19,6 +19,7 @@
 #define BM_LINK_WORD_POLL 0x424D504Cu  // "BMPL", master: give me your next word
 #define BM_LINK_WORD_IDLE 0x424D4944u  // "BMID", slave: nothing to send
 #define BM_LINK_WORD_SYNC 0x53594E43u  // "SYNC", after four 0xFFFFFFFF
+#define BM_LINK_WORD_SESSION 0x53455353u  // "SESS", after four 0xFFFFFFFF: a new master, sequence numbers from 0
 #define BM_LINK_WORD_FILL 0xFFFFFFFFu
 #define BM_LINK_ACK(seq) (0x42410000u | ((uint32_t)(uint8_t)(seq) << 8))
 #define BM_LINK_NAK(seq) (0x424E0000u | ((uint32_t)(uint8_t)(seq) << 8))
@@ -82,6 +83,7 @@ typedef enum BmLinkRxEvent {
   BM_LINK_RX_NAK,          // *pSeq: sequence number expected next
   BM_LINK_RX_BUSY,         // *pSeq: expected next; the receiver could not take it yet
   BM_LINK_RX_SYNC,
+  BM_LINK_RX_SESSION,      // a resync that also starts the sequence numbers over
   BM_LINK_RX_PACKET,       // a packet with a correct CRC is in the receive buffer
   BM_LINK_RX_BAD_PACKET,   // a packet ended with a wrong CRC, or its length was impossible
 } BmLinkRxEvent;
@@ -142,6 +144,7 @@ typedef struct BmLinkSlave
   bool busyPending;        // the handler refused a packet since the last answer
   bool answerPending;      // a poll waits for an ACK/NAK
   uint8_t answerHold;      // polls to ignore after an answer
+  bool sessionAnswer;      // the resync answer ends with SESSION instead of SYNC
   uint8_t syncWords;       // words of the resync answer still to send (4 fill + SYNC)
 
   // Transmit ring: packets from `txBase` on are not yet acknowledged.

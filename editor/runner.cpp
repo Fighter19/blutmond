@@ -82,7 +82,8 @@ Runner::~Runner()
 std::vector<std::string> Runner::linkArgs(RunTarget target) const
 {
   if (target == RunTarget::Pc) return {settings.bmlink, "--tcp", "127.0.0.1:" + std::to_string(settings.port)};
-  return {settings.bmlink, "--xboo", settings.xboo, "--reset", settings.reset};
+  // A minute to bring the GBA to its BIOS screen after pressing Run.
+  return {settings.bmlink, "--xboo", settings.xboo, "--reset", settings.reset, "--wait", "60"};
 }
 
 void Runner::run(RunTarget target, const std::string &packPath)

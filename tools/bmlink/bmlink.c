@@ -50,11 +50,13 @@
 #  include "mgba_link.h"
 #endif
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 static uint8_t *readFile(const char *path, uint32_t *pSize)
 {
@@ -68,6 +70,15 @@ static uint8_t *readFile(const char *path, uint32_t *pSize)
   fclose(f);
   *pSize = (uint32_t)n;
   return p;
+}
+
+static volatile int s_cancel;
+
+static void onInterrupt(int sig)
+{
+  // A second one ends the program at once.
+  if (s_cancel) _exit(128 + sig);
+  s_cancel = 1;
 }
 
 static double now(void)
@@ -191,6 +202,8 @@ static const char *resultName(uint8_t r)
 
 int main(int argc, char **argv)
 {
+  // Line by line also into a pipe (the editor shows the output while a transfer runs).
+  setvbuf(stdout, NULL, _IOLBF, 0);
   const char *xbooDevice = NULL, *mgbaImage = NULL, *tcpAddress = NULL;
   int i = 1;
   uint32_t delay = 1;
@@ -240,6 +253,10 @@ int main(int argc, char **argv)
       return 1;
     }
     xboo.resetWired = resetWired;
+    // Ctrl-C ends the program between two words, with the port released.
+    xboo.pCancel = &s_cancel;
+    signal(SIGINT, onInterrupt);
+    signal(SIGTERM, onInterrupt);
     if (!delayGiven) loadDelay(xbooDevice, &delay);
     xboo.delay = delay;
     transport = bmXbooTransport(&xboo);
@@ -435,6 +452,25 @@ int main(int argc, char **argv)
         m.minDelay = 0;
         bmLinkMasterSetDelay(&m, d);
         haveRemote = false;
+        // The runtime needs a moment to start: wait until it answers, so the commands that
+        // follow find it.
+        double until = now() + 10.0;
+        uint32_t polls = m.pollTimeout;
+        m.pollTimeout = 100;
+        while (!haveRemote && now() < until)
+        {
+          haveRemote = bmLiveMasterHello(&m, &remote);
+          if (haveRemote) break;
+          bmLinkMasterFree(&m);
+          bmLinkMasterInit(&m, &transport);
+          m.adaptive = adaptive;
+          m.minDelay = 0;
+          m.pollTimeout = 100;
+          bmLinkMasterSetDelay(&m, d);
+        }
+        m.pollTimeout = polls;
+        if (haveRemote) printf("boot: the runtime is up\n");
+        else { fprintf(stderr, "boot: the image was sent, but the runtime does not answer\n"); failed = 1; }
       }
       free(image);
     }

@@ -51,12 +51,12 @@ BM_IWRAM_CODE BmLinkRxEvent bmLinkRxWord(BmLinkRx *rx, uint32_t word, uint8_t *p
   }
   else
   {
-    bool sync = word == BM_LINK_WORD_SYNC && rx->fillCount >= 4;
+    bool sync = (word == BM_LINK_WORD_SYNC || word == BM_LINK_WORD_SESSION) && rx->fillCount >= 4;
     rx->fillCount = 0;
     if (sync)
     {
       rx->state = RX_IDLE;
-      return BM_LINK_RX_SYNC;
+      return word == BM_LINK_WORD_SYNC ? BM_LINK_RX_SYNC : BM_LINK_RX_SESSION;
     }
   }
 
@@ -160,7 +160,8 @@ BM_IWRAM_CODE static void slaveRewind(BmLinkSlave *s)
 BM_IWRAM_CODE static void slaveReceive(BmLinkSlave *s, uint32_t received)
 {
   uint8_t seq = 0;
-  switch (bmLinkRxWord(&s->rx, received, &seq))
+  BmLinkRxEvent ev = bmLinkRxWord(&s->rx, received, &seq);
+  switch (ev)
   {
   case BM_LINK_RX_PACKET:
   {
@@ -226,7 +227,15 @@ BM_IWRAM_CODE static void slaveReceive(BmLinkSlave *s, uint32_t received)
     }
     break;
   }
+  case BM_LINK_RX_SESSION:
+    // A new master (another program on the PC, another GBA): it counts from 0, and what was
+    // still queued for the old one is dropped.
+    s->rxExpected = 0;
+    s->txBase = 0;
+    s->txCount = 0;
+    // fall through
   case BM_LINK_RX_SYNC:
+    s->sessionAnswer = ev == BM_LINK_RX_SESSION;
     s->counters.resyncs++;
     s->syncWords = 5;
     s->answerPending = false;
@@ -249,7 +258,7 @@ BM_IWRAM_CODE uint32_t bmLinkSlaveExchange(BmLinkSlave *s, uint32_t received)
   if (s->syncWords != 0)
   {
     s->syncWords--;
-    return s->syncWords != 0 ? BM_LINK_WORD_FILL : BM_LINK_WORD_SYNC;
+    return s->syncWords != 0 ? BM_LINK_WORD_FILL : s->sessionAnswer ? BM_LINK_WORD_SESSION : BM_LINK_WORD_SYNC;
   }
   if (s->txWord == 0 && s->answerPending)
   {

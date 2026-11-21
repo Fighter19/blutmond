@@ -7,7 +7,7 @@
 // Run (F6) plays all rooms: on the PC in the game's window, or on a GBA over the Xboo cable
 // (editor/runner.h). With "Live" on, every cook while it runs is pushed in as a hot reload.
 //
-//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--frames N --screenshot out.ppm] [--tab N]
+//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--target pc|gba] [--frames N --screenshot out.ppm] [--tab N]
 //            [--game path] [--bmlink path] [--gba-image path] [--xboo device] [--reset none|xboo]
 //            [--port N]
 //
@@ -693,6 +693,7 @@ struct Editor
     runLog->tileSize = 0;
     runState = root->findAs<Label>("run_state");
     runner.log = [this](const std::string &line, bool error) { runLine(line, error); };
+    root->findAs<OptionButton>("run_target")->select(int(target), false);   // --target
     root->findAs<OptionButton>("run_target")->itemSelected.connect([this](int i) { target = RunTarget(i); });
     root->findAs<CheckBox>("live")->toggled.connect([this](bool on) { live = on; });
     state->tileSize = 0;
@@ -779,6 +780,7 @@ int main(int argc, char **argv)
   int frames = 0;
   const char *screenshot = nullptr;
   int tab = 0;
+  RunTarget startTarget = RunTarget::Pc;
   RunSettings run;
 #ifdef BM_EDITOR_GAME
   run.game = BM_EDITOR_GAME;
@@ -799,6 +801,7 @@ int main(int argc, char **argv)
     else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshot = argv[++i];
     else if (std::strcmp(argv[i], "--tab") == 0 && i + 1 < argc) tab = std::atoi(argv[++i]);
+    else if (std::strcmp(argv[i], "--target") == 0 && i + 1 < argc) startTarget = std::strcmp(argv[++i], "gba") == 0 ? RunTarget::Gba : RunTarget::Pc;
     else if (std::strncmp(argv[i], "--", 2) == 0 && i + 1 < argc && run.set(argv[i] + 2, argv[i + 1])) i++;
     else if (std::filesystem::path(argv[i]).extension() == ".bmproj") projectPath = argv[i];
     else roomFiles.push_back(argv[i]);
@@ -849,6 +852,7 @@ int main(int argc, char **argv)
   Editor editor(app);
   editor.themeName = themeName == "dark" || themeName == "light" ? themeName : "classic";
   editor.runner.settings = run;
+  editor.target = startTarget;
   editor.projectFile = projectFile;
 #ifdef BM_EDITOR_ENGINE_DIR
   editor.projectPanel.engineDir = BM_EDITOR_ENGINE_DIR;

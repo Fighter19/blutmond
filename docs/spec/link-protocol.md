@@ -62,6 +62,7 @@ Special single words:
 | `0x424Ess00` (`BN`, seq) | both | NAK, `ss` is the sequence number expected next |
 | `0x424Ess01` (`BN`, seq, busy) | both | the receiver could not take packet `ss` yet (no buffer); not an error: the sender waits a little and sends from `ss` again, without counting a failure |
 | `0xFFFFFFFF` ×4, then `0x53594E43` (`SYNC`) | master | resync, section 4 |
+| `0xFFFFFFFF` ×4, then `0x53455353` (`SESS`) | master | a new master (another program, another GBA): a resync that also starts both sides' sequence numbers at 0 and drops what the slave still had queued. Every master sends it before its first packet; the slave answers with four `0xFFFFFFFF` and `SESS` |
 
 Packets (both directions):
 
@@ -331,3 +332,4 @@ fallback is 256 kHz, one bit in `bmHalLinkMasterBegin`).
   packet that followed another one directly was sent twice).
 - 0.3: debugging (section 8).
 - 0.4: GBA to GBA and the bootstrap (section 9).
+- 0.4.1: `SESS`. Found on hardware: a second run of `bmlink` counted its packets from 0 while the runtime went on from the first run's numbers, and nothing got through.

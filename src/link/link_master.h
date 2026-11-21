@@ -47,7 +47,8 @@ typedef struct BmLinkMaster
   // Last answer to a poll.
   uint8_t answer;          // 0 none, else the BmLinkRxEvent
   uint8_t answerSeq;
-  bool sawSync;
+  bool sawSync, sawSession;
+  bool started;            // the session with the slave has begun (sequence numbers agreed)
 
   uint32_t pollTimeout;    // polls to wait for an answer (default 400)
   uint32_t maxResyncs;     // per flush before giving up (default 8)

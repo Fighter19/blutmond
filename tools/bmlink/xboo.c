@@ -7,6 +7,7 @@
 #include "multiboot.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifdef __linux__
@@ -68,9 +69,19 @@ void bmXbooPortDelay(BmXboo *x, uint32_t delay)
   for (uint32_t i = 0; i < delay * 6; i++) ioctl(x->fd, PPRDATA, &v);
 }
 
+// Ctrl-C: give the port back and end. Checked once per word, so no word is cut in half.
+static void checkCancel(BmXboo *x)
+{
+  if (x->pCancel == NULL || !*x->pCancel) return;
+  fprintf(stderr, "\ncancelled\n");
+  bmXbooClose(x);
+  exit(130);
+}
+
 // XbooExchange32 from xcomms parport.cxx, bit for bit.
 static uint32_t exchange32(BmXboo *x, uint32_t data)
 {
+  checkCancel(x);
   unsigned char al = 0;
   unsigned char ah = x->control;
   for (int i = 0; i < 32; i++)

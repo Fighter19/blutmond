@@ -117,6 +117,9 @@ static void xfer(BmLinkMaster *m, uint32_t out)
   case BM_LINK_RX_SYNC:
     m->sawSync = true;
     break;
+  case BM_LINK_RX_SESSION:
+    m->sawSession = true;
+    break;
   default:
     break;
   }
@@ -227,9 +230,35 @@ bool bmLinkMasterResync(BmLinkMaster *m)
   return false;
 }
 
+/// Before the first packet: tells the slave that a new master is here, so both count their
+/// packets from 0 (the slave may have talked to another program before).
+static bool startSession(BmLinkMaster *m)
+{
+  if (m->started) return true;
+  for (int attempt = 0; attempt < 4; attempt++)
+  {
+    for (int i = 0; i < 4; i++) xfer(m, BM_LINK_WORD_FILL);
+    m->sawSession = false;
+    xfer(m, BM_LINK_WORD_SESSION);
+    for (uint32_t k = 0; k < m->pollTimeout && !m->sawSession; k++) xfer(m, BM_LINK_WORD_POLL);
+    if (m->sawSession)
+    {
+      m->answer = 0;
+      m->ackPending = m->nakPending = false;
+      m->rxExpected = 0;
+      m->inboxCount = 0;
+      m->started = true;
+      return true;
+    }
+  }
+  m->pError = "the slave does not answer";
+  return false;
+}
+
 bool bmLinkMasterFlush(BmLinkMaster *m)
 {
   uint32_t attempts = 0, resyncs = 0, busyWaits = 0;
+  if (m->queueCount != 0 && !startSession(m)) return false;
   while (m->queueCount != 0)
   {
     uint32_t n = m->queueCount < BM_LINK_WINDOW ? m->queueCount : BM_LINK_WINDOW;
