@@ -13,3 +13,4 @@ content moves into the spec and the plan shrinks to what is still open.
 | [first-items.md](first-items.md) | the first weapons, spells, abilities, consumables and armour, with their numbers and scripts |
 | [versioning.md](versioning.md) | versions of runtime, content and save games; incremental updates of a game on a flash cartridge |
 | [hitboxes.md](hitboxes.md) | hit, hurt and guard boxes per animation frame, how hits are decided, projectiles, editing and showing boxes in the editor |
+| [layered-sprites.md](layered-sprites.md) | figures made of several sprite layers, attachment points, direction sets for aiming, palette variants, enemy variants as data |
