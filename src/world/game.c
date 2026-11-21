@@ -136,8 +136,70 @@ static const char *const s_playerRows[32] = {
   ".....11..11.....", "....111..111....", "....111..111....", "................",
 };
 
-static void loadSprites(void)
+// Which sheet each object of the room is drawn with.
+static void bindObjectSprites(BmGame *g)
 {
+  for (uint16_t i = 0; i < g->objectCount; i++)
+  {
+    g->objectSheet[i] = -1;
+    for (uint8_t k = 0; k < g->sheetCount; k++)
+    {
+      const char *name = bmPackString(g->pPack, g->sheets[k].nameId);
+      const char *cls = g->objects[i].className;
+      if (name == NULL || cls == NULL) continue;
+      // The sprite named like the class, whatever the case ("Bat" uses "bat").
+      const char *a = name, *b = cls;
+      for (; *a && *b; a++, b++)
+      {
+        char x = *a, y = *b;
+        if (x >= 'A' && x <= 'Z') x = (char)(x + 32);
+        if (y >= 'A' && y <= 'Z') y = (char)(y + 32);
+        if (x != y) break;
+      }
+      if (*a == 0 && *b == 0) g->objectSheet[i] = (int8_t)k;
+    }
+  }
+}
+
+static void loadSprites(BmGame *g)
+{
+  // Once per pack: the sheets stay in sprite memory across room changes.
+  if (g->pSpritesFrom == g->pPack->pData && g->spritesCrc == g->pPack->header.crc32)
+  {
+    bindObjectSprites(g);
+    return;
+  }
+  g->pSpritesFrom = g->pPack->pData;
+  g->spritesCrc = g->pPack->header.crc32;
+
+  // Sheets from the pack first, one palette bank each; the built-in graphics after them.
+  uint16_t tileBase = 0;
+  g->sheetCount = 0;
+  g->playerSheet = -1;
+  for (uint32_t n = 0; g->sheetCount < BM_GAME_MAX_SHEETS; n++)
+  {
+    int32_t chunk = bmSpriteSheetChunk(g->pPack, n);
+    if (chunk < 0) break;
+    BmSpriteSheet *s = &g->sheets[g->sheetCount];
+    if (bmSpriteSheetOpen(s, g->pPack, (uint32_t)chunk) != BM_SUCCESS) continue;
+    if (bmSpriteSheetLoad(s, tileBase, g->sheetCount) != BM_SUCCESS) continue;
+    tileBase = (uint16_t)(tileBase + s->tileCount);
+    const char *name = bmPackString(g->pPack, s->nameId);
+    if (name != NULL && strcmp(name, "player") == 0)
+    {
+      static const char *const anims[BM_PLAYER_ANIM_COUNT] = { "idle", "run", "jump", "fall", "climb" };
+      g->playerSheet = (int8_t)g->sheetCount;
+      for (int i = 0; i < BM_PLAYER_ANIM_COUNT; i++)
+      {
+        int32_t a = bmSpriteSheetAnim(s, g->pPack, anims[i]);
+        g->playerAnims[i] = (int8_t)(a < 0 ? 0 : a);
+      }
+    }
+    g->sheetCount++;
+  }
+  g->builtinTile = tileBase;
+  bindObjectSprites(g);
+
   uint8_t tiles[8][32];
   memset(tiles, 0, sizeof(tiles));
   for (int y = 0; y < 32; y++)
@@ -151,7 +213,7 @@ static void loadSprites(void)
       *b |= (x & 1) ? (uint8_t)(v << 4) : v;
     }
   }
-  bmTilesLoadObj(0, tiles, sizeof(tiles));
+  bmTilesLoadObj(g->builtinTile, tiles, sizeof(tiles));
 
   // Placeholder: a 16x16 frame for objects whose class has no graphics yet.
   uint8_t box[4][32];
@@ -167,8 +229,9 @@ static void loadSprites(void)
       *b |= (x & 1) ? (uint8_t)(1 << 4) : 1;
     }
   }
-  bmTilesLoadObj(8, box, sizeof(box));
+  bmTilesLoadObj((uint16_t)(g->builtinTile + 8), box, sizeof(box));
 
+  // Banks 14 and 15: the built-in figure and the placeholder frame.
   BmColor pal[32];
   memset(pal, 0, sizeof(pal));
   pal[1] = bmColorRGB(6, 4, 4);     // boots
@@ -178,36 +241,71 @@ static void loadSprites(void)
   pal[5] = bmColorRGB(28, 26, 22);  // shirt
   pal[6] = bmColorRGB(6, 6, 12);    // trousers
   pal[16 + 1] = bmColorRGB(4, 31, 31);
-  bmPaletteLoadObj(0, pal, 32);
+  bmPaletteLoadObj(14 * 16, pal, 32);
   bmVideoSetSpriteMapping1D(true);
 }
 
+
+// Picks the player's animation from what the body does and advances it by one frame.
+static void animatePlayer(BmGame *g)
+{
+  if (g->playerSheet < 0) return;
+  const BmBody *p = &g->player;
+  int which = BM_PLAYER_ANIM_IDLE;
+  bool advance = true;
+  if (p->climbing)
+  {
+    which = BM_PLAYER_ANIM_CLIMB;
+    advance = p->vy != 0 || p->vx != 0;
+  }
+  else if (!p->onGround) which = p->vy < 0 ? BM_PLAYER_ANIM_JUMP : BM_PLAYER_ANIM_FALL;
+  else if (p->vx > BM_FIX(1) / 8 || p->vx < -(BM_FIX(1) / 8)) which = BM_PLAYER_ANIM_RUN;
+  bmAnimPlay(&g->playerAnim, (uint8_t)g->playerAnims[which], false);
+  if (advance) bmAnimTick(&g->sheets[g->playerSheet], &g->playerAnim);
+}
 
 static void updateSprites(BmGame *g)
 {
   int32_t camX = g->room.cameraX, camY = g->room.cameraY;
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
   bool blink = g->hurtTimer && (g->hurtTimer & 4);
-  BmSprite s = {
-    .x = (int16_t)(px - 8 - camX), .y = (int16_t)(py - 32 - camY),
-    .shape = BM_SPRITE_TALL, .size = 2, .tile = 0, .priority = 1,
-    .hflip = g->player.facing < 0, .visible = !blink,
-  };
-  bmSpriteSet(0, &s);
+  uint8_t next = 0;
+  if (g->playerSheet >= 0)
+  {
+    const BmSpriteSheet *s = &g->sheets[g->playerSheet];
+    if (!blink)
+      next = (uint8_t)(next + bmSpriteSheetDraw(s, bmAnimFrame(s, &g->playerAnim), px - camX, py - camY, g->player.facing < 0, 1, next, 8));
+  }
+  else
+  {
+    BmSprite s = {
+      .x = (int16_t)(px - 8 - camX), .y = (int16_t)(py - 32 - camY),
+      .shape = BM_SPRITE_TALL, .size = 2, .tile = g->builtinTile, .paletteBank = 14, .priority = 1,
+      .hflip = g->player.facing < 0, .visible = !blink,
+    };
+    bmSpriteSet(next++, &s);
+  }
 
-  // Placeholders for objects of classes that have no graphics yet (scripts come later).
-  uint8_t next = 1;
-  for (uint16_t i = 0; i < g->objectCount && next <= BM_GAME_MAX_PLACEHOLDERS; i++)
+  // Objects: the sprite named like their class (its first animation, until scripts play
+  // animations), or a placeholder frame for classes without graphics.
+  for (uint16_t i = 0; i < g->objectCount && next < BM_GAME_MAX_OAM; i++)
   {
     const BmObjectView *o = &g->objects[i];
     if ((o->kind != BM_OBJECT_OTHER && o->kind != BM_OBJECT_SAVE_POINT) || o->className[0] == 0) continue;
+    if (g->objectSheet[i] >= 0)
+    {
+      const BmSpriteSheet *s = &g->sheets[g->objectSheet[i]];
+      next = (uint8_t)(next + bmSpriteSheetDraw(s, bmAnimFrameAt(s, 0, g->frame), o->x - camX, o->y - camY, false, 1, next,
+                                                (uint8_t)(BM_GAME_MAX_OAM - next)));
+      continue;
+    }
     int32_t ox = o->x - 8 - camX, oy = (o->w || o->h ? o->y : o->y - 16) - camY;
     if (ox < -16 || ox > 240 || oy < -16 || oy > 160) continue;
-    BmSprite b = { .x = (int16_t)ox, .y = (int16_t)oy, .shape = BM_SPRITE_SQUARE, .size = 1, .tile = 8,
-                   .paletteBank = 1, .priority = 1, .visible = true };
+    BmSprite b = { .x = (int16_t)ox, .y = (int16_t)oy, .shape = BM_SPRITE_SQUARE, .size = 1, .tile = (uint16_t)(g->builtinTile + 8),
+                   .paletteBank = 15, .priority = 1, .visible = true };
     bmSpriteSet(next++, &b);
   }
-  while (next <= BM_GAME_MAX_PLACEHOLDERS)
+  while (next < BM_GAME_MAX_OAM)
   {
     bmSpriteHide(next++);
   }
@@ -257,6 +355,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index)
   g->physics.waterGravity = g->room.waterGravity;
   g->physics.waterMaxFallSpeed = g->room.waterMaxFallSpeed;
   readObjects(g);
+  loadSprites(g);
   return bmRoomShow(&g->room, 0, 0);
 }
 
@@ -268,7 +367,6 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   int32_t index = roomId ? bmGameFindRoom(pPack, roomId) : 0;
   if (index < 0) return BM_ERROR_INVALID_ARGUMENT;
   bmVideoInit();
-  loadSprites();
   BmResult r = enterRoom(g, (uint32_t)index);
   if (r != BM_SUCCESS) return r;
   BmObjectView start;
@@ -397,6 +495,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     respawn(g);
   }
 
+  animatePlayer(g);
   updateCamera(g);
   updateSprites(g);
 }
@@ -429,6 +528,10 @@ static const BmStateField s_gameFields[] = {
   F(roomChanges, BM_TYPE_U32, BM_STATE_SAVE),
   F(hurts, BM_TYPE_U32, BM_STATE_SAVE),
   F(saves, BM_TYPE_U32, BM_STATE_SAVE),
+  F(playerAnim.anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerAnim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerAnim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerAnim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
 };
 #undef F
 

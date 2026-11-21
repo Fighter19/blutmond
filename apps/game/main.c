@@ -155,6 +155,15 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
       bm_state_inbox.size = 0;
     }
     bmLiveFrame(&s_live);
+    if (bmLiveCapturing(&s_live))
+    {
+      // The video state is being read over the link: hold still until it is through.
+#ifdef BM_PLATFORM_HOST
+      if (s_frameHook != NULL && !s_frameHook()) break;
+#endif
+      frame--;
+      continue;
+    }
     uint16_t keys = autoplay ? bmAutopilotKeys(&s_pilot, &s_game) : bmHalInputKeys();
     bmGameFrame(&s_game, keys);
     if (s_snapshotFrame != 0 && s_game.frame == s_snapshotFrame)
@@ -374,6 +383,8 @@ int main(int argc, char **argv)
 #  endif
   if (result == 0 && out != NULL)
   {
+    // The picture after the last frame: sprites reach the screen at the next vertical blank.
+    bmVideoWaitFrame();
     static uint16_t pixels[BM_PPU_WIDTH * BM_PPU_HEIGHT];
     bmHalHostRender(pixels);
     result = writePpm(out, pixels);

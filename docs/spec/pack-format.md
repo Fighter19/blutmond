@@ -181,8 +181,7 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `TMAP` | tile map of one layer, profile map entry format |
 | `ROOM`, `COLL`, `SHAP`, `OBJS` | room data, see [room-format.md](room-format.md) §7 |
 | `EFCT` | raster effect: per-line register tables |
-| `SPRT` | sprite frames and meta-sprite layouts |
-| `ANIM` | animations: frame lists, timing, hitboxes per frame |
+| `SPRT` | one sprite: palette bank, tiles, frames as hardware sprite pieces, hitboxes, animations ([sprite-format.md](sprite-format.md)) |
 | `SONG` | music sequence |
 | `INST` | instruments |
 | `SMPL` | samples (8-bit signed PCM, loop points) |

@@ -28,6 +28,7 @@ const char *kindName(AssetKind k)
   switch (k)
   {
   case AssetKind::Room: return "room";
+  case AssetKind::Sprite: return "sprite";
   case AssetKind::Tileset: return "tileset";
   case AssetKind::Image: return "image";
   default: return "file";
@@ -51,6 +52,10 @@ void ProjectPanel::bind(Control &root, Context &ui)
       if (file_.rooms[i] == path && roomPicked) roomPicked(int(i));
   });
   tree_->activated.connect([this](TreeItem *) { openSelected(); });
+  tree_->selectionChanged.connect([this] {
+    std::string path = selectedPath();
+    if (fs::path(path).extension() == ".bmsprite" && spritePicked) spritePicked(path);
+  });
 }
 
 void ProjectPanel::setProject(ProjectFile file)
@@ -88,6 +93,7 @@ void ProjectPanel::rebuild()
     TreeItem *item = nullptr;
   };
   Group groups[] = {{"Rooms not in the project", "file-o", AssetKind::Room},
+                    {"Sprites", "film", AssetKind::Sprite},
                     {"Tilesets", "th", AssetKind::Tileset},
                     {"Images", "image", AssetKind::Image},
                     {"Other files", "file", AssetKind::Other}};
@@ -109,7 +115,16 @@ void ProjectPanel::rebuild()
       item->data = a.path;
       if (!a.problem.empty()) item->secondary = a.problem;
       else if (a.kind == AssetKind::Room) item->secondary = "not in project";
-      else item->secondary = a.usedBy.empty() ? "unused" : std::to_string(a.usedBy.size()) + (a.usedBy.size() == 1 ? " room" : " rooms");
+      else
+      {
+        // Images used only by sprites say so.
+        size_t bySprites = 0;
+        for (const std::string &u : a.usedBy) bySprites += fs::path(u).extension() == ".bmsprite";
+        size_t byRooms = a.usedBy.size() - bySprites;
+        if (a.usedBy.empty()) item->secondary = "unused";
+        else if (byRooms) item->secondary = std::to_string(byRooms) + (byRooms == 1 ? " room" : " rooms");
+        else item->secondary = std::to_string(bySprites) + (bySprites == 1 ? " sprite" : " sprites");
+      }
       if (a.hasOverrides) item->secondary += ", overrides";
     }
   }
@@ -161,7 +176,7 @@ void ProjectPanel::showInfo()
     if (a->usedBy.empty()) info_->items.push_back({"No room of the project uses it", "circle-o", {}, {}, {}, {}});
     for (const std::string &r : a->usedBy) info_->items.push_back({"Used by " + fileName(r), "map-marker", {}, {}, {}, {}});
     if (a->usedBy.size() > 1)
-      info_->items.push_back({"Shared: a change affects " + std::to_string(a->usedBy.size()) + " rooms", "warning", {}, {}, {}, {}});
+      info_->items.push_back({"Shared: a change affects all " + std::to_string(a->usedBy.size()) + " of them", "warning", {}, {}, {}, {}});
   }
   if (a->hasOverrides) info_->items.push_back({"Has overrides (" + fileName(a->path) + ".bmasset)", "sliders", {}, {}, {}, {}});
 }
@@ -304,6 +319,7 @@ void ProjectPanel::importFiles(const std::vector<std::string> &paths)
   }
   if (roomsAdded) save();
   refresh();
+  if (assetsChanged) assetsChanged();
   if (roomsAdded && roomsChanged) roomsChanged();
 }
 
@@ -337,7 +353,35 @@ void ProjectPanel::deleteSelected()
     if (!deleteAsset(sel, &error) && log) log(error, true);
     else if (log) log("deleted " + sel, false);
     refresh();
+    if (assetsChanged) assetsChanged();
   });
+}
+
+void ProjectPanel::newSprite()
+{
+  std::vector<std::string> images;
+  std::string pick = selectedPath();
+  for (const AssetInfo &a : catalog_.assets)
+    if (a.kind == AssetKind::Image && a.path.find("blutmond_") == std::string::npos) images.push_back(a.path);
+  if (images.empty())
+  {
+    if (log) log("import the sprite's image first (Import, or drop the file onto the editor)", false);
+    return;
+  }
+  if (std::find(images.begin(), images.end(), pick) == images.end()) pick = images.front();
+  openForm(*ui_, "New sprite",
+           {{"Image", pick, FormField::Kind::Choice, images, 0, 0, {}},
+            {"Frame width", "16", FormField::Kind::Number, {}, 8, 128, {}},
+            {"Frame height", "16", FormField::Kind::Number, {}, 8, 128, {}}},
+           "Create", [this](const std::vector<std::string> &v, std::string *pError) {
+             std::string path;
+             if (!createSprite(v[0], std::atoi(v[1].c_str()), std::atoi(v[2].c_str()), &path, pError)) return false;
+             refresh();
+             if (log) log("new sprite " + path, false);
+             if (assetsChanged) assetsChanged();
+             if (spritePicked) spritePicked(path);
+             return true;
+           });
 }
 
 void ProjectPanel::saveProjectAs()

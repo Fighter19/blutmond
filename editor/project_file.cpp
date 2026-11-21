@@ -10,6 +10,7 @@
 
 #include "image.h"
 #include "overrides.h"
+#include "sprite_asset.h"
 #include "tmx.h"
 #include "xml.h"
 
@@ -39,6 +40,7 @@ AssetKind kindOf(const std::string &path)
   std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return char(std::tolower(c)); });
   if (ext == ".tmx") return AssetKind::Room;
   if (ext == ".tsx") return AssetKind::Tileset;
+  if (ext == ".bmsprite") return AssetKind::Sprite;
   if (ext == ".png" || ext == ".bmp" || ext == ".gif" || ext == ".tga") return AssetKind::Image;
   return AssetKind::Other;
 }
@@ -185,6 +187,46 @@ AssetCatalog AssetCatalog::scan(const ProjectFile &project)
     }
   }
 
+  // Sprites use their sheet image; rooms use the sprite named like the class of an object, and
+  // every room uses the player's.
+  std::vector<std::string> sprites;
+  for (auto &[path, a] : found)
+    if (a.kind == AssetKind::Sprite && a.problem.empty()) sprites.push_back(path);
+  for (const std::string &path : sprites)
+  {
+    try
+    {
+      sprite::Sprite s = sprite::load(path);
+      AssetInfo &img = entry(s.imagePath);
+      img.usedBy.push_back(path);
+      std::string name = s.name;
+      std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) { return char(std::tolower(ch)); });
+      for (const std::string &room : project.rooms)
+      {
+        bool uses = name == "player";
+        try
+        {
+          tmx::Map map = tmx::load(room);
+          for (const tmx::ObjectGroup &g : map.objectGroups)
+            for (const tmx::Object &o : g.objects)
+            {
+              std::string type = o.type;
+              std::transform(type.begin(), type.end(), type.begin(), [](unsigned char ch) { return char(std::tolower(ch)); });
+              uses |= type == name;
+            }
+        }
+        catch (const std::exception &)
+        {
+        }
+        if (uses) found[path].usedBy.push_back(normalPath(room));
+      }
+    }
+    catch (const std::exception &e)
+    {
+      found[path].problem = e.what();
+    }
+  }
+
   AssetCatalog c;
   for (auto &[path, a] : found)
   {
@@ -254,6 +296,59 @@ bool deleteAsset(const std::string &path, std::string *pError)
     return false;
   }
   fs::remove(overridesPath(path), ec);
+  return true;
+}
+
+std::vector<std::string> spritePaths(const AssetCatalog &catalog)
+{
+  std::vector<std::string> out;
+  for (const AssetInfo &a : catalog.assets)
+    if (a.kind == AssetKind::Sprite && a.problem.empty()) out.push_back(a.path);
+  return out;
+}
+
+bool createSprite(const std::string &imagePath, int frameW, int frameH, std::string *pNewPath, std::string *pError)
+{
+  auto fail = [&](const std::string &why) {
+    if (pError) *pError = why;
+    return false;
+  };
+  if (frameW <= 0 || frameH <= 0 || frameW > 128 || frameH > 128) return fail("frames are between 1 and 128 pixels wide and high");
+  fs::path target = fs::path(imagePath).replace_extension(".bmsprite");
+  std::error_code ec;
+  if (fs::exists(target, ec)) return fail(target.string() + " exists already");
+  try
+  {
+    sprite::Sprite s;
+    s.path = target.string();
+    s.imageAttr = fs::path(imagePath).filename().string();
+    Image img = loadImage(imagePath);
+    for (int y = 0; y + frameH <= img.height; y += frameH)
+      for (int x = 0; x + frameW <= img.width; x += frameW)
+      {
+        bool any = false;
+        for (int py = 0; py < frameH && !any; py++)
+          for (int px = 0; px < frameW && !any; px++) any = img.pixel(x + px, y + py)[3] >= 128;
+        if (!any) continue;
+        sprite::Frame f;
+        f.x = x;
+        f.y = y;
+        f.w = frameW;
+        f.h = frameH;
+        f.ax = frameW / 2;
+        f.ay = frameH;
+        s.frames.push_back(f);
+      }
+    if (s.frames.empty()) return fail("no " + std::to_string(frameW) + "x" + std::to_string(frameH) + " cell of " + imagePath + " has pixels");
+    s.hitbox = {-frameW / 2 + 1, -frameH + 1, frameW - 2, frameH - 1};
+    s.animations.push_back({"idle", true, {{0, 30}}});
+    if (!sprite::save(s, pError)) return false;
+  }
+  catch (const std::exception &e)
+  {
+    return fail(e.what());
+  }
+  if (pNewPath) *pNewPath = normalPath(target.string());
   return true;
 }
 

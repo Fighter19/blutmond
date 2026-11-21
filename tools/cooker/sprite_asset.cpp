@@ -1,0 +1,342 @@
+// SPDX-License-Identifier: BSD-2-Clause OR MIT
+#include "sprite_asset.h"
+
+#include "overrides.h"
+#include "xml.h"
+
+#include <algorithm>
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <set>
+#include <stdexcept>
+
+namespace fs = std::filesystem;
+
+namespace bm::sprite {
+
+namespace {
+
+int toInt(const xml::Element *e, const char *key, int fallback)
+{
+  return e->has(key) ? std::stoi(e->attr(key)) : fallback;
+}
+
+// The 12 hardware sprite sizes, in tiles.
+const int kSizes[12][2] = {{1, 1}, {2, 2}, {4, 4}, {8, 8}, {2, 1}, {4, 1}, {4, 2}, {8, 4}, {1, 2}, {1, 4}, {2, 4}, {4, 8}};
+
+int luminance(uint16_t c)
+{
+  return (c & 31) * 2 + ((c >> 5) & 31) * 5 + ((c >> 10) & 31);
+}
+
+}  // namespace
+
+Sprite load(const std::string &path)
+{
+  Sprite s;
+  s.path = path;
+  s.name = fs::path(path).stem().string();
+  auto root = xml::parseFile(path);
+  if (root->name != "sprite") throw std::runtime_error(path + ": not a sprite file");
+  if (root->attr("version", "1") != "1") throw std::runtime_error(path + ": sprite version " + root->attr("version") + " is not supported");
+  s.imageAttr = root->attr("image");
+  if (s.imageAttr.empty()) throw std::runtime_error(path + ": no image");
+  s.imagePath = (fs::path(path).parent_path() / s.imageAttr).lexically_normal().string();
+  s.image = std::make_shared<Image>(loadImage(s.imagePath));
+  auto box = [](const xml::Element *e) { return Box{toInt(e, "x", 0), toInt(e, "y", 0), toInt(e, "w", 0), toInt(e, "h", 0)}; };
+  if (const xml::Element *h = root->child("hitbox")) s.hitbox = box(h);
+  for (const xml::Element *f : root->childrenNamed("frame"))
+  {
+    Frame fr;
+    fr.x = toInt(f, "x", 0);
+    fr.y = toInt(f, "y", 0);
+    fr.w = toInt(f, "w", 16);
+    fr.h = toInt(f, "h", 16);
+    fr.ax = toInt(f, "ax", fr.w / 2);
+    fr.ay = toInt(f, "ay", fr.h);
+    if (const xml::Element *h = f->child("hitbox"))
+    {
+      fr.ownHitbox = true;
+      fr.hitbox = box(h);
+    }
+    s.frames.push_back(fr);
+  }
+  for (const xml::Element *a : root->childrenNamed("animation"))
+  {
+    Animation an;
+    an.name = a->attr("name");
+    an.loop = a->attr("loop", "1") != "0";
+    for (const xml::Element *st : a->childrenNamed("step")) an.steps.push_back({toInt(st, "frame", 0), toInt(st, "duration", 6)});
+    s.animations.push_back(an);
+  }
+  return s;
+}
+
+bool save(const Sprite &s, std::string *pError)
+{
+  std::ofstream out(s.path, std::ios::binary);
+  if (!out)
+  {
+    if (pError) *pError = "cannot write " + s.path;
+    return false;
+  }
+  out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<sprite version=\"1\" image=\"" << s.imageAttr << "\">\n";
+  out << " <hitbox x=\"" << s.hitbox.x << "\" y=\"" << s.hitbox.y << "\" w=\"" << s.hitbox.w << "\" h=\"" << s.hitbox.h << "\"/>\n";
+  for (const Frame &f : s.frames)
+  {
+    out << " <frame x=\"" << f.x << "\" y=\"" << f.y << "\" w=\"" << f.w << "\" h=\"" << f.h << "\" ax=\"" << f.ax << "\" ay=\"" << f.ay << "\"";
+    if (f.ownHitbox)
+      out << ">\n  <hitbox x=\"" << f.hitbox.x << "\" y=\"" << f.hitbox.y << "\" w=\"" << f.hitbox.w << "\" h=\"" << f.hitbox.h << "\"/>\n </frame>\n";
+    else
+      out << "/>\n";
+  }
+  for (const Animation &a : s.animations)
+  {
+    out << " <animation name=\"" << a.name << "\" loop=\"" << (a.loop ? 1 : 0) << "\">\n";
+    for (const Step &st : a.steps) out << "  <step frame=\"" << st.frame << "\" duration=\"" << st.duration << "\"/>\n";
+    out << " </animation>\n";
+  }
+  out << "</sprite>\n";
+  return bool(out);
+}
+
+Cooked cook(const Sprite &s, const Profile &profile, Report &report)
+{
+  Cooked out;
+  out.palette.assign(16, 0);
+  if (!s.image) return out;
+  const Image &img = *s.image;
+  AssetOverrides overrides;
+  try
+  {
+    overrides = loadOverrides(s.imagePath);
+  }
+  catch (const std::exception &e)
+  {
+    report.error("does-not-fit", overridesPath(s.imagePath), e.what());
+  }
+
+  // Colours: BGR555 of every opaque pixel inside a frame.
+  constexpr uint16_t NONE = 0xFFFF;
+  size_t replaced = 0;
+  std::set<uint32_t> replacedSources;
+  auto colourAt = [&](int x, int y) -> uint16_t {
+    if (x < 0 || y < 0 || x >= img.width || y >= img.height) return NONE;
+    const uint8_t *p = img.pixel(x, y);
+    if (p[3] < 128 || (p[0] == 255 && p[1] == 0 && p[2] == 255)) return NONE;
+    uint32_t rgb = uint32_t(p[0]) << 16 | uint32_t(p[1]) << 8 | p[2], repl = 0;
+    if (overrides.colourFor(profile.name, rgb, &repl))
+    {
+      replacedSources.insert(rgb);
+      rgb = repl;
+    }
+    auto q = [](uint32_t v) { return uint16_t(std::lround(float(v) * 31.0f / 255.0f)); };
+    return uint16_t(q((rgb >> 16) & 255) | (q((rgb >> 8) & 255) << 5) | (q(rgb & 255) << 10));
+  };
+  std::set<uint16_t> colours;
+  for (const Frame &f : s.frames)
+    for (int y = 0; y < f.h; y++)
+      for (int x = 0; x < f.w; x++)
+        if (uint16_t c = colourAt(f.x + x, f.y + y); c != NONE) colours.insert(c);
+  replaced = replacedSources.size();
+  if (replaced)
+    report.info("colour-override", s.imagePath, std::to_string(replaced) + " source colours replaced for profile " + profile.name);
+  if (colours.size() > 15)
+  {
+    report.error("does-not-fit", s.path,
+                 "the sprite uses " + std::to_string(colours.size()) + " colours; a sprite has one palette bank of 15 plus transparency. Reduce its colours");
+    return out;
+  }
+  std::vector<uint16_t> sorted(colours.begin(), colours.end());
+  std::stable_sort(sorted.begin(), sorted.end(), [](uint16_t a, uint16_t b) { return luminance(a) < luminance(b); });
+  std::map<uint16_t, uint8_t> indexOf;
+  for (size_t i = 0; i < sorted.size(); i++)
+  {
+    out.palette[i + 1] = sorted[i];
+    indexOf[sorted[i]] = uint8_t(i + 1);
+  }
+
+  // Frames into pieces. Identical pieces (the same run of tiles) are stored once.
+  std::map<std::vector<uint8_t>, int> runs;
+  for (size_t fi = 0; fi < s.frames.size(); fi++)
+  {
+    const Frame &f = s.frames[fi];
+    CookedFrame cf;
+    cf.hitbox = f.ownHitbox ? f.hitbox : s.hitbox;
+    if (f.w <= 0 || f.h <= 0 || f.w > 128 || f.h > 128)
+    {
+      report.error("does-not-fit", s.path, "frame " + std::to_string(fi) + " must be between 1 and 128 pixels wide and high");
+      out.frames.push_back(cf);
+      continue;
+    }
+    int tw = (f.w + 7) / 8, th = (f.h + 7) / 8;
+    auto index = [&](int px, int py) -> uint8_t {
+      if (px >= f.w || py >= f.h) return 0;
+      uint16_t c = colourAt(f.x + px, f.y + py);
+      return c == NONE ? 0 : indexOf[c];
+    };
+    std::vector<uint8_t> filled(size_t(tw) * th, 0), covered(size_t(tw) * th, 0);
+    int minX = f.w, minY = f.h, maxX = -1, maxY = -1;
+    for (int y = 0; y < f.h; y++)
+      for (int x = 0; x < f.w; x++)
+        if (index(x, y))
+        {
+          filled[size_t(y / 8) * tw + x / 8] = 1;
+          minX = std::min(minX, x);
+          maxX = std::max(maxX, x);
+          minY = std::min(minY, y);
+          maxY = std::max(maxY, y);
+        }
+    if (maxX >= 0) cf.bounds = {minX - f.ax, minY - f.ay, maxX - minX + 1, maxY - minY + 1};
+
+    for (int cy = 0; cy < th; cy++)
+      for (int cx = 0; cx < tw; cx++)
+      {
+        if (!filled[size_t(cy) * tw + cx] || covered[size_t(cy) * tw + cx]) continue;
+        // The hardware size that covers the most new pixels for the tiles it costs.
+        int best = 0, bestScore = -1000;
+        for (int k = 0; k < 12; k++)
+        {
+          int w = kSizes[k][0], h = kSizes[k][1], fresh = 0;
+          for (int y = cy; y < cy + h && y < th; y++)
+            for (int x = cx; x < cx + w && x < tw; x++) fresh += filled[size_t(y) * tw + x] && !covered[size_t(y) * tw + x];
+          int score = fresh * 4 - w * h;
+          if (score > bestScore || (score == bestScore && w * h > kSizes[best][0] * kSizes[best][1]))
+          {
+            best = k;
+            bestScore = score;
+          }
+        }
+        int w = kSizes[best][0], h = kSizes[best][1];
+        for (int y = cy; y < cy + h && y < th; y++)
+          for (int x = cx; x < cx + w && x < tw; x++) covered[size_t(y) * tw + x] = 1;
+        std::vector<uint8_t> run(size_t(w) * h * 64);
+        for (int ty = 0; ty < h; ty++)
+          for (int tx = 0; tx < w; tx++)
+            for (int p = 0; p < 64; p++) run[(size_t(ty) * w + tx) * 64 + p] = index((cx + tx) * 8 + p % 8, (cy + ty) * 8 + p / 8);
+        auto it = runs.find(run);
+        int tile;
+        if (it != runs.end()) tile = it->second;
+        else
+        {
+          tile = int(out.tiles.size());
+          runs[run] = tile;
+          for (int t = 0; t < w * h; t++)
+          {
+            std::array<uint8_t, 64> tileData;
+            std::copy(run.begin() + t * 64, run.begin() + (t + 1) * 64, tileData.begin());
+            out.tiles.push_back(tileData);
+          }
+        }
+        cf.pieces.push_back({cx * 8 - f.ax, cy * 8 - f.ay, w * 8, h * 8, tile});
+      }
+
+    out.maxPieces = std::max(out.maxPieces, int(cf.pieces.size()));
+    for (int y = -128; y < 128; y++)
+    {
+      int cost = 0;
+      for (const Piece &p : cf.pieces)
+        if (y >= p.dy && y < p.dy + p.h) cost += p.w;
+      out.maxLineCost = std::max(out.maxLineCost, cost);
+    }
+    out.frames.push_back(cf);
+  }
+  if (out.tiles.size() > 1024)
+    report.error("does-not-fit", s.path, std::to_string(out.tiles.size()) + " sprite tiles; sprite memory holds 1024");
+
+  for (const Animation &a : s.animations)
+  {
+    if (a.steps.empty()) report.warning("animation", s.path, "animation '" + a.name + "' has no steps");
+    for (const Step &st : a.steps)
+      if (st.frame < 0 || size_t(st.frame) >= s.frames.size())
+        report.error("does-not-fit", s.path, "animation '" + a.name + "' uses frame " + std::to_string(st.frame) + ", which does not exist");
+  }
+  report.info("sprite", s.path,
+              std::to_string(s.frames.size()) + " frames in " + std::to_string(out.tiles.size()) + " tiles (" + std::to_string(out.tiles.size() * 32) +
+                  " bytes), " + std::to_string(colours.size()) + " colours, at most " + std::to_string(out.maxPieces) + " hardware sprites per frame");
+  return out;
+}
+
+std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, const std::vector<uint16_t> &animationNames)
+{
+  std::vector<uint8_t> b;
+  auto u8 = [&](int v) { b.push_back(uint8_t(v)); };
+  auto u16 = [&](uint32_t v) { u8(int(v)); u8(int(v >> 8)); };
+  auto u32 = [&](uint32_t v) { u16(v); u16(v >> 16); };
+
+  size_t pieces = 0, steps = 0;
+  for (const CookedFrame &f : c.frames) pieces += f.pieces.size();
+  for (const Animation &a : s.animations) steps += a.steps.size();
+  const uint32_t header = 36;
+  uint32_t framesAt = header, piecesAt = framesAt + uint32_t(c.frames.size()) * 12, animsAt = piecesAt + uint32_t(pieces) * 6;
+  uint32_t stepsAt = animsAt + uint32_t(s.animations.size()) * 8, paletteAt = stepsAt + uint32_t(steps) * 4, tilesAt = paletteAt + 32;
+
+  u16(nameId);
+  u16(uint32_t(c.frames.size()));
+  u16(uint32_t(s.animations.size()));
+  u16(uint32_t(c.tiles.size()));
+  u16(uint32_t(pieces));
+  u16(uint32_t(steps));
+  u32(framesAt);
+  u32(piecesAt);
+  u32(animsAt);
+  u32(stepsAt);
+  u32(paletteAt);
+  u32(tilesAt);
+
+  uint32_t pieceStart = 0;
+  for (const CookedFrame &f : c.frames)
+  {
+    u16(pieceStart);
+    u8(int(f.pieces.size()));
+    u8(0);
+    u8(f.hitbox.x);
+    u8(f.hitbox.y);
+    u8(f.hitbox.w);
+    u8(f.hitbox.h);
+    u8(f.bounds.x);
+    u8(f.bounds.y);
+    u8(f.bounds.w);
+    u8(f.bounds.h);
+    pieceStart += uint32_t(f.pieces.size());
+  }
+  for (const CookedFrame &f : c.frames)
+    for (const Piece &p : f.pieces)
+    {
+      int shape = p.w == p.h ? 0 : p.w > p.h ? 1 : 2, size = 0;
+      for (int k = 0; k < 12; k++)
+        if (kSizes[k][0] * 8 == p.w && kSizes[k][1] * 8 == p.h) size = k % 4;
+      u8(p.dx);
+      u8(p.dy);
+      u8(shape | (size << 2));
+      u8(0);
+      u16(uint32_t(p.tile));
+    }
+  uint32_t stepStart = 0;
+  for (size_t i = 0; i < s.animations.size(); i++)
+  {
+    const Animation &a = s.animations[i];
+    u16(i < animationNames.size() ? animationNames[i] : 0);
+    u16(stepStart);
+    u16(uint32_t(a.steps.size()));
+    u8(a.loop ? 1 : 0);
+    u8(0);
+    stepStart += uint32_t(a.steps.size());
+  }
+  for (const Animation &a : s.animations)
+    for (const Step &st : a.steps)
+    {
+      u16(uint32_t(st.frame));
+      u16(uint32_t(std::max(1, st.duration)));
+    }
+  for (int i = 0; i < 16; i++) u16(c.palette[size_t(i)]);
+  for (const auto &t : c.tiles)
+    for (int y = 0; y < 8; y++)
+      for (int x = 0; x < 8; x += 2) u8(t[size_t(y * 8 + x)] | (t[size_t(y * 8 + x + 1)] << 4));
+  while (b.size() % 4) u8(0);
+  return b;
+}
+
+}  // namespace bm::sprite

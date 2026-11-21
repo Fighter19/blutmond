@@ -133,6 +133,7 @@ bool Project::cookLevel(const std::string &path, std::string *pError) const
     for (const std::string &r : rooms_) maps.push_back(tmx::load(r));
     CookOptions options;
     options.profile = *profileByName("gba");
+    options.sprites = sprites_;
     Report report;
     std::vector<uint8_t> pack = bm::cook(maps, options, report);
     for (const auto &e : report.entries)

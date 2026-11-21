@@ -30,14 +30,14 @@ struct ProjectFile
   bool removeRoom(const std::string &path);    // the file stays
 };
 
-enum class AssetKind { Room, Tileset, Image, Other };
+enum class AssetKind { Room, Sprite, Tileset, Image, Other };
 
 struct AssetInfo
 {
   std::string path;                 // absolute, normalised
   AssetKind kind = AssetKind::Other;
   bool inProject = false;           // rooms: listed in the project
-  std::vector<std::string> usedBy;  // room files that reference it
+  std::vector<std::string> usedBy;  // rooms (or, for images, sprites) that reference it
   bool hasOverrides = false;        // a .bmasset next to it
   int width = 0, height = 0;        // images
   std::string problem;              // could not be read, missing, ...
@@ -70,6 +70,13 @@ struct NewRoom
   int tileSize = 16;
   std::string engineDir;            // folder with blutmond_collision.tsx and blutmond_material.tsx
 };
+
+/// Writes a sprite file for an image: one frame per grid cell of `frameW` x `frameH` that has
+/// pixels, anchors at the bottom centre, and an animation "idle" with the first frame.
+bool createSprite(const std::string &imagePath, int frameW, int frameH, std::string *pNewPath, std::string *pError);
+
+/// The sprite files of a catalogue.
+std::vector<std::string> spritePaths(const AssetCatalog &catalog);
 
 /// Writes a new, empty room in Tiled's format with the layers the cooker expects (background,
 /// main, collision, objects with a PlayerStart and a CameraZone).

@@ -93,6 +93,12 @@ changes, so it can run next to Tiled.
   [docs/spec/asset-model.md](docs/spec/asset-model.md)), never in the image itself; the room
   cooks again at once and, with Live on, the running game shows the new colour. Reset removes
   the override.
+- **Animation** (centre tab): sprites ([docs/spec/sprite-format.md](docs/spec/sprite-format.md)).
+  New sprite makes one from an image of the project; the sheet shows its frames (Slice cuts it
+  by a grid), with rectangle, anchor and hitbox per frame; animations are lists of steps (a
+  frame shown for a number of game frames). The preview plays from the cooked sprite and shows
+  the hardware sprite pieces and what the sprite costs. Edits are saved to the `.bmsprite`
+  file and, with Live on, pushed into the running game.
 - **Graphics** (centre tab): what is loaded in video memory and how much of the hardware it
   takes: all 96 KB of VRAM as tiles with the maps of each background, overlaps in red and data
   nothing shows; the backgrounds, the sprites in OAM, both palettes, sprite time per line, and

@@ -27,6 +27,10 @@ public:
   std::function<void()> roomsChanged;
   /// A project room was picked (index into file().rooms).
   std::function<void(int)> roomPicked;
+  /// A sprite file was picked: show it in the Animation tab.
+  std::function<void(const std::string &path)> spritePicked;
+  /// Assets were added or removed (the set of sprites may have changed).
+  std::function<void()> assetsChanged;
   std::function<void(const std::string &line, bool error)> log;
   /// Where the engine's collision tilesets are (for new rooms).
   std::string engineDir;
@@ -43,6 +47,7 @@ public:
   void newRoom();
   void addRoom();
   void removeRoom();
+  void newSprite();
   void importAssets();
   void importFiles(const std::vector<std::string> &paths);
   void openSelected();

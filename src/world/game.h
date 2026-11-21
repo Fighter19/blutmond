@@ -12,10 +12,15 @@
 #include "collision.h"
 #include "pack.h"
 #include "room.h"
+#include "sprite.h"
 #include "state.h"
 
-#define BM_GAME_MAX_PLACEHOLDERS 24
 #define BM_GAME_MAX_OBJECTS 64
+#define BM_GAME_MAX_SHEETS 8
+#define BM_GAME_MAX_OAM 48
+
+/// Animations the engine's player looks for in the sprite called "player".
+enum { BM_PLAYER_ANIM_IDLE, BM_PLAYER_ANIM_RUN, BM_PLAYER_ANIM_JUMP, BM_PLAYER_ANIM_FALL, BM_PLAYER_ANIM_CLIMB, BM_PLAYER_ANIM_COUNT };
 
 typedef enum BmObjectKind {
   BM_OBJECT_OTHER = 0,   // a game class (placeholder until scripts exist)
@@ -58,6 +63,16 @@ typedef struct BmGame
   // Objects of the current room, read once when the room is entered.
   uint16_t objectCount;
   BmObjectView objects[BM_GAME_MAX_OBJECTS];
+  // Sprite sheets of the pack, loaded into sprite memory when a room is entered.
+  const uint8_t *pSpritesFrom;                 // the pack they were loaded from
+  uint32_t spritesCrc;
+  uint8_t sheetCount;
+  BmSpriteSheet sheets[BM_GAME_MAX_SHEETS];
+  int8_t playerSheet;                          // -1: the built-in figure
+  int8_t playerAnims[BM_PLAYER_ANIM_COUNT];
+  int8_t objectSheet[BM_GAME_MAX_OBJECTS];     // sheet named like the object's class, or -1
+  uint16_t builtinTile;                        // where the built-in graphics start
+  BmAnimState playerAnim;
 } BmGame;
 
 /// Number of objects in the current room and access to one of them.

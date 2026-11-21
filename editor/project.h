@@ -56,6 +56,8 @@ public:
   /// Cooks all rooms into one pack for running (GBA format: the runtime on the PC and on the
   /// GBA uses it) and writes it to `path`. False with `*pError` set if that fails.
   bool cookLevel(const std::string &path, std::string *pError) const;
+  /// Sprite files that go into the level pack.
+  void setSprites(std::vector<std::string> paths) { sprites_ = std::move(paths); }
   /// True if a room file changed on disk since the last cook (for hot reload).
   bool changedOnDisk() const;
 
@@ -83,6 +85,7 @@ private:
   void analyse();
 
   std::vector<std::string> rooms_;
+  std::vector<std::string> sprites_;
   int current_ = -1;
   std::string profile_ = "gba";
   std::filesystem::file_time_type cookedTime_{};

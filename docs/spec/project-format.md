@@ -40,6 +40,7 @@ Rules:
 | Add room | adds an existing `.tmx` to the project |
 | Remove room | removes it from the project; the file stays |
 | Import asset | copies files (and their `.bmasset`) into an asset folder; dropping files onto the editor does the same, and `.tmx` files are added as rooms |
+| New sprite | writes a `.bmsprite` next to an image: one frame per grid cell that has pixels, an `idle` animation ([sprite-format.md](sprite-format.md)) |
 | Delete asset | deletes the file and its `.bmasset`; refused while a room of the project uses it |
 
 The project file is saved after every change to its room list.

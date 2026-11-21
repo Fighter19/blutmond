@@ -118,6 +118,13 @@ BmLinkTake bmLiveHandler(void *pContext, BmLinkPacket *pPacket);
 /// call (chunk data, state, HELLO, APPLY, ...).
 void bmLiveFrame(BmLive *pLive);
 
+/// True while a PPU snapshot is being sent. The game should stand still meanwhile (skip its
+/// frame, keep calling bmLiveFrame), so the snapshot shows one moment and not a mix of frames.
+static inline bool bmLiveCapturing(const BmLive *pLive)
+{
+  return pLive->snapshotOffset < pLive->snapshotEnd;
+}
+
 /// Sends a LOG packet (dropped if the link is busy).
 bool bmLiveLog(BmLive *pLive, const char *pText);
 

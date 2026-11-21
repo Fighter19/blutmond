@@ -71,6 +71,30 @@ static int writePpm(const char *path, const color_t *buffer, unsigned width, uns
 }
 
 // "<elf>:<symbol>[+offset]=<value>" (value optional); returns false on a mismatch.
+// "<elf>:<symbol>[+offset]=<value>": the address and the value.
+static bool parseUntil(const char *spec, uint32_t *pAddress, uint32_t *pValue)
+{
+  char buf[512];
+  snprintf(buf, sizeof(buf), "%s", spec);
+  char *colon = strrchr(buf, ':');
+  char *eq = colon ? strchr(colon, '=') : NULL;
+  if (colon == NULL || eq == NULL) return false;
+  *colon = 0;
+  *eq = 0;
+  char *plus = strchr(colon + 1, '+');
+  uint32_t offset = 0;
+  if (plus)
+  {
+    *plus = 0;
+    offset = (uint32_t)strtoul(plus + 1, NULL, 0);
+  }
+  uint32_t address = elfSymbol(buf, colon + 1);
+  if (address == 0) return false;
+  *pAddress = address + offset;
+  *pValue = (uint32_t)strtoul(eq + 1, NULL, 0);
+  return true;
+}
+
 static bool checkValue(struct mCore *core, const char *spec, bool check)
 {
   char buf[512];
@@ -205,6 +229,7 @@ int main(int argc, char **argv)
   const char *snapshot = NULL;
   int pokeFrame = -1;
   const char *pokeTarget = NULL, *pokeFile = NULL, *dumpTarget = NULL, *dumpFile = NULL;
+  const char *until = NULL;
   const char *checks[16];
   bool checkFlags[16];
   int checkCount = 0;
@@ -233,6 +258,8 @@ int main(int argc, char **argv)
       checkFlags[checkCount] = strcmp(argv[i], "--check") == 0;
       checks[checkCount++] = argv[++i];
     }
+    else if (strcmp(argv[i], "--until") == 0 && i + 1 < argc)
+      until = argv[++i];
     else if (strcmp(argv[i], "--expect-backdrop") == 0)
       expectBackdrop = 1;
     else if (argv[i][0] != '-' && rom == NULL)
@@ -271,10 +298,31 @@ int main(int argc, char **argv)
     return 1;
   }
   core->reset(core);
+  uint32_t untilAddress = 0, untilValue = 0;
+  if (until != NULL && !parseUntil(until, &untilAddress, &untilValue))
+  {
+    fprintf(stderr, "bad --until %s\n", until);
+    return 1;
+  }
+  bool reached = until == NULL;
   for (int i = 0; i < frames; i++)
   {
     if (i == pokeFrame && !pokeMailbox(core, pokeTarget, pokeFile)) return 1;
     core->runFrame(core);
+    if (until != NULL && core->busRead32(core, untilAddress) >= untilValue)
+    {
+      // One more frame: the picture then shows what the program had set up by that point
+      // (sprites reach the screen at the next vertical blank).
+      core->runFrame(core);
+      reached = true;
+      frames = i + 2;
+      break;
+    }
+  }
+  if (!reached)
+  {
+    fprintf(stderr, "--until %s not reached in %d frames\n", until, frames);
+    return 1;
   }
 
   // BG palette entry 0 as the program left it.

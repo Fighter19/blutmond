@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "platform/sdl3/ui_sdl3.h"
+#include "animation_panel.h"
 #include "dialogs.h"
 #include "graphics_view.h"
 #include "palette_panel.h"
@@ -54,6 +55,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
     <Menu title="File">
       <Item action="project.open"/><Item action="project.save_as"/>
       <Item action="room.new"/><Item action="room.add"/><Item action="room.remove"/>
+      <Item action="sprite.new"/>
       <Item action="asset.import"/><Item action="asset.open"/><Item action="asset.delete"/>
       <Item action="room.reload"/><Item action="app.quit"/>
     </Menu>
@@ -131,6 +133,64 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
             <TextureRect id="tiles"/>
           </VBox></Scroll></PanelContainer>
         </HBox>
+        <VBox title="Animation" separation="0">
+          <PanelContainer theme-type="Toolbar"><HBox>
+            <Label text="Sprite"/>
+            <OptionButton id="anim_sprite"/>
+            <Button text="New sprite" action="sprite.new"/>
+            <Label id="anim_info" text="" expand="1" clip-text="1"/>
+          </HBox></PanelContainer>
+          <HBox expand="1" separation="2">
+            <PanelContainer min-width="340"><VBox>
+              <Label text="Sheet: click a frame" bold="1"/>
+              <Scroll expand="1"><SheetView id="anim_sheet"/></Scroll>
+              <HBox>
+                <Label text="Grid"/><SpinBox id="anim_grid_w" expand="1"/><Label text="x"/><SpinBox id="anim_grid_h" expand="1"/>
+                <Button id="anim_slice" text="Slice into frames"/>
+              </HBox>
+              <Label id="anim_frame_title" text="No frame selected" bold="1"/>
+              <HBox>
+                <Label text="X"/><SpinBox id="anim_fx" expand="1"/><Label text="Y"/><SpinBox id="anim_fy" expand="1"/>
+                <Label text="W"/><SpinBox id="anim_fw" expand="1"/><Label text="H"/><SpinBox id="anim_fh" expand="1"/>
+              </HBox>
+              <HBox>
+                <Label text="Anchor X"/><SpinBox id="anim_ax" expand="1"/><Label text="Y"/><SpinBox id="anim_ay" expand="1"/>
+              </HBox>
+              <CheckBox id="anim_own_hitbox" text="This frame has its own hitbox"/>
+              <HBox>
+                <Label text="Hitbox X"/><SpinBox id="anim_hx" expand="1"/><Label text="Y"/><SpinBox id="anim_hy" expand="1"/>
+                <Label text="W"/><SpinBox id="anim_hw" expand="1"/><Label text="H"/><SpinBox id="anim_hh" expand="1"/>
+              </HBox>
+            </VBox></PanelContainer>
+            <VBox expand="1">
+              <HBox>
+                <Button id="anim_play" text="Pause"/>
+                <CheckBox id="anim_show_hitbox" text="Hitbox" pressed="1"/>
+                <CheckBox id="anim_show_pieces" text="Hardware sprites" pressed="1"/>
+              </HBox>
+              <AnimPreview id="anim_preview" expand="1"/>
+              <Label id="anim_cost" text="" wrap="1"/>
+            </VBox>
+            <PanelContainer min-width="300"><VBox>
+              <Label text="Animations" bold="1"/>
+              <ItemList id="anim_list" min-size="0 150"/>
+              <HBox>
+                <LineEdit id="anim_name" expand="1"/>
+                <CheckBox id="anim_loop" text="Loop"/>
+              </HBox>
+              <HBox><Button id="anim_add" text="New animation"/><Button id="anim_delete" text="Delete"/></HBox>
+              <Label text="Steps" bold="1"/>
+              <ItemList id="anim_steps" expand="1" min-size="0 120"/>
+              <HBox><Label text="Shown for"/><SpinBox id="anim_duration" expand="1"/><Label text="frames"/></HBox>
+              <Flow>
+                <Button id="anim_step_add" text="Add selected frame"/>
+                <Button id="anim_step_remove" text="Remove"/>
+                <Button id="anim_step_up" text="Up"/>
+                <Button id="anim_step_down" text="Down"/>
+              </Flow>
+            </VBox></PanelContainer>
+          </HBox>
+        </VBox>
         <VBox title="Graphics" separation="0">
           <PanelContainer theme-type="Toolbar"><HBox>
             <Label text="Show"/>
@@ -189,6 +249,7 @@ struct Editor
   ProjectPanel projectPanel;
   ProjectFile projectFile;  // as loaded at start
   PalettePanel palettePanel;
+  AnimationPanel animationPanel;
   Label *status = nullptr, *camera = nullptr;
   Label *hwTiles = nullptr, *hwBanks = nullptr, *hwMaps = nullptr, *hwLayers = nullptr, *hwPack = nullptr;
   ProgressBar *hwTilesBar = nullptr, *hwBanksBar = nullptr, *hwMapsBar = nullptr;
@@ -326,6 +387,14 @@ struct Editor
     camera->text = "Camera " + std::to_string(cx) + "," + std::to_string(cy);
   }
 
+  // The set of sprite files may have changed: for the level pack and the Animation tab.
+  void spritesChanged()
+  {
+    std::vector<std::string> sprites = spritePaths(projectPanel.catalog());
+    project.setSprites(sprites);
+    animationPanel.setSprites(sprites);
+  }
+
   // The room list of the project changed: keep the room that was shown, if it is still there.
   void roomsChanged()
   {
@@ -398,6 +467,8 @@ struct Editor
     ui.actions().add({"asset.open", "Open in its program", "pencil", "", "", [this] { projectPanel.openSelected(); }, nullptr, nullptr});
     ui.actions().add({"asset.delete", "Delete asset...", "trash", "", "", [this] { projectPanel.deleteSelected(); }, nullptr, nullptr});
     registerGraphicsControls();
+    registerAnimationControls();
+    ui.actions().add({"sprite.new", "New sprite...", "film", "", "", [this] { projectPanel.newSprite(); }, nullptr, nullptr});
     ui.actions().add({"gfx.capture", "Capture the running game's graphics", "eye", "F8", "", [this] {
                         graphicsFromGame = true;
                         app.ui().root()->findAs<OptionButton>("gfx_from")->select(1, false);
@@ -432,6 +503,17 @@ struct Editor
       project.selectRoom(i);
       cook();
     };
+    animationPanel.bind(*root, app.renderer());
+    animationPanel.log = projectPanel.log;
+    animationPanel.changed = [this] {
+      // The sprite file was saved: into the running game.
+      pushLive();
+    };
+    projectPanel.spritePicked = [this](const std::string &path) {
+      if (animationPanel.path() != path) animationPanel.open(path);
+      if (auto *center = app.ui().root() ? app.ui().root()->findAs<TabContainer>("center") : nullptr) center->setCurrent(1);
+    };
+    projectPanel.assetsChanged = [this] { spritesChanged(); };
     palettePanel.bind(*root, project);
     palettePanel.catalog = &projectPanel.catalog();
     palettePanel.log = projectPanel.log;
@@ -467,6 +549,7 @@ struct Editor
     };
     projectPanel.setProject(projectFile);
     project.setRooms(projectFile.rooms);
+    spritesChanged();
     projectPanel.showRoom(project.currentRoom());
     auto *profile = root->findAs<OptionButton>("profile");
     profile->itemSelected.connect([this](int i) {
@@ -486,6 +569,7 @@ struct Editor
   {
     pollFileDialogs();
     palettePanel.update(dt);
+    animationPanel.update(dt);
     reloadTimer += dt;
     if (reloadTimer > 1.0f)
     {

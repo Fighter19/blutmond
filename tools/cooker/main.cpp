@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 // bmcook: cooks Tiled rooms into a pack for one platform profile.
 //
-//   bmcook [--profile gba|snes|host] [--report report.txt] [--color-matrix m0,...,m8] -o out.bmpk room.tmx...
+//   bmcook [--profile gba|snes|host] [--report report.txt] [--color-matrix m0,...,m8] -o out.bmpk
+//          room.tmx... [sprite.bmsprite...]
 //
 // Exit status 1 when the report contains errors (the pack is then not written).
 
@@ -57,8 +58,12 @@ int main(int argc, char **argv)
   try
   {
     std::vector<bm::tmx::Map> maps;
-    for (const std::string &path : inputs) maps.push_back(bm::tmx::load(path));
     bm::CookOptions options;
+    for (const std::string &path : inputs)
+    {
+      if (path.size() > 9 && path.substr(path.size() - 9) == ".bmsprite") options.sprites.push_back(path);
+      else maps.push_back(bm::tmx::load(path));
+    }
     options.profile = *profile;
     options.colorMatrix = matrix;
     pack = bm::cook(maps, options, report);

@@ -27,6 +27,11 @@ set(BM_WARNINGS -Wall -Wextra -Werror -pedantic)
 
 # --- Engine library -----------------------------------------------------------------------
 
+# What the test level is cooked from besides its rooms (sprites; later scripts and songs).
+set(BM_TEST_LEVEL_ASSETS
+  ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/bat.bmsprite)
+
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
@@ -128,8 +133,8 @@ if(BM_PLATFORM STREQUAL "gba")
   set(BM_TEST_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK}
-      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
-    DEPENDS host_tools ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS host_tools ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level")
   add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK})
@@ -148,10 +153,13 @@ if(BM_PLATFORM STREQUAL "gba")
       endif()
     endforeach()
   endforeach()
-  set_property(SOURCE ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S APPEND PROPERTY OBJECT_DEPENDS ${BM_TEST_LEVEL_PACK})
+
 
   bm_add_gba_image(room_viewer apps/room_viewer/main.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
-  set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S PROPERTIES OBJECT_DEPENDS ${BM_TEST_ROOM_PACK})
+  # The embedded pack is pulled in by the assembler, which the build system cannot see: every
+  # image that embeds one is assembled again when either pack changes.
+  set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S PROPERTIES
+    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK}")
   foreach(target ${BM_GBA_TARGETS})
     add_dependencies(${target} test_room_pack)
     target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_ROOM_PACK}\"")
@@ -185,7 +193,7 @@ if(BM_PLATFORM STREQUAL "host")
   # Cooker: Tiled rooms -> pack (tools/cooker), as a library for bmcook and the editor.
   # Uses stb_image from third_party.
   add_library(bm_cooker STATIC
-    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp src/pack/pack.c)
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp src/pack/pack.c)
   target_include_directories(bm_cooker PUBLIC tools/cooker src/pack PRIVATE third_party/stb)
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST)
   target_compile_options(bm_cooker PRIVATE ${BM_WARNINGS})
@@ -208,7 +216,7 @@ if(BM_PLATFORM STREQUAL "host")
       GIT_TAG 81846abb402362fd542952a58e648844a6551520)
     FetchContent_MakeAvailable(ose_ui)
     add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
-      editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp)
+      editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
     target_link_libraries(bmeditor PRIVATE bm_editor_model bm_cooker blutmond ose_ui_sdl3)
     target_compile_definitions(bmeditor PRIVATE
@@ -244,8 +252,8 @@ if(BM_PLATFORM STREQUAL "host")
   set(BM_GAME_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
   add_custom_command(OUTPUT ${BM_GAME_LEVEL_PACK}
     COMMAND bmcook --profile gba -o ${BM_GAME_LEVEL_PACK}
-      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
-    DEPENDS bmcook ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS bmcook ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level for the game")
   add_custom_target(game_level_pack ALL DEPENDS ${BM_GAME_LEVEL_PACK})
@@ -261,9 +269,18 @@ if(BM_PLATFORM STREQUAL "host")
   target_link_libraries(bm_link_host PUBLIC blutmond)
   target_compile_options(bm_link_host PRIVATE ${BM_WARNINGS})
   # bmlink without mGBA (Xboo only); with libmgba it is built further down with both.
-  find_path(MGBA_INCLUDE_DIR mgba/core/core.h)
-  find_library(MGBA_LIBRARY mgba)
-  if(NOT (MGBA_INCLUDE_DIR AND MGBA_LIBRARY))
+  # libmgba is optional: with it the GBA images are tested in the emulator. BM_USE_MGBA=OFF
+  # builds as if it were not installed.
+  option(BM_USE_MGBA "Use libmgba if it is installed (emulator tests, bmlink --mgba)" ON)
+  set(BM_HAVE_MGBA OFF)
+  if(BM_USE_MGBA)
+    find_path(MGBA_INCLUDE_DIR mgba/core/core.h)
+    find_library(MGBA_LIBRARY mgba)
+    if(MGBA_INCLUDE_DIR AND MGBA_LIBRARY)
+      set(BM_HAVE_MGBA ON)
+    endif()
+  endif()
+  if(NOT BM_HAVE_MGBA)
     add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c tools/bmlink/tcp_link.c)
     target_include_directories(bmlink PRIVATE tools tools/bmlink)
     target_link_libraries(bmlink PRIVATE bm_link_host)
@@ -284,6 +301,11 @@ if(BM_PLATFORM STREQUAL "host")
   target_include_directories(test_project PRIVATE tests)
   target_compile_options(test_project PRIVATE ${BM_WARNINGS})
   add_test(NAME test_project COMMAND test_project ${PROJECT_SOURCE_DIR}/assets ${CMAKE_CURRENT_BINARY_DIR}/test-output/project)
+  add_executable(test_sprite tests/test_sprite.cpp)
+  target_link_libraries(test_sprite PRIVATE bm_editor_model)
+  target_include_directories(test_sprite PRIVATE tests)
+  target_compile_options(test_sprite PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_sprite COMMAND test_sprite ${PROJECT_SOURCE_DIR}/assets ${CMAKE_CURRENT_BINARY_DIR}/test-output/sprite)
   add_executable(test_vram tests/test_vram.cpp)
   target_link_libraries(test_vram PRIVATE bm_editor_model)
   target_include_directories(test_vram PRIVATE tests)
@@ -304,7 +326,7 @@ if(BM_PLATFORM STREQUAL "host")
   # The test level: both rooms in one pack.
   add_test(NAME cook_test_level
     COMMAND bmcook --profile gba -o ${cooked}/test_level_gba.bmpk
-      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS})
   set_tests_properties(cook_test_level PROPERTIES FIXTURES_SETUP test_level_pack)
   add_executable(test_game tests/test_game.c apps/game/autopilot.c apps/game/game_live.c)
   target_link_libraries(test_game PRIVATE blutmond)
@@ -319,7 +341,7 @@ if(BM_PLATFORM STREQUAL "host")
   set_tests_properties(make_room_variant PROPERTIES FIXTURES_SETUP room_variant_tmx)
   add_test(NAME cook_test_level_variant
     COMMAND bmcook --profile gba -o ${cooked}/test_level_variant_gba.bmpk
-      ${cooked}/room_variant.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
+      ${cooked}/room_variant.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS})
   set_tests_properties(cook_test_level_variant PROPERTIES FIXTURES_REQUIRED room_variant_tmx FIXTURES_SETUP test_level_variant)
   add_executable(test_live tests/test_live.c apps/game/autopilot.c apps/game/game_live.c)
   target_link_libraries(test_live PRIVATE blutmond bm_link_host)
@@ -360,9 +382,7 @@ if(BM_PLATFORM STREQUAL "host")
   # mGBA runner (optional). With libmgba installed (Ubuntu: libmgba-dev) the host build gets
   # bm_mgba_run, which runs GBA images headless. Point BM_GBA_BUILD_DIR at a GBA build
   # directory to test its images:  cmake -S . -B build -DBM_GBA_BUILD_DIR=$PWD/build-gba
-  find_path(MGBA_INCLUDE_DIR mgba/core/core.h)
-  find_library(MGBA_LIBRARY mgba)
-  if(MGBA_INCLUDE_DIR AND MGBA_LIBRARY)
+  if(BM_HAVE_MGBA)
     add_executable(bm_mgba_run tools/bm_mgba_run.c src/ppu/ppu.c)
     target_include_directories(bm_mgba_run PRIVATE ${MGBA_INCLUDE_DIR} src/ppu tools)
     target_link_libraries(bm_mgba_run PRIVATE ${MGBA_LIBRARY})
@@ -416,8 +436,8 @@ if(BM_PLATFORM STREQUAL "host")
         # new room is loaded: 2 from ROM, 4 from EWRAM in the multiboot image).
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         add_test(NAME game_render_${image}
-          COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 1100 --ppm ${out}/${image}.ppm
-            --check ${elf}:bm_game_stats+8=0 --check ${elf}:bm_game_stats+12=1 --check "${elf}:bm_game_stats+4<=4")
+          COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 1300 --until ${elf}:bm_game_stats+24=1000
+            --ppm ${out}/${image}.ppm --check ${elf}:bm_game_stats+8=0 --check ${elf}:bm_game_stats+12=1 --check "${elf}:bm_game_stats+4<=4")
         set_tests_properties(game_render_${image} PROPERTIES FIXTURES_SETUP game_${image})
         add_test(NAME game_matches_${image}
           COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --diff ${out}/${image}_diff.ppm)
@@ -445,7 +465,8 @@ if(BM_PLATFORM STREQUAL "host")
         COMMAND ${compare} ${out}/game_host.ppm ${out}/state_gba_to_host.ppm)
       set_tests_properties(state_gba_to_host_matches PROPERTIES FIXTURES_REQUIRED "game_host;state_gba_to_host")
       add_test(NAME state_host_to_gba
-        COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/game_autoplay.gba --frames 1100 --poke 20 ${elf}:bm_state_inbox ${out}/state_host_300.bmst
+        COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/game_autoplay.gba --frames 1300 --until ${elf}:bm_game_stats+24=1000
+          --poke 20 ${elf}:bm_state_inbox ${out}/state_host_300.bmst
           --ppm ${out}/state_host_to_gba.ppm --check ${elf}:bm_game_stats+8=0 --check ${elf}:bm_game_stats+12=1
           --check ${elf}:bm_game_stats+20=1 --print ${elf}:bm_game_stats+24)
       set_tests_properties(state_host_to_gba PROPERTIES FIXTURES_REQUIRED state_host FIXTURES_SETUP state_host_to_gba)
@@ -465,7 +486,8 @@ if(BM_PLATFORM STREQUAL "host")
           check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+12=0 stats)
       set_tests_properties(live_mgba_hot PROPERTIES FIXTURES_REQUIRED test_level_variant FIXTURES_SETUP live_mgba_hot)
       add_test(NAME live_mgba_hot_changes_one_tile
-        COMMAND ${compare} ${out}/live_before.ppm ${out}/live_after.ppm --changed-in 0 0 15 15)
+        COMMAND ${compare} ${out}/live_before.ppm ${out}/live_after.ppm --changed-in 0 0 15 15
+          --ignore 32 96 47 127)  # the player's idle animation goes on meanwhile
       set_tests_properties(live_mgba_hot_changes_one_tile PROPERTIES FIXTURES_REQUIRED live_mgba_hot)
       # The video state read over the link (PPU_SNAPSHOT), rendered by the software PPU, is
       # what mGBA shows; with bit errors none of its 100 packets may be lost.
@@ -475,7 +497,8 @@ if(BM_PLATFORM STREQUAL "host")
       set_tests_properties(live_mgba_ppu_snapshot PROPERTIES FIXTURES_SETUP live_mgba_ppu_snapshot)
       add_test(NAME live_mgba_ppu_snapshot_render COMMAND bm_ppu_render ${out}/live_snapshot.bmps ${out}/live_snapshot_ppu.ppm)
       set_tests_properties(live_mgba_ppu_snapshot_render PROPERTIES FIXTURES_REQUIRED live_mgba_ppu_snapshot FIXTURES_SETUP live_mgba_ppu_render)
-      add_test(NAME live_mgba_ppu_snapshot_matches COMMAND ${compare} ${out}/live_snapshot_mgba.ppm ${out}/live_snapshot_ppu.ppm)
+      add_test(NAME live_mgba_ppu_snapshot_matches COMMAND ${compare} ${out}/live_snapshot_mgba.ppm ${out}/live_snapshot_ppu.ppm
+          --ignore 32 96 47 127)  # the screenshot is a few frames later: the player's idle animation
       set_tests_properties(live_mgba_ppu_snapshot_matches PROPERTIES FIXTURES_REQUIRED live_mgba_ppu_render)
       foreach(image game_autoplay game_autoplay_mb)
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)

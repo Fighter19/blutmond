@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 #include "cook.h"
 #include "overrides.h"
+#include "sprite_asset.h"
 
 #include <algorithm>
 #include <cmath>
@@ -840,6 +841,31 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       r.u16(tileChunkIndex);
       r.align4();
       add(writer, BM_CHUNK_ROOM, BM_CATEGORY_LEVEL, roomGroup, r);
+    }
+  }
+
+  // Sprites: global for now (every room may use every sprite).
+  std::set<std::string> spriteNames;
+  for (const std::string &path : options.sprites)
+  {
+    try
+    {
+      sprite::Sprite s = sprite::load(path);
+      if (!spriteNames.insert(s.name).second)
+      {
+        report.error("does-not-fit", path, "sprite name '" + s.name + "' is used twice");
+        continue;
+      }
+      sprite::Cooked cooked = sprite::cook(s, profile, report);
+      std::vector<uint16_t> names;
+      for (const sprite::Animation &a : s.animations) names.push_back(strings.id(a.name));
+      Bytes b;
+      b.data = sprite::chunk(s, cooked, strings.id(s.name), names);
+      add(writer, BM_CHUNK_SPRT, BM_CATEGORY_ACTORS, 0, b);
+    }
+    catch (const std::exception &e)
+    {
+      report.error("does-not-fit", path, e.what());
     }
   }
 

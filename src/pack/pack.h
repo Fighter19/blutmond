@@ -34,6 +34,7 @@ enum {
   BM_CHUNK_SHAP = BM_FOURCC('S', 'H', 'A', 'P'),
   BM_CHUNK_OBJS = BM_FOURCC('O', 'B', 'J', 'S'),
   BM_CHUNK_STRS = BM_FOURCC('S', 'T', 'R', 'S'),
+  BM_CHUNK_SPRT = BM_FOURCC('S', 'P', 'R', 'T'),
 };
 
 /// Storage layout (header flags bits 0-3), docs/spec/pack-format.md §2.6.

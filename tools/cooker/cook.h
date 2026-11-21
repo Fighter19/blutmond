@@ -73,6 +73,8 @@ struct CookOptions
   std::optional<std::array<float, 9>> colorMatrix;
   /// Filled when given.
   CookInfo *pInfo = nullptr;
+  /// Sprite files (.bmsprite, sprite-format.md) to cook into the pack.
+  std::vector<std::string> sprites;
 };
 
 /// Cooks the given rooms. Rooms with the same `area` property share tiles, palettes and the
