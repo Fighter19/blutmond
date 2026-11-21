@@ -138,7 +138,7 @@ These are engine work this plan brings along, because a weapon is useless withou
 - **Objects created at run time**: `spawn(Class, x, y)` for projectiles and effects, taken
   from the room's object pool (raised from 8 to 16), gone on a room change or when they call
   `destroy()`.
-- **Hit boxes**: `hit_box(x, y, w, h, damage, element, frames)` relative to the owner and
+- **Hit boxes** (in full: [hitboxes.md](hitboxes.md)): `hit_box(x, y, w, h, damage, element, frames)` relative to the owner and
   mirrored with its facing; tested against the hitboxes sprites already carry
   ([../spec/sprite-format.md](../spec/sprite-format.md)). A hit gives the target
   `hit(amount)` after its `damage_in` filters and the attacker `struck`.
