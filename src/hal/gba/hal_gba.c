@@ -308,6 +308,36 @@ void bmHalLinkStop(void)
   s_linkHandler = NULL;
 }
 
+static uint16_t s_masterMode;
+
+void bmHalLinkMasterBegin(bool fast)
+{
+  GBA_REG_IE &= ~GBA_IRQ_SERIAL;
+  GBA_REG_RCNT = 0;
+  s_masterMode = (uint16_t)(GBA_SIO_32BIT | GBA_SIO_INTERNAL_CLOCK | (fast ? GBA_SIO_2MHZ : 0));
+  GBA_REG_SIOCNT = s_masterMode;
+}
+
+BM_IWRAM_CODE uint32_t bmHalLinkMasterExchange(uint32_t out)
+{
+  GBA_REG_SIODATA32 = out;
+  GBA_REG_SIOCNT = s_masterMode | GBA_SIO_START;
+  while (GBA_REG_SIOCNT & GBA_SIO_START) {}
+  return GBA_REG_SIODATA32;
+}
+
+BM_IWRAM_CODE void bmHalLinkMasterWait(uint32_t cycles)
+{
+  // Four cycles per turn from IWRAM (subs 1, a taken branch 3).
+  uint32_t turns = cycles / 4 + 1;
+  __asm__ volatile("1: subs %0, %0, #1\n bne 1b" : "+r"(turns) : : "cc");
+}
+
+void bmHalLinkMasterEnd(void)
+{
+  GBA_REG_SIOCNT = GBA_SIO_32BIT;
+}
+
 uint32_t bmHalLinkLock(void)
 {
   uint32_t state = GBA_REG_IE & GBA_IRQ_SERIAL;

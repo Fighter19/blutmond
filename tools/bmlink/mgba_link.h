@@ -25,6 +25,8 @@ void bmMgbaLinkRunFrames(BmMgbaLink *pLink, uint32_t frames);
 
 /// "<elf>:<symbol>[+offset]=<value>" or "<=" or no value (print). False on a mismatch.
 bool bmMgbaLinkCheck(BmMgbaLink *pLink, const char *pSpec);
+/// "<elf>:<symbol>[+offset]=<value>": true once the value in memory is at least that.
+bool bmMgbaLinkReached(BmMgbaLink *pLink, const char *pSpec);
 bool bmMgbaLinkScreenshot(BmMgbaLink *pLink, const char *pPath);
 
 typedef struct BmMgbaLinkStats
@@ -35,3 +37,13 @@ typedef struct BmMgbaLinkStats
 BmMgbaLinkStats bmMgbaLinkStats(const BmMgbaLink *pLink);
 
 BmLinkTransport bmMgbaLinkTransport(BmMgbaLink *pLink);
+
+/// Two GBAs joined by a link cable (tools/bm_mgba_pair): runs both for `cycles` of emulated
+/// time in small steps. When one starts a transfer with its own clock (normal mode, 32 bits),
+/// the word goes across after the time 32 bits take at its clock (2 MHz or 256 kHz); the other
+/// side takes part if its port is armed for an outside clock, else the word is lost.
+typedef struct BmMgbaPairStats
+{
+  uint64_t words, lost;      // transfers a master started; those the other side missed
+} BmMgbaPairStats;
+void bmMgbaPairRun(BmMgbaLink *pA, BmMgbaLink *pB, uint64_t cycles, BmMgbaPairStats *pStats);

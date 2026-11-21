@@ -24,7 +24,7 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `assets/` | `engine/` (Tiled tilesets for collision and materials), `test_room/` (own test room) |
 | `third_party/` | `stb_image.h` (public domain), used by the cooker |
 | `tests/` | host tests |
-| `tools/` | `cooker/` (`bmcook`: rooms, sprites and scripts to packs), `mondskript/` (the script compiler), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_ppu_render.c` (renders a snapshot), `compare_images.py`, `bmlink/` (live link to a running game: Xboo cable, the PC game over TCP, or mGBA) |
+| `tools/` | `cooker/` (`bmcook`: rooms, sprites and scripts to packs), `mondskript/` (the script compiler), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_mgba_pair.c` (two images in mGBA joined by a link cable), `bm_ppu_render.c` (renders a snapshot), `compare_images.py`, `bmlink/` (live link to a running game: Xboo cable, the PC game over TCP, or mGBA) |
 
 Hardware addresses may only appear in `src/hal/gba/`; a test checks this.
 
@@ -173,6 +173,12 @@ build/bmlink --xboo /dev/parport0 ping 50 stats
 build/bmlink --tcp 7414 push level.bmpk hot      # the PC game in its window
 build/bmlink --tcp 7414 ppu-snapshot vram.bmps   # its video state (build/bm_ppu_render renders it)
 ```
+
+GBA to GBA: with two GBAs on a link cable, Select + Start in the cartridge game brings the
+other one to the same room and position. A GBA without a cartridge is booted first, with the
+game's own multiboot image ([docs/spec/link-protocol.md](docs/spec/link-protocol.md) §9; so far
+only run between two emulated GBAs: `build/bm_mgba_pair build-gba/game_send.gba
+build-gba/bootstrap_mb.gba`).
 
 GDB on the running GBA game, with breakpoints on script lines (the scripts built as a native
 module, see above; [docs/spec/link-protocol.md](docs/spec/link-protocol.md) §8):

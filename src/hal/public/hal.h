@@ -145,4 +145,12 @@ void bmHalLinkStop(void);
 /// Keeps the link interrupt from running (while the main loop changes what it uses).
 /// Returns a value for bmHalLinkUnlock.
 uint32_t bmHalLinkLock(void);
+/// The serial port as the side that makes the clock (GBA to GBA, transfer.h): normal mode,
+/// 32 bits, at 2 MHz (`fast`) or 256 kHz. Stop listening (bmHalLinkStop) first. An exchange
+/// sends one word and returns the one received, 0xFFFFFFFF if nobody answered.
+void bmHalLinkMasterBegin(bool fast);
+uint32_t bmHalLinkMasterExchange(uint32_t out);
+void bmHalLinkMasterEnd(void);
+/// Waits about `cycles` processor cycles (between words, to give the other side time).
+void bmHalLinkMasterWait(uint32_t cycles);
 void bmHalLinkUnlock(uint32_t state);

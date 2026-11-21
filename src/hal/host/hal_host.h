@@ -38,6 +38,10 @@ uint32_t bmHalHostAudioRead(int8_t *pLeft, int8_t *pRight, uint32_t maxFrames);
 /// is started.
 uint32_t bmHalHostLinkExchange(uint32_t masterWord);
 
+/// What answers when this program is the master (bmHalLinkMasterExchange): for tests.
+typedef uint32_t (*BmHalHostLinkPeer)(void *pContext, uint32_t out);
+void bmHalHostLinkSetPeer(BmHalHostLinkPeer peer, void *pContext);
+
 /// The same from another thread (the game's socket link): waits while the main loop holds the
 /// link lock instead of losing the word.
 uint32_t bmHalHostLinkExchangeWait(uint32_t masterWord);

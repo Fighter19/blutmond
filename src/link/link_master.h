@@ -60,9 +60,14 @@ typedef struct BmLinkMaster
   BmLinkCounters counters;
   uint64_t payloadBytesAcked;
   const char *pError;      // why the last call failed
+  bool fixed;              // storage given by the caller (no allocation: on the device)
 } BmLinkMaster;
 
 void bmLinkMasterInit(BmLinkMaster *pMaster, const BmLinkTransport *pTransport);
+/// The same without allocating: the queue and the inbox are the caller's arrays (for a master
+/// on the device). A full queue is flushed by the next bmLinkMasterQueue.
+void bmLinkMasterInitFixed(BmLinkMaster *pMaster, const BmLinkTransport *pTransport, BmLinkPacket *pQueue, uint32_t queueCapacity,
+                           BmLinkPacket *pInbox, uint32_t inboxCapacity);
 void bmLinkMasterFree(BmLinkMaster *pMaster);
 
 void bmLinkMasterSetDelay(BmLinkMaster *pMaster, uint32_t delay);

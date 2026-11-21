@@ -4,7 +4,11 @@
  */
 #include "link_master.h"
 
-#include <stdlib.h>
+// Tools on the PC let the queue and the inbox grow; on the device they are fixed arrays.
+#ifndef BM_PLATFORM_GBA
+#  define BM_LINK_MASTER_ALLOCATES
+#  include <stdlib.h>
+#endif
 #include <string.h>
 
 #define MAX_ATTEMPTS 4
@@ -23,10 +27,24 @@ void bmLinkMasterInit(BmLinkMaster *m, const BmLinkTransport *pTransport)
   m->cleanWindowsToLower = 8;
 }
 
+void bmLinkMasterInitFixed(BmLinkMaster *m, const BmLinkTransport *pTransport, BmLinkPacket *pQueue, uint32_t queueCapacity,
+                           BmLinkPacket *pInbox, uint32_t inboxCapacity)
+{
+  bmLinkMasterInit(m, pTransport);
+  m->fixed = true;
+  m->pQueue = pQueue;
+  m->queueCapacity = queueCapacity;
+  m->pInbox = pInbox;
+  m->inboxCapacity = inboxCapacity;
+}
+
 void bmLinkMasterFree(BmLinkMaster *m)
 {
+  if (m->fixed) return;
+#ifdef BM_LINK_MASTER_ALLOCATES
   free(m->pQueue);
   free(m->pInbox);
+#endif
   m->pQueue = m->pInbox = NULL;
   m->queueCount = m->inboxCount = 0;
 }
@@ -39,11 +57,20 @@ void bmLinkMasterSetDelay(BmLinkMaster *m, uint32_t delay)
 
 static void inboxPush(BmLinkMaster *m, const BmLinkPacket *p)
 {
+  if (m->inboxCount == m->inboxCapacity && m->fixed)
+  {
+    // No room: the oldest packet nobody asked for goes.
+    for (uint32_t i = 1; i < m->inboxCount; i++) m->pInbox[i - 1] = m->pInbox[i];
+    m->inboxCount--;
+  }
+#ifdef BM_LINK_MASTER_ALLOCATES
   if (m->inboxCount == m->inboxCapacity)
   {
     m->inboxCapacity = m->inboxCapacity ? m->inboxCapacity * 2 : 8;
     m->pInbox = realloc(m->pInbox, m->inboxCapacity * sizeof(BmLinkPacket));
   }
+#endif
+  if (m->inboxCount == m->inboxCapacity) return;
   m->pInbox[m->inboxCount++] = *p;
 }
 
@@ -130,10 +157,17 @@ static void sendPacket(BmLinkMaster *m, const BmLinkPacket *p)
 bool bmLinkMasterQueue(BmLinkMaster *m, uint8_t type, const void *pPayload, uint16_t length)
 {
   if (length > BM_LINK_MAX_PAYLOAD) return false;
+  // With fixed storage a full queue is sent first.
+  if (m->queueCount == m->queueCapacity && m->fixed && !bmLinkMasterFlush(m)) return false;
   if (m->queueCount == m->queueCapacity)
   {
+#ifdef BM_LINK_MASTER_ALLOCATES
+    if (m->fixed) return false;
     m->queueCapacity = m->queueCapacity ? m->queueCapacity * 2 : 32;
     m->pQueue = realloc(m->pQueue, m->queueCapacity * sizeof(BmLinkPacket));
+#else
+    return false;
+#endif
   }
   BmLinkPacket *p = &m->pQueue[m->queueCount];
   p->type = type;

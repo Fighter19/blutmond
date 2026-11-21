@@ -304,6 +304,25 @@ static bool tryExchange(uint32_t masterWord, uint32_t *pIn)
   return true;
 }
 
+// As the master: the other side is whatever a test plugs in.
+static BmHalHostLinkPeer s_peer;
+static void *s_peerContext;
+
+void bmHalHostLinkSetPeer(BmHalHostLinkPeer peer, void *pContext)
+{
+  s_peer = peer;
+  s_peerContext = pContext;
+}
+
+void bmHalLinkMasterBegin(bool fast) { (void)fast; }
+void bmHalLinkMasterEnd(void) {}
+void bmHalLinkMasterWait(uint32_t cycles) { (void)cycles; }
+
+uint32_t bmHalLinkMasterExchange(uint32_t out)
+{
+  return s_peer != NULL ? s_peer(s_peerContext, out) : 0xFFFFFFFFu;
+}
+
 uint32_t bmHalHostLinkExchange(uint32_t masterWord)
 {
   // A locked link behaves like a slave that is not ready: the word is lost.

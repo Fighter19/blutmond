@@ -42,7 +42,7 @@ file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
 file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c)
-set(BM_LINK_SOURCES src/link/link.c src/link/live.c src/ppu/ppu_snapshot_part.c)
+set(BM_LINK_SOURCES src/link/link.c src/link/live.c src/link/multiboot.c src/link/transfer.c src/link/link_master.c src/link/live_master.c src/ppu/ppu_snapshot_part.c)
 set(BM_SCRIPT_SOURCES src/script/vm.c src/script/native.c)
 set(BM_SOUND_SOURCES src/sound/sound.c)
 
@@ -95,6 +95,7 @@ function(bm_add_gba_image name)
     add_custom_command(TARGET ${target} POST_BUILD
       COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${target}> $<TARGET_FILE_DIR:${target}>/${target}.gba
       COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/gbafix.py $<TARGET_FILE_DIR:${target}>/${target}.gba --pad
+      BYPRODUCTS ${CMAKE_BINARY_DIR}/${target}.gba
       COMMENT "Writing ${target}.gba")
   endforeach()
   set(BM_GBA_TARGETS ${targets} PARENT_SCOPE)
@@ -160,8 +161,35 @@ if(BM_PLATFORM STREQUAL "gba")
 
   # The game, played with the buttons, and the same with the autopilot (for tests and demos).
   # embed_pack.S is compiled per target with that target's BM_PACK_PATH.
-  foreach(variant game game_autoplay game_autoplay_native)
+  # The bootstrap (link-protocol.md section 9): a multiboot image on its own, without the engine.
+  add_executable(bootstrap_mb src/hal/gba/bootstrap/bootstrap.c src/hal/gba/crt0.S)
+  set_target_properties(bootstrap_mb PROPERTIES SUFFIX ".elf")
+  target_include_directories(bootstrap_mb PRIVATE src/link)
+  target_compile_definitions(bootstrap_mb PRIVATE BM_GBA_MULTIBOOT BM_PLATFORM_GBA)
+  target_compile_options(bootstrap_mb PRIVATE $<$<COMPILE_LANGUAGE:C>:${BM_WARNINGS}>)
+  target_link_options(bootstrap_mb PRIVATE -T ${PROJECT_SOURCE_DIR}/src/hal/gba/gba_mb.ld -nostdlib
+    -Wl,-Map=${CMAKE_BINARY_DIR}/bootstrap_mb.map)
+  add_custom_command(TARGET bootstrap_mb POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:bootstrap_mb> ${CMAKE_BINARY_DIR}/bootstrap_mb.gba
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/gbafix.py ${CMAKE_BINARY_DIR}/bootstrap_mb.gba --pad
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/bootstrap_mb.gba
+    COMMENT "Writing bootstrap_mb.gba")
+
+  # game_send: the autoplaying game that, at frame 800 (in the second room), brings the GBA on the other end of the
+  # cable to where it is (tests). The cartridge game does the same on Select + Start.
+  foreach(variant game game_autoplay game_autoplay_native game_send)
     bm_add_gba_image(${variant} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
+    if(variant STREQUAL "game" OR variant STREQUAL "game_send")
+      # Only cartridge images can boot another GBA: the images they send are in their ROM.
+      target_sources(${variant} PRIVATE ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_transfer.S)
+      # What is sent as the runtime is the game's own multiboot image.
+      add_dependencies(${variant} bootstrap_mb game_mb)
+      target_compile_definitions(${variant} PRIVATE BM_GAME_SEND "BM_BOOTSTRAP_PATH=\"${CMAKE_BINARY_DIR}/bootstrap_mb.gba\""
+        "BM_RUNTIME_PATH=\"${CMAKE_BINARY_DIR}/game_mb.gba\"")
+      if(variant STREQUAL "game_send")
+        target_compile_definitions(${variant} PRIVATE BM_SEND_FRAME=800)
+      endif()
+    endif()
     foreach(target ${BM_GBA_TARGETS})
       add_dependencies(${target} test_level_pack)
       target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/apps/game)
@@ -190,6 +218,9 @@ if(BM_PLATFORM STREQUAL "gba")
     add_dependencies(${target} script_bench_pack)
     target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_SCRIPT_BENCH_PACK}\"")
   endforeach()
+
+  set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_transfer.S PROPERTIES
+    OBJECT_DEPENDS "${CMAKE_BINARY_DIR}/bootstrap_mb.gba;${CMAKE_BINARY_DIR}/game_mb.gba")
 
   bm_add_gba_image(room_viewer apps/room_viewer/main.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
   # The embedded pack is pulled in by the assembler, which the build system cannot see: every
@@ -309,9 +340,8 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_ppu_render PRIVATE ${BM_WARNINGS})
 
   # Master side of the live link (PC tools and tests).
-  add_library(bm_link_host STATIC src/link/link_master.c src/link/live_master.c)
-  target_link_libraries(bm_link_host PUBLIC blutmond)
-  target_compile_options(bm_link_host PRIVATE ${BM_WARNINGS})
+  add_library(bm_link_host INTERFACE)
+  target_link_libraries(bm_link_host INTERFACE blutmond)
   # bmlink without mGBA (Xboo only); with libmgba it is built further down with both.
   # libmgba is optional: with it the GBA images are tested in the emulator. BM_USE_MGBA=OFF
   # builds as if it were not installed.
@@ -363,6 +393,16 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_definitions(test_gdb_step PRIVATE _GNU_SOURCE)
   target_compile_options(test_gdb_step PRIVATE ${BM_WARNINGS})
   add_test(NAME test_gdb_step COMMAND test_gdb_step)
+  add_executable(test_multiboot tests/test_multiboot.c)
+  target_link_libraries(test_multiboot PRIVATE blutmond)
+  target_include_directories(test_multiboot PRIVATE tests)
+  target_compile_options(test_multiboot PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_multiboot COMMAND test_multiboot)
+  add_executable(test_transfer tests/test_transfer.c)
+  target_link_libraries(test_transfer PRIVATE blutmond)
+  target_include_directories(test_transfer PRIVATE tests)
+  target_compile_options(test_transfer PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_transfer COMMAND test_transfer)
   # With an ARM compiler around: the cooker's native modules through the real tool chain.
   find_program(BM_ARM_GCC arm-none-eabi-gcc)
   if(BM_ARM_GCC)
@@ -486,6 +526,13 @@ if(BM_PLATFORM STREQUAL "host")
     target_link_libraries(bmlink PRIVATE bm_link_host ${MGBA_LIBRARY})
     target_compile_definitions(bmlink PRIVATE _GNU_SOURCE BM_HAVE_MGBA)
     target_compile_options(bmlink PRIVATE -Wall -Wextra -Werror)
+
+    # Two GBAs joined by a link cable.
+    add_executable(bm_mgba_pair tools/bm_mgba_pair.c tools/bmlink/mgba_link.c)
+    target_include_directories(bm_mgba_pair PRIVATE ${MGBA_INCLUDE_DIR} tools tools/bmlink)
+    target_link_libraries(bm_mgba_pair PRIVATE bm_link_host ${MGBA_LIBRARY})
+    target_compile_definitions(bm_mgba_pair PRIVATE _GNU_SOURCE BM_HAVE_MGBA)
+    target_compile_options(bm_mgba_pair PRIVATE -Wall -Wextra -Werror)
 
     set(BM_GBA_BUILD_DIR "" CACHE PATH "GBA build directory whose images the tests run in mGBA")
     if(BM_GBA_BUILD_DIR)
@@ -619,6 +666,25 @@ if(BM_PLATFORM STREQUAL "host")
             ${BM_GBA_BUILD_DIR}/test_level_native.elf assets/test_room/scripts/bat.ms 14)
         set_tests_properties(gdb_session_script_breakpoint PROPERTIES TIMEOUT 120)
       endif()
+      # GBA to GBA (docs/spec/link-protocol.md section 9), two emulated GBAs joined by a cable.
+      # The autoplaying game, in the second room at frame 800, brings the other GBA to where it
+      # is: a GBA running the game from a cartridge (it only needs the state: it changes room),
+      # and a GBA that runs nothing but the bootstrap (it gets the runtime through it first).
+      # The other side then reports the sender's room and position; the sender plays on.
+      set(send ${BM_GBA_BUILD_DIR}/game_send.elf:bm_game_stats)
+      add_test(NAME gba_to_gba_state
+        COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/game.gba --frames 1500 --until a ${send}+24=1000
+          --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=0 --check a ${send}+8=0 --check a ${send}+12=1
+          --check a ${send}+64 --check a ${send}+68
+          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+28=1
+          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+56=0)
+      add_test(NAME gba_to_gba_boot
+        COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/bootstrap_mb.gba --frames 1500 --until a ${send}+24=1000
+          --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=2 --check a ${send}+8=0 --check a ${send}+12=1
+          --check a ${send}+64 --check a ${send}+80 --check a ${send}+68
+          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+28=1
+          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+56=0)
+
       # Native code takes at most 60 % of the interpreter's time for the benchmark script (from
       # ROM about 35 %), with the same result.
       foreach(image script_bench script_bench_mb)

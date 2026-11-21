@@ -1,6 +1,6 @@
 # Link protocol
 
-Version 0.3, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
+Version 0.4, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
 
 How the editor (or another GBA) talks to a running Blutmond runtime: booting it, sending
 content, reading state and logs, debugging. Requirement: **wherever xcomms can boot a GBA over
@@ -268,6 +268,57 @@ breakpoint on a script line, registers, memory, steps over a call into the runti
 detach, and the game plays on to its end. Not yet tried with a real `arm-none-eabi-gdb` or on
 hardware.
 
+## 9. GBA to GBA
+
+A game on a cartridge brings the GBA on the other end of a link cable to where it is
+(`src/link/transfer.h`; in the test game: Select + Start). The sending GBA makes the clock
+(normal mode, 32 bits, 2 MHz); the other side needs nothing special:
+
+| The other GBA | What is sent |
+|---|---|
+| runs the game (cartridge) | the `link` part of the game state (`STATE_PUT`, `APPLY` state) |
+| runs the runtime with other content | the pack first, only the chunks it lacks (sections 3, [streaming.md](streaming.md)), applied as a restart; then the state |
+| runs the bootstrap | the runtime as a multiboot image through the bootstrap, then as above |
+| waits in its BIOS (no cartridge) | the bootstrap through the BIOS's multiboot protocol (256 kHz), then as above |
+
+The sender finds out which by asking: `HELLO` (a runtime answers), then the bootstrap's start
+word, and if neither answers it tries the BIOS. Everything after the bootstrap is the packet
+protocol of section 3 with the GBA as master (`link_master.c` with fixed buffers); between
+words the master waits 800 cycles, since the receiving runtime handles each word in its serial
+interrupt (section 7).
+
+**The bootstrap** (`src/hal/gba/bootstrap`, 868 bytes) is what the BIOS's slow protocol
+carries. It runs from IWRAM, polls the port with interrupts off, and takes one image:
+
+```
+sender   START   size    word 0  word 1 ... word n-1   crc     any
+answer   (idle)  READY   size    1      ... n-1        n       OK or BAD
+```
+
+Each answer comes one word late and is the number of words taken so far, so the sender
+notices a lost word at once and starts again from `START` (a bootstrap in the middle of an
+image takes words until it has its count, fails the checksum and waits for `START` again).
+After `OK` the bootstrap jumps to the image at 0x020000C0. The checksum is the CRC-32 of the
+words. Size in bytes, a multiple of 4, at most 256 KB.
+
+**Measured** in mGBA with two emulated GBAs joined by a cable (`tools/bm_mgba_pair`, tests
+`gba_to_gba_*`), the sender in the second room of the test level:
+
+| Case | Words | Time |
+|---|---|---|
+| the other GBA runs the game: state only | 860 | 0.09 s |
+| the other GBA runs the bootstrap: runtime with its content (81 KB), start-up, state | 24,100 | 1.17 s, of which the image takes 0.75 s (108 KB/s) |
+
+The image goes at about 620 cycles per word: 256 for the 32 bits at 2 MHz, the rest for the
+bootstrap to store the word and add it to the checksum. In both cases the receiver then
+reports the sender's room and position, and the sender plays on.
+
+Not tested: the BIOS stage. mGBA's built-in BIOS replacement neither sends nor receives
+multiboot, so the sender's multiboot code is only checked against a model of the receiving
+BIOS (`tests/test_multiboot.c`); it is the same code `bmlink boot` uses over the Xboo cable.
+And nothing here has run on hardware: cable quality at 2 MHz is the open question (the plan's
+fallback is 256 kHz, one bit in `bmHalLinkMasterBegin`).
+
 ## History
 
 - 0.1: first draft.
@@ -279,3 +330,4 @@ hardware.
   middle of its next packet must not restart that packet (fixed in the slave: before, every
   packet that followed another one directly was sent twice).
 - 0.3: debugging (section 8).
+- 0.4: GBA to GBA and the bootstrap (section 9).

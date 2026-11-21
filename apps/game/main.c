@@ -16,6 +16,10 @@
 // Live link: the game listens on the serial port (docs/spec/link-protocol.md); a master can
 // push packs and state into it while it runs (tools/bmlink, tools/bm_mgba_run --link).
 //
+// GBA to GBA (BM_GAME_SEND, cartridge images): Select + Start brings a GBA on the other end of
+// a link cable to where this game is, booting it first if it has no cartridge
+// (docs/spec/link-protocol.md §9). With BM_SEND_FRAME that happens by itself at that frame.
+//
 // Host: game [pack.bmpk] [options] [out.ppm]
 //   Without --frames, --trace or an output picture the game opens a window and is played with
 //   keyboard or gamepad (apps/game/host_window.h); without a pack it plays the test level.
@@ -33,6 +37,9 @@
 #include "hal.h"
 #include "pack.h"
 #include "physical_device.h"
+#ifdef BM_GAME_SEND
+#  include "transfer.h"
+#endif
 #include "video.h"
 
 #ifdef BM_PLATFORM_HOST
@@ -97,6 +104,12 @@ typedef struct BmGameStats
   uint32_t nativeCalls;  // script functions run as native code
   uint32_t scriptCycles; // processor cycles spent in scripts (0 on the PC)
   uint32_t scriptErrors;
+  uint32_t sendResult;   // GBA to GBA: 0 not sent, 1 arrived, 0x100 + BmTransferResult failed
+  uint32_t sendCycles;   // processor cycles the transfer took
+  uint32_t sendWords;    // words exchanged
+  uint32_t sendFlags;    // 1 booted through the BIOS, 2 runtime sent through the bootstrap, 4 content sent
+  uint32_t sendSame;     // the other side reported this game's room and position
+  uint32_t sendRuntimeCycles;  // of sendCycles, sending the runtime through the bootstrap
 } BmGameStats;
 BmGameStats bm_game_stats;
 
@@ -110,6 +123,38 @@ static BmAutopilot s_pilot;
 static uint8_t s_content[2][BM_LIVE_CONTENT_SIZE] BM_EWRAM_BSS;
 static BmLive s_live BM_EWRAM_BSS;
 static BmGameLive s_gameLive = { &s_game, &s_pack, &s_pilot };
+
+#ifdef BM_GAME_SEND
+extern const uint8_t bm_embedded_bootstrap[], bm_embedded_bootstrap_end[];
+extern const uint8_t bm_embedded_runtime[], bm_embedded_runtime_end[];
+#  ifndef BM_SEND_FRAME
+#    define BM_SEND_FRAME 0
+#  endif
+
+// Brings the GBA on the other end of the cable to where this game is. The game stands still
+// meanwhile; afterwards it listens on the port again.
+static void sendToOther(const uint8_t *pPackData, uint32_t packSize)
+{
+  static uint8_t state[BM_LIVE_STATE_CAPACITY] BM_EWRAM_BSS;
+  BmStateBlock blocks[2];
+  uint32_t n = bmGameLiveStateBlocks(&s_gameLive, blocks, 2);
+  uint32_t size = bmStateWrite(blocks, n, BM_STATE_LINK, state, sizeof(state));
+  BmTransferImages images = { bm_embedded_bootstrap, (uint32_t)(bm_embedded_bootstrap_end - bm_embedded_bootstrap),
+                              bm_embedded_runtime, (uint32_t)(bm_embedded_runtime_end - bm_embedded_runtime) };
+  BmTransferStats stats;
+  bmHalLinkStop();
+  uint32_t started = bmHalCycles();
+  BmTransferResult result = bmTransferSend(&images, pPackData, packSize, state, size, &stats);
+  bm_game_stats.sendCycles = bmHalCycles() - started;
+  bm_game_stats.sendWords = stats.words;
+  bm_game_stats.sendRuntimeCycles = stats.runtimeCycles;
+  bm_game_stats.sendFlags = (uint32_t)(stats.usedMultiboot | (stats.usedBootstrap << 1) | (stats.sentPack << 2));
+  bm_game_stats.sendResult = result == BM_TRANSFER_OK ? 1 : 0x100u + (uint32_t)result;
+  bm_game_stats.sendSame = result == BM_TRANSFER_OK && stats.peer.roomIndex == s_game.roomIndex &&
+                           stats.peer.x == (int16_t)BM_FIX_INT(s_game.player.x) && stats.peer.y == (int16_t)BM_FIX_INT(s_game.player.y);
+  bmLiveStart(&s_live);
+}
+#endif
 
 static uint32_t stateBlocks(BmStateBlock blocks[2])
 {
@@ -173,6 +218,19 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
       continue;
     }
     uint16_t keys = autoplay ? bmAutopilotKeys(&s_pilot, &s_game) : bmHalInputKeys();
+#ifdef BM_GAME_SEND
+    {
+      static bool s_held;
+      uint16_t pad = bmHalInputKeys();
+      bool both = (pad & (BM_KEY_SELECT | BM_KEY_START)) == (BM_KEY_SELECT | BM_KEY_START);
+      if ((both && !s_held) || (BM_SEND_FRAME != 0 && s_game.frame == BM_SEND_FRAME && bm_game_stats.sendResult == 0))
+      {
+        sendToOther(pData, size);
+        lastVideoFrame = bmVideoWaitFrame();   // the frames the transfer took are not missed ones
+      }
+      s_held = both;
+    }
+#endif
     bmGameFrame(&s_game, keys);
     if (s_snapshotFrame != 0 && s_game.frame == s_snapshotFrame)
     {

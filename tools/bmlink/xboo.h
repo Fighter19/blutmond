@@ -22,7 +22,6 @@ typedef struct BmXboo
   unsigned char control;     // last value written to the control port
   uint32_t delay;            // xcomms "Transfer Delay": PortDelay(delay) after each word
   bool resetWired;           // reset setting (link-protocol.md §6): none or xboo
-  uint16_t crc1, crc2;       // multiboot CRC
   char error[256];
 } BmXboo;
 
