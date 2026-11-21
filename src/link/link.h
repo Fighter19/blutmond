@@ -48,6 +48,7 @@ typedef enum BmLinkType {
   BM_LINK_LOG = 0x30,
   BM_LINK_PROFILE = 0x31,
   BM_LINK_PPU_SNAPSHOT = 0x32,
+  BM_LINK_INPUT = 0x33,     // the keys per game frame, for a second device that plays along (live.h)
   BM_LINK_MEM_READ = 0x38,
   BM_LINK_MEM_WRITE = 0x39,
   BM_LINK_GDB = 0x40,

@@ -258,6 +258,160 @@ static bool handleApply(BmLive *l, const BmLinkPacket *p)
   return true;
 }
 
+// --- Input mirror (link-protocol.md §10) ------------------------------------------------------
+
+void bmLiveInput(BmLive *l, uint32_t frame, uint16_t keys)
+{
+  if (!l->inputStream) return;
+  if (l->inputFirst || keys != l->inputKeys)
+  {
+    if (l->inputCount < BM_LIVE_INPUT_CHANGES)
+    {
+      l->inputChanges[l->inputCount].frame = frame;
+      l->inputChanges[l->inputCount].keys = keys;
+      l->inputCount++;
+    }
+    else l->inputLost = true;
+    l->inputFirst = false;
+    l->inputKeys = keys;
+  }
+  l->inputThrough = frame;
+  l->inputQuiet++;
+}
+
+bool bmLiveInputWantsCheck(const BmLive *l, uint32_t frame)
+{
+  return l->inputStream && frame % BM_LIVE_INPUT_CHECK_EVERY == 0;
+}
+
+void bmLiveInputCheck(BmLive *l, uint32_t frame, uint32_t crc)
+{
+  l->inputHasCheck = true;
+  l->inputCheckFrame = frame;
+  l->inputCheckCrc = crc;
+}
+
+// Sends what was collected: at once when a key changed, else every second frame so the other
+// side knows how far it may play.
+static void pumpInput(BmLive *l)
+{
+  if (!l->inputStream || (l->inputCount == 0 && !l->inputHasCheck && l->inputQuiet < 2)) return;
+  uint32_t lock = bmHalLinkLock();
+  BmLinkPacket *p = bmLinkSlaveSendBegin(&l->slave);
+  bmHalLinkUnlock(lock);
+  if (p == NULL) return;
+  uint8_t *o = p->payload;
+  bmLinkPut32(o, l->inputThrough);
+  o[4] = l->inputCount;
+  o[5] = (uint8_t)((l->inputLost ? BM_LIVE_INPUT_FLAG_LOST : 0) | (l->inputHasCheck ? BM_LIVE_INPUT_FLAG_CHECK : 0));
+  o[6] = o[7] = 0;
+  o += BM_LIVE_INPUT_HEADER;
+  for (uint32_t i = 0; i < l->inputCount; i++, o += 8)
+  {
+    bmLinkPut32(o, l->inputChanges[i].frame);
+    bmLinkPut16(o + 4, l->inputChanges[i].keys);
+    bmLinkPut16(o + 6, 0);
+  }
+  if (l->inputHasCheck)
+  {
+    bmLinkPut32(o, l->inputCheckFrame);
+    bmLinkPut32(o + 4, l->inputCheckCrc);
+    o += 8;
+  }
+  p->type = BM_LINK_INPUT;
+  p->length = (uint16_t)(o - p->payload);
+  l->inputCount = 0;
+  l->inputLost = false;
+  l->inputHasCheck = false;
+  l->inputQuiet = 0;
+  lock = bmHalLinkLock();
+  bmLinkSlaveSendCommit(&l->slave);
+  bmHalLinkUnlock(lock);
+}
+
+static void receiveInput(BmLive *l, const BmLinkPacket *p)
+{
+  if (p->length == 1)
+  {
+    // Start or stop reporting.
+    l->inputStream = p->payload[0] == 1;
+    if (p->payload[0] == 0) l->following = false;
+    l->inputFirst = true;
+    l->inputCount = 0;
+    l->inputLost = false;
+    l->inputHasCheck = false;
+    return;
+  }
+  if (p->length < BM_LIVE_INPUT_HEADER) return;
+  // Another device's keys: this one follows.
+  uint32_t count = p->payload[4], flags = p->payload[5];
+  if (p->length < BM_LIVE_INPUT_HEADER + count * 8u + ((flags & BM_LIVE_INPUT_FLAG_CHECK) ? 8u : 0u)) return;
+  if (!l->following)
+  {
+    l->following = true;
+    l->followCount = 0;
+    l->followHasCheck = false;
+  }
+  l->followIdle = 0;
+  const uint8_t *in = p->payload + BM_LIVE_INPUT_HEADER;
+  for (uint32_t i = 0; i < count; i++, in += 8)
+  {
+    if (l->followCount >= BM_LIVE_FOLLOW_CHANGES)
+    {
+      // Too far behind to keep them all: the oldest goes, the checksum will tell.
+      for (uint32_t k = 1; k < l->followCount; k++) l->followChanges[k - 1] = l->followChanges[k];
+      l->followCount--;
+    }
+    l->followChanges[l->followCount].frame = bmLinkGet32(in);
+    l->followChanges[l->followCount].keys = bmLinkGet16(in + 4);
+    l->followCount++;
+  }
+  if (flags & BM_LIVE_INPUT_FLAG_CHECK)
+  {
+    l->followHasCheck = true;
+    l->followCheckFrame = bmLinkGet32(in);
+    l->followCheckCrc = bmLinkGet32(in + 4);
+  }
+  l->followThrough = bmLinkGet32(p->payload);
+}
+
+bool bmLiveFollowKeys(BmLive *l, uint32_t frame, uint16_t *pKeys)
+{
+  if ((int32_t)(l->followThrough - frame) < 0) return false;
+  // The changes up to this frame are used up.
+  uint32_t used = 0;
+  while (used < l->followCount && (int32_t)(l->followChanges[used].frame - frame) <= 0)
+  {
+    l->followKeys = l->followChanges[used].keys;
+    used++;
+  }
+  if (used != 0)
+  {
+    for (uint32_t k = used; k < l->followCount; k++) l->followChanges[k - used] = l->followChanges[k];
+    l->followCount = (uint8_t)(l->followCount - used);
+  }
+  *pKeys = l->followKeys;
+  return true;
+}
+
+uint32_t bmLiveFollowAhead(const BmLive *l, uint32_t frame)
+{
+  int32_t ahead = (int32_t)(l->followThrough - frame);
+  return ahead > 0 ? (uint32_t)ahead : 0;
+}
+
+void bmLiveFollowCheck(BmLive *l, uint32_t frame, uint32_t crc)
+{
+  if (!l->followHasCheck || l->followCheckFrame != frame) return;
+  l->followHasCheck = false;
+  l->followChecks++;
+  if (crc == l->followCheckCrc) return;
+  l->followMismatches++;
+  uint8_t out[8] = { 2, 0, 0, 0 };
+  bmLinkPut32(out + 4, frame);
+  send(l, BM_LINK_INPUT, out, sizeof(out));
+}
+
 // --- Debugging (link-protocol.md §8) --------------------------------------------------------
 
 static bool debugAnswer(BmLive *l, uint8_t command, uint8_t result, uint8_t slot, const void *pData, uint16_t length)
@@ -411,6 +565,9 @@ static bool handle(BmLive *l, const BmLinkPacket *p)
     return handleApply(l, p);
   case BM_LINK_GDB:
     return handleDebug(l, p);
+  case BM_LINK_INPUT:
+    receiveInput(l, p);
+    return true;
   case BM_LINK_RESET:
     l->resetIn = 20;   // a few frames later: the acknowledgement has to get out first
     return true;
@@ -469,6 +626,9 @@ void bmLiveFrame(BmLive *l)
     l->debugHalt = false;
     bmHalDebugBreak();
   }
+  pumpInput(l);
+  // Following ends when it is told to, or when nothing has come for a long time.
+  if (l->following && ++l->followIdle >= 3000) l->following = false;
   pumpSnapshot(l);
 }
 

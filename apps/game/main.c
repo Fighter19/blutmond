@@ -27,6 +27,11 @@
 //   (bmlink --tcp, the editor's Run button). Options:
 //   --frames N  --autoplay  --trace  --snapshot-at N file  --load file  --headless  --window
 //   --scale N  --listen PORT  --no-listen  --save file  --no-save  --sound-check file
+//   --follow  (wait for another device's keys: bmlink mirror)  --until-frame N
+
+#if defined(BM_PLATFORM_HOST) && !defined(_POSIX_C_SOURCE)
+#  define _POSIX_C_SOURCE 200809L   // nanosleep
+#endif
 
 #include "autopilot.h"
 #include "device.h"
@@ -49,6 +54,7 @@
 #    include "host_window.h"
 #  endif
 #  include <errno.h>
+#  include <time.h>
 #  include <sys/stat.h>
 #  include <stdio.h>
 #  include <stdlib.h>
@@ -110,6 +116,8 @@ typedef struct BmGameStats
   uint32_t sendFlags;    // 1 booted through the BIOS, 2 runtime sent through the bootstrap, 4 content sent
   uint32_t sendSame;     // the other side reported this game's room and position
   uint32_t sendRuntimeCycles;  // of sendCycles, sending the runtime through the bootstrap
+  uint32_t followChecks;      // input mirror: state checksums compared with the other device's
+  uint32_t followMismatches;  // ... and how many differed
 } BmGameStats;
 BmGameStats bm_game_stats;
 
@@ -175,7 +183,21 @@ static bool loadSnapshot(const uint8_t *pData, uint32_t size)
   return bmStateRead(blocks, n, pData, size) == BM_STATE_OK && bmGameAfterLoad(&s_game) == BM_SUCCESS;
 }
 
+/// Checksum of the game state as it is now, for comparing two devices.
+static uint32_t stateCrc(void)
+{
+  static uint8_t buffer[BM_SNAPSHOT_CAPACITY] BM_EWRAM_BSS;
+  BmStateBlock blocks[2];
+  // Only the game itself (the first block): the autopilot's own state is not played along.
+  stateBlocks(blocks);
+  return bmCrc32(0, buffer, bmStateWrite(blocks, 1, BM_STATE_SNAPSHOT, buffer, sizeof(buffer)));
+}
+
 static uint32_t s_snapshotFrame = BM_SNAPSHOT_FRAME;
+static bool s_waitForMirror;   // --follow: do not play until another device's keys arrive
+#ifdef BM_PLATFORM_HOST
+static uint32_t s_untilFrame;  // --until-frame: end when the game reaches this frame
+#endif
 
 static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autoplay)
 {
@@ -197,11 +219,15 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
   bmLiveStart(&s_live);
 
   uint32_t lastVideoFrame = bmVideoWaitFrame();
+  uint32_t catchUp = 0;
   for (uint32_t frame = 0; frames == 0 || frame < frames; frame++)
   {
-    uint32_t videoFrame = bmVideoWaitFrame();
-    if (videoFrame != lastVideoFrame + 1) bm_game_stats.lagFrames += videoFrame - lastVideoFrame - 1;
-    lastVideoFrame = videoFrame;
+    if (catchUp == 0)
+    {
+      uint32_t videoFrame = bmVideoWaitFrame();
+      if (videoFrame != lastVideoFrame + 1) bm_game_stats.lagFrames += videoFrame - lastVideoFrame - 1;
+      lastVideoFrame = videoFrame;
+    }
     if (bm_state_inbox.size != 0)
     {
       if (loadSnapshot(bm_state_inbox.data, bm_state_inbox.size)) bm_game_stats.snapshotsLoaded++;
@@ -218,6 +244,40 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
       continue;
     }
     uint16_t keys = autoplay ? bmAutopilotKeys(&s_pilot, &s_game) : bmHalInputKeys();
+    if (bmLiveFollowing(&s_live) || s_waitForMirror)
+    {
+      // Another device plays and this one plays along (link-protocol.md §10): the same keys
+      // for the same frames. Until they are known for the next frame, hold still.
+      if (!bmLiveFollowing(&s_live) || !bmLiveFollowKeys(&s_live, s_game.frame, &keys))
+      {
+#ifdef BM_PLATFORM_HOST
+        struct timespec nap = { 0, 1000000 };
+        nanosleep(&nap, NULL);
+        if (s_frameHook != NULL && !s_frameHook()) break;
+#endif
+        frame--;
+        continue;
+      }
+      s_waitForMirror = false;
+      bmLiveFollowCheck(&s_live, s_game.frame, stateCrc());
+      // Behind by more than a frame: catch up without waiting for the screen.
+      catchUp = bmLiveFollowAhead(&s_live, s_game.frame) > 1 && catchUp < 3 ? catchUp + 1 : 0;
+      bm_game_stats.followChecks = s_live.followChecks;
+      bm_game_stats.followMismatches = s_live.followMismatches;
+    }
+#ifdef BM_PLATFORM_HOST
+    if (getenv("BM_STATE_DUMP") != NULL && s_game.frame % 64 == 0)
+    {
+      // For finding what differs between two runs: the state before every 64th frame.
+      char path[600];
+      snprintf(path, sizeof(path), "%s/%u.bmst", getenv("BM_STATE_DUMP"), (unsigned)s_game.frame);
+      takeSnapshot(&bm_state_outbox);
+      FILE *df = fopen(path, "wb");
+      if (df != NULL) { fwrite(bm_state_outbox.data, 1, bm_state_outbox.size, df); fclose(df); }
+    }
+#endif
+    bmLiveInput(&s_live, s_game.frame, keys);
+    if (bmLiveInputWantsCheck(&s_live, s_game.frame)) bmLiveInputCheck(&s_live, s_game.frame, stateCrc());
 #ifdef BM_GAME_SEND
     {
       static bool s_held;
@@ -256,6 +316,7 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
     bm_game_stats.scriptErrors = bm_script_errors;
 #ifdef BM_PLATFORM_HOST
     if (s_frameHook != NULL && !s_frameHook()) break;
+    if (s_untilFrame != 0 && s_game.frame >= s_untilFrame) break;
 #endif
   }
   return 0;
@@ -353,7 +414,7 @@ int main(int argc, char **argv)
   uint32_t frames = 1;
   bool autoplay = BM_AUTOPLAY;
   bool trace = false;
-  bool framesGiven = false, headless = false, window = false, listen = true, save = true;
+  bool framesGiven = false, headless = false, window = false, listen = true, listenGiven = false, save = true;
   const char *soundCheckPath = NULL;
   int scale = 3, port = BM_HOST_LINK_DEFAULT_PORT;
   for (int i = 1; i < argc; i++)
@@ -362,12 +423,14 @@ int main(int argc, char **argv)
     else if (strcmp(argv[i], "--headless") == 0) headless = true;
     else if (strcmp(argv[i], "--window") == 0) window = true;
     else if (strcmp(argv[i], "--scale") == 0 && i + 1 < argc) scale = atoi(argv[++i]);
-    else if (strcmp(argv[i], "--listen") == 0 && i + 1 < argc) { port = atoi(argv[++i]); listen = true; }
+    else if (strcmp(argv[i], "--listen") == 0 && i + 1 < argc) { port = atoi(argv[++i]); listen = true; listenGiven = true; }
     else if (strcmp(argv[i], "--no-listen") == 0) listen = false;
     else if (strcmp(argv[i], "--save") == 0 && i + 1 < argc) s_savePath = argv[++i];
     else if (strcmp(argv[i], "--no-save") == 0) save = false;
     else if (strcmp(argv[i], "--sound-check") == 0 && i + 1 < argc) soundCheckPath = argv[++i];
     else if (strcmp(argv[i], "--autoplay") == 0) autoplay = true;
+    else if (strcmp(argv[i], "--follow") == 0) s_waitForMirror = true;
+    else if (strcmp(argv[i], "--until-frame") == 0 && i + 1 < argc) s_untilFrame = (uint32_t)atoi(argv[++i]);
     else if (strcmp(argv[i], "--trace") == 0) trace = true;
     else if (strcmp(argv[i], "--snapshot-at") == 0 && i + 2 < argc)
     {
@@ -420,6 +483,10 @@ int main(int argc, char **argv)
     return 2;
 #  endif
   }
+  // Without a window the link is only listened to when asked for (--listen with a port).
+  bool headlessLink = !window && listenGiven;
+  if (headlessLink) bmHostLinkListen((uint16_t)port);
+  if (s_waitForMirror || s_untilFrame != 0) frames = 0;
   FILE *f = fopen(packPath, "rb");
   if (f == NULL) { perror(packPath); return 1; }
   fseek(f, 0, SEEK_END);
@@ -448,6 +515,13 @@ int main(int argc, char **argv)
   else
   {
     result = run(data, (uint32_t)size, frames, autoplay);
+  }
+  if (headlessLink)
+  {
+    bmHostLinkStop();
+    printf("frame %u, %u state checks against the other device, %u different\n", (unsigned)s_game.frame,
+           (unsigned)bm_game_stats.followChecks, (unsigned)bm_game_stats.followMismatches);
+    if (bm_game_stats.followMismatches != 0) result = 1;
   }
 #  ifdef BM_GAME_WINDOW
   if (window)

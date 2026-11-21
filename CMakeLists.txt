@@ -697,6 +697,15 @@ if(BM_PLATFORM STREQUAL "host")
           --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+28=1
           --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+56=0)
 
+      # The PC game plays along with the GBA (docs/spec/link-protocol.md section 10): the GBA's
+      # keys for each frame, mirrored by bmlink; the states are compared every 64 frames.
+      if(Python3_FOUND)
+        add_test(NAME input_mirror_gba_to_pc
+          COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/mirror_session.py $<TARGET_FILE:bmlink> $<TARGET_FILE:game>
+            ${cooked}/test_level_gba.bmpk ${BM_GBA_BUILD_DIR}/game_autoplay.gba ${BM_GBA_BUILD_DIR}/game_autoplay.elf)
+        set_tests_properties(input_mirror_gba_to_pc PROPERTIES FIXTURES_REQUIRED test_level_pack TIMEOUT 200)
+      endif()
+
       # Native code takes at most 60 % of the interpreter's time for the benchmark script (from
       # ROM about 35 %), with the same result.
       foreach(image script_bench script_bench_mb)

@@ -22,6 +22,11 @@
 #define BM_LIVE_MAX_CHUNKS 512
 #define BM_LIVE_STATE_CAPACITY 1024
 
+// Input mirror (below): key changes kept on each side, and how often the state is compared.
+#define BM_LIVE_INPUT_CHANGES 16
+#define BM_LIVE_FOLLOW_CHANGES 64
+#define BM_LIVE_INPUT_CHECK_EVERY 64
+
 /// Reload modes (runtime-abi.md §5).
 typedef enum BmLiveMode {
   BM_LIVE_RESTART = 0,
@@ -112,6 +117,28 @@ typedef struct BmLive
 
   uint8_t resetIn;            // frames until the device starts over (RESET), 0: not asked
 
+  // Input mirror, this device reporting (link-protocol.md §10): key changes not yet sent.
+  bool inputStream;           // asked for
+  bool inputFirst;            // the next frame's keys are reported whatever they are
+  bool inputLost;             // more changes than fit while nobody listened
+  uint16_t inputKeys;         // keys of the last frame reported
+  uint32_t inputThrough;      // last frame whose keys are known to this side
+  uint8_t inputCount, inputQuiet;
+  struct { uint32_t frame; uint16_t keys; } inputChanges[BM_LIVE_INPUT_CHANGES];
+  bool inputHasCheck;
+  uint32_t inputCheckFrame, inputCheckCrc;
+
+  // Input mirror, this device following: key changes received, oldest first.
+  bool following;
+  uint8_t followCount;
+  uint16_t followIdle;
+  uint16_t followKeys;        // keys at the frame last asked for
+  uint32_t followThrough;     // keys are known up to this frame
+  struct { uint32_t frame; uint16_t keys; } followChanges[BM_LIVE_FOLLOW_CHANGES];
+  bool followHasCheck;
+  uint32_t followCheckFrame, followCheckCrc;
+  uint32_t followChecks, followMismatches;
+
   BmLiveRegion regions[BM_LIVE_REGIONS];
   uint32_t applied, chunksCopied, chunksReceived;
 } BmLive;
@@ -136,6 +163,40 @@ static inline bool bmLiveCapturing(const BmLive *pLive)
 {
   return pLive->snapshotOffset < pLive->snapshotEnd;
 }
+
+// --- Input mirror (link-protocol.md §10) ------------------------------------------------------
+// One device reports which keys it used for which game frame; another one that started from
+// the same state uses the same keys for the same frames and so plays the same game, a little
+// behind. Every BM_LIVE_INPUT_CHECK_EVERY frames a checksum of the state goes along, so a
+// difference is noticed.
+
+/// INPUT from the master: one byte, 1 start reporting, 0 stop. From the reporting device (and
+/// passed on to the following one): u32 last frame whose keys are known, u8 number of
+/// changes, u8 flags, u16 0; then per change u32 frame, u16 keys, u16 0; with flag 2 then
+/// u32 frame and u32 checksum of the state before that frame. From the following device:
+/// byte 2, u8 0 x3, u32 frame at which its state differed.
+#define BM_LIVE_INPUT_HEADER 8
+#define BM_LIVE_INPUT_FLAG_LOST 1
+#define BM_LIVE_INPUT_FLAG_CHECK 2
+
+/// Reporting side: call before each game frame with the keys it will use.
+void bmLiveInput(BmLive *pLive, uint32_t frame, uint16_t keys);
+/// Reporting side: whether a state checksum is wanted before frame `frame`; and giving it.
+bool bmLiveInputWantsCheck(const BmLive *pLive, uint32_t frame);
+void bmLiveInputCheck(BmLive *pLive, uint32_t frame, uint32_t crc);
+
+/// Following side: true while another device's keys arrive.
+static inline bool bmLiveFollowing(const BmLive *pLive)
+{
+  return pLive->following;
+}
+/// Following side: the keys for frame `frame`. False if they are not known yet (wait).
+bool bmLiveFollowKeys(BmLive *pLive, uint32_t frame, uint16_t *pKeys);
+/// How many frames the keys are known ahead of `frame` (to catch up when behind).
+uint32_t bmLiveFollowAhead(const BmLive *pLive, uint32_t frame);
+/// Following side: if the reporting device sent a checksum for frame `frame`, compares it with
+/// `crc` (the state before that frame here) and reports a difference to the master.
+void bmLiveFollowCheck(BmLive *pLive, uint32_t frame, uint32_t crc);
 
 /// Sends a LOG packet (dropped if the link is busy).
 bool bmLiveLog(BmLive *pLive, const char *pText);

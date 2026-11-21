@@ -1,6 +1,6 @@
 # Link protocol
 
-Version 0.4, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
+Version 0.5, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
 
 How the editor (or another GBA) talks to a running Blutmond runtime: booting it, sending
 content, reading state and logs, debugging. Requirement: **wherever xcomms can boot a GBA over
@@ -335,6 +335,39 @@ BIOS (`tests/test_multiboot.c`); it is the same code `bmlink boot` uses over the
 And nothing here has run on hardware: cable quality at 2 MHz is the open question (the plan's
 fallback is 256 kHz, one bit in `bmHalLinkMasterBegin`).
 
+## 10. Input mirror: the PC plays along
+
+`bmlink --xboo <port> mirror <[host:]port of the PC game>` makes the PC game show what happens
+on the GBA. Nothing but the keys is sent: the game is deterministic (same state, same keys,
+same result on both machines, bit for bit), so the PC game that starts from the GBA's state
+and gets the GBA's keys for every frame plays the same game.
+
+- The runtime, asked with `INPUT` (payload 1), notes before each game frame which keys that
+  frame uses. It sends a packet at once when the keys changed and otherwise every second
+  frame: the last frame whose keys are known, and the changes (frame, keys) since the last
+  packet.
+- `bmlink` first starts the reporting, then reads the GBA's state (`STATE_GET`) and loads it
+  into the PC game (`STATE_PUT`, `APPLY` state), then passes every `INPUT` packet on.
+- The PC game (`apps/game`, started normally or with `--follow` to wait) uses for frame *n*
+  the keys the GBA used for frame *n*, never its own, and holds still while the next frame's
+  keys are not there yet.
+
+**Lag.** The cable is slow and the PC only gets a word when it polls, so keys arrive tens of
+milliseconds late and not evenly. That delay never changes *what* happens, because keys are
+applied by frame number and not by arrival time; it only makes the PC run a little behind the
+GBA (the two frames between packets plus the transfer). When packets arrive in a bunch the PC
+game runs up to four frames per screen refresh to catch up, so the delay does not add up.
+
+**Checks.** Every 64 frames the runtime adds a CRC-32 of its game state to the packet. The PC
+game compares it with its own state at that frame and reports a difference; `bmlink` then
+loads the GBA's state again. The same happens if the runtime had more key changes than fit
+(16) while nobody polled.
+
+Tested in mGBA (a GBA image played by its autopilot, 900 frames through a room change, every
+check equal) and on a real GBA over the Xboo cable (1500 frames in 25.5 s, no reload of the
+state needed). Both machines must run the same pack. Not there yet: a button in the editor,
+and the other direction (the PC's keys into the GBA).
+
 ## History
 
 - 0.1: first draft.
@@ -347,5 +380,6 @@ fallback is 256 kHz, one bit in `bmHalLinkMasterBegin`).
   packet that followed another one directly was sent twice).
 - 0.3: debugging (section 8).
 - 0.4: GBA to GBA and the bootstrap (section 9).
+- 0.5: input mirror (section 10).
 - 0.4.2: the word boundary (section 4), the `RESET` packet (the runtime starts the device over through the BIOS, for cables without a reset wire), measurements on a GBA.
 - 0.4.1: `SESS`. Found on hardware: a second run of `bmlink` counted its packets from 0 while the runtime went on from the first run's numbers, and nothing got through.

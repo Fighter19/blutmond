@@ -174,6 +174,15 @@ build/bmlink --tcp 7414 push level.bmpk hot      # the PC game in its window
 build/bmlink --tcp 7414 ppu-snapshot vram.bmps   # its video state (build/bm_ppu_render renders it)
 ```
 
+The PC game can play along with the GBA: it takes the GBA's state and then the GBA's keys for
+every frame, so its window shows what happens on the device, a moment later
+([docs/spec/link-protocol.md](docs/spec/link-protocol.md) §10):
+
+```
+build/game level.bmpk --follow &                  # waits for the GBA
+build/bmlink --xboo /dev/parport0 mirror 7414     # until Ctrl-C
+```
+
 GBA to GBA: with two GBAs on a link cable, Select + Start in the cartridge game brings the
 other one to the same room and position. A GBA without a cartridge is booted first, with the
 game's own multiboot image ([docs/spec/link-protocol.md](docs/spec/link-protocol.md) §9; so far
