@@ -11,3 +11,4 @@ content moves into the spec and the plan shrinks to what is still open.
 | [ui.md](ui.md) | menus: screens, widgets, text, the Start and Equipment menus, animated backdrops that keep running |
 | [attachable-scripts.md](attachable-scripts.md) | scripts that are attached to the player, an object or an item at run time; one module per script |
 | [first-items.md](first-items.md) | the first weapons, spells, abilities, consumables and armour, with their numbers and scripts |
+| [versioning.md](versioning.md) | versions of runtime, content and save games; incremental updates of a game on a flash cartridge |

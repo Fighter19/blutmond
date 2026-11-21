@@ -804,6 +804,7 @@ is meant for, and the cooker reports per profile what a port would change.
 | M13 | UI ([plans/ui.md](plans/ui.md)): windows and blending in the PPU, a UI layer with text, screens as scripts with layout assets, Start and Equipment menus, animated backdrops, UI tab | Start opens the menu over the paused game on GBA and PC, equipment can be changed, the backdrop animates at full frame rate while a save is written |
 | M14 | attachable scripts ([plans/attachable-scripts.md](plans/attachable-scripts.md)): one module per script, `Attachment` classes with owner events, hooks and messages, objects created at run time, hit boxes and health, reload of a single module | a weapon's script is exchanged in the running game without touching any other script; an ability is added by attaching one class |
 | M15 | first items ([plans/first-items.md](plans/first-items.md)): 6 weapons, 5 spells, 5 abilities, 6 consumables, 8 pieces of armour, 3 status effects, an enemy with health, in the test level | every item can be found, equipped or used on GBA and PC; a recorded play-through gives the same state checksums on both |
+| M16 | versioning and incremental updates ([plans/versioning.md](plans/versioning.md)): versions and compatibility checks, build manifests, pack sets with update packs, sector-stable ROM layout, update files, flashing over the link, save migration | a changed script is on the flash cartridge and survives power-off in seconds, without rewriting the rest; a save game from the previous version loads |
 
 ### Status
 

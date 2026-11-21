@@ -153,7 +153,7 @@ Attachments in the free slots, with a lifetime:
 
 | What | Count | Size |
 |---|---|---|
-| Records | 31 in 6 tables | about 1.6 KB of `DTAB` chunks |
+| Records | 30 in 5 tables, plus key items | about 1.6 KB of `DTAB` chunks |
 | Script classes | 4 weapon, 3 spell, 4 ability, 3 consumable, 2 armour, 3 effects, 3 projectiles, 3 enemies, chest, dummy: 27 | at about 300 bytes each, 8 KB of modules |
 | Attachments at once | 6 equipment + 5 abilities + 4 effects = 15 | pool of 24 |
 | Objects at once | room objects + 2 knives + 1 bolt + 1 flask | pool of 16 |
