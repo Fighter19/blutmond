@@ -8,6 +8,7 @@
 // (docs/spec/room-format.md section 5): the player with PlatformerControl, the camera with
 // CameraZone, KillZone respawns, Door room changes and placeholders for other classes.
 
+#include "actors.h"
 #include "body.h"
 #include "collision.h"
 #include "pack.h"
@@ -73,7 +74,12 @@ typedef struct BmGame
   int8_t objectSheet[BM_GAME_MAX_OBJECTS];     // sheet named like the object's class, or -1
   uint16_t builtinTile;                        // where the built-in graphics start
   BmAnimState playerAnim;
+  // Scripted objects of the room (docs/spec/mondskript.md).
+  BmActors actors;
 } BmGame;
+
+/// Hurts the player as a hazard does (unless still blinking from the last hit).
+void bmGameHurtPlayer(BmGame *pGame, int32_t damage);
 
 /// Number of objects in the current room and access to one of them.
 uint16_t bmGameObjectCount(const BmGame *pGame);

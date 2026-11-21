@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 #include "cook.h"
+#include "mondskript.h"
 #include "overrides.h"
 #include "sprite_asset.h"
 
@@ -866,6 +867,40 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     catch (const std::exception &e)
     {
       report.error("does-not-fit", path, e.what());
+    }
+  }
+
+  // Scripts: all classes in one module.
+  if (!options.scripts.empty())
+  {
+    std::vector<script::Source> sources;
+    for (const std::string &path : options.scripts)
+    {
+      try
+      {
+        sources.push_back(script::readSource(path));
+      }
+      catch (const std::exception &e)
+      {
+        report.error("script", path, e.what());
+      }
+    }
+    script::Module module = script::compile(sources, [&](const std::string &s) { return strings.id(s); });
+    for (const script::Diagnostic &d : module.diagnostics)
+    {
+      std::string where = d.file + ":" + std::to_string(d.line) + ":" + std::to_string(d.column);
+      if (d.warning) report.warning("script", where, d.message);
+      else report.error("script", where, d.message);
+    }
+    if (module.ok())
+    {
+      Bytes b;
+      b.data = module.data;
+      add(writer, BM_CHUNK_MODB, BM_CATEGORY_SCRIPTS, 0, b);
+      size_t words = 0;
+      for (const script::ClassInfo &c : module.classes) words += size_t(c.codeWords);
+      report.info("script", "module", std::to_string(module.classes.size()) + " classes, " + std::to_string(words * 2) + " bytes of code, " +
+                                        std::to_string(module.data.size()) + " bytes in the pack");
     }
   }
 

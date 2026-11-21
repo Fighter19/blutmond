@@ -57,7 +57,7 @@ extern const uint8_t bm_embedded_pack_end[];
 #  define BM_SNAPSHOT_FRAME 0
 #endif
 
-#define BM_SNAPSHOT_CAPACITY 512
+#define BM_SNAPSHOT_CAPACITY 1024
 
 /// Snapshot mailboxes, written and read by tools (tools/bm_mgba_run --poke/--dump).
 typedef struct BmStateMailbox

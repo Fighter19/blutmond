@@ -35,6 +35,7 @@ enum {
   BM_CHUNK_OBJS = BM_FOURCC('O', 'B', 'J', 'S'),
   BM_CHUNK_STRS = BM_FOURCC('S', 'T', 'R', 'S'),
   BM_CHUNK_SPRT = BM_FOURCC('S', 'P', 'R', 'T'),
+  BM_CHUNK_MODB = BM_FOURCC('M', 'O', 'D', 'B'),
 };
 
 /// Storage layout (header flags bits 0-3), docs/spec/pack-format.md §2.6.
@@ -106,6 +107,9 @@ typedef struct BmPack
   const uint8_t *pData;
   uint32_t size;
   BmPackHeader header;
+  // The string table, found once when the pack is opened (strings are looked up often).
+  const uint8_t *pStrings;
+  uint32_t stringsSize;
 } BmPack;
 
 /// CRC-32 (IEEE 802.3), as used by packs, chunks and the link protocol.

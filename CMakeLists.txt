@@ -30,13 +30,17 @@ set(BM_WARNINGS -Wall -Wextra -Werror -pedantic)
 # What the test level is cooked from besides its rooms (sprites; later scripts and songs).
 set(BM_TEST_LEVEL_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmsprite
-  ${PROJECT_SOURCE_DIR}/assets/test_room/bat.bmsprite)
+  ${PROJECT_SOURCE_DIR}/assets/test_room/bat.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bat.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/door.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms)
 
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
 file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c)
 set(BM_LINK_SOURCES src/link/link.c src/link/live.c src/ppu/ppu_snapshot_part.c)
+set(BM_SCRIPT_SOURCES src/script/vm.c)
 
 if(BM_PLATFORM STREQUAL "gba")
   # The software PPU is not needed on the device; only its register definitions are used.
@@ -47,9 +51,10 @@ else()
   set(BM_HAL_DIR src/hal/host)
 endif()
 
-add_library(blutmond STATIC ${BM_CORE_SOURCES} ${BM_GRAPHICS_SOURCES} ${BM_PACK_SOURCES} ${BM_WORLD_SOURCES} ${BM_LINK_SOURCES} ${BM_HAL_SOURCES})
+add_library(blutmond STATIC ${BM_CORE_SOURCES} ${BM_GRAPHICS_SOURCES} ${BM_PACK_SOURCES} ${BM_WORLD_SOURCES} ${BM_LINK_SOURCES}
+  ${BM_SCRIPT_SOURCES} ${BM_HAL_SOURCES})
 target_include_directories(blutmond
-  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu src/pack src/world src/link ${BM_HAL_DIR}
+  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu src/pack src/world src/link src/script ${BM_HAL_DIR}
   PRIVATE src/core/private)
 target_compile_options(blutmond PRIVATE ${BM_WARNINGS})
 if(BM_PLATFORM STREQUAL "gba")
@@ -192,9 +197,16 @@ if(BM_PLATFORM STREQUAL "host")
 
   # Cooker: Tiled rooms -> pack (tools/cooker), as a library for bmcook and the editor.
   # Uses stb_image from third_party.
+  # The Mondskript compiler (tools/mondskript), with the interpreter's verifier.
+  add_library(bm_script STATIC tools/mondskript/mondskript.cpp src/script/vm.c)
+  target_include_directories(bm_script PUBLIC tools/mondskript src/script src/core/public)
+  target_compile_definitions(bm_script PUBLIC BM_PLATFORM_HOST)
+  target_compile_options(bm_script PRIVATE ${BM_WARNINGS})
+
   add_library(bm_cooker STATIC
     tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp src/pack/pack.c)
   target_include_directories(bm_cooker PUBLIC tools/cooker src/pack PRIVATE third_party/stb)
+  target_link_libraries(bm_cooker PUBLIC bm_script)
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST)
   target_compile_options(bm_cooker PRIVATE ${BM_WARNINGS})
   # The editor's project model (project file, asset catalogue, new rooms), without UI.
@@ -301,6 +313,11 @@ if(BM_PLATFORM STREQUAL "host")
   target_include_directories(test_project PRIVATE tests)
   target_compile_options(test_project PRIVATE ${BM_WARNINGS})
   add_test(NAME test_project COMMAND test_project ${PROJECT_SOURCE_DIR}/assets ${CMAKE_CURRENT_BINARY_DIR}/test-output/project)
+  add_executable(test_script tests/test_script.cpp)
+  target_link_libraries(test_script PRIVATE bm_script)
+  target_include_directories(test_script PRIVATE tests)
+  target_compile_options(test_script PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_script COMMAND test_script)
   add_executable(test_sprite tests/test_sprite.cpp)
   target_link_libraries(test_sprite PRIVATE bm_editor_model)
   target_include_directories(test_sprite PRIVATE tests)

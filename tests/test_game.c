@@ -109,6 +109,105 @@ static void testSavePointWritesASaveGame(void)
   TEST_ASSERT(s_game.saves == 1);
 }
 
+// --- Scripted objects (assets/test_room/scripts) ---------------------------------------------
+
+static int actorOfClass(const char *cls)
+{
+  for (uint8_t i = 0; i < s_game.actors.count; i++)
+    if (strcmp(s_game.objects[s_game.actors.object[i]].className, cls) == 0) return i;
+  return -1;
+}
+
+static const char *stateOf(int actor)
+{
+  const BmActors *a = &s_game.actors;
+  if (a->state[actor] == 0xFF) return "";
+  return bmPackString(&s_pack, bmVmStateName(&a->module, a->classIndex[actor], a->state[actor]));
+}
+
+static void testTheBatChasesHitsAndGoesHome(void)
+{
+  bmHalHostReset();
+  BmDeviceHandle device = NULL;
+  bmCreateDevice(bmGetPhysicalDevice(), &device);
+  g_defaultDevice = device;
+  bmPackOpen(&s_pack, s_data, s_size, true);
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "test_room_2") == BM_SUCCESS);
+  TEST_ASSERT(s_game.actors.hasModule);
+  int bat = actorOfClass("Bat");
+  TEST_ASSERT(bat >= 0);
+  TEST_ASSERT(s_game.actors.sheet[bat] >= 0);
+  TEST_ASSERT(strcmp(stateOf(bat), "Sleeping") == 0);
+
+  // Far away it sleeps.
+  bmBodyPlace(&s_game.player, 40, 160);
+  frames(60, 0);
+  TEST_ASSERT(strcmp(stateOf(bat), "Sleeping") == 0);
+  TEST_ASSERT(s_game.actors.x[bat] == s_game.actors.homeX[bat]);
+
+  // The player jumps up below it: it wakes up and comes closer every frame.
+  bmBodyPlace(&s_game.player, 200, 140);
+  frames(2, 0);
+  TEST_ASSERT(strcmp(stateOf(bat), "Chasing") == 0);
+  int32_t y0 = s_game.actors.y[bat];
+  frames(20, 0);
+  TEST_ASSERT(s_game.actors.y[bat] > y0);
+
+  // A save state in the middle of the chase continues exactly the same.
+  static uint8_t snap[1024];
+  BmStateBlock block = bmGameStateBlock(&s_game);
+  uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
+  TEST_ASSERT(size > 0);
+  printf("    snapshot with scripted objects: %u bytes\n", (unsigned)size);
+  frames(40, 0);
+  int32_t x1 = s_game.actors.x[bat], y1 = s_game.actors.y[bat];
+  uint8_t state1 = s_game.actors.state[bat];
+  uint32_t hurts1 = s_game.hurts;
+  TEST_ASSERT(bmStateRead(&block, 1, snap, size) == BM_STATE_OK);
+  TEST_ASSERT(bmGameAfterLoad(&s_game) == BM_SUCCESS);
+  frames(40, 0);
+  TEST_ASSERT(s_game.actors.x[bat] == x1 && s_game.actors.y[bat] == y1 && s_game.actors.state[bat] == state1 && s_game.hurts == hurts1);
+
+  // It reaches the player, hurts them once and flies home to rest.
+  uint32_t hurtsBefore = s_game.hurts;
+  int frame = 0;
+  for (; frame < 300 && s_game.hurts == hurtsBefore; frame++) frames(1, 0);
+  TEST_ASSERT(s_game.hurts == hurtsBefore + 1);
+  TEST_ASSERT(strcmp(stateOf(bat), "Returning") == 0);
+  bmBodyPlace(&s_game.player, 40, 160);
+  for (frame = 0; frame < 400 && strcmp(stateOf(bat), "Resting") != 0; frame++) frames(1, 0);
+  TEST_ASSERT(strcmp(stateOf(bat), "Resting") == 0);
+  TEST_ASSERT(s_game.actors.x[bat] == s_game.actors.homeX[bat] && s_game.actors.y[bat] == s_game.actors.homeY[bat]);
+  frames(95, 0);
+  TEST_ASSERT(strcmp(stateOf(bat), "Sleeping") == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+static void testAPickupStaysTaken(void)
+{
+  start();
+  int pickup = actorOfClass("Pickup");
+  TEST_ASSERT(pickup >= 0);
+  TEST_ASSERT(!s_game.actors.hidden[pickup] && s_game.actors.itemCount == 0);
+  // Onto the pickup: taken, hidden, the item is the player's.
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[pickup]), BM_FIX_INT(s_game.actors.y[pickup]));
+  frames(2, 0);
+  TEST_ASSERT(s_game.actors.hidden[pickup]);
+  TEST_ASSERT(s_game.actors.itemCount == 1);
+  TEST_ASSERT(s_game.actors.storeCount == 1);
+
+  // In the save game: a new game that loads it finds the pickup gone and the item kept.
+  TEST_ASSERT(bmGameWriteSaveGame(&s_game));
+  bmGameStart(&s_game, &s_pack, NULL);
+  pickup = actorOfClass("Pickup");
+  TEST_ASSERT(!s_game.actors.hidden[pickup] && s_game.actors.itemCount == 0);
+  TEST_ASSERT(bmGameReadSaveGame(&s_game));
+  pickup = actorOfClass("Pickup");
+  TEST_ASSERT(s_game.actors.hidden[pickup]);
+  TEST_ASSERT(s_game.actors.itemCount == 1);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -129,6 +228,8 @@ int main(int argc, char **argv)
   RUN_TEST(testFallingIntoAPitRespawnsOnSafeGround);
   RUN_TEST(testDoorsLeadBothWays);
   RUN_TEST(testSavePointWritesASaveGame);
+  RUN_TEST(testTheBatChasesHitsAndGoesHome);
+  RUN_TEST(testAPickupStaysTaken);
   free(s_data);
   return TEST_RESULT();
 }

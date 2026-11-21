@@ -101,6 +101,10 @@ BmPackError bmPackOpen(BmPack *pPack, const void *pData, uint32_t size, bool ver
   pPack->pData = p;
   pPack->size = h.totalSize;
   pPack->header = h;
+  pPack->pStrings = NULL;
+  pPack->stringsSize = 0;
+  int32_t strings = bmPackFindChunk(pPack, BM_CHUNK_STRS, 0);
+  if (strings >= 0) pPack->pStrings = bmPackChunkData(pPack, (uint32_t)strings, &pPack->stringsSize);
   return BM_PACK_OK;
 }
 
@@ -148,9 +152,8 @@ const uint8_t *bmPackChunkData(const BmPack *pPack, uint32_t index, uint32_t *pS
 
 const char *bmPackString(const BmPack *pPack, uint16_t id)
 {
-  int32_t index = bmPackFindChunk(pPack, BM_CHUNK_STRS, 0);
-  uint32_t size = 0;
-  const uint8_t *p = index >= 0 ? bmPackChunkData(pPack, (uint32_t)index, &size) : NULL;
+  const uint8_t *p = pPack->pStrings;
+  uint32_t size = pPack->stringsSize;
   if (p == NULL || size < 4 || id >= bmRead16(p) || 4u + id * 4u + 4u > size)
   {
     return NULL;

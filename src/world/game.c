@@ -286,12 +286,15 @@ static void updateSprites(BmGame *g)
     bmSpriteSet(next++, &s);
   }
 
-  // Objects: the sprite named like their class (its first animation, until scripts play
+  next = (uint8_t)(next + bmActorsDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
+
+  // Other objects: the sprite named like their class (its first animation, until scripts play
   // animations), or a placeholder frame for classes without graphics.
   for (uint16_t i = 0; i < g->objectCount && next < BM_GAME_MAX_OAM; i++)
   {
     const BmObjectView *o = &g->objects[i];
     if ((o->kind != BM_OBJECT_OTHER && o->kind != BM_OBJECT_SAVE_POINT) || o->className[0] == 0) continue;
+    if (bmActorsOwnObject(g, i)) continue;
     if (g->objectSheet[i] >= 0)
     {
       const BmSpriteSheet *s = &g->sheets[g->objectSheet[i]];
@@ -342,7 +345,7 @@ static void updateCamera(BmGame *g)
   bmRoomSetCamera(&g->room, cx, cy);
 }
 
-static BmResult enterRoom(BmGame *g, uint32_t index)
+static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
 {
   BmResult r = bmRoomOpen(&g->room, g->pPack, index);
   if (r != BM_SUCCESS) return r;
@@ -356,6 +359,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index)
   g->physics.waterMaxFallSpeed = g->room.waterMaxFallSpeed;
   readObjects(g);
   loadSprites(g);
+  bmActorsEnterRoom(g, fresh);
   return bmRoomShow(&g->room, 0, 0);
 }
 
@@ -367,7 +371,8 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   int32_t index = roomId ? bmGameFindRoom(pPack, roomId) : 0;
   if (index < 0) return BM_ERROR_INVALID_ARGUMENT;
   bmVideoInit();
-  BmResult r = enterRoom(g, (uint32_t)index);
+  g->actors.seed = 1;
+  BmResult r = enterRoom(g, (uint32_t)index, true);
   if (r != BM_SUCCESS) return r;
   BmObjectView start;
   if (findObject(g, BM_OBJECT_PLAYER_START, NULL, &start))
@@ -406,7 +411,7 @@ static void useDoor(BmGame *g, const BmObjectView *door)
   int32_t index = target ? bmGameFindRoom(g->pPack, target) : -1;
   if (index < 0) return;
   bm_fix vx = g->player.vx;
-  if (enterRoom(g, (uint32_t)index) != BM_SUCCESS) return;
+  if (enterRoom(g, (uint32_t)index, true) != BM_SUCCESS) return;
   g->roomChanges++;
   g->doorCooldown = 20;
 
@@ -430,6 +435,15 @@ static void useDoor(BmGame *g, const BmObjectView *door)
   g->player.vx = vx;
 }
 
+void bmGameHurtPlayer(BmGame *g, int32_t damage)
+{
+  if (damage <= 0 || g->hurtTimer != 0) return;
+  g->hurts++;
+  g->hurtTimer = 60;
+  g->player.vy = -BM_FIX(3);
+  g->player.vx = -g->player.facing * BM_FIX(2);
+}
+
 void bmGameFrame(BmGame *g, uint16_t keys)
 {
   g->frame++;
@@ -451,12 +465,9 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   {
     respawn(g);
   }
-  else if ((events & BM_BODY_DAMAGE) && g->hurtTimer == 0)
+  else if (events & BM_BODY_DAMAGE)
   {
-    g->hurts++;
-    g->hurtTimer = 60;
-    g->player.vy = -BM_FIX(3);
-    g->player.vx = -g->player.facing * BM_FIX(2);
+    bmGameHurtPlayer(g, 1);
   }
 
   // Engine objects the player touches.
@@ -465,6 +476,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   for (uint16_t i = 0; i < g->objectCount; i++)
   {
     const BmObjectView *o = &g->objects[i];
+    if (bmActorsOwnObject(g, i)) continue;  // its script decides what happens
     if (o->kind == BM_OBJECT_SAVE_POINT)
     {
       // Points: the area of a 16x32 marker standing on the point.
@@ -487,6 +499,18 @@ void bmGameFrame(BmGame *g, uint16_t keys)
       BmObjectView door = *o;  // the room's objects change when the room does
       useDoor(g, &door);
       break;
+    }
+  }
+  // Scripted objects; a door one of them opened is gone through after all had their turn.
+  bmActorsFrame(g);
+  if (g->actors.pendingDoor != 0)
+  {
+    uint16_t index = (uint16_t)(g->actors.pendingDoor - 1);
+    g->actors.pendingDoor = 0;
+    if (g->doorCooldown == 0 && index < g->objectCount)
+    {
+      BmObjectView door = g->objects[index];
+      useDoor(g, &door);
     }
   }
   // Falling out of the bottom without a kill zone.
@@ -532,6 +556,31 @@ static const BmStateField s_gameFields[] = {
   F(playerAnim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerAnim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerAnim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  // Scripted objects: where each script is and what its variables hold.
+  F(actors.moduleHash, BM_TYPE_U32, BM_STATE_SNAPSHOT),
+  F(actors.count, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  BM_STATE_ARRAY(BmGame, actors.classIndex, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.state, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.wait, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.pc, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.fields, BM_TYPE_S32, BM_STATE_SNAPSHOT, BM_ACTORS_MAX * BM_SCRIPT_MAX_FIELDS),
+  BM_STATE_ARRAY(BmGame, actors.x, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.y, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.facing, BM_TYPE_S8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.hidden, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.touching, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.anim, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.animFinished, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.animStep, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.animTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  F(actors.seed, BM_TYPE_U32, BM_STATE_SNAPSHOT),
+  // What `save` variables hold, and the items: these go into the save game.
+  F(actors.storeCount, BM_TYPE_U8, BM_STATE_SAVE),
+  BM_STATE_ARRAY(BmGame, actors.storeKey, BM_TYPE_U32, BM_STATE_SAVE, BM_ACTORS_STORE),
+  BM_STATE_ARRAY(BmGame, actors.storeValue, BM_TYPE_S32, BM_STATE_SAVE, BM_ACTORS_STORE),
+  F(actors.itemCount, BM_TYPE_U8, BM_STATE_SAVE),
+  BM_STATE_ARRAY(BmGame, actors.items, BM_TYPE_U32, BM_STATE_SAVE, BM_ACTORS_ITEMS),
 };
 #undef F
 
@@ -540,18 +589,24 @@ BmStateBlock bmGameStateBlock(BmGame *pGame)
   return (BmStateBlock){ "game", s_gameFields, (uint16_t)(sizeof(s_gameFields) / sizeof(s_gameFields[0])), pGame };
 }
 
-BmResult bmGameAfterLoad(BmGame *g)
+// `fresh`: the scripted objects start anew (a save game holds only what `save` variables kept).
+static BmResult afterLoad(BmGame *g, bool fresh)
 {
   BmBody player = g->player;
   uint32_t roomIndex = g->roomIndex;
   if (roomIndex >= bmRoomCount(g->pPack)) return BM_ERROR_INVALID_ARGUMENT;
-  BmResult r = enterRoom(g, roomIndex);
+  BmResult r = enterRoom(g, roomIndex, fresh);
   if (r != BM_SUCCESS) return r;
   g->player = player;
   g->saveCooldown = 0;
   updateCamera(g);
   updateSprites(g);
   return BM_SUCCESS;
+}
+
+BmResult bmGameAfterLoad(BmGame *g)
+{
+  return afterLoad(g, false);
 }
 
 // Save memory layout: the save game at offset 0 (bmStateWrite format).
@@ -576,5 +631,5 @@ bool bmGameReadSaveGame(BmGame *g)
   // Only the `save` fields are read; everything else stays as bmGameStart left it.
   if (bmStateRead(&block, 1, buffer, sizeof(buffer)) != BM_STATE_OK) return false;
   g->player.vx = g->player.vy = 0;
-  return bmGameAfterLoad(g) == BM_SUCCESS;
+  return afterLoad(g, true) == BM_SUCCESS;
 }

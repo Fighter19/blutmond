@@ -2,7 +2,7 @@
 // bmcook: cooks Tiled rooms into a pack for one platform profile.
 //
 //   bmcook [--profile gba|snes|host] [--report report.txt] [--color-matrix m0,...,m8] -o out.bmpk
-//          room.tmx... [sprite.bmsprite...]
+//          room.tmx... [sprite.bmsprite...] [script.ms...]
 //
 // Exit status 1 when the report contains errors (the pack is then not written).
 
@@ -62,6 +62,7 @@ int main(int argc, char **argv)
     for (const std::string &path : inputs)
     {
       if (path.size() > 9 && path.substr(path.size() - 9) == ".bmsprite") options.sprites.push_back(path);
+      else if (path.size() > 3 && path.substr(path.size() - 3) == ".ms") options.scripts.push_back(path);
       else maps.push_back(bm::tmx::load(path));
     }
     options.profile = *profile;

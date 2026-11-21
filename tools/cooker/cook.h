@@ -75,6 +75,8 @@ struct CookOptions
   CookInfo *pInfo = nullptr;
   /// Sprite files (.bmsprite, sprite-format.md) to cook into the pack.
   std::vector<std::string> sprites;
+  /// Script files (.ms, mondskript.md), compiled into the pack's bytecode module.
+  std::vector<std::string> scripts;
 };
 
 /// Cooks the given rooms. Rooms with the same `area` property share tiles, palettes and the
