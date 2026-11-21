@@ -72,7 +72,7 @@ void bmXbooPortDelay(BmXboo *x, uint32_t delay)
 // Ctrl-C: give the port back and end. Checked once per word, so no word is cut in half.
 static void checkCancel(BmXboo *x)
 {
-  if (x->pCancel == NULL || !*x->pCancel) return;
+  if (x->pCancel == NULL || !*x->pCancel || x->cancelByCaller) return;
   fprintf(stderr, "\ncancelled\n");
   bmXbooClose(x);
   exit(130);

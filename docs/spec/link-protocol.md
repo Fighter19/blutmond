@@ -335,10 +335,13 @@ BIOS (`tests/test_multiboot.c`); it is the same code `bmlink boot` uses over the
 And nothing here has run on hardware: cable quality at 2 MHz is the open question (the plan's
 fallback is 256 kHz, one bit in `bmHalLinkMasterBegin`).
 
-## 10. Input mirror: the PC plays along
+## 10. Input mirror: one plays, the other plays along
 
-`bmlink --xboo <port> mirror <[host:]port of the PC game>` makes the PC game show what happens
-on the GBA. Nothing but the keys is sent: the game is deterministic (same state, same keys,
+`bmlink --xboo <port> mirror from <[host:]port of the PC game>` makes the PC game show what
+happens on the GBA; `mirror to ...` is the other direction: the game is played in the PC window
+and the GBA plays along. In the editor these are the buttons "Sync: Off, GBA > PC, PC > GBA"
+next to Run; switching ends the running mirror and starts the other. What follows describes
+the first direction; the other is the same with the roles swapped. Nothing but the keys is sent: the game is deterministic (same state, same keys,
 same result on both machines, bit for bit), so the PC game that starts from the GBA's state
 and gets the GBA's keys for every frame plays the same game.
 
@@ -346,7 +349,9 @@ and gets the GBA's keys for every frame plays the same game.
   frame uses. It sends a packet at once when the keys changed and otherwise every second
   frame: the last frame whose keys are known, and the changes (frame, keys) since the last
   packet.
-- `bmlink` first starts the reporting, then reads the GBA's state (`STATE_GET`) and loads it
+- `bmlink` first tells the PC game to get ready (`INPUT`, payload 3: it holds still from then
+  on, so it plays no frames of its own between getting the state and the first keys), starts
+  the reporting, then reads the GBA's state (`STATE_GET`) and loads it
   into the PC game (`STATE_PUT`, `APPLY` state), then passes every `INPUT` packet on.
 - The PC game (`apps/game`, started normally or with `--follow` to wait) uses for frame *n*
   the keys the GBA used for frame *n*, never its own, and holds still while the next frame's
@@ -363,10 +368,16 @@ game compares it with its own state at that frame and reports a difference; `bml
 loads the GBA's state again. The same happens if the runtime had more key changes than fit
 (16) while nobody polled.
 
-Tested in mGBA (a GBA image played by its autopilot, 900 frames through a room change, every
-check equal) and on a real GBA over the Xboo cable (1500 frames in 25.5 s, no reload of the
-state needed). Both machines must run the same pack. Not there yet: a button in the editor,
-and the other direction (the PC's keys into the GBA).
+**Stopping.** Ctrl-C (or the editor's "Off") ends `bmlink mirror` in order: it tells both sides
+to stop (`INPUT`, payload 0), and each plays on with its own keys from where it is. A side that
+follows and hears nothing for about two seconds does the same by itself. While the mirror runs
+it holds the cable; the editor lets it step aside for a hot reload (which then goes to both
+sides) and starts it again.
+
+Tested in mGBA in both directions (the playing side driven by its autopilot, 800 to 900 frames
+through a room change, every check equal, no reload of the state) and on a real GBA over the
+Xboo cable: the PC following the GBA for 1800 frames, and the GBA following the PC game's
+autopilot for 1180 frames into the second room. Both machines must run the same pack.
 
 ## History
 

@@ -701,9 +701,12 @@ if(BM_PLATFORM STREQUAL "host")
       # keys for each frame, mirrored by bmlink; the states are compared every 64 frames.
       if(Python3_FOUND)
         add_test(NAME input_mirror_gba_to_pc
-          COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/mirror_session.py $<TARGET_FILE:bmlink> $<TARGET_FILE:game>
+          COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/mirror_session.py from $<TARGET_FILE:bmlink> $<TARGET_FILE:game>
             ${cooked}/test_level_gba.bmpk ${BM_GBA_BUILD_DIR}/game_autoplay.gba ${BM_GBA_BUILD_DIR}/game_autoplay.elf)
-        set_tests_properties(input_mirror_gba_to_pc PROPERTIES FIXTURES_REQUIRED test_level_pack TIMEOUT 200)
+        add_test(NAME input_mirror_pc_to_gba
+          COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/mirror_session.py to $<TARGET_FILE:bmlink> $<TARGET_FILE:game>
+            ${cooked}/test_level_gba.bmpk ${BM_GBA_BUILD_DIR}/game.gba ${BM_GBA_BUILD_DIR}/game.elf)
+        set_tests_properties(input_mirror_gba_to_pc input_mirror_pc_to_gba PROPERTIES FIXTURES_REQUIRED test_level_pack TIMEOUT 240)
       endif()
 
       # Native code takes at most 60 % of the interpreter's time for the benchmark script (from

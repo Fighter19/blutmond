@@ -37,8 +37,10 @@
 //   screenshot <file.ppm> mGBA
 //   ppu-snapshot <file.bmps>   the video state (VRAM, palettes, OAM, registers) as a PPU
 //                         snapshot, for the editor's graphics view and bm_ppu_render
-//   mirror [host:]port [frames]   the PC game there plays along with this device: it takes the
-//                         device's state and then the same keys for the same frames
+//   mirror [from|to] [host:]port [frames]   "from" (the default): the PC game there plays along
+//                         with this device (its state, then the same keys for the same
+//                         frames); "to": this device plays along with the PC game. Until
+//                         Ctrl-C or for so many frames
 //   gdb <port>            a GDB server for the running game (link-protocol.md section 8) until
 //                         the debugger detaches; gdb-verbose also prints the packets
 //   stats                 link counters
@@ -202,27 +204,38 @@ static const char *resultName(uint8_t r)
   return r < sizeof(names) / sizeof(names[0]) ? names[r] : "?";
 }
 
-/// Brings the PC game at `address` to the device's state. False if a link failed.
-static bool mirrorState(BmLinkMaster *pDevice, BmLinkMaster *pPc)
+/// Brings one side to the other's state. False if a link failed or the state was refused.
+static bool mirrorState(BmLinkMaster *pFrom, BmLinkMaster *pTo, const char *toName)
 {
   static uint8_t state[BM_LIVE_STATE_CAPACITY];
   uint32_t size = 0;
   BmLiveStatus status;
-  if (!bmLiveMasterGetState(pDevice, BM_STATE_SNAPSHOT, state, sizeof(state), &size)) return false;
-  if (!bmLiveMasterPutState(pPc, state, size, &status)) return false;
+  if (!bmLiveMasterGetState(pFrom, BM_STATE_SNAPSHOT, state, sizeof(state), &size)) return false;
+  if (!bmLiveMasterPutState(pTo, state, size, &status)) return false;
   if (status.result != BM_LIVE_OK)
   {
-    fprintf(stderr, "mirror: the PC game does not take the device's state (%s)\n", resultName(status.result));
+    fprintf(stderr, "mirror: %s does not take the state (%s)\n", toName, resultName(status.result));
     return false;
   }
   return true;
 }
 
-static bool mirror(BmLinkMaster *pDevice, const char *address, uint32_t frameLimit)
+/// One plays, the other plays along (link-protocol.md section 10). `toDevice`: the PC game
+/// plays and the device follows; else the device plays and the PC game follows. Ends after
+/// `frameLimit` frames (0: never) or when the program is asked to stop.
+static bool mirror(BmLinkMaster *pDevice, BmXboo *pXboo, const char *address, bool toDevice, uint32_t frameLimit)
 {
   static BmTcpLink tcp;
   static BmLiveRemote device, pc;
-  if (!bmTcpLinkOpen(&tcp, address))
+  // The PC game may just have been started: give it a few seconds to listen.
+  double until = now() + 5.0;
+  bool open = false;
+  while (!(open = bmTcpLinkOpen(&tcp, address)) && now() < until && !s_cancel)
+  {
+    struct timespec nap = { 0, 100000000 };
+    nanosleep(&nap, NULL);
+  }
+  if (!open)
   {
     fprintf(stderr, "mirror: %s\n", tcp.error);
     return false;
@@ -230,6 +243,11 @@ static bool mirror(BmLinkMaster *pDevice, const char *address, uint32_t frameLim
   BmLinkTransport transport = bmTcpLinkTransport(&tcp);
   BmLinkMaster pcMaster;
   bmLinkMasterInit(&pcMaster, &transport);
+  BmLinkMaster *pFrom = toDevice ? &pcMaster : pDevice, *pTo = toDevice ? pDevice : &pcMaster;
+  const char *fromName = toDevice ? "the PC game" : "the device", *toName = toDevice ? "the device" : "the PC game";
+  // Asked to stop (Ctrl-C, the editor): end in order, so neither side keeps waiting.
+  if (pXboo != NULL) pXboo->cancelByCaller = true;
+
   bool ok = bmLiveMasterHello(pDevice, &device) && bmLiveMasterHello(&pcMaster, &pc);
   if (ok && (device.hello.activeCrc != pc.hello.activeCrc || device.hello.activeSize != pc.hello.activeSize))
   {
@@ -237,30 +255,33 @@ static bool mirror(BmLinkMaster *pDevice, const char *address, uint32_t frameLim
     ok = false;
   }
   // Keys first, then the state: so nothing between the two is missing.
-  const uint8_t on = 1, off = 0;
-  ok = ok && bmLinkMasterQueue(pDevice, BM_LINK_INPUT, &on, 1) && bmLinkMasterFlush(pDevice) && mirrorState(pDevice, &pcMaster);
-  if (ok) printf("mirror: the PC game follows the device (Ctrl-C ends it)\n");
+  // And the one that follows holds still from before it gets the state, or it would play
+  // some frames of its own in between.
+  const uint8_t on = 1, off = 0, ready = 3;
+  ok = ok && bmLinkMasterQueue(pTo, BM_LINK_INPUT, &ready, 1) && bmLinkMasterFlush(pTo);
+  ok = ok && bmLinkMasterQueue(pFrom, BM_LINK_INPUT, &on, 1) && bmLinkMasterFlush(pFrom) && mirrorState(pFrom, pTo, toName);
+  if (ok) printf("mirror: %s follows %s\n", toName, fromName);
   uint32_t firstFrame = 0, lastFrame = 0, packets = 0, restarts = 0;
   double started = now(), lastReport = started;
-  while (ok)
+  while (ok && !s_cancel)
   {
     BmLinkPacket p;
-    if (bmLinkMasterReceive(pDevice, BM_LINK_INPUT, &p, 64) && p.length >= BM_LIVE_INPUT_HEADER)
+    if (bmLinkMasterReceive(pFrom, BM_LINK_INPUT, &p, toDevice ? 4 : 64) && p.length >= BM_LIVE_INPUT_HEADER)
     {
       lastFrame = bmLinkGet32(p.payload);
       if (packets++ == 0) firstFrame = lastFrame;
       bool lost = (p.payload[5] & BM_LIVE_INPUT_FLAG_LOST) != 0;
-      ok = bmLinkMasterQueue(&pcMaster, BM_LINK_INPUT, p.payload, p.length) && bmLinkMasterFlush(&pcMaster);
-      // Changes that did not fit on the device: start over from its state.
-      if (ok && lost) { restarts++; ok = mirrorState(pDevice, &pcMaster); }
+      ok = bmLinkMasterQueue(pTo, BM_LINK_INPUT, p.payload, p.length) && bmLinkMasterFlush(pTo);
+      // Changes that did not fit on the playing side: start over from its state.
+      if (ok && lost) { restarts++; ok = mirrorState(pFrom, pTo, toName); }
     }
-    else if (pDevice->pError != NULL && strstr(pDevice->pError, "resync") != NULL) ok = false;
-    // The PC game says so when its state differs from the device's.
-    if (ok && bmLinkMasterReceive(&pcMaster, BM_LINK_INPUT, &p, 1) && p.length >= 8 && p.payload[0] == 2)
+    else if (pFrom->pError != NULL && strstr(pFrom->pError, "resync") != NULL) ok = false;
+    // The following side says so when its state differs.
+    if (ok && bmLinkMasterReceive(pTo, BM_LINK_INPUT, &p, toDevice ? 8 : 1) && p.length >= 8 && p.payload[0] == 2)
     {
       restarts++;
-      printf("mirror: the PC game differed at frame %u; taking the device's state again\n", (unsigned)bmLinkGet32(p.payload + 4));
-      ok = mirrorState(pDevice, &pcMaster);
+      printf("mirror: %s differed at frame %u; taking the state of %s again\n", toName, (unsigned)bmLinkGet32(p.payload + 4), fromName);
+      ok = mirrorState(pFrom, pTo, toName);
     }
     if (now() - lastReport >= 5.0)
     {
@@ -271,14 +292,15 @@ static bool mirror(BmLinkMaster *pDevice, const char *address, uint32_t frameLim
   }
   if (ok)
   {
-    bmLinkMasterQueue(pDevice, BM_LINK_INPUT, &off, 1);
-    bmLinkMasterFlush(pDevice);
-    bmLinkMasterQueue(&pcMaster, BM_LINK_INPUT, &off, 1);
-    bmLinkMasterFlush(&pcMaster);
-    printf("mirror: %u frames in %.1f s, %u packets, %u restarts from the device's state\n", (unsigned)(lastFrame - firstFrame), now() - started,
-           (unsigned)packets, (unsigned)restarts);
+    bmLinkMasterQueue(pFrom, BM_LINK_INPUT, &off, 1);
+    bmLinkMasterFlush(pFrom);
+    bmLinkMasterQueue(pTo, BM_LINK_INPUT, &off, 1);
+    bmLinkMasterFlush(pTo);
+    printf("mirror: ended after %u frames in %.1f s, %u packets, %u restarts from the state of %s\n", (unsigned)(lastFrame - firstFrame),
+           now() - started, (unsigned)packets, (unsigned)restarts, fromName);
   }
   else if (pcMaster.pError != NULL) fprintf(stderr, "mirror: PC game: %s\n", pcMaster.pError);
+  if (pXboo != NULL) pXboo->cancelByCaller = false;
   bmLinkMasterFree(&pcMaster);
   bmTcpLinkClose(&tcp);
   return ok;
@@ -579,10 +601,14 @@ int main(int argc, char **argv)
     {
       // The PC game plays along with this device: same state to start from, then the same
       // keys for the same frames (link-protocol.md section 10). Optional: for how many frames.
+      bool toDevice = false;
+      if (strcmp(a1, "to") == 0 || strcmp(a1, "from") == 0) { toDevice = strcmp(a1, "to") == 0; i++; }
+      if (i + 1 >= argc) { fprintf(stderr, "mirror [from|to] [host:]port [frames]\n"); failed = 2; break; }
       const char *address = argv[++i];
       uint32_t limit = 0;
       if (i + 1 < argc && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9') limit = (uint32_t)atoi(argv[++i]);
-      if (!mirror(&m, address, limit)) failed = 1;
+      if (!mirror(&m, xbooDevice != NULL ? &xboo : NULL, address, toDevice, limit)) failed = 1;
+      if (s_cancel) break;   // asked to stop: ended in order, nothing more to do
     }
     else if (strcmp(cmd, "reset") == 0)
     {

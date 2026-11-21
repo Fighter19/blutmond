@@ -170,7 +170,8 @@ static inline bool bmLiveCapturing(const BmLive *pLive)
 // behind. Every BM_LIVE_INPUT_CHECK_EVERY frames a checksum of the state goes along, so a
 // difference is noticed.
 
-/// INPUT from the master: one byte, 1 start reporting, 0 stop. From the reporting device (and
+/// INPUT from the master: one byte, 1 start reporting, 0 stop (reporting and following),
+/// 3 get ready to follow (hold still until keys arrive). From the reporting device (and
 /// passed on to the following one): u32 last frame whose keys are known, u8 number of
 /// changes, u8 flags, u16 0; then per change u32 frame, u16 keys, u16 0; with flag 2 then
 /// u32 frame and u32 checksum of the state before that frame. From the following device:

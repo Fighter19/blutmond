@@ -179,9 +179,11 @@ every frame, so its window shows what happens on the device, a moment later
 ([docs/spec/link-protocol.md](docs/spec/link-protocol.md) §10):
 
 ```
-build/game level.bmpk --follow &                  # waits for the GBA
-build/bmlink --xboo /dev/parport0 mirror 7414     # until Ctrl-C
+build/game level.bmpk --follow &                       # waits for the GBA
+build/bmlink --xboo /dev/parport0 mirror from 7414     # until Ctrl-C; "to": the GBA follows the PC
 ```
+
+In the editor: Run on the GBA, then the Sync buttons next to it (Off, GBA > PC, PC > GBA).
 
 GBA to GBA: with two GBAs on a link cable, Select + Start in the cartridge game brings the
 other one to the same room and position. A GBA without a cartridge is booted first, with the

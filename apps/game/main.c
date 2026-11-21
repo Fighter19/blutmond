@@ -27,7 +27,7 @@
 //   (bmlink --tcp, the editor's Run button). Options:
 //   --frames N  --autoplay  --trace  --snapshot-at N file  --load file  --headless  --window
 //   --scale N  --listen PORT  --no-listen  --save file  --no-save  --sound-check file
-//   --follow  (wait for another device's keys: bmlink mirror)  --until-frame N
+//   --follow  (wait for another device's keys: bmlink mirror)  --until-frame N  --realtime
 
 #if defined(BM_PLATFORM_HOST) && !defined(_POSIX_C_SOURCE)
 #  define _POSIX_C_SOURCE 200809L   // nanosleep
@@ -197,6 +197,7 @@ static uint32_t s_snapshotFrame = BM_SNAPSHOT_FRAME;
 static bool s_waitForMirror;   // --follow: do not play until another device's keys arrive
 #ifdef BM_PLATFORM_HOST
 static uint32_t s_untilFrame;  // --until-frame: end when the game reaches this frame
+static bool s_realtime;        // --realtime: 60 frames per second also without a window
 #endif
 
 static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autoplay)
@@ -317,6 +318,11 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
 #ifdef BM_PLATFORM_HOST
     if (s_frameHook != NULL && !s_frameHook()) break;
     if (s_untilFrame != 0 && s_game.frame >= s_untilFrame) break;
+    if (s_realtime)
+    {
+      struct timespec nap = { 0, 16666667 };
+      nanosleep(&nap, NULL);
+    }
 #endif
   }
   return 0;
@@ -430,6 +436,7 @@ int main(int argc, char **argv)
     else if (strcmp(argv[i], "--sound-check") == 0 && i + 1 < argc) soundCheckPath = argv[++i];
     else if (strcmp(argv[i], "--autoplay") == 0) autoplay = true;
     else if (strcmp(argv[i], "--follow") == 0) s_waitForMirror = true;
+    else if (strcmp(argv[i], "--realtime") == 0) s_realtime = true;
     else if (strcmp(argv[i], "--until-frame") == 0 && i + 1 < argc) s_untilFrame = (uint32_t)atoi(argv[++i]);
     else if (strcmp(argv[i], "--trace") == 0) trace = true;
     else if (strcmp(argv[i], "--snapshot-at") == 0 && i + 2 < argc)

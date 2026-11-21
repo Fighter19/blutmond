@@ -260,6 +260,14 @@ static bool handleApply(BmLive *l, const BmLinkPacket *p)
 
 // --- Input mirror (link-protocol.md §10) ------------------------------------------------------
 
+// Calls of bmLiveFrame without keys from the other side after which following ends (about two
+// seconds: the PC game calls it every millisecond while it waits, a device once per frame).
+#ifdef BM_PLATFORM_HOST
+#  define FOLLOW_TIMEOUT 2000
+#else
+#  define FOLLOW_TIMEOUT 120
+#endif
+
 void bmLiveInput(BmLive *l, uint32_t frame, uint16_t keys)
 {
   if (!l->inputStream) return;
@@ -334,6 +342,16 @@ static void receiveInput(BmLive *l, const BmLinkPacket *p)
   if (p->length == 1)
   {
     // Start or stop reporting.
+    if (p->payload[0] == 3)
+    {
+      // About to follow: play nothing of its own from now on, until the first keys are there.
+      l->following = true;
+      l->followIdle = 0;
+      l->followCount = 0;
+      l->followHasCheck = false;
+      l->followThrough = 0xFFFFFFFFu;   // before every frame
+      return;
+    }
     l->inputStream = p->payload[0] == 1;
     if (p->payload[0] == 0) l->following = false;
     l->inputFirst = true;
@@ -628,7 +646,7 @@ void bmLiveFrame(BmLive *l)
   }
   pumpInput(l);
   // Following ends when it is told to, or when nothing has come for a long time.
-  if (l->following && ++l->followIdle >= 3000) l->following = false;
+  if (l->following && ++l->followIdle >= FOLLOW_TIMEOUT) l->following = false;
   pumpSnapshot(l);
 }
 

@@ -66,7 +66,8 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
       <Item action="asset.import"/><Item action="asset.open"/><Item action="asset.delete"/>
       <Item action="room.reload"/><Item action="app.quit"/>
     </Menu>
-    <Menu title="Run"><Item action="run.start"/><Item action="run.pc"/><Item action="run.gba"/><Item action="run.stop"/><Item action="gfx.capture"/></Menu>
+    <Menu title="Run"><Item action="run.start"/><Item action="run.pc"/><Item action="run.gba"/><Item action="run.stop"/><Item action="gfx.capture"/>
+      <Item action="sync.off"/><Item action="sync.gba_pc"/><Item action="sync.pc_gba"/></Menu>
     <Menu title="View"><Item action="view.collision"/><Item action="view.objects"/><Item action="view.grid"/>
       <Item action="theme.classic"/><Item action="theme.light"/><Item action="theme.dark"/></Menu>
   </MenuBar>
@@ -78,6 +79,10 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
     <OptionButton id="run_target" items="PC;GBA (Xboo)"/>
     <Button text="Stop" action="run.stop"/>
     <CheckBox id="live" text="Live" pressed="1"/>
+    <Label text="  Sync"/>
+    <Button id="sync_off" text="Off" toggle="1" pressed="1" action="sync.off" tooltip="The GBA and the PC game each play on their own"/>
+    <Button id="sync_gba_pc" text="GBA > PC" toggle="1" action="sync.gba_pc" tooltip="Play on the GBA; the PC game plays along"/>
+    <Button id="sync_pc_gba" text="PC > GBA" toggle="1" action="sync.pc_gba" tooltip="Play in the PC window; the GBA plays along"/>
     <CheckBox id="collision" text="Collision" pressed="1"/>
     <CheckBox id="objects" text="Objects" pressed="1"/>
     <CheckBox id="grid" text="Grid"/>
@@ -415,6 +420,7 @@ struct Editor
   }
 
   RunTarget target = RunTarget::Pc;
+  Button *syncOff = nullptr, *syncGbaPc = nullptr, *syncPcGba = nullptr;
   bool live = true;
 
   std::string runPackPath() const
@@ -438,6 +444,14 @@ struct Editor
     if (project.cookLevel(path, &error)) return true;
     runLine("cannot cook the level: " + error, true);
     return false;
+  }
+
+  // Whose keys the other one uses. Needs the latest cook on both, so it cooks first.
+  void setSync(SyncMode mode)
+  {
+    std::string path;
+    if (mode != SyncMode::Off && !cookLevel(path)) return;
+    runner.setSync(mode, path);
   }
 
   void startRun(RunTarget t)
@@ -579,6 +593,11 @@ struct Editor
     ui.actions().add({"run.pc", "Run on the PC", "play", "", "", [this] { startRun(RunTarget::Pc); }, nullptr, nullptr});
     ui.actions().add({"run.gba", "Run on the GBA (Xboo)", "gamepad", "F7", "", [this] { startRun(RunTarget::Gba); }, nullptr, nullptr});
     ui.actions().add({"run.stop", "Stop", "stop", "Shift+F6", "", [this] { runner.stop(); }, [this] { return runner.active(); }, nullptr});
+    ui.actions().add({"sync.off", "Sync off", "unlink", "", "", [this] { setSync(SyncMode::Off); }, nullptr, [this] { return runner.sync() == SyncMode::Off; }});
+    ui.actions().add({"sync.gba_pc", "Sync: the PC plays along with the GBA", "link", "", "", [this] { setSync(SyncMode::GbaToPc); }, nullptr,
+                      [this] { return runner.sync() == SyncMode::GbaToPc; }});
+    ui.actions().add({"sync.pc_gba", "Sync: the GBA plays along with the PC", "link", "", "", [this] { setSync(SyncMode::PcToGba); }, nullptr,
+                      [this] { return runner.sync() == SyncMode::PcToGba; }});
     ui.actions().add({"app.quit", "Quit", "", "Ctrl+Q", "", [this] { app.quit(); }, nullptr, nullptr});
     ui.actions().add({"view.collision", "Collision", "", "C", "", [this] { overview->showCollision = !overview->showCollision; }, nullptr, nullptr});
     ui.actions().add({"view.objects", "Objects", "", "O", "", [this] { overview->showObjects = !overview->showObjects; }, nullptr, nullptr});
@@ -692,6 +711,9 @@ struct Editor
     runLog = root->findAs<ItemList>("runlog");
     runLog->tileSize = 0;
     runState = root->findAs<Label>("run_state");
+    syncOff = root->findAs<Button>("sync_off");
+    syncGbaPc = root->findAs<Button>("sync_gba_pc");
+    syncPcGba = root->findAs<Button>("sync_pc_gba");
     runner.log = [this](const std::string &line, bool error) { runLine(line, error); };
     root->findAs<OptionButton>("run_target")->select(int(target), false);   // --target
     root->findAs<OptionButton>("run_target")->itemSelected.connect([this](int i) { target = RunTarget(i); });
@@ -744,6 +766,10 @@ struct Editor
       }
     }
     runner.update();
+    // The three sync buttons show which one is on (also after it ended by itself).
+    syncOff->pressed = runner.sync() == SyncMode::Off;
+    syncGbaPc->pressed = runner.sync() == SyncMode::GbaToPc;
+    syncPcGba->pressed = runner.sync() == SyncMode::PcToGba;
     followTimer += dt;
     if (graphicsFromGame && graphicsFollow && runner.active() && !runner.busy() && followTimer > 1.0f)
     {

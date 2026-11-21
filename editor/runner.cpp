@@ -120,8 +120,80 @@ void Runner::run(RunTarget target, const std::string &packPath)
   queue({args, "Run on the GBA", true, {}, false});
 }
 
+static const char *kSyncJob = "Sync";
+
+void Runner::queueSync()
+{
+  std::vector<std::string> args = linkArgs(RunTarget::Gba);
+  args.insert(args.end(), {"mirror", sync_ == SyncMode::PcToGba ? "to" : "from", "127.0.0.1:" + std::to_string(settings.port)});
+  queue({args, kSyncJob, true, {}, false});
+}
+
+// The mirror holds the cable while it runs: ask it to end (it does so in order).
+void Runner::interruptSync()
+{
+  if (!job_ || current_.what != kSyncJob || syncStopping_) return;
+  syncStopping_ = true;
+  SDL_KillProcess(job_, false);
+}
+
+void Runner::setSync(SyncMode mode, const std::string &packPath)
+{
+  if (mode == sync_) return;
+  for (auto it = jobs_.begin(); it != jobs_.end();) it = it->what == kSyncJob ? jobs_.erase(it) : it + 1;
+  syncResume_ = false;
+  interruptSync();
+  sync_ = mode;
+  if (mode == SyncMode::Off)
+  {
+    if (log) log("sync off: both play on their own", false);
+    return;
+  }
+  if (!gbaActive_)
+  {
+    if (log) log("sync needs the game running on the GBA: choose GBA and press Run first", true);
+    sync_ = SyncMode::Off;
+    return;
+  }
+  if (!game_)
+  {
+    // The PC game with the same level; when it is the one that follows, it waits for the GBA.
+    std::vector<std::string> args = {settings.game, packPath, "--listen", std::to_string(settings.port)};
+    if (mode == SyncMode::GbaToPc) args.push_back("--follow");
+    game_ = spawn(args, false);
+    if (!game_)
+    {
+      if (log) log("cannot start " + settings.game + ": " + SDL_GetError(), true);
+      sync_ = SyncMode::Off;
+      return;
+    }
+  }
+  else
+  {
+    // Both must run the same level.
+    std::vector<std::string> args = linkArgs(RunTarget::Pc);
+    args.insert(args.end(), {"push", packPath, "restart"});
+    queue({args, "Same level on the PC", false, {}, true});
+  }
+  if (log) log(mode == SyncMode::GbaToPc ? "sync: the PC game plays along with the GBA" : "sync: the GBA plays along with the PC game", false);
+  queueSync();
+}
+
 bool Runner::pushHot(const std::string &packPath)
 {
+  if (sync_ != SyncMode::Off)
+  {
+    // Both sides get the change, or they would no longer play the same game.
+    while (!jobs_.empty() && jobs_.back().what == "Hot reload") jobs_.pop_back();
+    for (RunTarget t : {RunTarget::Pc, RunTarget::Gba})
+    {
+      if (t == RunTarget::Pc && !game_) continue;
+      std::vector<std::string> args = linkArgs(t);
+      args.insert(args.end(), {"push", packPath, "hot"});
+      queue({args, "Hot reload", t == RunTarget::Gba, {}, false});
+    }
+    return true;
+  }
   RunTarget target = liveTarget_;
   if (target == RunTarget::Pc && !game_) target = RunTarget::Gba;
   if (target == RunTarget::Gba && !gbaActive_) return false;
@@ -160,12 +232,21 @@ void Runner::stop()
     if (log) log("stopped the game", false);
   }
   jobs_.clear();
+  syncResume_ = false;
+  interruptSync();
+  sync_ = SyncMode::Off;
   gbaActive_ = false;
   state_ = "Not running";
 }
 
 void Runner::queue(Job job)
 {
+  // Anything else needs the cable the mirror holds: the mirror steps aside and comes back.
+  if (job.what != kSyncJob && job_ && current_.what == kSyncJob)
+  {
+    syncResume_ = true;
+    interruptSync();
+  }
   jobs_.push_back(std::move(job));
   if (!job_) startNext();
 }
@@ -232,10 +313,22 @@ void Runner::update()
     gbaActive_ = code == 0;
     if (code == 0) liveTarget_ = RunTarget::Gba;
   }
+  bool wasSync = current_.what == kSyncJob;
+  if (wasSync)
+  {
+    // Ended because it was asked to: fine. Ended by itself: the sync is over.
+    if (syncStopping_) code = 0;
+    else sync_ = SyncMode::Off;
+    syncStopping_ = false;
+    if (syncResume_ && sync_ != SyncMode::Off) queueSync();   // behind the jobs it made room for
+    syncResume_ = false;
+  }
   if (log && (code != 0 || !current_.quiet))
-    log(current_.what + (code == 0 ? ": done" : ": failed (exit code " + std::to_string(code) + ")"), code != 0);
+    log(current_.what + (code == 0 ? (wasSync ? ": ended" : ": done") : ": failed (exit code " + std::to_string(code) + ")"), code != 0);
   if (current_.done) current_.done(code == 0);
   state_ = liveTarget_ == RunTarget::Gba && gbaActive_ ? "Running on the GBA" : game_ ? "Running on the PC" : gbaActive_ ? "Running on the GBA" : "Not running";
+  if (sync_ == SyncMode::GbaToPc) state_ = "Sync: GBA to PC";
+  if (sync_ == SyncMode::PcToGba) state_ = "Sync: PC to GBA";
   startNext();
 }
 

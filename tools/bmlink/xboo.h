@@ -22,6 +22,7 @@ typedef struct BmXboo
   unsigned char control;     // last value written to the control port
   uint32_t delay;            // xcomms "Transfer Delay": PortDelay(delay) after each word
   volatile int *pCancel;     // if set and nonzero: stop (the port is released, the program ends)
+  bool cancelByCaller;       // ... unless the caller looks at the flag itself and ends in order
   bool resetWired;           // reset setting (link-protocol.md §6): none or xboo
   char error[256];
 } BmXboo;

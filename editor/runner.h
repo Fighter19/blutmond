@@ -32,6 +32,9 @@ struct RunSettings
 
 enum class RunTarget { Pc = 0, Gba = 1 };
 
+/// Whose keys the other one uses (docs/spec/link-protocol.md section 10).
+enum class SyncMode { Off, GbaToPc, PcToGba };
+
 class Runner
 {
 public:
@@ -48,6 +51,10 @@ public:
   /// Reads the video state of what runs (a PPU snapshot over the link) into `path` and calls
   /// `done` with the result. False if nothing runs.
   bool capture(const std::string &path, std::function<void(bool ok)> done);
+  /// One of the two plays and the other plays along; Off ends that. The GBA must be running
+  /// (Run on the GBA); the PC game is started with `packPath` if it is not running.
+  void setSync(SyncMode mode, const std::string &packPath);
+  SyncMode sync() const { return sync_; }
   /// Ends the PC game; forgets the GBA (it keeps running).
   void stop();
   /// Call every frame: collects output and notices ended processes.
@@ -78,7 +85,13 @@ private:
   Job current_;
   std::deque<Job> jobs_;
   std::string partial_;
+  void queueSync();
+  void interruptSync();
+
   bool gbaActive_ = false;
+  SyncMode sync_ = SyncMode::Off;
+  bool syncStopping_ = false;   // the running mirror was asked to end
+  bool syncResume_ = false;     // ... to let other jobs through; it starts again after them
   RunTarget liveTarget_ = RunTarget::Pc;
   std::string state_ = "Not running";
 };
