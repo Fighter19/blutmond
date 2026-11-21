@@ -23,6 +23,16 @@ if(BM_PLATFORM STREQUAL "host")
   endif()
 endif()
 
+if(BM_PLATFORM STREQUAL "gba")
+  # The multiboot images must fit into 256 KB, which they only do built for size. Without a
+  # build type, or with one whose flags have no optimisation level, build for size anyway.
+  string(TOUPPER "${CMAKE_BUILD_TYPE}" bm_build_type)
+  if(NOT "${CMAKE_C_FLAGS} ${CMAKE_C_FLAGS_${bm_build_type}}" MATCHES "-O")
+    message(STATUS "No optimisation level in the C flags: building the GBA images with -Os")
+    add_compile_options($<$<COMPILE_LANGUAGE:C>:-Os>)
+  endif()
+endif()
+
 set(BM_WARNINGS -Wall -Wextra -Werror -pedantic)
 
 # --- Engine library -----------------------------------------------------------------------
