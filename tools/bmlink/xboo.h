@@ -33,8 +33,8 @@ void bmXbooPortDelay(BmXboo *pXboo, uint32_t delay);
 void bmXbooReset(BmXboo *pXboo);
 
 /// Boots `image` (a multiboot image, header included) with the BIOS protocol exactly as
-/// xcomms NormalBoot does. With the reset wire the GBA is reset first; otherwise it must be
-/// switched on with no cartridge (or waiting for multiboot).
+/// xcomms NormalBoot does. The GBA must be waiting in its BIOS: switched on with no cartridge,
+/// or reset with bmXbooReset first.
 bool bmXbooBoot(BmXboo *pXboo, const uint8_t *pImage, uint32_t size);
 
 /// As a link transport.

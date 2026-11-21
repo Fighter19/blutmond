@@ -46,9 +46,10 @@ bool bmXbooOpen(BmXboo *x, const char *pDevice)
     x->fd = -1;
     return false;
   }
-  // InitPort
+  // InitPort. The data lines as xcomms leaves them after its reset: only bit 2 (the reset
+  // wire, active low) high.
   wcontrol(x, x->control);
-  unsigned char data = 0xFF;
+  unsigned char data = 0x04;
   ioctl(x->fd, PPWDATA, &data);
   return true;
 }
@@ -138,7 +139,6 @@ bool bmXbooBoot(BmXboo *x, const uint8_t *pImage, uint32_t size)
 {
   BmMultibootPort port = { x, bootExchange, bootDelay, x->delay };
   const char *why = NULL;
-  bmXbooReset(x);
   if (bmMultibootSend(&port, pImage, size, &why)) return true;
   snprintf(x->error, sizeof(x->error), "%s", why);
   return false;

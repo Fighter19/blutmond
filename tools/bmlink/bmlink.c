@@ -412,6 +412,7 @@ int main(int argc, char **argv)
           fprintf(stderr, "boot: no logo given (--logo, or %s): a real GBA refuses the image after its header\n", defaultLogoPath());
         // The GBA only answers while it waits in its BIOS: keep asking for a while.
         double until = now() + (double)bootWait;
+        bmXbooReset(&xboo);   // once (with the reset wire): the GBA then comes up waiting
         bool told = false;
         for (;;)
         {
