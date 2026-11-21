@@ -1,6 +1,38 @@
 # Runtime ABI and live reload
 
-Version 0.1, draft.
+Version 0.2, draft.
+
+## 0. What is built
+
+Most of this document is the design. Built so far (`src/link/live.h`,
+`apps/game/game_live.c`):
+
+- **Two content buffers.** A pack pushed over the link is put together in the buffer the
+  running pack does not use ([link-protocol.md](link-protocol.md) §3). After a successful
+  `APPLY` that buffer holds the running pack and the other one is free for the next. The
+  first pack is the one built into the image and lies in neither.
+- **The region table** has four entries: the link's own memory (runtime), the two content
+  buffers and the buffer for a pushed state (content). Nothing reads it yet.
+- **What the game provides** (`BmLiveHooks`): its state blocks ([state.md](state.md));
+  "use this pack" for the modes restart and hot; "state was loaded, rebuild what is derived";
+  and frame, room and position for `STATUS`.
+- **restart**: the game starts over with the new pack ([runtime-core.md](runtime-core.md) §6,
+  "start"), in the room whose ID was given or in room 0. If that fails, the old pack is
+  started again and the answer is "pack refused".
+- **hot**: the state is kept. The current room is looked up by its ID in the new pack (not
+  there: refused, nothing changes); then everything derived is rebuilt as after loading a
+  state ([state.md](state.md) §5): the room, video memory, sprites, the script module (it
+  is verified again), the song. If that fails the old pack is put back the same way.
+- **state**: the pushed state is read into the game's blocks and the same rebuilding follows.
+  A state of another layout is refused before anything is changed.
+- Pack versions: only `format_major` is checked. `abi_major`, `abi_minor` and the profile are
+  carried and reported in `HELLO`, and nothing compares them yet.
+
+Not built: the API table of section 1 (scripts call the runtime by the numbers in
+[runtime-core.md](runtime-core.md) §8; the module's header says how many it knows), handles
+(section 2; objects are referred to by their index in the room), the residency table
+(section 4; a room change loads the whole room anew, palette and tiles included), the watchdog, the modes `hot_migrate` and `module`, and storage back
+ends (section 7; a pack is always one block of memory).
 
 The runtime is loaded once (multiboot or cartridge). Content (packs, script modules, state)
 can be replaced while it runs, without a reset. This document defines the contract that makes
@@ -134,6 +166,7 @@ from the live link). A CF/SD back end would read the `sequential` layout
 
 ## History
 
+- 0.2: section 0, what is built.
 - 0.1: first draft.
 - 0.1.1: residency table and room changes (§4).
 - 0.1.2: storage back end interface (§7).

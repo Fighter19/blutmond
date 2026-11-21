@@ -1,6 +1,6 @@
 # Link protocol
 
-Version 0.5, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
+Version 0.6, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
 
 How the editor (or another GBA) talks to a running Blutmond runtime: booting it, sending
 content, reading state and logs, debugging. Requirement: **wherever xcomms can boot a GBA over
@@ -12,14 +12,18 @@ A transport moves 32-bit words in both directions at the same time (the GBA seri
 normal mode, 32-bit). The PC side implements:
 
 ```c
-struct BmTransport {
-    int  (*open)(void *ctx, const char *device);
-    u32  (*exchange)(void *ctx, u32 out);   // send one word, return the word received
-    int  (*reset)(void *ctx);               // optional, see section 6
-    void (*set_delay)(void *ctx, u32 delay);
-    u32  caps;                              // bit 0: reset wired, bit 1: SD burst
-};
+typedef struct BmLinkTransport {
+    void *pContext;
+    uint32_t (*exchange)(void *pContext, uint32_t out);  // send one word, return the word received
+    void (*setDelay)(void *pContext, uint32_t delay);    // optional
+    bool (*reset)(void *pContext);                       // optional, see section 6
+    uint32_t caps;                                       // bit 0: reset wired, bit 1: SD burst
+    void (*pause)(void *pContext, uint32_t milliseconds);// optional: nothing on the wire for that long
+} BmLinkTransport;
 ```
+
+Built: `xboo-ppdev`, `tcp`, `host`, `gba`, and mGBA as a transport for tests. The other two
+are plans.
 
 | Transport | Clock | Notes |
 |---|---|---|
@@ -35,16 +39,40 @@ talking to a PC.
 
 ## 2. Boot
 
-1. The master boots the GBA with the BIOS multiboot protocol exactly as xcomms `NormalBoot`
-   does: attention handshake (`0x6202` until the reply has `0x72` in the top byte), header
-   (`0x6102`, 0x60 halfwords), key exchange (`0x63xx`, `0x64xx`), length, encrypted data,
-   CRC check. The per-word delay is the same setting as xcomms' "Transfer Delay".
-2. The image is either the runtime (multiboot) or a small bootstrap that starts the runtime
-   from the cartridge. Multiboot is only used together with the live link; content is then
-   streamed ([streaming.md](streaming.md)).
+1. The master boots the GBA with the BIOS multiboot protocol as xcomms `NormalBoot` does
+   (below). The per-word delay is the same setting as xcomms' "Transfer Delay".
+2. The image is the runtime as a multiboot image, with its content inside.
 3. The runtime then waits for packets (section 3) and answers `HELLO`.
 
-The runtime is only booted once per session; afterwards only packets are exchanged.
+A runtime that is already running is asked to start the device over first (`RESET`).
+
+**The multiboot sequence** (`src/link/multiboot.c`; each step is one 32-bit exchange, "top
+byte" is bits 24 to 31 of the reply):
+
+1. The image is padded with zeros to a multiple of 16 bytes, at least 0x1C0; at most 256 KB.
+2. Send `0x6202`, pausing between tries, until the top byte of the reply is `0x72` (give up
+   after about 1000 tries).
+3. Send `0x6102`. Then the first 0xC0 bytes as 0x60 halfwords; the reply's top byte counts
+   down from 0x60 and must match. Send `0x6200`, then `0x6202`.
+4. Send `0x63D1` until the top byte of the reply is `0x73`; bits 16 to 23 of it are key 1.
+   Send `0x6400 | ((key 1 + 0x0F) & 0xFF)` (the confirmation), again until `0x73`.
+5. Wait about a sixteenth of a second. Send `length / 4 - 0x64`; bits 16 to 23 of the reply
+   are key 2.
+6. Seed = `0xFFFF0000 | key 1 << 8 | 0xD1`. For every word from offset 0xC0: add the plain
+   word to the checksum (below); seed = `seed * 0x6F646573 + 1`; send
+   `word ^ seed ^ (0xFE000000 - offset) ^ 0x43202F2F`. Bits 16 to 31 of each reply must be
+   the low 16 bits of the offset.
+7. Send `0x65` until bits 16 to 31 of the reply are no longer `0x74`; they must then be
+   `0x75`. Send `0x66`.
+8. Add `0xFFFF0000 | key 2 << 8 | (confirmation & 0xFF)` to the checksum and send the
+   checksum; bits 16 to 31 of the reply must be the same.
+
+The checksum is 16 bits, starts at `0xC387`, and for each word: `c ^= word & 0xFFFF` and
+the upper half of a 32-bit register is the word's upper half; then 32 times: shift the
+register right by one, and if the bit that fell out was 1, xor its low 16 bits with `0xC37B`.
+The low 16 bits are the new checksum.
+
+A real GBA also checks the header: [../HARDWARE.md](../HARDWARE.md) §3.
 
 ## 3. Words and packets
 
@@ -57,21 +85,41 @@ Special single words:
 | Word | From | Meaning |
 |---|---|---|
 | `0x424D504C` (`BMPL`) | master | poll: "give me your next word" |
-| `0x424D4944` (`BMID`) | slave | idle: nothing to send |
-| `0x4241ss00` (`BA`, seq) | both | ACK for packet `ss` |
+| `0x424D4944` (`BMID`) | slave | idle: nothing to send; also the first word a runtime arms its port with |
+| `0x4241ss00` (`BA`, seq) | both | ACK: `ss` is the last packet received in order (`0xFF` before the first one) |
 | `0x424Ess00` (`BN`, seq) | both | NAK, `ss` is the sequence number expected next |
 | `0x424Ess01` (`BN`, seq, busy) | both | the receiver could not take packet `ss` yet (no buffer); not an error: the sender waits a little and sends from `ss` again, without counting a failure |
-| `0xFFFFFFFF` ×4, then `0x53594E43` (`SYNC`) | master | resync, section 4 |
-| `0xFFFFFFFF` ×4, then `0x53455353` (`SESS`) | master | a new master (another program, another GBA): a resync that also starts both sides' sequence numbers at 0 and drops what the slave still had queued. Every master sends it before its first packet; the slave answers with four `0xFFFFFFFF` and `SESS` |
+| `0xFFFFFFFF` ×4 or more, then `0x53594E43` (`SYNC`) | master | resync, section 4. Recognised anywhere, also in the middle of a packet |
+| `0xFFFFFFFF` ×4, then `0x53455353` (`SESS`) | master | a new master (another program, another GBA): a resync that also starts both sides' sequence numbers at 0 and drops what the slave still had queued. Every master sends it before its first packet |
 
 Packets (both directions):
 
 ```
-word 0      0x42 | type << 16 | seq << 8 | flags     (top byte 0x42 = 'B')
+word 0      0x42000000 | type << 16 | seq << 8 | flags
 word 1      payload length in bytes (max 1024)
-words ...   payload, padded with zeros to a multiple of 4
-last word   CRC-32 (IEEE) over word 0 .. last payload word
+words ...   payload, little endian, the last word padded with zeros
+last word   CRC
 ```
+
+`flags` is 0. The CRC is the standard CRC-32 (polynomial 0xEDB88320 reflected, start and
+final xor 0xFFFFFFFF, as in zlib) over the four bytes of each word before it, lowest byte
+first: header word, length word, payload words with their padding. A length above 1024 ends
+the packet at once as a bad one. Outside a packet, a word whose top byte is not `0x42` is
+ignored.
+
+**The slave's answer to `SYNC` and `SESS`** comes without being polled: its next five words
+are four `0xFFFFFFFF` and then `SYNC` or `SESS`. The master polls until it sees that word
+(recognised the same way: after at least four fill words). Both sides drop a partial packet,
+pending answers, and start their unacknowledged packets over from their first word. After
+`SESS` both also expect and send sequence number 0 next, and the slave drops what it had
+queued.
+
+**Sequence numbers** are compared modulo 256. With `d = (seq - expected) & 0xFF` for a packet
+received whole: 0 is taken (or refused as busy); 1 to 127 means one before it is missing (a
+NAK is due); 128 to 255 is a copy of one already taken (the master acknowledges it again, the
+slave ignores it). An ACK for `ss` releases the sender's packets up to and including `ss` if
+that is one it still holds; a NAK for `ss` releases those before `ss` and sends again from
+`ss`. A packet being sent is not started over because an ACK for earlier ones arrives.
 
 Type values `0x41`, `0x4D` and `0x4E` are reserved, because the single words above use them in
 the same position.
@@ -80,8 +128,21 @@ Packets are acknowledged per **window** to keep the number of turnarounds low: t
 sends up to 16 packets back to back, then polls once. The receiver answers with a cumulative
 ACK (the last sequence number it received in order) or a NAK with the sequence number it expects
 next; the sender then continues from there (go-back-N). The slave sends its own packets when
-polled; the master acknowledges them the same way. Sequence numbers count per direction and
-wrap at 256.
+polled; the master acknowledges them the same way (it sends an ACK or NAK word instead of a
+poll). Sequence numbers count per direction and wrap at 256.
+
+The runtime's numbers: 4 send buffers and 6 receive buffers of one packet each. A packet is
+kept in its receive buffer until the frame boundary handles it; when fewer than two buffers
+are free the packet is refused (busy). If the slave has sent everything it holds and 32 polls
+pass without an ACK, it sends its unacknowledged packets again. What the slave sends in an
+exchange, first that applies: the resync answer; an answer to a poll (only between its own
+packets): NAK if a packet was lost or bad since the last answer, else busy if one was refused,
+else ACK; the next word of its own packets; idle.
+
+The master's numbers: it waits 400 polls for an answer; a window that made no progress is
+sent again, after 4 such windows in a row it resyncs, after 8 resyncs in one flush (or 4
+resync tries without an answer) the link has failed. After a busy answer it polls 16 times
+and sends again from the number named, without counting a failure.
 
 The slave answers a burst of polls once (with the state at that moment) and then ignores the
 next 8 polls unless a packet arrives in between, so its own packets are not starved by
@@ -94,68 +155,79 @@ word prepared in the previous interrupt before it handles the word just received
 master can clock the next word at once; its answers are therefore two words late. Nothing in
 the protocol depends on the exact delay.
 
-The master drives the transfer: it pushes content according to [streaming.md](streaming.md)
-and the slave does not request chunks one by one. The slave's `STATUS` is collected while
-polling for window acknowledgements, so it needs no round trip of its own.
+The master drives the transfer: it pushes content and the slave does not request chunks one
+by one.
 
 ### Packet types
 
-| Type | Name | Direction | Payload |
-|---|---|---|---|
-| 0x01 | `HELLO` | both | protocol version, runtime version, ABI version, profile, capabilities, free content memory, hashes of the chunks currently loaded |
-| 0x02 | `PING` | both | – |
-| 0x10 | `CHUNK_BEGIN` | M → S | transfer ID, chunk ID, size, unpacked size, compression, hash |
-| 0x11 | `CHUNK_DATA` | M → S | transfer ID, offset, data |
-| 0x12 | `CHUNK_END` | M → S | transfer ID; the slave checks the hash and NAKs on mismatch |
-| 0x13 | `TOC` | M → S | new pack header and table of contents (see [pack-format.md](pack-format.md) §5) |
-| 0x14 | `DROP` | M → S | chunk indices the runtime may free (eviction decided by the master, streaming.md §4) |
-| 0x15 | `SESSION` | M → S | load profile and categories (streaming.md §3) |
-| 0x16 | `STATUS` | S → M | current room, coarse player position, free memory per region, events (door entered, out of memory) |
-| 0x17 | `TEST` | M → S | open the test scene for a mini pack (streaming.md §5) |
-| 0x18 | `APPLY` | M → S | reload mode, transfer IDs, start room/door (see [runtime-abi.md](runtime-abi.md) §5) |
-| 0x20 | `STATE_GET` | M → S | flag mask (`save`, `link`, `snapshot`), optional range |
-| 0x21 | `STATE_DATA` | S → M | schema hash, data |
-| 0x22 | `STATE_PUT` | M → S | schema hash, data (applied with the `state` reload mode) |
-| 0x30 | `LOG` | S → M | text |
-| 0x31 | `PROFILE` | S → M | profiler zones and cycle counts for the last frame(s) |
-| 0x32 | `PPU_SNAPSHOT` | both | request (M → S) and data (S → M): registers, VRAM, palettes, OAM, line table |
-| 0x38 | `MEM_READ`, 0x39 `MEM_WRITE` | M → S | debug builds only |
-| 0x40 | `GDB` | both | debugger commands and answers (section 8) |
-| 0x50 | `WATCHDOG` | S → M | frame counter and program counter of a detected hang |
-| 0x7F | `ERROR` | both | error code and text |
+"Built" says whether the runtime does anything with it. A runtime ignores (but acknowledges)
+every type it does not know.
 
-### Payloads (version 0.2)
+| Type | Name | Direction | Built | Content |
+|---|---|---|---|---|
+| 0x01 | `HELLO` | both | yes | what runs there |
+| 0x02 | `PING` | both | yes | echo |
+| 0x10 | `CHUNK_BEGIN` | M → S | ignored | announces a chunk; the master sends it, the runtime needs nothing from it |
+| 0x11 | `CHUNK_DATA` | M → S | yes | a piece of a chunk |
+| 0x12 | `CHUNK_END` | M → S | yes | the chunk is complete |
+| 0x13 | `TOC` | M → S | yes | starts a pack transfer |
+| 0x14 | `DROP` | M → S | no | planned ([streaming.md](streaming.md)) |
+| 0x15 | `SESSION` | M → S | no | planned |
+| 0x16 | `STATUS` | S → M | yes | only as the answer to `APPLY` |
+| 0x17 | `TEST` | M → S | no | planned |
+| 0x18 | `APPLY` | M → S | yes | use the pack or state transferred |
+| 0x19 | `RESET` | M → S | yes | start the device over |
+| 0x20 | `STATE_GET` | M → S | yes | |
+| 0x21 | `STATE_DATA` | S → M | yes | |
+| 0x22 | `STATE_PUT` | M → S | yes | |
+| 0x30 | `LOG` | S → M | sent by nothing yet | text |
+| 0x31 | `PROFILE` | S → M | no | planned |
+| 0x32 | `PPU_SNAPSHOT` | both | yes | the video state |
+| 0x33 | `INPUT` | both | yes | section 10 |
+| 0x38, 0x39 | `MEM_READ`, `MEM_WRITE` | M → S | no | the debugger's `m` and `M` do this (section 8) |
+| 0x40 | `GDB` | both | yes | section 8 |
+| 0x50 | `WATCHDOG` | S → M | no | planned |
+| 0x7F | `ERROR` | both | no | planned |
+
+### Payloads
 
 All values little endian.
 
 | Packet | Payload |
 |---|---|
 | `HELLO` M → S | empty |
-| `HELLO` S → M | u16 protocol, u16 runtime version, u16 ABI major, u16 ABI minor, u32 profile, u32 content buffer size, u32 size and u32 CRC of the running pack, u32 chunk count, u32 n, then n × (u32 hash, u32 size) of the running pack's chunks |
+| `HELLO` S → M | u16 protocol (1), u16 runtime version (1), u16 ABI major, u16 ABI minor and u32 profile (those of the running pack's header), u32 content buffer size (65,536; 49,152 in a multiboot image), u32 size and u32 CRC of the running pack, u32 chunk count, u32 n, then n × (u32 hash, u32 size) of the running pack's first n chunks, n at most 124 |
 | `PING` | any bytes; the slave sends them back |
-| `TOC` | u32 transfer ID, u32 pack size, u16 part, u16 parts, then bytes of the stream "pack header (36 bytes) + chunk table" split over the parts. Part 0 starts a transfer into the content buffer that the running pack does not use; after the last part the runtime copies the chunks it already has (same hash and size) |
+| `TOC` | u32 transfer ID, u32 pack size, u16 part, u16 parts, then at most 1012 bytes of the stream "pack header (36 bytes) + chunk table". Part 0 must hold the whole pack header; it starts a transfer into the content buffer that the running pack does not use, which is first filled with zeros up to the pack size. The header goes to offset 0 and the table to where the header says. After the last part the runtime copies every chunk the running pack also has (same hash and size) and marks it present. A pack larger than the buffer, more than 512 chunks or a table outside the pack make the transfer fail (reported by `APPLY`) |
 | `CHUNK_BEGIN` | u32 transfer ID, u16 chunk index, u16 0, u32 size, u32 hash |
-| `CHUNK_DATA` | u32 transfer ID, u16 chunk index, u16 0, u32 offset in the chunk, data (at most 1012 bytes) |
-| `CHUNK_END` | u32 transfer ID, u16 chunk index |
-| `APPLY` | u32 transfer ID, u8 mode ([runtime-abi.md](runtime-abi.md) §5), 3 × u8 0, optional room ID (for `restart`). The runtime checks that every chunk is there and the pack's CRC, then applies at a frame boundary and answers with `STATUS` |
-| `STATUS` | u8 kind (0 report, 1 answer to `APPLY`), u8 result (0 ok, 1 transfer incomplete, 2 CRC mismatch, 3 too large, 4 pack refused, 5 state of another layout, 6 mode not supported), u8 mode, u8 0, u32 transfer ID, u32 game frame, u32 room index, s16 x, s16 y, u32 reloads applied |
-| `STATE_GET` | u8 flag mask ([state.md](state.md)) |
-| `STATE_DATA`, `STATE_PUT` | the state as `bmStateWrite` writes it (header with schema hash and CRC) |
-| `LOG` | text |
-| `PPU_SNAPSHOT` M → S | u32 offset, u32 length (0: to the end) of the runtime's video state as a PPU snapshot (`BMPS`, `src/ppu/ppu.h`: registers, VRAM, palettes, OAM, line tables; about 100 KB) |
+| `CHUNK_DATA` | u32 transfer ID, u16 chunk index, u16 0, u32 offset in the chunk, data (at most 1012 bytes), copied to the chunk's place in the new pack. Outside the chunk: the transfer fails |
+| `CHUNK_END` | u32 transfer ID, u16 chunk index: marks the chunk present. The chunk's hash is not checked here; the pack's CRC is, at `APPLY` |
+| `APPLY` | u32 transfer ID, u8 mode (0 restart, 1 hot, 2 hot with migration, 3 module, 4 state; 2 and 3 are answered "not supported"), 3 × u8 0, then optionally the text of a room ID from byte 8 to the end of the payload, at most 63 bytes, no terminator (the room to start in; used by restart). Modes 0 and 1: every chunk must be present and the pack must open with a correct CRC; mode 4 loads the last `STATE_PUT`. Applied at a frame boundary and answered with `STATUS` |
+| `STATUS` (24 bytes) | u8 kind (1 answer to `APPLY`; 0 is reserved for reports), u8 result (0 ok, 1 transfer incomplete, 2 CRC mismatch, 3 too large, 4 pack refused, 5 state of another layout, 6 mode not supported), u8 mode, u8 0, u32 transfer ID, u32 game frame, u32 room index, s16 x, s16 y, u32 reloads applied |
+| `STATE_GET` | u8 flag mask ([state.md](state.md)); without it, snapshot |
+| `STATE_DATA`, `STATE_PUT` | the serialised state ([state.md](state.md) §2), at most 1024 bytes, so one packet. `STATE_PUT` only stores it; `APPLY` with mode 4 loads it |
+| `RESET` | empty. 20 frames later (so the acknowledgement gets out) the device starts over ([gba-backend.md](gba-backend.md) §4) |
+| `INPUT` | section 10 |
+| `LOG` | text, no terminator |
+| `PPU_SNAPSHOT` M → S | u32 offset, u32 length (0: to the end) of the runtime's video state as a PPU snapshot (`BMPS`, [gba-backend.md](gba-backend.md) §6; 100,778 bytes) |
 | `PPU_SNAPSHOT` S → M | u32 offset, u32 total size, then data (at most 1016 bytes). The runtime sends the parts at frame boundaries, as many per frame as its send buffers take; the registers are the values last written (the GBA HAL keeps copies, most video registers are write-only) |
 
-The master does not wait for chunk-level answers: a pack transfer is `TOC`, then for each
-missing chunk `CHUNK_BEGIN`, `CHUNK_DATA`…, `CHUNK_END`, in windows; the only round trip is
-`APPLY` → `STATUS`.
+The master does not wait for chunk-level answers: a pack transfer is `HELLO` (to learn which
+chunks are there), `TOC`, then for each chunk the runtime lacks `CHUNK_BEGIN`,
+`CHUNK_DATA`…, `CHUNK_END`, in windows; the only round trip is `APPLY` → `STATUS`. If the
+running pack has more than 124 chunks the master cannot know about the rest and sends them;
+that is harmless.
+
+Packets are handled in the order received, once per frame, between two game frames. A packet
+whose answer finds no free send buffer waits for the next frame.
 
 ## 4. Error handling
 
 - **Retry**: on NAK, CRC mismatch or a timeout (no ACK after a set number of polls), the packet
   is sent again with the same sequence number.
-- **Resync**: after 4 failed attempts the master sends four `0xFFFFFFFF` and `SYNC`. The slave
-  drops any partial packet and answers the next poll with `SYNC`. Both sides then continue with
-  the sequence numbers from the last ACK.
+- **Resync**: after 4 failed attempts the master is quiet for 100 ms, then sends four
+  `0xFFFFFFFF` and `SYNC` (section 3). Both sides then continue with the sequence numbers
+  from the last ACK.
 - **Word boundary**: the wire has no frame for words. If the slave's port is armed while a
   word is already under way (the runtime starting while the master polls, an interrupt that
   comes late, a glitch on the clock), every later word is cut at the wrong place, on both
@@ -166,12 +238,12 @@ missing chunk `CHUNK_BEGIN`, `CHUNK_DATA`…, `CHUNK_END`, in windows; the only 
   first version looked at every pass of the loop, and a GBA catching up in the input mirror
   (section 10) then armed its port anew between two words of the same packet and cut them
   apart itself.
-- **Resume**: chunks are confirmed window by window, so a transfer continues where it stopped.
-- **Atomic apply**: the slave applies nothing until `APPLY` arrives and every chunk it refers to
-  has passed its hash check.
-- **Adaptive delay**: the master starts with a safe per-bit delay, lowers it step by step while
-  transfers are clean and raises it after errors. The working value is remembered per device
-  and transport.
+- **Atomic apply**: the slave applies nothing until `APPLY` arrives, every chunk is present and
+  the pack's CRC is right. A transfer that broke off is started again with a new `TOC`; the
+  chunks of the running pack are then copied again and only the rest is sent.
+- **Adaptive delay** (optional, off for the Xboo cable, whose delay is fixed at 8): after 8
+  clean windows the delay goes down by one, after a failed one it becomes twice itself plus
+  one, at most 64.
 - **Counters**: the master keeps CRC errors, retries, resyncs and the effective rate and shows
   them to the user.
 
@@ -205,7 +277,7 @@ In mGBA, with `bmlink` clocking the serial port word by word (the GBA side uncha
 On a real GBA over a four-wire Xboo cable (parallel port through `ppdev`, about 2.5 µs per
 port access):
 
-- multiboot of the game image (81 KB), then the runtime answers: works;
+- multiboot of the game image (83 KB), then the runtime answers: works;
 - 5 KB there and back: 2270 words/s (9 KB/s) at the default word delay of 8; 2950 words/s at
   delay 1, but that leaves the GBA only about 15 µs to arm its port again, and words were then
   cut at the wrong place (section 4, "Word boundary");
@@ -230,17 +302,24 @@ memory that may be used, 3 not supported) and data from byte 4.
 
 | Command | Arguments | Answer |
 |---|---|---|
-| `i` info | | u8 stopped, u8 breakpoint slots (8), u8 the device can be stopped |
+| `i` info | | from byte 4: u8 stopped, u8 breakpoint slots (8), u8 the device can be stopped, u8 0 |
 | `h` halt | | none; a `S` packet follows when the program has stopped at the next frame boundary |
 | `c` continue | | result |
 | `g` / `G` registers | `G`: 17 words | `g`: r0–r15 and cpsr (17 words) |
 | `m` read memory | u32 address, u16 length (≤ 512) | the bytes |
 | `M` write memory | u32 address, bytes | result |
 | `Z` / `z` breakpoint | slot, u32 address (`Z`) | result |
-| `S` stopped (from the runtime) | byte 1: 0 asked to, 1 breakpoint; byte 2: slot | |
+| `S` stopped (from the runtime) | byte 1: 0 asked to, 1 breakpoint; byte 2: slot (0xFF when asked to) | |
 
 Commands are safe to repeat (a write or a breakpoint done twice is the same as once), so a
 command whose answer had to wait for room in the send ring is simply handled again.
+
+Memory that can be read: EWRAM, IWRAM, the I/O registers (0x04000000 to 0x040003FF), palette,
+video memory (to 0x06017FFF), the sprite table, and ROM. Written: only EWRAM and IWRAM. A
+breakpoint needs an address in RAM that is a multiple of 4; the word there is replaced by
+`0xEA000000 | (((landing - (address + 8)) >> 2) & 0xFFFFFF)`, where slot n's landing place is
+12 bytes after slot n-1's, and put back when the breakpoint is cleared. When it stops there,
+r15 in the registers is the breakpoint's address.
 
 **Breakpoints.** The ARM7TDMI has no debug hardware a program can use and the BIOS does not
 pass undefined instructions on, so a breakpoint is a branch written over an ARM instruction in
@@ -319,7 +398,9 @@ Each answer comes one word late and is the number of words taken so far, so the 
 notices a lost word at once and starts again from `START` (a bootstrap in the middle of an
 image takes words until it has its count, fails the checksum and waits for `START` again).
 After `OK` the bootstrap jumps to the image at 0x020000C0. The checksum is the CRC-32 of the
-words. Size in bytes, a multiple of 4, at most 256 KB.
+words (as for packets, starting anew). Size in bytes, a multiple of 4, at most 256 KB. The
+words: `START` 0x424D4253, `READY` 0x424D4252, `OK` 0x424D4F4B, `BAD` 0x424D4E4F, idle
+0x424D4249.
 
 **Measured** in mGBA with two emulated GBAs joined by a cable (`tools/bm_mgba_pair`, tests
 `gba_to_gba_*`), the sender in the second room of the test level:
@@ -365,16 +446,30 @@ and gets the GBA's keys for every frame plays the same game.
 milliseconds late and not evenly. That delay never changes *what* happens, because keys are
 applied by frame number and not by arrival time; it only makes the PC run a little behind the
 GBA (the two frames between packets plus the transfer). When packets arrive in a bunch the PC
-game runs up to four frames per screen refresh to catch up, so the delay does not add up.
+game runs one extra frame per screen refresh to catch up, so the delay does not add up.
 
 **Keeping up.** The side that follows must not be slower than the side that plays, or the
 delay grows without end. So: the PC game, while a GBA plays along, runs at the GBA's frame
 rate (59.7275 frames per second, not 60); the following side works out its state's checksum
 only for the frames that have one to compare with; `bmlink` asks the following side for its
 reports only ten times a second and otherwise leaves the cable alone (every word costs a GBA
-an interrupt); a follower two frames behind runs one extra frame before the next refresh; and
+an interrupt); a follower more than two frames behind runs one extra frame before the next refresh; and
 one that is more than 45 frames behind says so and gets the other side's state, a jump
 instead of a growing delay.
+
+**Payloads of `INPUT`.**
+
+| From | Payload |
+|---|---|
+| master | one byte: 1 start reporting; 0 stop reporting and following; 3 get ready to follow (hold still until keys arrive) |
+| the reporting side, passed on unchanged to the following side | u32 the last frame whose keys are known, u8 number of changes n (at most 16), u8 flags (1: changes were lost, 2: a check follows), u16 0; n × (u32 frame, u16 keys, u16 0); with flag 2: u32 frame, u32 CRC-32 of the state before that frame |
+| the following side | u8 2, u8 reason (0 its state differed, 1 more than 45 frames behind), u16 0, u32 frame |
+
+The first frame after "start" is always reported as a change. The state that is compared is
+the serialised block `game` with the snapshot mask ([state.md](state.md) §6), and frames are
+the game's frame counter, compared as signed differences. The follower keeps up to 64
+changes; it uses for frame *f* the keys of the last change at or before *f*, once the "last
+frame known" has reached *f*. It reports "behind" at most once per 120 frames.
 
 **Checks.** Every 64 frames the runtime adds a CRC-32 of its game state to the packet. The PC
 game compares it with its own state at that frame and reports a difference; `bmlink` then
@@ -406,4 +501,7 @@ autopilot for 1180 frames into the second room. Both machines must run the same 
 - 0.4: GBA to GBA and the bootstrap (section 9).
 - 0.5: input mirror (section 10).
 - 0.4.2: the word boundary (section 4), the `RESET` packet (the runtime starts the device over through the BIOS, for cables without a reset wire), measurements on a GBA.
+- 0.6: brought in line with the code: the header word, the CRC, the answer to `SYNC` and
+  `SESS`, sequence number rules, buffer and retry numbers, which packet types are built,
+  `RESET` and `INPUT` in the tables, the multiboot sequence, memory the debugger may touch.
 - 0.4.1: `SESS`. Found on hardware: a second run of `bmlink` counted its packets from 0 while the runtime went on from the first run's numbers, and nothing got through.

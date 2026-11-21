@@ -1,6 +1,29 @@
 # Room format
 
-Version 0.1, draft.
+Version 0.2, draft.
+
+**What is built.** Sections 1 to 6 describe the source form and the design, and not all of it
+exists. What the runtime does with a room, exactly, is in
+[runtime-core.md](runtime-core.md) (collision §4, the player's body §5, doors and respawn §6,
+the camera §7); where that file and this one differ, that file is right. Section 7 (the
+cooked form) is exact. Differences to keep in mind:
+
+- The collision cell is the map's tile; the property `collision_cell` is not read.
+- Custom shapes (§3.6, shape 14, `SHAP`) are not built: shape 14 is empty.
+- `half_top` (shape 2) is solid in its upper half for walls and ceilings but is no floor.
+- Materials with behaviour: water, damage, death, ladder. Conveyor, ice, bounce and sticky
+  are stored and do nothing yet.
+- Layer properties `priority` and `effect` are not read: background is priority 2, main 1,
+  foreground 0. A room has at most 3 graphics layers.
+- §4.5 (entity against entity) and §4.6 are not built. §4.1 to §4.4 are the design;
+  runtime-core.md §5 has the rules and numbers as built.
+- Engine classes with behaviour: `PlayerStart`, `Door`, `CameraZone`, `KillZone`,
+  `SavePoint`. `Trigger` is recognised and does nothing; the others in §5 do not exist. Any
+  other class name is a script class ([mondskript.md](mondskript.md)); a name no script
+  defines is ignored.
+- Of §6 the cooker reports as errors: diagonal flips, more than one `PlayerStart`, more than
+  3 graphics layers, what does not fit the hardware. A layer without role and a door whose
+  target room is not in the cook are warnings. The rest is not checked.
 
 A room is one screen-sized or larger area of the game world: tile layers, a collision grid,
 physics settings and objects. The source form is a Tiled map (`.tmx`, Tiled 1.8 or newer) or
@@ -313,14 +336,14 @@ little endian; offsets are from the start of the chunk.
 ```
 'ROOM'  struct BmRoomHeader {              // 44 bytes
           u16 width_px, height_px;
-          u8  collision_cell;              // 8 or 16
-          u8  layer_count;                 // graphics layers, at most 4
+          u8  collision_cell;              // the map's tile size in pixels
+          u8  layer_count;                 // graphics layers, at most 3
           u16 flags;                       // bit 0: edges_solid
           fix gravity, max_fall_speed, water_gravity, water_max_fall_speed;
           u16 music;                       // string ID, 0xFFFF = none
           u16 object_count;
           u8  area;                        // area group
-          u8  dep_count;
+          u8  dep_count;                   // 3
           u16 tiles_chunk, palette_chunk;  // in the area group
           u16 collision_chunk, objects_chunk;
           u16 vram_layout_chunk;           // VLAY of the area
@@ -329,15 +352,17 @@ little endian; offsets are from the start of the chunk.
         }
         struct BmRoomLayer {               // 12 bytes, layer_count times
           u8  role;                        // 0 background, 1 main, 2 foreground
-          u8  priority;                    // 0 front .. 3 back
+          u8  priority;                    // 0 front .. 3 back: background 2, main 1, foreground 0
           u16 map_chunk;                   // TMAP
           fix parallax_x, parallax_y;
         }
-        u16 deps[dep_count];               // chunk indices needed from other groups
+        u16 deps[dep_count];               // chunk indices needed from other groups: VLAY, PALE, TILE
+                                           // then zeros to a multiple of 4
 'TMAP'  u16 width, height;                 // in 8x8 cells
         u8  format;                        // 0 GBA map entries, 1 SNES map entries
         u8  reserved; u16 reserved;
-        u16 entries[width * height];       // row major, the profile's map entry format
+        u16 entries[width * height];       // row major. GBA: tile number in bits 0-9, 0x400 mirrored
+                                           // left-right, 0x800 mirrored top-bottom, palette bank << 12
 'COLL'  u16 width, height;                 // in cells
         u8  cell_size; u8 pad[3];
         u8  cells[width * height][2];      // row major, §3.2
@@ -352,8 +377,12 @@ little endian; offsets are from the start of the chunk.
         } [count]                          // 20 bytes each
 ```
 
-Object properties are stored as string pairs until class layouts exist
-([mondskript.md](mondskript.md)); then they become field values in the class layout.
+Objects are in the order of the Tiled file. An object without class or name has the id of the
+empty string there. Coordinates are Tiled's, rounded to whole pixels; `w` and `h` are 0 for a
+point. Property values are stored as their text (`true`, `12`, `1.5`, a name), pairs sorted
+by key; the runtime converts them when it creates the object
+([runtime-core.md](runtime-core.md) §8). The layers of a room are stored in the order of the
+Tiled file.
 
 Chunks of the area (pack-format.md §2): `VLAY`, `PALE` and `TILE`:
 
@@ -371,6 +400,7 @@ room IDs and song names.
 
 ## History
 
+- 0.2: what is built; details of the cooked form.
 - 0.1: first draft.
 - 0.1.1: solid bodies, pushing with weight-based resistance, chains and loads (§4.5).
 - 0.1.2: room property `area`; dependency list in `ROOM`.

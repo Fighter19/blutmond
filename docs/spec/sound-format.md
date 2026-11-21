@@ -1,6 +1,6 @@
 # Sound format
 
-Version 1, draft. The reasons and the full feature target are in [../PLAN.md](../PLAN.md),
+Version 1.1, draft. The reasons and the full feature target are in [../PLAN.md](../PLAN.md),
 section 13; this document describes what version 1 of the engine (`src/sound/sound.h`) plays.
 
 A **song** is a source asset ([asset-model.md](asset-model.md)): a `.bmsong` file (XML) with
@@ -23,7 +23,7 @@ named `jump` and `hurt` when the player jumps and is hurt.
 | Element | Attributes | Meaning |
 |---|---|---|
 | `song` | `bpm` (20-400); `length` and `loop` in ticks, 24 per beat (`loop`: where the song repeats from, -1: it plays once); `effect` (1: a sound effect); `echo` in ms (0: none, at most 225) and `echo-feedback` (0-255) | |
-| `instrument` | `name`; `wave`: `pulse12`, `pulse25`, `pulse50`, `saw`, `triangle`, `sine`, `noise` or `sample`; for samples `sample` (a WAV file next to the song: uncompressed, 8 or 16 bit; converted to 8 bit mono), `root` (the key at which it plays at its own rate) and `loop` (1: it repeats while the note is held); envelope `attack`, `decay`, `release` in frames (1/60 s) and `sustain` (0-255); `volume` (0-255); `pan` (-64 left to 63 right) | |
+| `instrument` | `name`; `wave`: `pulse12`, `pulse25`, `pulse50`, `saw`, `triangle`, `sine`, `noise` or `sample`; for samples `sample` (a WAV file next to the song: uncompressed, 8 or 16 bit; converted to 8 bit mono), `root` (the key at which it plays at its own rate) and `loop` (1: it repeats); envelope `attack`, `decay`, `release` in frames (1/60 s) and `sustain` (0-255); `volume` (0-255); `pan` (-64 left to 63 right) | |
 | `track` | `name`, `instrument` | notes for one instrument |
 | `note` | `t` (tick), `key` (MIDI number, 60 = middle C), `len` (ticks), `vel` (1-127) | |
 
@@ -47,10 +47,106 @@ named `jump` and `hurt` when the player jumps and is hurt.
   goes back to `loop` or ends.
 - **Echo**: one delay line per side; the output of `echo` ms ago comes back multiplied by
   `echo-feedback / 256`. Only the music's song sets it.
-- Everything is integer arithmetic and identical on every target: the test compares a
-  checksum over all samples mixed in 1000 frames between the PC and the GBA.
+- Everything is integer arithmetic and identical on every target: a test compares a
+  checksum over every sample mixed while the test level is played for 1000 game frames,
+  between the PC and the GBA. The next section has the arithmetic.
 - The engine is a struct with no global state besides the wave tables and a mixing scratch
   buffer, so the editor's preview runs the same code on its own instance.
+
+### The arithmetic, exactly
+
+What a second implementation needs to produce the same samples. `>>` is an arithmetic shift;
+`/` truncates. Chunk fields are named as in "The `SONG` chunk" below.
+
+**Wave tables**, signed 8 bit, 64 samples, index i = 0..63:
+
+| Wave | Sample i |
+|---|---|
+| 0 pulse 12.5 % | 100 for i < 8, else -100 |
+| 1 pulse 25 % | 100 for i < 16, else -100 |
+| 2 pulse 50 % | 100 for i < 32, else -100 |
+| 3 saw | `-124 + 4i` |
+| 4 triangle | `-124 + 8i` for i < 32, else `124 - 8(i - 32)` |
+| 5 sine | with `q = i & 15`, quarter table Q = 0 12 25 37 49 60 71 81 90 98 106 112 117 122 125 126 127: `Q[q]` in quadrants 0 and 2, `Q[16 - q]` in 1 and 3, negated in quadrants 2 and 3 (quadrant = `i >> 4`) |
+| 6 noise | 2048 samples: `lfsr = 0x1ACE5`; for each sample `lfsr = (lfsr >> 1) ^ (lfsr & 1 ? 0xB400 : 0)`, then the sample is `(lfsr & 0xFF) - 128` |
+
+**Pitch.** A voice has a position and a step, both with 12 fraction bits; it plays
+`data[position >> 12]` and then adds the step. The step at key 60 is 3777 for waves 0-5, 4096
+for noise, and the instrument's field for samples. For another key: `n = key - 60`, brought
+into 0..11 by adding or subtracting 12 while counting octaves; `step = (step60 * S[n]) >> 16`
+(64-bit) with S = 65536 69433 73562 77936 82570 87480 92682 98193 104032 110218 116772 123715;
+then shifted left by the octaves (or right for negative ones); at most 0x7FFFFFFF, at least 1.
+
+**End of the data.** Built-in waves repeat. For a sample: when the position reaches
+`length << 12`, a sample without loop ends the voice; one with a loop continues at
+`position - ((length - loop start) << 12)`. The loop also holds while the note fades out.
+
+**Starting a note** (`noteOn`): pick a voice, the lowest-numbered one in each case: a free
+one; else the one fading out with the lowest level; else, for an effect's note, the music's
+oldest note, and for a music note, the music's own oldest note. If there is none (a music
+note when the effect holds all voices), the note is dropped. The voice starts with position
+0, level 0, in the attack phase, with the instrument's values, velocity limited to 127, the
+note's length in frames (at least 1), and the frame counter as its age.
+
+**The sequencer**, once per frame and song (music, then effect): `tick += ticks per frame`
+(16.16). Then every event not yet played with `event tick <= min(tick >> 16, length)` and
+`event tick < length` starts its note, in the chunk's order; the note's length in frames is
+`(length in ticks << 16) / ticks per frame`, at most 65535. If `tick >> 16 >= length`: without
+a loop the song stops (its notes play out); with one, `tick -= (length - loop tick) << 16`,
+the next event is the first one at or after the loop tick, and the same is done again (at
+most four times in a frame).
+
+**One frame** (`bmSoundFrame`, 304 samples): the frame counter goes up; the two sequencers
+run; then for the voices 0 to 7 in order, each active voice first runs its envelope and is
+then mixed. So a note sounds from the frame it starts in.
+
+**Envelope**, level 0..65535, sustain level = `sustain << 8`:
+
+- attack: if the rate is 0 or `level + rate >= 65535`: level 65535, go to decay; else add the
+  rate.
+- decay: if `level <= sustain level`, or `level - sustain level <= rate`, or the rate is 0:
+  level = sustain level, go to sustain; else subtract the rate.
+- sustain: nothing.
+- release: if the rate is 0 or `level <= rate`: the voice ends (it is not mixed this frame);
+  else subtract the rate.
+- then: if not in release and the frames left reach 0 (counted down here), release begins,
+  taking effect in the next frame. A voice in sustain whose sustain level is 0 ends.
+
+**Volume and sides**: `vol = min(256, ((level >> 8) * velocity * instrument volume) >> 15)`.
+`left = pan > 0 ? (vol * (64 - pan)) >> 6 : vol`; `right = pan < 0 ? (vol * (64 + pan)) >> 6 :
+vol`.
+
+**Mixing**: per sample and side a 32-bit sum starting at 0; each voice adds `sample * left`
+and `sample * right`. A voice whose two volumes are 0 is not mixed, but its position moves on
+by `step * 304` (a sample without loop that passes its end ends).
+
+**Output**: `clamp(sum >> 8, -128, 127)`. With an echo: `clamp((sum >> 8) + ((line[p] *
+feedback) >> 8))`, where `line` is the delay line of that side; the result is written back to
+`line[p]`, and `p` goes on, wrapping at the delay. The echo is on while the music's song has a
+delay other than 0; delay at most 4096 samples.
+
+**Starting a song**: the notes of the song it replaces (music or effect) get one frame left,
+so they fade out. Position and next event to 0. For music also: the delay and feedback from
+the chunk, the echo position to 0, both delay lines to silence. Asking for the music that is
+already playing does nothing. Songs are found by name, the first `SONG` chunk in pack order
+whose name is equal.
+
+**The checksum** tests compare, starting at 0: for each sample pair `a += left byte; b += a;
+a += right byte; b += a`, both kept to 16 bits at the end of a frame as `a | b << 16` (bytes
+taken unsigned).
+
+**What the cooker puts into the chunk:**
+
+- ticks per frame = `round(bpm * 24 * 65536 / 3583.65)`;
+- echo delay = `ms * 18157 / 1000`, at most 4096;
+- attack rate = `max(1, 65535 / attack)`, decay rate = `max(1, (65535 - sustain * 256) /
+  decay)`, release rate = `max(1, 65535 / release)`, each 0 if the time is 0. So a release
+  lasts its number of frames from full level, and proportionally shorter from the sustain
+  level;
+- a sample's step at key 60 = `round(sample rate / 18157 * 4096 * 2^((60 - root) / 12))`;
+- events of all tracks sorted by tick, ties in track order (this decides which note gets
+  which voice); notes outside the song's length are dropped;
+- an effect never loops.
 
 ### Cost on the GBA
 
@@ -94,3 +190,4 @@ chunk and that every event names an instrument that exists, before playing (`bmS
 ## History
 
 - 1: first version.
+- 1.1: the arithmetic written out.

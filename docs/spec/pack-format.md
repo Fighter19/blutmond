@@ -1,6 +1,7 @@
 # Pack format
 
-Version 0.1, draft.
+Version 0.2, draft. Section 0 says exactly what is built; the sections after it also describe
+what is planned and say so.
 
 A pack is the cooked, platform-specific form of a project's content (or part of it, such as one
 level). It is position independent: it can lie in ROM, in EWRAM, or arrive over the link, and a
@@ -8,6 +9,52 @@ newer runtime can load packs made for an older one (see [runtime-abi.md](runtime
 
 The layout grew out of the tagged archive of the earlier SceneCompiler project (`GARCHIVE` with
 `PALE`, `MTIL`, `INDX`, `PIXL`, `AMAP`).
+
+## 0. What is built
+
+Everything is little endian. This is all a reader of today's packs needs, together with the
+chunk formats named in section 3.
+
+- **Header and table**: as in section 1. `format_major` 0 (another value is refused),
+  `format_minor` 1, `abi_major` 0, `abi_minor` 1, `flags` = the layout the cooker was asked
+  for (0 unless told otherwise; nothing reads it), `toc_offset` 36.
+- **Opening a pack** fails if: the magic is wrong; `total_size` is larger than the data or
+  smaller than 36; the table does not lie inside `total_size`; a chunk does not lie inside
+  `total_size`; or (when asked to check) the CRC is wrong. Bytes after `total_size` are
+  ignored.
+- **`crc32`**: the standard CRC-32 (zlib's) of the bytes from offset 36 to `total_size`: the
+  table, the chunks and the zero padding between them.
+- **`hash`** of a chunk: the same CRC-32 of its `size` bytes.
+- **Chunks** follow the table in table order, each padded with zeros to a multiple of 4.
+- **Compression** is not built: the cooker writes 0 and `unpacked_size = size`; the reader
+  gives no data for a chunk with another value.
+- **Categories**: 0 level, 1 graphics, 2 objects, 3 actors, 4 player, 5 scripts, 6 music,
+  7 sound effects, 8 text, 9 meta. The runtime does not read them.
+- **Groups**: 0 global; `1 + n` for the n-th area; `256 + n` for the n-th room. The runtime
+  does not read them either: a room names the chunks it needs.
+- **Strings (`STRS`)**: `u16 count; u16 0; u32 offset[count]`, each offset from the start of
+  the chunk to a NUL-terminated string. A string id is its index. The first `STRS` chunk in
+  the table is the pack's string table; ids that do not exist read as "no string". The
+  cooker writes it last.
+- **Rooms** are numbered by the order of their `ROOM` chunks in the table, from 0. Room 0 is
+  where a new game starts.
+- **What the cooker writes**, in this order: per area `VLAY`, `PALE`, `TILE`, then per room of
+  the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `SONG`, `MODB`,
+  optionally `MODN`, and `STRS`.
+- **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `PALE`, `TILE`, `SPRT`, `SONG`,
+  `MODB`, `MODN`, `STRS`. `VLAY` is written but not read; where things go in video memory is
+  fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
+- **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the
+  profile (GBA: 1024); 16 palette banks; a pack pushed over the link has at most 512 chunks
+  and must fit the runtime's content buffer ([link-protocol.md](link-protocol.md) §3).
+- **Sharing**: tiles are merged (with flips) per area and palettes are packed per area.
+  Identical assets are not merged across chunks, and nothing decides between global, area
+  and room level: sprites, songs and scripts are always global.
+
+Not built: `RCHN`, `META`, `SHAP`, `CLAS`, `SCHM`, `EFCT`, `SFX `, `WRLD`; the layouts other
+than writing chunks in the order above; `bmpack relayout`; the `stream` way of section 2.4 as
+described there (the link sends whole packs, chunk by chunk, skipping what the runtime has:
+section 5).
 
 ## 1. Layout
 
@@ -203,12 +250,13 @@ The cooker picks per chunk; tile data for VRAM SHOULD use 1.
 ## 5. Delta transfer
 
 The live link (see [link-protocol.md](link-protocol.md)) compares `hash` values per chunk and
-only sends chunks that changed. Chunks that did not change keep their content but MAY move; the
-receiver therefore rebuilds the pack from the new table of contents and the chunks it already
-has.
+only sends chunks that changed (same hash and same size count as unchanged). Chunks that did
+not change keep their content but MAY move; the receiver therefore rebuilds the pack from the
+new table of contents and the chunks it already has.
 
 ## History
 
+- 0.2: section 0, what is built, from the code.
 - 0.1: first draft.
 - 0.1.4: content and layout separated (§2.6); layout ID in the header; `relayout` tool;
   `sequential` layout reserved for CF/SD.

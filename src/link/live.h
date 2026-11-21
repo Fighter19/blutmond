@@ -230,7 +230,7 @@ bool bmLiveLog(BmLive *pLive, const char *pText);
 #define BM_LIVE_DEBUG_HEADER 4
 #define BM_LIVE_DEBUG_DATA_MAX 512
 enum {
-  BM_DEBUG_INFO = 'i',       // answer: byte 1 stopped, byte 2 breakpoint slots, byte 3 can stop
+  BM_DEBUG_INFO = 'i',       // answer, from byte 4: stopped, breakpoint slots, can stop
   BM_DEBUG_HALT = 'h',       // stop at the next frame boundary; answered by STOPPED
   BM_DEBUG_CONTINUE = 'c',
   BM_DEBUG_READ_REGS = 'g',  // answer: r0-r15, cpsr (17 words)

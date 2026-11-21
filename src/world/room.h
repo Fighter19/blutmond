@@ -11,7 +11,8 @@
 #include "shared.h"
 #include "pack.h"
 
-#define BM_ROOM_MAX_LAYERS 4
+// Each layer takes two of the screen blocks 26-31 for its map.
+#define BM_ROOM_MAX_LAYERS 3
 
 typedef enum BmRoomRole {
   BM_ROOM_ROLE_BACKGROUND = 0,

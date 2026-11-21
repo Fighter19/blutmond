@@ -57,9 +57,15 @@ piece (6 bytes):      s8 dx, dy (top left, relative to the anchor),
                       u8 shape (bits 0-1: square, wide, tall) | size << 2, u8 0, u16 first tile
 animation (8 bytes):  u16 name (string id), u16 first step, u16 step count, u8 loop, u8 0
 step (4 bytes):       u16 frame, u16 duration
-palette:              16 × u16 BGR555
-tiles:                32 bytes each
+palette:              16 × u16 BGR555 (entry 0 is transparent and written as 0)
+tiles:                32 bytes each: 8 rows of 4 bytes, the left pixel of each pair in the low
+                      four bits. The tiles of a piece follow each other row by row.
 ```
+
+Shape and size give the piece's pixels as on the hardware: square 8, 16, 32, 64; wide 16×8,
+32×8, 32×16, 64×32; tall 8×16, 8×32, 16×32, 32×64. Shape 3 does not exist and such a piece is
+not drawn. Everything is little endian and the chunk is padded to four bytes. The runtime
+does not use the bounds.
 
 A reader MUST check that every piece, step and frame reference lies inside its table before
 using the chunk.
@@ -73,11 +79,16 @@ using the chunk.
 - The position in an animation (animation, step, frames shown) is plain data and part of the
   game state ([state.md](state.md)), so save states and link transfers continue animations
   where they were.
-- Until classes are scripted, the engine's player uses the sprite named `player` with the
-  animations `idle`, `run`, `jump`, `fall` and `climb` (missing ones fall back to the first),
-  and an object is drawn with the sprite named like its class (ignoring case), playing its
-  first animation.
+- The engine's player uses the sprite named `player` with the animations `idle`, `run`,
+  `jump`, `fall` and `climb` (missing ones fall back to the first). A scripted object uses
+  the sprite its class names, or the one named like the class (ignoring case), and its script
+  chooses the animation (`play_anim`). An unscripted object with a sprite named like its
+  class shows that sprite's first animation.
+- Where sheets go in sprite memory, how the animation state advances, the order in which
+  hardware sprites are given out and how a frame is placed on screen are in
+  [runtime-core.md](runtime-core.md) §9.
 
 ## History
 
 - 1: first version.
+- 1.1: tile bytes, piece sizes; the run-time rules moved to runtime-core.md.

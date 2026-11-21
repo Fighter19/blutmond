@@ -1,90 +1,170 @@
 # Game state
 
-Version 0.1, draft.
+Version 0.2. Describes the state as the runtime keeps and serialises it (`src/world/state.c`,
+the field table in `src/world/game.c`). Version 0.1 of this document described a larger
+design (a generated arena, a schema chunk, migration); what of it is not built is listed in
+section 7.
 
-## 1. State arena
+## 1. What state is
 
-All mutable game state lives in one **state arena**: a contiguous block (EWRAM on the GBA, with
-an optional hot part in IWRAM) that contains no pointers. References are handles (see
-[runtime-abi.md](runtime-abi.md)) or offsets. The arena can be copied with `memcpy` and has the
-same layout on every target of the same profile.
+The game's state is a set of named **fields** with a type, a count and flags. On every
+machine they serialise to the same bytes, so a state written on the PC loads on the GBA and
+back, and two machines given the same state and the same keys stay identical
+([runtime-core.md](runtime-core.md)).
 
-The layout is generated, never written by hand: from engine types and from the fields of
-Mondskript classes ([mondskript.md](mondskript.md)).
+Fields are grouped in **blocks**. The game has one block, `game`. The test game adds a second
+one, `autopilot` (`jumpHold`, `idle`, both u16, snapshot), when it is played by its autopilot
+or could be.
 
-## 2. Field flags
+## 2. Flags
 
-Every field carries one or more flags:
+| Bit | Flag | Meaning |
+|---|---|---|
+| 0 | `save` | written to the save game |
+| 1 | `link` | sent when one device brings another to where it is |
+| 2 | `snapshot` | part of a save state |
+| 3 | `transient` | never written; 0 after a load |
+| 4 | `derived` | never written; worked out again after a load |
 
-| Flag | Meaning |
-|---|---|
-| `save` | written to the save game (SRAM/flash) |
-| `link` | sent on link transfer (GBA to GBA, editor to GBA) |
-| `snapshot` | part of a save state (debugging, "state" reload mode) |
-| `transient` | not saved anywhere; reset to its default on load |
-| `derived` | not saved; recomputed after loading by the owning code |
+`save` and `link` imply `snapshot`. A field without flags is `snapshot`. A field with
+`transient` or `derived` is never written, whatever else it has.
 
-`save` and `link` imply `snapshot`. A field without any flag is `snapshot` only, and the editor
-MUST mark it so missing `save` flags stand out.
+Writing takes a **mask** of the bits 0-2; a field is written if it has (with the rule above)
+any flag of the mask. The three uses: `save` (1) for the save game, `link` (2) for a transfer
+between devices, `snapshot` (4) for everything.
 
-## 3. Schema
+## 3. Serialised form
 
-The cooker writes the schema as the `SCHM` chunk:
-
-```c
-struct BmSchemaHeader {
-    u32 schema_hash;           // CRC-32 over the field list; equal hash = same layout
-    u32 arena_size;
-    u16 field_count;
-    u16 pad;
-};
-struct BmSchemaField {         // 16 bytes
-    u16 name;                  // string ID
-    u16 owner;                 // class ID, or 0xFFFF for engine globals
-    u32 offset;                // within the arena (for per-object fields: within the record)
-    u16 size;
-    u8  type;                  // bool, s8..s32, u8..u32, fix, fix16, handle, enum, array
-    u8  flags;                 // bit 0 save, 1 link, 2 snapshot, 3 transient, 4 derived
-    u16 count;                 // array length, 1 otherwise
-    u16 persistent_scope;      // 0 global, 1 per persistent object ID, 2 per entity slot
-};
-```
-
-Generated C headers declare the same layout as `struct`s with `_Static_assert` on every
-offset and size.
-
-## 4. State map
-
-The editor shows the schema as a **state map**: a table (field, owner, type, offset, bytes,
-flags) and a memory bar of the arena, with totals for `save`, `link` and `snapshot`. It shows
-the size of a save game per slot and the size of a link transfer.
-
-## 5. Per-object state
-
-State of placed objects that must survive (defeated, collected, opened, broken blocks) is kept
-per **persistent ID** of the object (see [room-format.md](room-format.md) §5), in a table per
-room. Objects that are added later simply have no entry yet.
-
-## 6. Save games
-
-A save game contains a header (magic `BMSV`, schema hash, profile, slot, CRC-32) and the `save`
-fields in schema order. Loading a save with a different schema hash uses the migration table
-of the build that wrote it, if the game ships one; otherwise the fields are matched by owner and
-name, unknown ones are dropped and new ones get their defaults.
-
-## 7. Migration table
-
-Used by the `hot_migrate` reload mode and for old save games. A list of operations from the old
-to the new layout:
+Everything little endian.
 
 ```
-COPY  old_offset new_offset size
-FILL  new_offset size value (from defaultproperties)
-CONV  old_offset new_offset from_type to_type   (e.g. int to fix)
+0    "BMST"
+4    u8  version (1)
+5    u8  flag mask
+6    u16 payload size in bytes
+8    u32 schema hash
+12   u32 CRC-32 of the payload
+16   payload
 ```
 
-The editor generates it by matching fields by owner and name.
+The payload is the selected fields: block after block, field after field in table order,
+array elements one after the other, nothing in between.
 
-## History
+| Type | Number | Bytes | |
+|---|---|---|---|
+| u8, s8 | 0, 1 | 1 | |
+| u16, s16 | 2, 3 | 2 | |
+| u32, s32 | 4, 5 | 4 | |
+| bool | 6 | 1 | 0 or 1 |
+| fix | 7 | 4 | signed 24.8 |
 
-- 0.1: first draft.
+**Schema hash.** A CRC-32 ([pack-format.md](pack-format.md) §1) run over, for each block: its
+name with the terminating zero byte; then for each field of its table, selected or not: the
+name with its zero byte, then four bytes: type number, flags, count low byte, count high
+byte. Field names are exactly as in the table below. Offsets in memory are not part of it.
+
+**Reading** fails with "bad header" (too short, other magic or version), "other schema" (the
+hash differs, or the payload size is not what the mask selects) or "bad checksum". Nothing is
+changed in those cases.
+
+## 4. The fields of `game`
+
+In serialisation order. Count is the array length.
+
+| Field | Type | Count | Flags |
+|---|---|---|---|
+| `roomIndex` | u32 |  | save link |
+| `player.x` | fix |  | save link |
+| `player.y` | fix |  | save link |
+| `player.vx` | fix |  | link |
+| `player.vy` | fix |  | link |
+| `player.onGround` | bool |  | link |
+| `player.climbing` | bool |  | link |
+| `player.inWater` | bool |  | derived |
+| `player.jumpCutDone` | bool |  | snapshot |
+| `player.facing` | s8 |  | save link |
+| `player.coyote` | u8 |  | snapshot |
+| `player.jumpBuffer` | u8 |  | snapshot |
+| `player.dropThrough` | u8 |  | snapshot |
+| `player.safeX` | s32 |  | save |
+| `player.safeY` | s32 |  | save |
+| `frame` | u32 |  | snapshot |
+| `keysPrevious` | u16 |  | snapshot |
+| `hurtTimer` | u16 |  | snapshot |
+| `doorCooldown` | u16 |  | snapshot |
+| `saveCooldown` | u16 |  | transient |
+| `deaths` | u32 |  | save |
+| `roomChanges` | u32 |  | save |
+| `hurts` | u32 |  | save |
+| `saves` | u32 |  | save |
+| `playerAnim.anim` | u8 |  | snapshot |
+| `playerAnim.finished` | u8 |  | snapshot |
+| `playerAnim.step` | u16 |  | snapshot |
+| `playerAnim.timer` | u16 |  | snapshot |
+| `actors.moduleHash` | u32 |  | snapshot |
+| `actors.count` | u8 |  | snapshot |
+| `actors.classIndex` | u16 | 8 | snapshot |
+| `actors.state` | u8 | 8 | snapshot |
+| `actors.wait` | u8 | 8 | snapshot |
+| `actors.pc` | u16 | 8 | snapshot |
+| `actors.timer` | u16 | 8 | snapshot |
+| `actors.fields` | s32 | 64 | snapshot |
+| `actors.x` | fix | 8 | snapshot |
+| `actors.y` | fix | 8 | snapshot |
+| `actors.facing` | s8 | 8 | snapshot |
+| `actors.hidden` | u8 | 8 | snapshot |
+| `actors.touching` | u8 | 8 | snapshot |
+| `actors.anim` | u8 | 8 | snapshot |
+| `actors.animFinished` | u8 | 8 | snapshot |
+| `actors.animStep` | u16 | 8 | snapshot |
+| `actors.animTimer` | u16 | 8 | snapshot |
+| `actors.seed` | u32 |  | snapshot |
+| `actors.storeCount` | u8 |  | save |
+| `actors.storeKey` | u32 | 16 | save |
+| `actors.storeValue` | s32 | 16 | save |
+| `actors.itemCount` | u8 |  | save |
+| `actors.items` | u32 | 4 | save |
+
+Sizes with this table: a save game is 183 bytes of payload, a link transfer 23, a snapshot
+678 (682 with the autopilot); each plus the 16-byte header.
+
+`actors.fields` holds 8 values per scripted object, object 0 first. The meaning of the
+fields is in [runtime-core.md](runtime-core.md).
+
+## 5. After a load
+
+Loading a state only sets fields. Then the runtime enters the stored room again (collision,
+objects, sprites, sound, the room on screen) without moving the player, sets `saveCooldown`
+to 0, and updates camera and sprites.
+
+Scripted objects continue where the state has them, unless the state does not fit: another
+script module (`actors.moduleHash` differs from the pack's), another number of scripted
+objects in the room, or another class at some position. Then they start fresh, as on entering
+the room.
+
+Not part of the state: the position in the music. A load starts the room's song from its
+beginning.
+
+## 6. Uses
+
+- **Save game**: block `game` only, mask `save`, at offset 0 of the save memory (512 bytes are
+  read). Loading one also sets `vx` and `vy` to 0 and starts the scripted objects fresh.
+- **Snapshot**: all blocks, mask `snapshot`: save states, the editor, the input sync
+  ([link-protocol.md](link-protocol.md) §10).
+- **Link**: all blocks, mask `link`: GBA to GBA ([link-protocol.md](link-protocol.md) §9).
+  Note what it leaves out: the scripted objects, the random seed, the frame counter and the
+  timers are `snapshot` only. The receiving device gets the room and the player; its scripted
+  objects keep the state they had if they fit the room it ends up in, and start fresh
+  otherwise. A transfer after which both devices must stay identical needs
+  a snapshot.
+- **State checksum** in the input sync: the CRC-32 of the whole serialised snapshot (header
+  included) of block `game` alone.
+
+## 7. Planned, not built
+
+- A schema chunk (`SCHM`) written by the cooker, and layouts generated from it.
+- State of scripted objects per class instead of fixed arrays of 8.
+- Migration between schema versions: a state of another schema is refused.
+- Save slots, a profile field and compression in the save game.
+- The state map in the editor shows the table with sizes and totals; it does not show values
+  of a running game.

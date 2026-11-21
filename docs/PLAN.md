@@ -116,8 +116,8 @@ running from ROM is slow, and every indirect call costs).
 └────────────┴──────────────────────┴───────────────────────────────────┘
 ```
 
-- **HAL**: the only layer that knows the hardware. On the GBA one file per part
-  (`hal_gba_video.c` and so on); register access wrapped in `static inline` functions so there
+- **HAL**: the only layer that knows the hardware. On the GBA `hal_gba.c` with the
+  start code, interrupt handler and debugger landing places in assembly beside it; register access wrapped in `static inline` functions so there
   is no overhead. Addresses live only there (and in the linker script).
 - **Runtime**: platform independent C, fixed point only (deterministic on every target, see
   [11](#11-emulation-layer-for-the-pc)).

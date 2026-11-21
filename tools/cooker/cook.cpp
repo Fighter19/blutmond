@@ -794,6 +794,9 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       uint16_t roomGroup = uint16_t(256 + (room - rooms.data()));
 
       std::vector<std::pair<const GraphicsLayer *, uint32_t>> layerChunks;
+      // The runtime gives each layer two of six screen blocks.
+      if (room->layers.size() > 3)
+        report.error("layers", map.path, "a room can have at most 3 graphics layers (it has " + std::to_string(room->layers.size()) + ")");
       for (const GraphicsLayer &gl : room->layers)
         layerChunks.emplace_back(&gl, add(writer, BM_CHUNK_TMAP, BM_CATEGORY_LEVEL, roomGroup, mapChunk(gl, area, profile)));
       uint32_t collChunk = add(writer, BM_CHUNK_COLL, BM_CATEGORY_LEVEL, roomGroup, collisionChunk(map, report));

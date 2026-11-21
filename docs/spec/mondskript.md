@@ -1,6 +1,6 @@
 # Mondskript
 
-Version 0.3, draft.
+Version 0.4, draft.
 
 Mondskript is Blutmond's scripting language. It is modelled on the old UnrealScript (classes
 with declared fields, states with latent functions, `defaultproperties`) and avoids its known
@@ -108,7 +108,9 @@ begin:
 - The compiler turns state code into a state machine. The current state and the resume point
   are ordinary fields of the object (flag `snapshot`, plus `save`/`link` if the class says so),
   so save states, link transfer and live reloads work in the middle of state code.
-- `gotostate S;` leaves the current state at the end of the current event or latent step.
+- `gotostate S;` in state code leaves the state at once; in an event or a function the rest
+  of it still runs, and the new state's code starts at the object's next step (section 11,
+  "An object and its state code").
 - The initial state is set with `start_state` in `defaultproperties`.
 
 ## 6. Handles and queries
@@ -166,11 +168,9 @@ source → parser → AST → type check → IR ─┬─► bytecode module ('M
 - Text and node views in the editor show the same AST; the text is what is stored, node
   positions are kept in a side file keyed by stable node IDs.
 - **Bytecode**: register based, 16-bit instructions. A module contains: header (magic `BMMB`,
-  version, ABI version, class IDs it defines), constant pool, functions (register count,
-  code), line table (instruction → source line). The loader **verifies** it before use: every
-  jump target is an instruction start, every register index is below the function's register
-  count, every field access is inside the object's layout, every runtime call is a known API
-  index with the right argument count. A module that fails verification is rejected.
+  version, counts), classes, states, variables, functions, constant pool, code, line table.
+  The loader **verifies** it before use and rejects a module that fails. The layout, the
+  instructions and the verifier's rules are in section 11.
 - **Native**: the generated C uses no global variables (only a context pointer) and calls the
   runtime only through that context. It is compiled with `arm-none-eabi-gcc` and linked at
   address 0 with `--emit-relocs`; the packer keeps the list of absolute addresses and the
@@ -178,7 +178,7 @@ source → parser → AST → type check → IR ─┬─► bytecode module ('M
   show script lines. Section 12 has the details.
 - Both forms produce identical results; tests compare the game state between them.
 
-## 11. What version 0.2 implements
+## 11. What is implemented
 
 The compiler (`tools/mondskript`), the interpreter (`src/script/vm.h`) and the game's scripted
 objects (`src/world/actors.h`) implement a first part of the above. Script files end in `.ms`
@@ -203,7 +203,8 @@ added at the end. This version: `sleep`, `finish_anim`, `play_anim(name)`, `anim
 fix)`, `hurt_player(int)`, `enter_door`, `hide`, `show`, `face_player`, `log(int)`,
 `random(int)`, `touching_player`, `give_item(name)`, `has_item(name)`, `abs(int)`,
 `play_sound(name)`, `play_music(name)`; and the
-actor variables `x`, `y`, `facing` and (read only) `home_x`, `home_y`.
+actor variables `x`, `y`, `facing` and (read only) `home_x`, `home_y`. What each of these does,
+exactly, is in [runtime-core.md](runtime-core.md) §8.
 
 Objects of a room whose Tiled class is a script class are scripted; the engine then leaves them
 alone, also for engine classes (a class `Door` in a script decides when the door opens and
@@ -229,28 +230,109 @@ code:                u16 words, followed by one spare word
 line table:          per function a u32 offset to: u16 file (string id), u16 n, n × (u16 word, u16 line)
 ```
 
-An instruction is `op | a << 8` followed by its operand words:
+Everything is little endian. Variable types: 0 void, 1 bool, 2 int, 3 fix, 4 name, 5 text
+(names and texts are string ids). Events in the order of their numbers: 0 `spawn`, 1 `tick`,
+2 `touch`. The line table's offset may be 0 (none).
 
-| Instruction | Words | Effect |
-|---|---|---|
-| `LOADI a, imm` / `LOADK a, k` | 2 | register a = sign-extended word / constant k |
-| `MOVE a, b`, `NEG a, b`, `NOT a, b` | 2 | |
-| `GETF a, f` / `SETF a, f` | 2 | variable f of the object |
-| `GETV a, v` / `SETV a, v` | 2 | actor variable v |
-| `ADD SUB MUL DIV MOD FMUL FDIV EQ NE LT LE a, b, c` | 2 (b and c in one word) | division and modulo by zero give 0; `FMUL`/`FDIV` keep 8 fraction bits |
-| `JMP t`, `JZ a, t`, `JNZ a, t` | 2 | to word t of the function |
-| `CALLN a, api, first` | 2 | runtime function with arguments in the registers from `first`; a = result |
-| `CALL a, function, first` | 3 | a function of the same class |
-| `RET a` | 1 | a = 0xFF: no result |
-| `GOTOSTATE s`, `STOP` | 1 | `STOP` ends state code |
+#### Instructions
 
-The verifier refuses a module unless: every table lies inside the module; every instruction is
-known and complete; registers are below the function's count, variables inside the class,
-constants, states, functions and API entries exist; arguments fit; jumps land on instructions;
-no function can run off its end; latent functions and `STOP` only appear in state code and
-`RET` only outside; events and state code are functions of their class without parameters.
-At run time an instruction budget (4000 per call) stops endless loops and a depth limit stops
-endless recursion; the object then stops running scripts and the error names the source line.
+The first word of an instruction is `op | a << 8`. The numbers:
+
+| # | Instruction | Words | Operands | Effect |
+|---|---|---|---|---|
+| 0 | `LOADI` | 2 | w1: value | `r[a]` = w1 as a signed 16-bit number |
+| 1 | `LOADK` | 2 | w1: constant | `r[a]` = constant w1 |
+| 2 | `MOVE` | 2 | w1: register | `r[a] = r[w1]` |
+| 3 | `GETF` | 2 | w1: variable | `r[a]` = the object's variable w1 |
+| 4 | `SETF` | 2 | w1: variable | the object's variable w1 = `r[a]`; a `save` variable is also kept ([runtime-core.md](runtime-core.md) §8) |
+| 5 | `GETV` | 2 | w1: actor variable | `r[a]` = actor variable w1 |
+| 6 | `SETV` | 2 | w1: actor variable | actor variable w1 = `r[a]` |
+| 7 | `ADD` | 2 | w1 = `b \| c << 8` | `r[a] = r[b] + r[c]`, wrapping at 32 bits |
+| 8 | `SUB` | 2 | same | `r[b] - r[c]`, wrapping |
+| 9 | `MUL` | 2 | same | `r[b] * r[c]`, wrapping |
+| 10 | `DIV` | 2 | same | `r[b] / r[c]` truncating toward zero; 0 if `r[c]` is 0, and 0 for the smallest number divided by -1 |
+| 11 | `MOD` | 2 | same | the remainder of that division (sign of `r[b]`); 0 if `r[c]` is 0 or -1 |
+| 12 | `FMUL` | 2 | same | `(int64(r[b]) * r[c]) >> 8`, arithmetic shift |
+| 13 | `FDIV` | 2 | same | `(int64(r[b]) * 256) / r[c]` truncating; 0 if `r[c]` is 0 |
+| 14 | `EQ` | 2 | same | 1 if equal, else 0 |
+| 15 | `NE` | 2 | same | 1 if different, else 0 |
+| 16 | `LT` | 2 | same | 1 if `r[b] < r[c]` (signed), else 0 |
+| 17 | `LE` | 2 | same | 1 if `r[b] <= r[c]` (signed), else 0 |
+| 18 | `NEG` | 2 | w1: register | `r[a] = 0 - r[w1]`, wrapping |
+| 19 | `NOT` | 2 | w1: register | `r[a]` = 1 if `r[w1]` is 0, else 0 |
+| 20 | `JMP` | 2 | w1: target | continue at word w1 of this function |
+| 21 | `JZ` | 2 | w1: target | ... if `r[a]` is 0 |
+| 22 | `JNZ` | 2 | w1: target | ... if `r[a]` is not 0 |
+| 23 | `CALLN` | 2 | w1 = `api \| first << 8` | calls runtime function `api` with the registers from `first` as arguments; `r[a]` = its result unless `a` is 0xFF |
+| 24 | `CALL` | 3 | w1: function, w2: first | calls a function of the same class with the registers from `first` as arguments; `r[a]` = its result unless `a` is 0xFF |
+| 25 | `RET` | 1 | | returns `r[a]`, or nothing if `a` is 0xFF |
+| 26 | `GOTOSTATE` | 1 | | the object's state becomes `a` (below) |
+| 27 | `STOP` | 1 | | the end of state code (below) |
+
+The runtime functions and the actor variables, by number, are in
+[runtime-core.md](runtime-core.md) §8. The compiler writes `wait_until(condition)` as a loop
+around `sleep(1)`; it is not a runtime function.
+
+#### Running a function
+
+- A function has its own registers (as many as its record says, at most 32), all 0 at the
+  start except the first ones, which hold the arguments. State code starts with all registers
+  0 every time it runs on, which is why it cannot keep local values across a wait.
+- A call puts the callee's registers behind the caller's. At most 16 calls inside each other
+  and 128 registers in all; more is the error "calls nested too deep".
+- A run executes at most 3999 instructions; the next one is the error "the script runs too
+  long". (Native code counts per block of straight-line code and may stop up to one block
+  earlier.)
+- After an error the object's wait becomes "failed" and it runs no script again.
+- `RET` in the outermost function ends the run.
+
+#### An object and its state code
+
+Per object: class, state (0xFF: none), wait, place (a word in the state's code), timer, and 8
+variables. Wait values: 0 running, 1 sleeping, 2 waiting for its animation, 3 stopped (its
+state code reached `STOP`), 4 failed.
+
+- **New object**: variables to the defaults of its class, the class's start state, wait 0,
+  place 0.
+- **Event** (`spawn`, `tick`, `touch`): runs the state's function for that event if the state
+  has one, else the class's, else nothing. Not for a failed object; a stopped one still gets
+  events.
+- **Step**, once per frame:
+  - failed or stopped: nothing;
+  - sleeping: if the timer is above 1, it is decremented and that is all; else it becomes 0
+    and the code runs on. So `sleep(n)` runs on n frames later;
+  - waiting for its animation: runs on once the animation is done
+    ([runtime-core.md](runtime-core.md) §8);
+  - no state, or a state without code: nothing (a state without code makes the object
+    stopped);
+  - else the state's code runs from the object's place, with wait set to running.
+- **A latent function** (`sleep`, `finish_anim`; only in state code) sets wait and timer and
+  ends the run; the place becomes the word after the call, unless the state changed meanwhile.
+- **`GOTOSTATE`** sets the state, place 0, timer 0, wait running. In state code itself the run
+  ends there, and the new state's code starts at the next step. In an event, or in a function
+  called from state code, execution goes on to the end of what is running.
+- **`STOP`** ends the run; the object becomes stopped unless its state changed during this
+  run.
+
+#### The verifier
+
+A module is refused unless all of this holds:
+
+- header: `BMMB`, version 1, events per class 3, and not more API entries than the runtime
+  has;
+- every table lies inside the module, and one word of space follows the code;
+- a class has at most 8 variables; its start state exists or is 0xFF;
+- a function is not empty, at most 512 words, has at most 32 registers, at most 3 parameters
+  and not more parameters than registers, and belongs to a class that exists;
+- every instruction is known and complete; registers are below the function's count;
+  variables inside the class; constants, states and API numbers exist; arguments lie inside
+  the registers;
+- every jump lands on the first word of an instruction of the same function;
+- the last instruction of a function is `RET`, `STOP` or `JMP`;
+- latent functions and `STOP` only in state code, `RET` only outside it;
+- `CALL` only to a function of the same class that is not state code;
+- an event's function and a state's code belong to that class, have no parameters, and are
+  (not) state code as their use says.
 
 ## 12. Native modules (`MODN`)
 
@@ -322,3 +404,5 @@ for now), per-class modules loaded on room changes.
 - 0.1: first draft.
 - 0.2: the implemented subset, the API table, the bytecode module and its verification.
 - 0.3: native modules (section 12).
+- 0.4: instruction numbers and encodings, how functions and state code run, the verifier's
+  rules; what the runtime functions do moved to runtime-core.md.
