@@ -141,7 +141,8 @@ bool bmHalDebugWrite(uint32_t address, const void *pIn, uint32_t size);
 typedef uint32_t (*BmHalLinkHandler)(void *pContext, uint32_t received);
 void bmHalLinkStart(BmHalLinkHandler handler, void *pContext, uint32_t firstWord);
 void bmHalLinkStop(void);
-/// Call once per frame while listening. Words have no frame on the wire, so the port can lose
+/// Call every frame while listening (more often does no harm: it looks once per two frames
+/// of real time). Words have no frame on the wire, so the port can lose
 /// the word boundary (a glitch on the clock, a word that began before the port was armed). If
 /// no word has come since the last call, the port is armed anew, which puts the boundary back
 /// as soon as the other side is quiet for a moment.

@@ -28,6 +28,7 @@
 //   --frames N  --autoplay  --trace  --snapshot-at N file  --load file  --headless  --window
 //   --scale N  --listen PORT  --no-listen  --save file  --no-save  --sound-check file
 //   --follow  (wait for another device's keys: bmlink mirror)  --until-frame N  --realtime
+//   --random-keys N  (keys change at random every N frames on average)
 
 #if defined(BM_PLATFORM_HOST) && !defined(_POSIX_C_SOURCE)
 #  define _POSIX_C_SOURCE 200809L   // nanosleep
@@ -198,6 +199,7 @@ static bool s_waitForMirror;   // --follow: do not play until another device's k
 #ifdef BM_PLATFORM_HOST
 static uint32_t s_untilFrame;  // --until-frame: end when the game reaches this frame
 static bool s_realtime;        // --realtime: 60 frames per second also without a window
+static uint32_t s_randomKeys;  // --random-keys N: keys change at random, every N frames on average (tests)
 #endif
 
 static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autoplay)
@@ -245,6 +247,23 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
       continue;
     }
     uint16_t keys = autoplay ? bmAutopilotKeys(&s_pilot, &s_game) : bmHalInputKeys();
+#ifdef BM_PLATFORM_HOST
+    if (s_randomKeys != 0)
+    {
+      // Someone mashing the buttons: mostly running and jumping, now and then anything.
+      static uint32_t seed = 12345;
+      static uint16_t held;
+      seed = seed * 1664525u + 1013904223u;
+      if ((seed >> 8) % s_randomKeys == 0)
+      {
+        seed = seed * 1664525u + 1013904223u;
+        uint32_t r = seed >> 8;
+        held = (uint16_t)((r & 1 ? BM_KEY_RIGHT : 0) | (r & 6 ? 0 : BM_KEY_LEFT) | (r & 8 ? BM_KEY_A : 0) | (r & 0x30 ? 0 : BM_KEY_UP) |
+                          (r & 0xC0 ? 0 : BM_KEY_DOWN) | (r & 0x700 ? 0 : BM_KEY_B));
+      }
+      keys = held;
+    }
+#endif
     if (bmLiveFollowing(&s_live) || s_waitForMirror)
     {
       // Another device plays and this one plays along (link-protocol.md §10): the same keys
@@ -256,6 +275,7 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
         nanosleep(&nap, NULL);
         if (s_frameHook != NULL && !s_frameHook()) break;
 #endif
+        catchUp = 0;   // waiting is paced by the screen again
         frame--;
         continue;
       }
@@ -437,6 +457,7 @@ int main(int argc, char **argv)
     else if (strcmp(argv[i], "--autoplay") == 0) autoplay = true;
     else if (strcmp(argv[i], "--follow") == 0) s_waitForMirror = true;
     else if (strcmp(argv[i], "--realtime") == 0) s_realtime = true;
+    else if (strcmp(argv[i], "--random-keys") == 0 && i + 1 < argc) s_randomKeys = (uint32_t)atoi(argv[++i]);
     else if (strcmp(argv[i], "--until-frame") == 0 && i + 1 < argc) s_untilFrame = (uint32_t)atoi(argv[++i]);
     else if (strcmp(argv[i], "--trace") == 0) trace = true;
     else if (strcmp(argv[i], "--snapshot-at") == 0 && i + 2 < argc)

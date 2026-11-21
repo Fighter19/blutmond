@@ -309,7 +309,13 @@ void bmHalLinkStart(BmHalLinkHandler handler, void *pContext, uint32_t firstWord
 
 void bmHalLinkRealign(void)
 {
-  if (s_linkHandler == NULL) return;
+  // Looked at once per two frames of real time, however often this is called: arming the
+  // port anew while a word is under way is exactly what cuts words apart, so "no word" has
+  // to mean a pause much longer than a word and the gaps between words.
+  static uint32_t s_checkedAt;
+  uint32_t vblanks = bm_vblank_count;
+  if (s_linkHandler == NULL || vblanks - s_checkedAt < 2) return;
+  s_checkedAt = vblanks;
   uint32_t lock = bmHalLinkLock();
   if (s_linkWords == s_linkWordsSeen)
   {

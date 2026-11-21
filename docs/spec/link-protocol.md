@@ -162,6 +162,10 @@ missing chunk `CHUNK_BEGIN`, `CHUNK_DATA`…, `CHUNK_END`, in windows; the only 
   sides; seen on hardware as the idle word arriving rotated by two bits. So the slave arms its
   port anew whenever no word arrived during a frame, and the master is quiet for 100 ms before
   each resync and session start. The emulated port moves whole words and cannot show this.
+  The slave looks only once per two frames of real time, however often its main loop runs: a
+  first version looked at every pass of the loop, and a GBA catching up in the input mirror
+  (section 10) then armed its port anew between two words of the same packet and cut them
+  apart itself.
 - **Resume**: chunks are confirmed window by window, so a transfer continues where it stopped.
 - **Atomic apply**: the slave applies nothing until `APPLY` arrives and every chunk it refers to
   has passed its hash check.
