@@ -31,6 +31,8 @@ public:
   std::function<void(const std::string &path)> spritePicked;
   /// A script file was picked: show it in the Script tab.
   std::function<void(const std::string &path)> scriptPicked;
+  /// A song file was picked: show it in the Sound tab.
+  std::function<void(const std::string &path)> songPicked;
   /// Assets were added or removed (the set of sprites may have changed).
   std::function<void()> assetsChanged;
   std::function<void(const std::string &line, bool error)> log;

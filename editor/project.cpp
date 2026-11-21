@@ -109,6 +109,8 @@ bool Project::cook()
     options.profile = *profile;
     info_ = CookInfo{};
     options.pInfo = &info_;
+    // The songs too, so the room's music is known (the preview itself plays none).
+    options.songs = songs_;
     pack_ = bm::cook(maps, options, report_);
   }
   catch (const std::exception &e)
@@ -135,6 +137,7 @@ bool Project::cookLevel(const std::string &path, std::string *pError) const
     options.profile = *profileByName("gba");
     options.sprites = sprites_;
     options.scripts = scripts_;
+    options.songs = songs_;
     Report report;
     std::vector<uint8_t> pack = bm::cook(maps, options, report);
     for (const auto &e : report.entries)

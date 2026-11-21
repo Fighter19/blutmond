@@ -60,6 +60,8 @@ public:
   void setSprites(std::vector<std::string> paths) { sprites_ = std::move(paths); }
   /// Script files that go into the level pack.
   void setScripts(std::vector<std::string> paths) { scripts_ = std::move(paths); }
+  /// Songs and sound effects that go into the level pack.
+  void setSongs(std::vector<std::string> paths) { songs_ = std::move(paths); }
   /// True if a room file changed on disk since the last cook (for hot reload).
   bool changedOnDisk() const;
 
@@ -87,7 +89,7 @@ private:
   void analyse();
 
   std::vector<std::string> rooms_;
-  std::vector<std::string> sprites_, scripts_;
+  std::vector<std::string> sprites_, scripts_, songs_;
   int current_ = -1;
   std::string profile_ = "gba";
   std::filesystem::file_time_type cookedTime_{};

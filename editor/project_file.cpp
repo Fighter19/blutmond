@@ -10,6 +10,7 @@
 
 #include "image.h"
 #include "overrides.h"
+#include "song_asset.h"
 #include "sprite_asset.h"
 #include "tmx.h"
 #include "xml.h"
@@ -42,6 +43,7 @@ AssetKind kindOf(const std::string &path)
   if (ext == ".tsx") return AssetKind::Tileset;
   if (ext == ".bmsprite") return AssetKind::Sprite;
   if (ext == ".ms") return AssetKind::Script;
+  if (ext == ".bmsong") return AssetKind::Song;
   if (ext == ".png" || ext == ".bmp" || ext == ".gif" || ext == ".tga") return AssetKind::Image;
   return AssetKind::Other;
 }
@@ -228,6 +230,41 @@ AssetCatalog AssetCatalog::scan(const ProjectFile &project)
     }
   }
 
+  // Songs use their samples; rooms use the song their `music` property names, and every room
+  // uses the effects the engine plays itself.
+  std::vector<std::string> songs;
+  for (auto &[path, a] : found)
+    if (a.kind == AssetKind::Song && a.problem.empty()) songs.push_back(path);
+  for (const std::string &path : songs)
+  {
+    try
+    {
+      song::Song s = song::load(path);
+      for (const song::Instrument &in : s.instruments)
+        if (in.wave == "sample" && !in.sample.empty())
+        {
+          AssetInfo &wav = entry((fs::path(path).parent_path() / in.sample).string());
+          if (std::find(wav.usedBy.begin(), wav.usedBy.end(), path) == wav.usedBy.end()) wav.usedBy.push_back(path);
+        }
+      for (const std::string &room : project.rooms)
+      {
+        bool uses = s.name == "jump" || s.name == "hurt";
+        try
+        {
+          uses |= tmx::load(room).property("music") == s.name;
+        }
+        catch (const std::exception &)
+        {
+        }
+        if (uses) found[path].usedBy.push_back(normalPath(room));
+      }
+    }
+    catch (const std::exception &e)
+    {
+      found[path].problem = e.what();
+    }
+  }
+
   // Scripts: used by the rooms that hold an object of the script's class.
   for (auto &[path, a] : found)
   {
@@ -338,6 +375,14 @@ std::vector<std::string> scriptPaths(const AssetCatalog &catalog)
   std::vector<std::string> out;
   for (const AssetInfo &a : catalog.assets)
     if (a.kind == AssetKind::Script && a.problem.empty()) out.push_back(a.path);
+  return out;
+}
+
+std::vector<std::string> songPaths(const AssetCatalog &catalog)
+{
+  std::vector<std::string> out;
+  for (const AssetInfo &a : catalog.assets)
+    if (a.kind == AssetKind::Song && a.problem.empty()) out.push_back(a.path);
   return out;
 }
 

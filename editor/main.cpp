@@ -34,6 +34,7 @@
 #include "project_panel.h"
 #include "runner.h"
 #include "script_panel.h"
+#include "sound_panel.h"
 #include "ui/containers.h"
 #include "ui/lists.h"
 #include "ui/loader.h"
@@ -59,6 +60,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
       <Item action="room.new"/><Item action="room.add"/><Item action="room.remove"/>
       <Item action="sprite.new"/>
       <Item action="script.new"/>
+      <Item action="song.new"/>
       <Item action="asset.import"/><Item action="asset.open"/><Item action="asset.delete"/>
       <Item action="room.reload"/><Item action="app.quit"/>
     </Menu>
@@ -217,6 +219,55 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
             </VBox></PanelContainer>
           </HBox>
         </VBox>
+        <VBox title="Sound" separation="0">
+          <PanelContainer theme-type="Toolbar"><HBox>
+            <Label text="Song"/>
+            <OptionButton id="snd_song"/>
+            <Button text="New song" action="song.new"/>
+            <Button id="snd_play" text="Play"/>
+            <Label text="Tempo"/><SpinBox id="snd_bpm" min-size="56 0"/>
+            <Label text="Bars"/><SpinBox id="snd_bars" min-size="44 0"/>
+            <CheckBox id="snd_loop" text="Loop"/>
+            <CheckBox id="snd_effect" text="Sound effect"/>
+            <Label text="Echo ms"/><SpinBox id="snd_echo" min-size="48 0"/>
+            <Label text="Feedback"/><SpinBox id="snd_feedback" min-size="48 0"/>
+            <Label id="snd_info" text="" expand="1" clip-text="1"/>
+          </HBox></PanelContainer>
+          <HBox expand="1" separation="2">
+            <PanelContainer min-width="270"><VBox>
+              <Label text="Tracks" bold="1"/>
+              <Scroll min-size="0 110"><ItemList id="snd_tracks"/></Scroll>
+              <HBox><Button id="snd_track_add" text="Add track"/><Button id="snd_track_remove" text="Remove"/></HBox>
+              <Label text="Instrument of the track" bold="1"/>
+              <HBox><Label text="Name"/><LineEdit id="snd_track_name" expand="1"/></HBox>
+              <HBox><Label text="Wave"/><OptionButton id="snd_wave" expand="1"/><Button id="snd_test" text="Test"/></HBox>
+              <HBox><Label text="Sample"/><OptionButton id="snd_sample" expand="1"/></HBox>
+              <HBox><Label text="Root key"/><SpinBox id="snd_root" expand="1"/><CheckBox id="snd_sample_loop" text="Loops"/></HBox>
+              <Grid columns="4">
+                <Label text="Attack"/><SpinBox id="snd_attack" expand="1"/>
+                <Label text="Decay"/><SpinBox id="snd_decay" expand="1"/>
+                <Label text="Sustain"/><SpinBox id="snd_sustain" expand="1"/>
+                <Label text="Release"/><SpinBox id="snd_release" expand="1"/>
+                <Label text="Volume"/><SpinBox id="snd_volume" expand="1"/>
+                <Label text="Pan"/><SpinBox id="snd_pan" expand="1"/>
+              </Grid>
+              <Label text="Times in frames (1/60 s); sustain and volume 0-255; pan -64 to 63" wrap="1" dim="1"/>
+              <Label text="What it costs" bold="1"/>
+              <Label id="snd_voices" text="" clip-text="1"/><ProgressBar id="snd_voices_bar"/>
+              <Label id="snd_cpu" text="" clip-text="1"/><ProgressBar id="snd_cpu_bar"/>
+              <Label id="snd_size" text="" clip-text="1"/><ProgressBar id="snd_size_bar"/>
+            </VBox></PanelContainer>
+            <VBox expand="1">
+              <PianoRoll id="snd_roll" expand="1"/>
+              <PanelContainer><HBox>
+                <Label text="New notes"/><OptionButton id="snd_note_length"/>
+                <Label text="Selected note: velocity"/><SpinBox id="snd_velocity" min-size="56 0"/>
+                <Label text="length (ticks, 24 per beat)"/><SpinBox id="snd_length" min-size="56 0"/>
+                <Label text="Click: add or pick; drag: move; right end: length; right click: remove; wheel: scroll" expand="1" clip-text="1" dim="1"/>
+              </HBox></PanelContainer>
+            </VBox>
+          </HBox>
+        </VBox>
         <VBox title="Graphics" separation="0">
           <PanelContainer theme-type="Toolbar"><HBox>
             <Label text="Show"/>
@@ -277,6 +328,7 @@ struct Editor
   PalettePanel palettePanel;
   AnimationPanel animationPanel;
   ScriptPanel scriptPanel;
+  SoundPanel soundPanel;
   Label *status = nullptr, *camera = nullptr;
   Label *hwTiles = nullptr, *hwBanks = nullptr, *hwMaps = nullptr, *hwLayers = nullptr, *hwPack = nullptr;
   ProgressBar *hwTilesBar = nullptr, *hwBanksBar = nullptr, *hwMapsBar = nullptr;
@@ -423,6 +475,12 @@ struct Editor
     std::vector<std::string> scripts = scriptPaths(projectPanel.catalog());
     project.setScripts(scripts);
     scriptPanel.setScripts(scripts);
+    std::vector<std::string> songs = songPaths(projectPanel.catalog());
+    project.setSongs(songs);
+    soundPanel.setSongs(songs);
+    if (!songs.empty()) soundPanel.songDir = std::filesystem::path(songs[0]).parent_path().string();
+    else if (!projectPanel.file().assetDirs.empty())
+      soundPanel.songDir = (std::filesystem::path(projectPanel.file().assetDirs[0]) / "music").string();
     // New scripts go next to the existing ones, or into "scripts" in the first asset folder.
     if (!scripts.empty()) scriptPanel.scriptDir = std::filesystem::path(scripts[0]).parent_path().string();
     else if (!projectPanel.file().assetDirs.empty())
@@ -503,6 +561,8 @@ struct Editor
     registerGraphicsControls();
     registerAnimationControls();
     registerControlType("CodeEdit", [] { return std::make_unique<CodeEdit>(); });
+    registerControlType("PianoRoll", [] { return std::make_unique<PianoRoll>(); });
+    ui.actions().add({"song.new", "New song or sound effect...", "music", "", "", [this] { soundPanel.newSong(); }, nullptr, nullptr});
     ui.actions().add({"script.new", "New script...", "terminal", "", "", [this] { scriptPanel.newScript(); }, nullptr, nullptr});
     ui.actions().add({"sprite.new", "New sprite...", "film", "", "", [this] { projectPanel.newSprite(); }, nullptr, nullptr});
     ui.actions().add({"gfx.capture", "Capture the running game's graphics", "eye", "F8", "", [this] {
@@ -556,6 +616,17 @@ struct Editor
     scriptPanel.created = [this] {
       projectPanel.refresh();
       spritesChanged();
+    };
+    soundPanel.bind(*root, ui);
+    soundPanel.log = projectPanel.log;
+    soundPanel.changed = [this] { pushLive(); };
+    soundPanel.created = [this] {
+      projectPanel.refresh();
+      spritesChanged();
+    };
+    projectPanel.songPicked = [this](const std::string &path) {
+      if (soundPanel.path() != path) soundPanel.open(path);
+      if (auto *center = app.ui().root() ? app.ui().root()->findAs<TabContainer>("center") : nullptr) center->setCurrent(3);
     };
     projectPanel.scriptPicked = [this](const std::string &path) {
       if (scriptPanel.path() != path) scriptPanel.open(path);
@@ -618,6 +689,7 @@ struct Editor
     palettePanel.update(dt);
     animationPanel.update(dt);
     scriptPanel.update(dt);
+    soundPanel.update(dt);
     reloadTimer += dt;
     if (reloadTimer > 1.0f)
     {

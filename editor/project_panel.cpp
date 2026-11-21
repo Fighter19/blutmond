@@ -30,6 +30,7 @@ const char *kindName(AssetKind k)
   case AssetKind::Room: return "room";
   case AssetKind::Sprite: return "sprite";
   case AssetKind::Script: return "script";
+  case AssetKind::Song: return "song";
   case AssetKind::Tileset: return "tileset";
   case AssetKind::Image: return "image";
   default: return "file";
@@ -57,6 +58,7 @@ void ProjectPanel::bind(Control &root, Context &ui)
     std::string path = selectedPath();
     if (fs::path(path).extension() == ".bmsprite" && spritePicked) spritePicked(path);
     if (fs::path(path).extension() == ".ms" && scriptPicked) scriptPicked(path);
+    if (fs::path(path).extension() == ".bmsong" && songPicked) songPicked(path);
   });
 }
 
@@ -97,6 +99,7 @@ void ProjectPanel::rebuild()
   Group groups[] = {{"Rooms not in the project", "file-o", AssetKind::Room},
                     {"Sprites", "film", AssetKind::Sprite},
                     {"Scripts", "terminal", AssetKind::Script},
+                    {"Songs and effects", "music", AssetKind::Song},
                     {"Tilesets", "th", AssetKind::Tileset},
                     {"Images", "image", AssetKind::Image},
                     {"Other files", "file", AssetKind::Other}};
@@ -122,11 +125,11 @@ void ProjectPanel::rebuild()
       {
         // Images used only by sprites say so.
         size_t bySprites = 0;
-        for (const std::string &u : a.usedBy) bySprites += fs::path(u).extension() == ".bmsprite";
+        for (const std::string &u : a.usedBy) bySprites += fs::path(u).extension() == ".bmsprite" || fs::path(u).extension() == ".bmsong";
         size_t byRooms = a.usedBy.size() - bySprites;
         if (a.usedBy.empty()) item->secondary = "unused";
         else if (byRooms) item->secondary = std::to_string(byRooms) + (byRooms == 1 ? " room" : " rooms");
-        else item->secondary = std::to_string(bySprites) + (bySprites == 1 ? " sprite" : " sprites");
+        else item->secondary = "used by " + fileName(a.usedBy[0]) + (bySprites > 1 ? " and others" : "");
       }
       if (a.hasOverrides) item->secondary += ", overrides";
     }

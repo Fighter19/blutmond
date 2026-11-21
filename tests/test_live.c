@@ -277,6 +277,8 @@ static void testScriptsArePushedLive(void)
   printf("    %u chunks sent (%u bytes), %u already there\n", (unsigned)st.chunksSent, (unsigned)st.bytesSent, (unsigned)st.chunksResident);
   TEST_ASSERT(st.chunksSent <= 2);
   TEST_ASSERT(s_game.actors.hasModule && s_game.actors.moduleHash != hashBefore);
+  // The sound engine reads songs in place: it started over on the new pack and plays on.
+  TEST_ASSERT(s_game.sound.pPack == &s_pack && s_game.sound.players[0].playing);
   // With the changed door script the autopilot reaches the door but stays in the first room.
   for (int i = 0; i < 900; i++) frame();
   TEST_ASSERT(s_game.roomChanges == 0);

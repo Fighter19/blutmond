@@ -233,7 +233,7 @@ if(BM_PLATFORM STREQUAL "host")
     FetchContent_MakeAvailable(ose_ui)
     add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
       editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
-      editor/code_edit.cpp editor/script_panel.cpp)
+      editor/code_edit.cpp editor/script_panel.cpp editor/sound_panel.cpp)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
     target_link_libraries(bmeditor PRIVATE bm_editor_model bm_cooker blutmond ose_ui_sdl3)
     target_compile_definitions(bmeditor PRIVATE

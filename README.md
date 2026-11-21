@@ -12,6 +12,7 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `src/graphics/` | graphics API: video (modes, backgrounds, palettes, tiles, maps, sprites, line tables), backdrop, tilemaps |
 | `src/pack/` | packs: reader (ROM/RAM, in place), writer for tools, CRC-32 |
 | `src/world/` | rooms from packs (graphics layers, map streaming), collision, platformer physics, sprites and animations, the game loop for the engine classes (player, camera, kill zones, doors, save points), scripted objects, the state schema and save states |
+| `src/sound/` | the sound engine: sequencer and stereo mixer, the same code on the GBA, the PC and in the editor's preview |
 | `src/script/` | the bytecode interpreter for Mondskript with its verifier, and the table of what scripts can call |
 | `src/link/` | live link: protocol (both sides), the runtime's live reload module, the PC side's pack push |
 | `src/ppu/` | software PPU: renders the GBA video state in C; reference for tests, host back end, PPU snapshots |
@@ -107,6 +108,15 @@ changes, so it can run next to Tiled.
   Files are saved shortly after an edit; when everything compiles and Live is on, the running
   game gets the new scripts. Objects in a room whose class has a script run it; New script
   starts one from a template.
+- **Sound** (centre tab): songs and sound effects
+  ([docs/spec/sound-format.md](docs/spec/sound-format.md)). The piano roll shows the selected
+  track's notes (click to add, drag to move, drag the right end for the length, right click to
+  remove); each track has an instrument (a wave or a WAV sample, envelope, volume, pan); the
+  toolbar sets tempo, length, loop and echo. Play previews through the engine's own mixer, so
+  it is what the device plays. "What it costs" shows voices, an estimate of the GBA's processor
+  time and the size. Edits are saved and, with Live on, pushed into the running game. A room's
+  `music` property names its song; effects called `jump` and `hurt` play by themselves, others
+  from scripts with `play_sound(#name)`.
 - **Graphics** (centre tab): what is loaded in video memory and how much of the hardware it
   takes: all 96 KB of VRAM as tiles with the maps of each background, overlaps in red and data
   nothing shows; the backgrounds, the sprites in OAM, both palettes, sprite time per line, and
@@ -132,7 +142,7 @@ Cooking rooms by hand:
 build/bmcook --profile gba --report report.txt -o room.bmpk assets/test_room/room.tmx
 build/room_viewer room.bmpk --frames 200 out.ppm
 build/bmcook -o level.bmpk assets/test_room/room.tmx assets/test_room/room2.tmx \
-  assets/test_room/*.bmsprite assets/test_room/scripts/*.ms
+  assets/test_room/*.bmsprite assets/test_room/scripts/*.ms assets/test_room/music/*.bmsong
 build/game level.bmpk --autoplay --trace --frames 700
 ```
 
