@@ -208,6 +208,74 @@ state Dying { begin:
 - The player's class has the limits of every class (8 variables); what does not fit belongs
   in attachments, which is the point of this plan.
 
+### The player's attributes
+
+Not possible today: every number of the player's movement is a constant in the engine
+([../spec/runtime-core.md](../spec/runtime-core.md) §5), scripts can read the player's
+position (`player_x`, `player_y`) and hurt it (`hurt_player`), and nothing else. Planned:
+everything below can be read, and what is marked can be written, by the player's script,
+by its attachments, and (through `player.`) by any other script, such as a wind zone, a
+teleporter or an enemy's grab.
+
+**What the player is doing** (state):
+
+| Attribute | Write | Notes |
+|---|---|---|
+| `x`, `y` | yes | `fix`, the feet. Writing moves the player there at once, without a collision test (a teleport); velocity is kept. `safe_x`, `safe_y` follow only when the new place is safe ground |
+| `vx`, `vy` | yes | speed in pixels per frame; used by the next body step |
+| `facing` | yes | -1 or 1 |
+| `health`, `mana` | yes | limited to 0 and the maximum |
+| `on_ground`, `climbing`, `in_water`, `air_jumps_left` | no | what the body step found |
+| `invulnerable` | yes | frames left during which nothing strikes |
+| `control` | yes | whether the buttons reach the body step (`control(false)` in a cutscene or while knocked back) |
+
+**How the player moves** (tuning; the defaults are today's constants, so nothing changes
+until a script changes one):
+
+| Attribute | Default | |
+|---|---|---|
+| `run_speed` | 2.0 | |
+| `accel_ground`, `accel_air` | 0.5, 0.25 | |
+| `friction` | 0.5 | |
+| `jump_speed` | 1357/256 | |
+| `jump_cut` | 0.5 | how much of the rise is kept when the button is let go |
+| `climb_speed` | 1.0 | |
+| `gravity_scale`, `fall_scale` | 1.0 | multiply the room's gravity and fastest fall |
+| `water_speed_scale` | 0.5 | |
+| `coyote_frames`, `jump_buffer_frames` | 6, 6 | |
+| `box_half_width`, `box_height` | 6, 28 | a change that would put the box into a wall is refused and returns false (standing up under a low ceiling) |
+| `hurt_frames` | 60 | invulnerability after being hurt |
+| `knock_x`, `knock_y` | 2.0, 3.0 | the push when hurt, away from the facing and upward |
+
+**Two ways to change a tuning value**, for two different needs:
+
+- **Set it**: `run_speed = 2.5` in the player's own script changes the base value for good
+  (a level-up, another character).
+- **Modify it while something lasts**: `modify(#run_speed, #Mul, 0.8)` or
+  `modify(#jump_speed, #Add, 1.0)` from an attachment. The value in use is the base, times
+  all factors, plus all additions. A modifier belongs to the attachment that made it and
+  disappears with it, so heavy armour, a haste spell and a slowing swamp can overlap and
+  each end on its own without any of them knowing the others. The capabilities of section
+  3 (`AirJumps`, `Dash`) are the same mechanism.
+
+**Pushing the player around** without taking over its speed:
+
+| Function | Effect |
+|---|---|
+| `knock_back(vx, vy, frames)` | sets the speed, takes control away for that many frames, lets friction and gravity act; ends early on landing if asked (`#UntilGround`). Being hurt calls it with `knock_x`, `knock_y`; an enemy's hit can pass its own values through `#Knock` ([hitboxes.md](hitboxes.md) §3) |
+| `impulse(vx, vy)` | added to the speed once (an explosion, a spring) |
+| `push(vx, vy)` | moves the player by this much this frame, through the collision test, without changing its speed (wind, a conveyor, a moving platform); has to be called every frame it should act |
+| `move_to(x, y)` | like writing `x`, `y`, but refused if the box does not fit there |
+| `walk_to(x, speed)` | cutscenes: the body step walks there as if a direction were held; latent in state code |
+
+All of it goes through the one body step, so collision stays exact: scripts decide where the
+player wants to go and how fast, the engine decides where it ends up.
+
+**State.** The base tuning values are new `fix` fields of `game` with the flags `save link`
+(a character that was levelled up stays that way). Modifiers are part of each attachment's
+record (`snapshot`); the values in use are `derived`, worked out again after loading and
+whenever a modifier changes.
+
 ## 8. From the level to a running script
 
 How an object placed in a room gets its script. The first three points are how it works
@@ -296,7 +364,9 @@ inventory.
 6. Attachments from the inventory (needs structures.md step 4); editor views.
 7. The player as a script: the `Player` base class, `DefaultPlayer`, the project setting,
    `control`, `choose_move_anim`, hurt and death in the script. Test: equal checksums with
-   the engine code it replaces.
+   the engine code it replaces. Then the attributes: the body step reads its numbers from
+   the state instead of constants (same checksums again), reading and writing from scripts,
+   modifiers, `knock_back`, `impulse`, `push`, `move_to`.
 8. From the level: `attach` and dotted properties, attachments asked for by a class, the
    cook-time checks, the Tiled types file.
 
@@ -304,7 +374,9 @@ Done when: with the game running on the GBA, the script named by a weapon record
 replaced by another one and the next attack behaves differently, while no other script was
 re-sent or restarted; giving the player the "double jump" ability record attaches one class
 and the second jump works; a snapshot taken mid-swing continues the swing on the other
-machine; the demo's player is a script whose hurt state was changed while the game ran;
+machine; the demo's player is a script whose hurt state was changed while the game ran; a wind
+zone in the level pushes the player, a swamp slows it and heavy armour slows it further,
+and each effect ends on its own;
 and a bat placed in Tiled with `attach = Patrol` and `Patrol.Speed = 2` patrols at that
 speed, while a misspelt property is reported by the cooker.
 
