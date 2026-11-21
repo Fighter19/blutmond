@@ -4,6 +4,15 @@ Blutmond is an upcoming engine for Metroidvania-style GBA games
 The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specification is in
 [docs/spec/](docs/spec/README.md).
 
+## Documentation
+
+- [docs/USAGE.md](docs/USAGE.md): building, the editor, a real GBA over the Xboo cable, the
+  sync between GBA and PC, what to do when something does not work.
+- [docs/HARDWARE.md](docs/HARDWARE.md): what the first runs on a real GBA showed that the
+  emulator had not, and what the sync needed.
+- [docs/PLAN.md](docs/PLAN.md): the plan and the state of each milestone.
+- [docs/spec/](docs/spec/README.md): formats and protocols.
+
 ## Layout
 
 | Path | Content |
