@@ -149,6 +149,13 @@ build/bmcook -o level.bmpk assets/test_room/room.tmx assets/test_room/room2.tmx 
 build/game level.bmpk --autoplay --trace --frames 700
 ```
 
+For the GBA the scripts can also be compiled to machine code, packed next to the bytecode
+(`--native-elf` keeps the module with debug information for GDB):
+
+```
+build/bmcook --native arm-none-eabi-gcc --native-elf scripts.elf -o level.bmpk ...
+```
+
 Save states: `build/game level.bmpk --autoplay --frames 400 --snapshot-at 300 snap.bmst` writes
 one, `--load snap.bmst` continues from it (also from a snapshot taken in mGBA; the format is
 the same on both).

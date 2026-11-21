@@ -77,6 +77,11 @@ uint16_t bmHalVideoLine(void)
   return 160;  // the PC has no time limit per frame
 }
 
+uint32_t bmHalCycles(void)
+{
+  return 0;
+}
+
 // Sound: the buffers the program fills, and a short queue of frames for whoever plays them.
 #define AUDIO_QUEUE 8
 static int8_t s_audio[2][BM_HAL_AUDIO_FRAME_SAMPLES];

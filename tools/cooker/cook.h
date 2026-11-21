@@ -79,6 +79,15 @@ struct CookOptions
   std::vector<std::string> scripts;
   /// Songs and sound effects (.bmsong, sound-format.md).
   std::vector<std::string> songs;
+  /// If set: the scripts are also compiled to native code with this GCC for the profile's
+  /// machine (mondskript.md §12) and packed as a MODN chunk next to the bytecode.
+  std::string nativeCompiler;
+  /// Where native.h is; empty: the engine sources this cooker was built from.
+  std::string nativeIncludeDir;
+  /// If set: the linked native module with debug information is written here (for GDB).
+  std::string nativeElf;
+  /// If set: the C made from the scripts is written here.
+  std::string scriptC;
 };
 
 /// Cooks the given rooms. Rooms with the same `area` property share tiles, palettes and the

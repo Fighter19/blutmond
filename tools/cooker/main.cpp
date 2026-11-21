@@ -15,7 +15,7 @@
 
 int main(int argc, char **argv)
 {
-  std::string profileName = "gba", out, reportPath;
+  std::string profileName = "gba", out, reportPath, nativeCompiler, nativeInclude, nativeElf, scriptC;
   std::vector<std::string> inputs;
   std::optional<std::array<float, 9>> matrix;
 
@@ -25,6 +25,10 @@ int main(int argc, char **argv)
     if ((a == "--profile" || a == "-p") && i + 1 < argc) profileName = argv[++i];
     else if (a == "-o" && i + 1 < argc) out = argv[++i];
     else if (a == "--report" && i + 1 < argc) reportPath = argv[++i];
+    else if (a == "--native" && i + 1 < argc) nativeCompiler = argv[++i];
+    else if (a == "--native-include" && i + 1 < argc) nativeInclude = argv[++i];
+    else if (a == "--native-elf" && i + 1 < argc) nativeElf = argv[++i];
+    else if (a == "--script-c" && i + 1 < argc) scriptC = argv[++i];
     else if (a == "--color-matrix" && i + 1 < argc)
     {
       std::array<float, 9> m{};
@@ -42,7 +46,8 @@ int main(int argc, char **argv)
   }
   if (out.empty() || inputs.empty())
   {
-    std::cerr << "usage: bmcook [--profile gba|snes|host] [--report report.txt] [--color-matrix m0,...,m8] -o out.bmpk room.tmx...\n";
+    std::cerr << "usage: bmcook [--profile gba|snes|host] [--report report.txt] [--color-matrix m0,...,m8]\n"
+                 "              [--native arm-none-eabi-gcc] [--native-elf out.elf] [--native-include dir] [--script-c out.c] -o out.bmpk room.tmx...\n";
     return 2;
   }
 
@@ -68,6 +73,10 @@ int main(int argc, char **argv)
     }
     options.profile = *profile;
     options.colorMatrix = matrix;
+    options.nativeCompiler = nativeCompiler;
+    options.nativeIncludeDir = nativeInclude;
+    options.nativeElf = nativeElf;
+    options.scriptC = scriptC;
     pack = bm::cook(maps, options, report);
   }
   catch (const std::exception &e)

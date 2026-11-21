@@ -68,6 +68,7 @@ typedef struct BmVmModule
   const uint8_t *pClasses, *pFunctions, *pConsts, *pCode;
   uint32_t codeWords;
   const uint8_t *pLines;   // may be NULL
+  const struct BmVmNativeModule *pNative;   // native.h; NULL: everything is interpreted
 } BmVmModule;
 
 /// What an object is waiting for.

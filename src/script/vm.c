@@ -6,12 +6,13 @@
 
 #include <string.h>
 
+#include "native.h"
 #include "shared.h"
 
 // Instructions one call may run before the script counts as stuck.
-#define BUDGET 4000
-#define MAX_DEPTH 16
-#define STACK_REGISTERS 128
+#define BUDGET BM_VM_BUDGET
+#define MAX_DEPTH BM_VM_MAX_DEPTH
+#define STACK_REGISTERS BM_VM_STACK_REGISTERS
 
 static uint16_t rd16(const uint8_t *p)
 {
@@ -325,9 +326,61 @@ static void fail(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, con
   if (h->error) h->error(h->pContext, inst, what, function, bmVmLine(m, function, pc));
 }
 
-// Runs function `function` from word `pc`. Returns the word to continue at if a latent
-// function started waiting, else 0xFFFF.
-BM_IWRAM_CODE static uint16_t run(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, uint16_t function, uint16_t pc)
+// Division as scripts see it: the same in the interpreter and in native code.
+static int32_t vmDiv(int32_t n, int32_t d)
+{
+  return d == 0 || (d == -1 && n == INT32_MIN) ? 0 : n / d;
+}
+
+static int32_t vmMod(int32_t n, int32_t d)
+{
+  return d == 0 || d == -1 ? 0 : n % d;
+}
+
+static int32_t vmFdiv(int32_t n, int32_t d)
+{
+  return d == 0 ? 0 : (int32_t)(((int64_t)n * 256) / d);
+}
+
+static void nativeFail(BmVmNativeCtx *c, uint32_t failure, uint32_t function, uint32_t pc)
+{
+  static const char *const what[] = {
+    [BM_VM_FAIL_BUDGET] = "the script runs too long (an endless loop?)",
+    [BM_VM_FAIL_DEPTH] = "calls nested too deep",
+    [BM_VM_FAIL_INSTRUCTION] = "bad instruction",
+  };
+  fail(c->pModule, c->pHost, c->pInstance, what[failure <= BM_VM_FAIL_INSTRUCTION ? failure : BM_VM_FAIL_INSTRUCTION], (uint16_t)function, (uint16_t)pc);
+}
+
+static const BmVmNativeRt s_nativeRt = { vmDiv, vmMod, vmFdiv, nativeFail };
+
+uint32_t bm_native_calls;
+
+static uint16_t interpret(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, uint16_t function, uint16_t pc);
+
+// Runs function `function` from word `pc`: as native code if the module has it. Returns the
+// word to continue at if a latent function started waiting, else 0xFFFF.
+static uint16_t run(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, uint16_t function, uint16_t pc)
+{
+  if (m->pNative != NULL && m->pNative->entries[function] != NULL)
+  {
+    // One instruction less than the budget: the interpreter stops before the last one.
+    BmVmNativeCtx c = { h, inst, &s_nativeRt, m, BUDGET - 1, functionAt(m, function)[6], 0 };
+    bm_native_calls++;
+    return (uint16_t)m->pNative->entries[function](&c, pc);
+  }
+  return interpret(m, h, inst, function, pc);
+}
+
+bool bmVmModuleSetNative(BmVmModule *m, const BmVmNativeModule *pNative)
+{
+  if (pNative != NULL && (pNative->head.magic != BM_NATIVE_MAGIC || pNative->head.version != BM_NATIVE_VERSION || pNative->head.functionCount != m->functionCount))
+    return false;
+  m->pNative = pNative;
+  return true;
+}
+
+BM_IWRAM_CODE static uint16_t interpret(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, uint16_t function, uint16_t pc)
 {
   int32_t regs[STACK_REGISTERS];
   Frame frames[MAX_DEPTH];
@@ -366,28 +419,10 @@ BM_IWRAM_CODE static uint16_t run(const BmVmModule *m, const BmVmHost *h, BmVmIn
     case BM_OP_ADD: r[a] = (int32_t)((uint32_t)r[w1 & 0xFF] + (uint32_t)r[w1 >> 8]); pc += 2; break;
     case BM_OP_SUB: r[a] = (int32_t)((uint32_t)r[w1 & 0xFF] - (uint32_t)r[w1 >> 8]); pc += 2; break;
     case BM_OP_MUL: r[a] = (int32_t)((uint32_t)r[w1 & 0xFF] * (uint32_t)r[w1 >> 8]); pc += 2; break;
-    case BM_OP_DIV:
-    {
-      int32_t d = r[w1 >> 8], n = r[w1 & 0xFF];
-      r[a] = d == 0 || (d == -1 && n == INT32_MIN) ? 0 : n / d;
-      pc += 2;
-      break;
-    }
-    case BM_OP_MOD:
-    {
-      int32_t d = r[w1 >> 8], n = r[w1 & 0xFF];
-      r[a] = d == 0 || d == -1 ? 0 : n % d;
-      pc += 2;
-      break;
-    }
+    case BM_OP_DIV: r[a] = vmDiv(r[w1 & 0xFF], r[w1 >> 8]); pc += 2; break;
+    case BM_OP_MOD: r[a] = vmMod(r[w1 & 0xFF], r[w1 >> 8]); pc += 2; break;
     case BM_OP_FMUL: r[a] = (int32_t)(((int64_t)r[w1 & 0xFF] * r[w1 >> 8]) >> 8); pc += 2; break;
-    case BM_OP_FDIV:
-    {
-      int32_t d = r[w1 >> 8];
-      r[a] = d == 0 ? 0 : (int32_t)(((int64_t)r[w1 & 0xFF] * 256) / d);
-      pc += 2;
-      break;
-    }
+    case BM_OP_FDIV: r[a] = vmFdiv(r[w1 & 0xFF], r[w1 >> 8]); pc += 2; break;
     case BM_OP_EQ: r[a] = r[w1 & 0xFF] == r[w1 >> 8]; pc += 2; break;
     case BM_OP_NE: r[a] = r[w1 & 0xFF] != r[w1 >> 8]; pc += 2; break;
     case BM_OP_LT: r[a] = r[w1 & 0xFF] < r[w1 >> 8]; pc += 2; break;

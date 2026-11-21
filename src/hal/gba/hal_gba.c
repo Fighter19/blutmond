@@ -90,6 +90,27 @@ uint16_t bmHalVideoLine(void)
   return GBA_REG16(0x006) & 0xFF;
 }
 
+uint32_t bmHalCycles(void)
+{
+  // Timer 2 counts cycles, timer 3 its overflows.
+  static bool s_running;
+  if (!s_running)
+  {
+    GBA_REG_TM2CNT_L = 0;
+    GBA_REG_TM3CNT_L = 0;
+    GBA_REG_TM3CNT_H = 0x84;
+    GBA_REG_TM2CNT_H = 0x80;
+    s_running = true;
+  }
+  uint16_t high, low;
+  do
+  {
+    high = GBA_REG_TM3CNT_L;
+    low = GBA_REG_TM2CNT_L;
+  } while (high != GBA_REG_TM3CNT_L);
+  return ((uint32_t)high << 16) | low;
+}
+
 // --- Sound ----------------------------------------------------------------------------------
 //
 // Two buffers per side: one plays (DMA 1 and 2 feed FIFO A and B, timer 0 asks for a sample

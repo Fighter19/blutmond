@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 // Mondskript: the compiler and the interpreter against a small stand-in for the game.
 
+#include "aot.h"
 #include "mondskript.h"
 
 extern "C" {
+#include "native.h"
 #include "vm.h"
 }
+
+#ifdef BM_TEST_CC
+#include <dlfcn.h>
+#include <unistd.h>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#endif
 
 #include "test.h"
 
@@ -78,6 +88,49 @@ static Module build(const std::string &text)
   return compile({{"test.ms", text}}, stringId);
 }
 
+// With s_native set, every Run also turns its module into C, compiles that with the host's
+// compiler and runs the functions as native code: the same tests must pass either way.
+static bool s_native = false;
+static int s_nativeModules = 0;
+
+#ifdef BM_TEST_CC
+static uint32_t crc32(const std::vector<uint8_t> &data)
+{
+  uint32_t crc = 0xFFFFFFFFu;
+  for (uint8_t b : data)
+  {
+    crc ^= b;
+    for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1)));
+  }
+  return ~crc;
+}
+
+static const BmVmNativeModule *compileNative(const Module &module)
+{
+  static int s_files = 0;
+  std::string base = (std::filesystem::temp_directory_path() / ("bm_test_native_" + std::to_string(getpid()) + "_" + std::to_string(s_files++))).string();
+  std::string c = emitC(module, crc32(module.data));
+  std::ofstream(base + ".c") << c;
+  std::string command = std::string(BM_TEST_CC) + " -shared -fPIC -O1 -Wall -Werror -Wno-unused-label -I" BM_TEST_SCRIPT_INCLUDE " -I" BM_TEST_CORE_INCLUDE
+                        " -DBM_PLATFORM_HOST -o " + base + ".so " + base + ".c";
+  const BmVmNativeModule *native = nullptr;
+  if (std::system(command.c_str()) == 0)
+  {
+    void *lib = dlopen((base + ".so").c_str(), RTLD_NOW);
+    if (lib) native = static_cast<const BmVmNativeModule *>(dlsym(lib, "bm_native_module"));
+    if (!native) printf("  cannot load %s.so: %s\n", base.c_str(), dlerror());
+  }
+  else printf("  the C made from the script does not compile: %s.c\n", base.c_str());
+  if (native)
+  {
+    std::remove((base + ".c").c_str());
+    std::remove((base + ".so").c_str());
+    s_nativeModules++;
+  }
+  return native;
+}
+#endif
+
 struct Run
 {
   Module module;
@@ -97,6 +150,13 @@ struct Run
     }
     const char *why = nullptr;
     ok = bmVmModuleOpen(&vm, module.data.data(), uint32_t(module.data.size()), &why);
+#ifdef BM_TEST_CC
+    if (ok && s_native)
+    {
+      const BmVmNativeModule *native = compileNative(module);
+      ok = native != nullptr && native->head.bytecodeCrc == crc32(module.data) && bmVmModuleSetNative(&vm, native);
+    }
+#endif
     if (ok) bmVmInstanceInit(&vm, &inst, 0);
   }
   void event(BmScriptEvent e) { bmVmEvent(&vm, &host, &inst, e); }
@@ -378,6 +438,111 @@ defaultproperties { start_state = S; }
   TEST_ASSERT(refused > 100 && accepted > 100);
 }
 
+// The loader's checks, on a module image made by hand for the GBA's machine.
+static void testNativeLoaderChecks()
+{
+  auto put32 = [](std::vector<uint8_t> &b, uint32_t v) { for (int k = 0; k < 4; k++) b.push_back(uint8_t(v >> (k * 8))); };
+  // Image: header (magic, version 1, 2 functions, crc), two entries, 8 bytes of "code".
+  std::vector<uint8_t> image;
+  put32(image, BM_NATIVE_MAGIC);
+  put32(image, BM_NATIVE_VERSION | (2u << 16));
+  put32(image, 0xC0FFEE);
+  put32(image, 20);          // entry 0: the code at offset 20
+  put32(image, 0);           // entry 1: none
+  put32(image, 0xE12FFF1E);  // bx lr
+  put32(image, 12);          // an address inside the image
+  auto chunk = [&](const std::vector<uint8_t> &img, std::vector<uint32_t> relocs, uint32_t target = BM_NATIVE_TARGET_ARMV4T) {
+    std::vector<uint8_t> c;
+    put32(c, BM_NATIVE_MAGIC);
+    put32(c, BM_NATIVE_VERSION | (target << 16));
+    put32(c, uint32_t(img.size()));
+    put32(c, uint32_t(relocs.size()));
+    c.insert(c.end(), img.begin(), img.end());
+    for (uint32_t r : relocs) put32(c, r);
+    return c;
+  };
+  uint32_t slot[16] = {};
+  const char *why = nullptr;
+  auto load = [&](const std::vector<uint8_t> &c, uint32_t crc = 0xC0FFEE, uint32_t slotSize = sizeof(slot)) {
+    why = nullptr;
+    return bmVmNativeRelocate(c.data(), uint32_t(c.size()), slot, slotSize, crc, BM_NATIVE_TARGET_ARMV4T, 0x03000100, &why);
+  };
+  TEST_ASSERT(load(chunk(image, {12, 24})));
+  TEST_ASSERT(slot[3] == 0x03000100 + 20 && slot[6] == 0x03000100 + 12 && slot[4] == 0 && slot[5] == 0xE12FFF1E);
+  TEST_ASSERT(!load(chunk(image, {12, 24}), 0xBAD) && std::string(why).find("other scripts") != std::string::npos);
+  TEST_ASSERT(!load(chunk(image, {12, 24}), 0xC0FFEE, 16) && std::string(why).find("too big") != std::string::npos);
+  TEST_ASSERT(!load(chunk(image, {12, 24}, BM_NATIVE_TARGET_NONE)) && std::string(why).find("another machine") != std::string::npos);
+  TEST_ASSERT(!load(chunk(image, {12, 28})) && std::string(why).find("relocation outside") != std::string::npos);
+  TEST_ASSERT(!load(chunk(image, {12, 22})));                  // not on a word
+  TEST_ASSERT(!load(chunk(image, {24})) && std::string(why).find("entry outside") != std::string::npos);   // the entry is not relocated
+  std::vector<uint8_t> wild = image;
+  wild[12] = 4;                                                // entry 0 points into the header
+  TEST_ASSERT(!load(chunk(wild, {12, 24})));
+  wild = image;
+  wild[24] = 200;                                              // an address beyond the image
+  TEST_ASSERT(!load(chunk(wild, {12, 24})) && std::string(why).find("to outside") != std::string::npos);
+  std::vector<uint8_t> cut = chunk(image, {12, 24});
+  cut.resize(cut.size() - 5);
+  TEST_ASSERT(!load(cut) && std::string(why).find("cut off") != std::string::npos);
+  // On this machine nothing native can be loaded from a pack.
+  std::vector<uint8_t> good = chunk(image, {12, 24});
+  TEST_ASSERT(bmVmNativeLoad(good.data(), uint32_t(good.size()), slot, sizeof(slot), 0xC0FFEE, &why) == nullptr);
+  // A native module for other bytecode is not accepted by a module.
+  Run r("class T extends Actor;\nevent tick() { log(1); }\n");
+  TEST_ASSERT(r.ok);
+  BmVmNativeModule other = {{BM_NATIVE_MAGIC, BM_NATIVE_VERSION, uint16_t(r.vm.functionCount + 1), 0}, {nullptr}};
+  TEST_ASSERT(!bmVmModuleSetNative(&r.vm, &other));
+}
+
+#ifdef BM_TEST_CC
+// The same object run both ways, frame by frame: fields, waits, places to continue, what it
+// called and what it changed must be the same at every step.
+static void testNativeMatchesInterpreter()
+{
+  const char *text = R"(class T extends Actor;
+var int A = 3;
+var fix F = 0.5;
+var save int Kept;
+function int f(int a, int b) { if a > b { return a - b; } return f(a + 1, b) + 1; }
+function fix g(fix v) { return v * F / 3 + fix(A % 7); }
+state S {
+  event touch() { A = f(A, A + 5) - 50; Kept += 1; }
+  begin:
+    loop { sleep(2); A += 1; if A > 40 { gotostate U; } }
+}
+state U {
+  event tick() { x = g(x) - y; }
+  begin:
+    x = x + F; finish_anim(); sleep(3); log(int(x)); A = A / 3 - 20; gotostate S;
+}
+event tick() { if abs(A) > 3 && random(4) == 1 { log(A); } y = y - F; facing = -facing + A % 3; }
+defaultproperties { start_state = S; }
+)";
+  s_native = false;
+  Run a(text);
+  s_native = true;
+  Run b(text);
+  TEST_ASSERT(a.ok && b.ok && a.vm.pNative == nullptr && b.vm.pNative != nullptr);
+  uint32_t before = bm_native_calls;
+  for (int frame = 0; frame < 600 && g_testFailures == 0; frame++)
+  {
+    for (Run *r : {&a, &b})
+    {
+      r->game.animDone = frame % 5 == 0;
+      r->event(BM_SCRIPT_EVENT_tick);
+      if (frame % 37 == 11) r->event(BM_SCRIPT_EVENT_touch);
+      r->step();
+    }
+    TEST_ASSERT(std::memcmp(&a.inst, &b.inst, sizeof(a.inst)) == 0);
+    TEST_ASSERT(a.game.log == b.game.log && std::memcmp(a.game.vars, b.game.vars, sizeof(a.game.vars)) == 0);
+    TEST_ASSERT(a.game.fieldChanges == b.game.fieldChanges && a.game.seed == b.game.seed);
+  }
+  TEST_ASSERT(a.game.errors.empty() && b.game.errors.empty());
+  TEST_ASSERT(a.game.log.size() > 20);
+  TEST_ASSERT(bm_native_calls - before > 600);
+}
+#endif
+
 int main()
 {
   RUN_TEST(testArithmetic);
@@ -386,5 +551,16 @@ int main()
   RUN_TEST(testErrors);
   RUN_TEST(testEndlessLoopIsStopped);
   RUN_TEST(testCorruptModulesAreSafe);
+  RUN_TEST(testNativeLoaderChecks);
+#ifdef BM_TEST_CC
+  // Once more as native code.
+  s_native = true;
+  RUN_TEST(testArithmetic);
+  RUN_TEST(testControlFlow);
+  RUN_TEST(testStatesAndLatentFunctions);
+  RUN_TEST(testEndlessLoopIsStopped);
+  RUN_TEST(testNativeMatchesInterpreter);
+  printf("  %d modules compiled to native code\n", s_nativeModules);
+#endif
   return TEST_RESULT();
 }

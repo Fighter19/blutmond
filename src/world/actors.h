@@ -74,3 +74,5 @@ bool bmActorsOwnObject(const struct BmGame *pGame, uint16_t objectIndex);
 
 /// Script errors since the start (for tests and the status display).
 extern uint32_t bm_script_errors;
+/// Processor cycles spent running scripts since the start (bmHalCycles).
+extern uint32_t bm_script_cycles;

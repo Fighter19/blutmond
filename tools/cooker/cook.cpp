@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 #include "cook.h"
+#include <fstream>
+
+#include "aot.h"
 #include "mondskript.h"
+#include "native_module.h"
 #include "overrides.h"
 #include "song_asset.h"
 #include "sprite_asset.h"
@@ -931,6 +935,25 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       for (const script::ClassInfo &c : module.classes) words += size_t(c.codeWords);
       report.info("script", "module", std::to_string(module.classes.size()) + " classes, " + std::to_string(words * 2) + " bytes of code, " +
                                         std::to_string(module.data.size()) + " bytes in the pack");
+      if (!options.scriptC.empty() || !options.nativeCompiler.empty())
+      {
+        std::string c = script::emitC(module, bmCrc32(0, module.data.data(), module.data.size()));
+        if (!options.scriptC.empty()) std::ofstream(options.scriptC) << c;
+        if (!options.nativeCompiler.empty())
+        {
+          try
+          {
+            Bytes n;
+            n.data = buildNativeModule(c, {options.nativeCompiler, options.nativeIncludeDir, options.nativeElf});
+            add(writer, BM_CHUNK_MODN, BM_CATEGORY_SCRIPTS, 0, n);
+            report.info("script", "native module", std::to_string(n.data.size()) + " bytes of native code and addresses in the pack");
+          }
+          catch (const std::exception &e)
+          {
+            report.error("script", "native module", e.what());
+          }
+        }
+      }
     }
   }
 

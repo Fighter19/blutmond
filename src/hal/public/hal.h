@@ -94,6 +94,10 @@ void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues);
 /// A frame starts at line 160, so this tells how much of a frame's time has been used.
 uint16_t bmHalVideoLine(void);
 
+/// A running count of processor cycles, for measuring how long something takes (wraps around;
+/// subtract two readings). 0 where time is not measured (the PC).
+uint32_t bmHalCycles(void);
+
 /// Sound output: two channels (left, right) of signed 8-bit samples at BM_HAL_AUDIO_RATE,
 /// BM_HAL_AUDIO_FRAME_SAMPLES per video frame (exactly one frame on the GBA: timer 0 and the
 /// two sound FIFOs). After bmHalAudioStart, fill the buffers bmHalAudioBuffers returns once per

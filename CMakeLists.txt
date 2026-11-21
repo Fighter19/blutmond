@@ -43,7 +43,7 @@ file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
 file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c)
 set(BM_LINK_SOURCES src/link/link.c src/link/live.c src/ppu/ppu_snapshot_part.c)
-set(BM_SCRIPT_SOURCES src/script/vm.c)
+set(BM_SCRIPT_SOURCES src/script/vm.c src/script/native.c)
 set(BM_SOUND_SOURCES src/sound/sound.c)
 
 if(BM_PLATFORM STREQUAL "gba")
@@ -146,17 +146,30 @@ if(BM_PLATFORM STREQUAL "gba")
     DEPENDS host_tools ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level")
-  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK})
+  # The same level with the scripts also compiled to native code (mondskript.md section 12).
+  set(BM_TEST_LEVEL_NATIVE_PACK ${CMAKE_BINARY_DIR}/test_level_native_gba.bmpk)
+  add_custom_command(OUTPUT ${BM_TEST_LEVEL_NATIVE_PACK}
+    COMMAND ${BM_BMCOOK} --profile gba --native ${CMAKE_C_COMPILER} --native-elf ${CMAKE_BINARY_DIR}/test_level_native.elf
+      --script-c ${CMAKE_BINARY_DIR}/test_level_native.c -o ${BM_TEST_LEVEL_NATIVE_PACK}
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS host_tools ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
+      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
+    COMMENT "Cooking the test level with native scripts")
+  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
 
   # The game, played with the buttons, and the same with the autopilot (for tests and demos).
   # embed_pack.S is compiled per target with that target's BM_PACK_PATH.
-  foreach(variant game game_autoplay)
+  foreach(variant game game_autoplay game_autoplay_native)
     bm_add_gba_image(${variant} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
     foreach(target ${BM_GBA_TARGETS})
       add_dependencies(${target} test_level_pack)
       target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/apps/game)
-      target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
-      if(variant STREQUAL "game_autoplay")
+      if(variant STREQUAL "game_autoplay_native")
+        target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_NATIVE_PACK}\"")
+      else()
+        target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
+      endif()
+      if(NOT variant STREQUAL "game")
         # The autoplay image also writes a snapshot at game frame 300 (for the state tests).
         target_compile_definitions(${target} PRIVATE BM_AUTOPLAY=1 BM_SNAPSHOT_FRAME=300)
       endif()
@@ -164,11 +177,24 @@ if(BM_PLATFORM STREQUAL "gba")
   endforeach()
 
 
+  # Scripts interpreted against scripts as native code: a speed comparison (tests read it).
+  set(BM_SCRIPT_BENCH_PACK ${CMAKE_BINARY_DIR}/script_bench_gba.bmpk)
+  add_custom_command(OUTPUT ${BM_SCRIPT_BENCH_PACK}
+    COMMAND ${BM_BMCOOK} --profile gba --native ${CMAKE_C_COMPILER} -o ${BM_SCRIPT_BENCH_PACK} ${PROJECT_SOURCE_DIR}/tests/scripts/bench.ms
+    DEPENDS host_tools ${PROJECT_SOURCE_DIR}/tests/scripts/bench.ms ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
+    COMMENT "Cooking the script benchmark")
+  add_custom_target(script_bench_pack DEPENDS ${BM_SCRIPT_BENCH_PACK})
+  bm_add_gba_image(script_bench apps/script_bench/main.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
+  foreach(target ${BM_GBA_TARGETS})
+    add_dependencies(${target} script_bench_pack)
+    target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_SCRIPT_BENCH_PACK}\"")
+  endforeach()
+
   bm_add_gba_image(room_viewer apps/room_viewer/main.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
   # The embedded pack is pulled in by the assembler, which the build system cannot see: every
   # image that embeds one is assembled again when either pack changes.
   set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S PROPERTIES
-    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK}")
+    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK};${BM_TEST_LEVEL_NATIVE_PACK};${BM_SCRIPT_BENCH_PACK}")
   foreach(target ${BM_GBA_TARGETS})
     add_dependencies(${target} test_room_pack)
     target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_ROOM_PACK}\"")
@@ -202,16 +228,16 @@ if(BM_PLATFORM STREQUAL "host")
   # Cooker: Tiled rooms -> pack (tools/cooker), as a library for bmcook and the editor.
   # Uses stb_image from third_party.
   # The Mondskript compiler (tools/mondskript), with the interpreter's verifier.
-  add_library(bm_script STATIC tools/mondskript/mondskript.cpp src/script/vm.c)
+  add_library(bm_script STATIC tools/mondskript/mondskript.cpp tools/mondskript/aot.cpp src/script/vm.c src/script/native.c)
   target_include_directories(bm_script PUBLIC tools/mondskript src/script src/core/public)
   target_compile_definitions(bm_script PUBLIC BM_PLATFORM_HOST)
   target_compile_options(bm_script PRIVATE ${BM_WARNINGS})
 
   add_library(bm_cooker STATIC
-    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp src/sound/sound.c src/pack/pack.c)
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp src/sound/sound.c src/pack/pack.c)
   target_include_directories(bm_cooker PUBLIC tools/cooker src/pack src/sound src/core/public PRIVATE third_party/stb)
   target_link_libraries(bm_cooker PUBLIC bm_script)
-  target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST)
+  target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST PRIVATE "BM_NATIVE_INCLUDE_DIR=\"${PROJECT_SOURCE_DIR}/src/script\"")
   target_compile_options(bm_cooker PRIVATE ${BM_WARNINGS})
   # The editor's project model (project file, asset catalogue, new rooms), without UI.
   add_library(bm_editor_model STATIC editor/project_file.cpp editor/vram.cpp)
@@ -322,7 +348,24 @@ if(BM_PLATFORM STREQUAL "host")
   target_link_libraries(test_script PRIVATE bm_script)
   target_include_directories(test_script PRIVATE tests)
   target_compile_options(test_script PRIVATE ${BM_WARNINGS})
+  # Where shared objects can be made and loaded, the script tests also run as native code:
+  # the C the compiler writes is built with the host's C compiler.
+  if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
+    target_compile_definitions(test_script PRIVATE "BM_TEST_CC=\"${CMAKE_C_COMPILER}\""
+      "BM_TEST_SCRIPT_INCLUDE=\"${PROJECT_SOURCE_DIR}/src/script\"" "BM_TEST_CORE_INCLUDE=\"${PROJECT_SOURCE_DIR}/src/core/public\"")
+    target_link_libraries(test_script PRIVATE ${CMAKE_DL_LIBS})
+  endif()
   add_test(NAME test_script COMMAND test_script)
+  # With an ARM compiler around: the cooker's native modules through the real tool chain.
+  find_program(BM_ARM_GCC arm-none-eabi-gcc)
+  if(BM_ARM_GCC)
+    add_executable(test_native_pack tests/test_native_pack.cpp)
+    target_link_libraries(test_native_pack PRIVATE bm_cooker)
+    target_include_directories(test_native_pack PRIVATE tests)
+    target_compile_options(test_native_pack PRIVATE ${BM_WARNINGS})
+    target_compile_definitions(test_native_pack PRIVATE "BM_TEST_ARM_CC=\"${BM_ARM_GCC}\"")
+    add_test(NAME test_native_pack COMMAND test_native_pack)
+  endif()
   add_executable(test_sound tests/test_sound.cpp)
   target_link_libraries(test_sound PRIVATE bm_cooker)
   target_include_directories(test_sound PRIVATE tests)
@@ -523,6 +566,47 @@ if(BM_PLATFORM STREQUAL "host")
       add_test(NAME state_host_to_gba_matches
         COMMAND ${compare} ${out}/game_host.ppm ${out}/state_host_to_gba.ppm)
       set_tests_properties(state_host_to_gba_matches PROPERTIES FIXTURES_REQUIRED "game_host;state_host_to_gba")
+
+      # Scripts as native code (docs/spec/mondskript.md section 12): the level cooked with a
+      # native module plays to the same picture and, at game frame 300, the same state byte for
+      # byte as the host's interpreter; the functions really ran as native code; and a pack
+      # without native code pushed over the link is interpreted again.
+      foreach(image game_autoplay_native game_autoplay_native_mb)
+        set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
+        set(lag 4)
+        if(image STREQUAL "game_autoplay_native_mb")
+          set(lag 6)
+        endif()
+        add_test(NAME native_render_${image}
+          COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 1300 --until ${elf}:bm_game_stats+24=1000
+            --ppm ${out}/${image}.ppm --check ${elf}:bm_game_stats+8=0 --check ${elf}:bm_game_stats+12=1 --check "${elf}:bm_game_stats+4<=${lag}"
+            --check ${elf}:bm_game_stats+56=0 --print ${elf}:bm_game_stats+48 --print ${elf}:bm_game_stats+52)
+        set_tests_properties(native_render_${image} PROPERTIES FIXTURES_REQUIRED game_host FIXTURES_SETUP native_${image}
+          PASS_REGULAR_EXPRESSION "bm_game_stats\\+48 = [1-9][0-9][0-9]")
+        add_test(NAME native_matches_${image}
+          COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --diff ${out}/${image}_diff.ppm)
+        set_tests_properties(native_matches_${image} PROPERTIES FIXTURES_REQUIRED "game_host;native_${image}")
+      endforeach()
+      set(elf ${BM_GBA_BUILD_DIR}/game_autoplay_native.elf)
+      add_test(NAME native_state_snapshot
+        COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/game_autoplay_native.gba --frames 400 --dump ${elf}:bm_state_outbox ${out}/state_native_300.bmst)
+      set_tests_properties(native_state_snapshot PROPERTIES FIXTURES_SETUP state_native)
+      add_test(NAME native_state_identical
+        COMMAND ${CMAKE_COMMAND} -E compare_files ${out}/state_gba_300.bmst ${out}/state_native_300.bmst)
+      set_tests_properties(native_state_identical PROPERTIES FIXTURES_REQUIRED "state_gba;state_native")
+      add_test(NAME native_live_push_interprets
+        COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game_autoplay_native.gba --errors 2000 2000 run 30 hello
+          push ${cooked}/test_level_variant_gba.bmpk hot run 1300
+          check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+8=0 check ${elf}:bm_game_stats+12=1 check ${elf}:bm_game_stats+56=0 stats)
+      set_tests_properties(native_live_push_interprets PROPERTIES FIXTURES_REQUIRED test_level_variant)
+      # Native code takes at most 60 % of the interpreter's time for the benchmark script (from
+      # ROM about 35 %), with the same result.
+      foreach(image script_bench script_bench_mb)
+        set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
+        add_test(NAME native_speed_${image}
+          COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 120 --check ${elf}:bm_bench+0=1 --check ${elf}:bm_bench+12=1
+            --check ${elf}:bm_bench+20=0 --check "${elf}:bm_bench+28<=60" --print ${elf}:bm_bench+4 --print ${elf}:bm_bench+8 --print ${elf}:bm_bench+28)
+      endforeach()
 
       # Live link (docs/spec/link-protocol.md) with the game running in mGBA, driven word by word
       # through its serial port by bmlink:

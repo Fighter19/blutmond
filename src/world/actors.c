@@ -7,6 +7,8 @@
 #include <string.h>
 
 #include "game.h"
+#include "hal.h"
+#include "native.h"
 #include "video.h"
 
 #ifdef BM_PLATFORM_HOST
@@ -14,6 +16,7 @@
 #endif
 
 uint32_t bm_script_errors;
+uint32_t bm_script_cycles;
 
 // --- Helpers --------------------------------------------------------------------------------
 
@@ -413,6 +416,26 @@ static void applyProperties(BmGame *g, uint8_t i, BmVmInstance *inst)
   }
 }
 
+// The pack's native code for the scripts, if it has some for this machine: the functions then
+// run as native code instead of being interpreted (native.h).
+static void loadNative(BmGame *g, BmVmModule *pModule, uint32_t bytecodeCrc)
+{
+  int32_t chunk = bmPackFindChunk(g->pPack, BM_CHUNK_MODN, 0);
+  if (chunk < 0) return;
+  uint32_t size = 0, slotSize = 0;
+  const uint8_t *p = bmPackChunkData(g->pPack, (uint32_t)chunk, &size);
+  void *pSlot = bmVmNativeSlot(&slotSize);
+  const char *why = NULL;
+  const BmVmNativeModule *pNative = bmVmNativeLoad(p, size, pSlot, slotSize, bytecodeCrc, &why);
+  if (pNative == NULL || !bmVmModuleSetNative(pModule, pNative))
+  {
+#if BM_NATIVE_TARGET != BM_NATIVE_TARGET_NONE
+    // On a machine that could run it, a module that does not load is a fault of the pack.
+    bm_script_errors++;
+#endif
+  }
+}
+
 void bmActorsEnterRoom(BmGame *g, bool fresh)
 {
   BmActors *a = &g->actors;
@@ -433,6 +456,7 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     const char *why = NULL;
     if (p != NULL && bmPackGetChunk(g->pPack, (uint32_t)chunk, &entry) && bmVmModuleOpen(&a->module, p, size, &why))
     {
+      loadNative(g, &a->module, entry.hash);
       a->hasModule = true;
       a->pVerified = p;
       a->verifiedHash = entry.hash;
@@ -506,6 +530,7 @@ void bmActorsFrame(BmGame *g)
   BmActors *a = &g->actors;
   if (!a->hasModule) return;
   BmVmHost host = hostOf(g);
+  uint32_t started = bmHalCycles();
   for (uint8_t i = 0; i < a->count; i++)
   {
     BmVmInstance inst;
@@ -517,6 +542,10 @@ void bmActorsFrame(BmGame *g)
     a->touching[i] = touching;
     bmVmStep(&a->module, &host, &inst);
     storeInstance(a, i, &inst);
+  }
+  bm_script_cycles += bmHalCycles() - started;
+  for (uint8_t i = 0; i < a->count; i++)
+  {
     if (a->sheet[i] >= 0)
     {
       BmAnimState st = animOf(a, i);

@@ -29,6 +29,7 @@
 #include "game.h"
 #include "game_live.h"
 #include "live.h"
+#include "native.h"
 #include "hal.h"
 #include "pack.h"
 #include "physical_device.h"
@@ -93,6 +94,9 @@ typedef struct BmGameStats
   uint32_t soundVoices;  // most voices in use at once
   uint32_t loadPeak;     // most display lines a game frame took (228 = a whole frame)
   uint32_t loadTotal;    // lines of all game frames together
+  uint32_t nativeCalls;  // script functions run as native code
+  uint32_t scriptCycles; // processor cycles spent in scripts (0 on the PC)
+  uint32_t scriptErrors;
 } BmGameStats;
 BmGameStats bm_game_stats;
 
@@ -189,6 +193,9 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
     uint32_t lines = (uint32_t)(bmHalVideoLine() + 228 - 160) % 228;
     if (lines > bm_game_stats.loadPeak) bm_game_stats.loadPeak = lines;
     bm_game_stats.loadTotal += lines;
+    bm_game_stats.nativeCalls = bm_native_calls;
+    bm_game_stats.scriptCycles = bm_script_cycles;
+    bm_game_stats.scriptErrors = bm_script_errors;
 #ifdef BM_PLATFORM_HOST
     if (s_frameHook != NULL && !s_frameHook()) break;
 #endif

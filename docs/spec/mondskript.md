@@ -1,6 +1,6 @@
 # Mondskript
 
-Version 0.1, draft.
+Version 0.3, draft.
 
 Mondskript is Blutmond's scripting language. It is modelled on the old UnrealScript (classes
 with declared fields, states with latent functions, `defaultproperties`) and avoids its known
@@ -172,12 +172,11 @@ source → parser → AST → type check → IR ─┬─► bytecode module ('M
   count, every field access is inside the object's layout, every runtime call is a known API
   index with the right argument count. A module that fails verification is rejected.
 - **Native**: the generated C uses no global variables (only a context pointer) and calls the
-  runtime only through the API table. It is compiled with `arm-none-eabi-gcc` (`-mthumb`, or
-  `-marm` for IWRAM) and linked at address 0 with `--emit-relocs`. The packer keeps only
-  `R_ARM_ABS32` relocations and rejects any other; the module (magic `BMMN`) contains code,
-  data, the relocation list and the same line table. The loader copies it into a slot and
-  patches the relocations. `#line` directives in the C make GDB show script lines.
-- Both forms produce identical results; tests compare state hashes per frame.
+  runtime only through that context. It is compiled with `arm-none-eabi-gcc` and linked at
+  address 0 with `--emit-relocs`; the packer keeps the list of absolute addresses and the
+  loader copies the module into a slot and patches them. `#line` directives in the C make GDB
+  show script lines. Section 12 has the details.
+- Both forms produce identical results; tests compare the game state between them.
 
 ## 11. What version 0.2 implements
 
@@ -253,7 +252,73 @@ no function can run off its end; latent functions and `STOP` only appear in stat
 At run time an instruction budget (4000 per call) stops endless loops and a depth limit stops
 endless recursion; the object then stops running scripts and the error names the source line.
 
+## 12. Native modules (`MODN`)
+
+A pack can hold the scripts a second time as machine code. The bytecode module stays: it has
+the class tables, and it is what runs wherever the native code cannot (the PC, a pack pushed
+from the editor, a module too big for its slot). `bmcook --native arm-none-eabi-gcc` makes
+both; `--native-elf file` keeps the linked module with debug information, `--script-c file`
+the generated C.
+
+**Translation.** The C back end (`tools/mondskript/aot.cpp`) translates the *bytecode*, one C
+function per bytecode function, registers as local variables. So native code is by
+construction the interpreter's behaviour, not a second implementation of the language:
+
+- State code is a function `(context, word) → word`: it starts with a `switch` over the
+  bytecode word to continue at, and returns the word after a latent call that started
+  waiting. The place an object waits at is therefore the same number in both forms, and game
+  state (save states, state sent over the link) made with one runs on with the other.
+- Events are functions without parameters behind the same kind of entry; other functions are
+  called directly, with the interpreter's depth limit (16) and register limit.
+- The instruction budget is counted per block of straight-line code instead of per
+  instruction. A script that runs into the budget is stopped with the same error, but it may
+  have run up to one block less far than in the interpreter. That is the only difference.
+- Division, modulo and fixed-point division go through the runtime (`BmVmNativeRt`), so they
+  are the same code as in the interpreter and the module needs no library.
+- `#line` directives name the script file and line of every instruction.
+
+**Building.** `-marm -mcpu=arm7tdmi -mthumb-interwork -O2 -ffreestanding -fno-pic`, linked
+with a script that puts the module header (`BmVmNativeHeader`, section `.bmhead`) at address
+0, followed by code and constants. The packer (`tools/cooker/native_module.cpp`) reads the ELF
+file and refuses it if it has writable or zero-initialised data (a module has no variables of
+its own: everything is in the object and the context), or a relocation it cannot handle.
+`R_ARM_ABS32` places go into the address list; relative ones (`R_ARM_CALL`, `R_ARM_JUMP24`,
+`R_ARM_REL32`, `R_ARM_PREL31`, `R_ARM_V4BX`, the Thumb branches) need nothing, since distances
+inside the module do not change when it is loaded.
+
+```
+chunk:  "BMNA"   u16 version (1)   u16 machine (1: ARMv4T, little endian)
+        u32 image size (a multiple of 4)   u32 number of addresses
+        image
+        u32 offset in the image of each address, ascending
+
+image:  "BMNA"   u16 version   u16 functions   u32 CRC-32 of the bytecode module
+        u32 entry of each function (0: not an entry; else an offset, relocated like any address)
+        code and constants
+```
+
+**Loading** (`src/script/native.h`). When a pack's bytecode module is opened, the runtime
+looks for a `MODN` chunk for its machine, checks it in the pack (sizes, every address inside
+the image, the CRC of the bytecode it was made from, every entry a relocated address behind
+the table), copies the image into its slot (8 KB of IWRAM on the GBA) and adds the slot's
+address to every listed word. From then on `bmVmEvent` and `bmVmStep` call the entry of a
+function instead of interpreting it. A chunk that is refused counts as a script error; the
+scripts then run interpreted. A new pack without native code (a live push) switches back to
+the interpreter at the same frame boundary as any reload; no native function is running then,
+because waits return to the runtime.
+
+Native code is **not verified**: it is trusted as much as the runtime itself, which is why
+scripts run as bytecode during development ([runtime-abi.md](runtime-abi.md)).
+
+**Measured** (mGBA, `apps/script_bench`, loops with integer and fixed-point arithmetic and
+calls): from the cartridge the native module takes about 35 % of the interpreter's time, in
+the multiboot image about 44 % (there the runtime's division helpers run from slow RAM). The
+test level's three classes are 304 bytes of bytecode and 3.3 KB of ARM code. Not done yet:
+Thumb modules for slower memory, several slots with reference counts (one module per pack
+for now), per-class modules loaded on room changes.
+
 ## History
 
 - 0.1: first draft.
 - 0.2: the implemented subset, the API table, the bytecode module and its verification.
+- 0.3: native modules (section 12).

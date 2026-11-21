@@ -185,7 +185,7 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `SONG` | one song or sound effect: instruments, note events and its samples ([sound-format.md](sound-format.md)) |
 | `SFX ` | sound effects |
 | `MODB` | script module: classes, variables, states, functions and bytecode ([mondskript.md](mondskript.md) §11) |
-| `MODN` | script module, native code with relocations |
+| `MODN` | the same scripts as machine code for one machine, with the list of addresses to patch when it is loaded ([mondskript.md](mondskript.md) §12); optional |
 | `WRLD` | world map: rooms, positions, door links, map screen data |
 
 Readers MUST skip chunk types they do not know.
