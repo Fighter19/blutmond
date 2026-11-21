@@ -247,6 +247,8 @@ void Runner::queue(Job job)
     syncResume_ = true;
     interruptSync();
   }
+  // Never silently: say what it waits for.
+  if (job_ && log && !job.quiet) log(job.what + ": waiting for \"" + current_.what + "\" to finish", false);
   jobs_.push_back(std::move(job));
   if (!job_) startNext();
 }

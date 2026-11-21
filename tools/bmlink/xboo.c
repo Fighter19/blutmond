@@ -11,7 +11,9 @@
 #include <string.h>
 
 #ifdef __linux__
+#  include <errno.h>
 #  include <fcntl.h>
+#  include <sys/file.h>
 #  include <linux/parport.h>
 #  include <linux/ppdev.h>
 #  include <sys/ioctl.h>
@@ -34,15 +36,26 @@ bool bmXbooOpen(BmXboo *x, const char *pDevice)
   memset(x, 0, sizeof(*x));
   x->control = PARPORT_CONTROL_INIT;
   x->delay = 1;
-  x->fd = open(pDevice, O_RDWR);
+  // Not blocking: if another program has the port, say so instead of waiting for it forever.
+  x->fd = open(pDevice, O_RDWR | O_NONBLOCK);
   if (x->fd < 0)
   {
-    snprintf(x->error, sizeof(x->error), "cannot open %s", pDevice);
+    snprintf(x->error, sizeof(x->error), "cannot open %s (%s)", pDevice, strerror(errno));
+    return false;
+  }
+  // Claiming waits for whoever has the port, without end. Two of these programs at once is
+  // the usual case (a run still going in the editor, a mirror left over), so they tell each
+  // other apart with a lock on the device first.
+  if (flock(x->fd, LOCK_EX | LOCK_NB) != 0)
+  {
+    snprintf(x->error, sizeof(x->error), "%s is in use by another bmlink (a run or a sync that is still going?)", pDevice);
+    close(x->fd);
+    x->fd = -1;
     return false;
   }
   if (ioctl(x->fd, PPCLAIM) != 0)
   {
-    snprintf(x->error, sizeof(x->error), "cannot claim %s (is another program using it?)", pDevice);
+    snprintf(x->error, sizeof(x->error), "%s is in use by another program (another bmlink, xcomms, a printer driver?)", pDevice);
     close(x->fd);
     x->fd = -1;
     return false;

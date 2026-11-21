@@ -55,6 +55,9 @@
 #endif
 
 #include <signal.h>
+#ifdef __linux__
+#  include <sys/prctl.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -264,6 +267,7 @@ static bool mirror(BmLinkMaster *pDevice, BmXboo *pXboo, const char *address, bo
   uint32_t firstFrame = 0, lastFrame = 0, packets = 0, restarts = 0, jumps = 0;
   double started = now(), lastReport = started;
   double lastAsked = now();
+  bool gone = false;
   while (ok && !s_cancel)
   {
     BmLinkPacket p;
@@ -278,6 +282,13 @@ static bool mirror(BmLinkMaster *pDevice, BmXboo *pXboo, const char *address, bo
       if (ok && lost) { restarts++; ok = mirrorState(pFrom, pTo, toName); }
     }
     else if (pFrom->pError != NULL && strstr(pFrom->pError, "resync") != NULL) ok = false;
+    if (tcp.fd < 0)
+    {
+      // The window was closed: nothing left to mirror.
+      printf("mirror: the PC game is gone\n");
+      gone = true;
+      break;
+    }
     // The following side says so when its state differs or it has fallen behind. Asked only
     // ten times a second: every word costs a GBA an interrupt, and time is what it lacks.
     if (ok && now() - lastAsked >= 0.1)
@@ -310,7 +321,13 @@ static bool mirror(BmLinkMaster *pDevice, BmXboo *pXboo, const char *address, bo
     }
     if (frameLimit != 0 && packets != 0 && lastFrame - firstFrame >= frameLimit) break;
   }
-  if (ok)
+  if (ok && gone)
+  {
+    // Only the device is left to be told.
+    bmLinkMasterQueue(pDevice, BM_LINK_INPUT, &off, 1);
+    bmLinkMasterFlush(pDevice);
+  }
+  else if (ok)
   {
     bmLinkMasterQueue(pFrom, BM_LINK_INPUT, &off, 1);
     bmLinkMasterFlush(pFrom);
@@ -330,6 +347,10 @@ int main(int argc, char **argv)
 {
   // Line by line also into a pipe (the editor shows the output while a transfer runs).
   setvbuf(stdout, NULL, _IOLBF, 0);
+#ifdef __linux__
+  // Started by another program (the editor): end with it, and do not keep the cable.
+  prctl(PR_SET_PDEATHSIG, SIGTERM);
+#endif
   const char *xbooDevice = NULL, *mgbaImage = NULL, *tcpAddress = NULL;
   int i = 1;
   // Between words the GBA has to arm its port again (in an interrupt): a little time, or it
