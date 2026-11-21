@@ -15,6 +15,9 @@
 // Options (before the commands they affect):
 //   --delay N             per-word delay (xcomms "Transfer Delay"); remembered per device
 //   --adaptive            lower the delay while transfers are clean, raise it after errors
+//   --logo FILE           the 156 logo bytes a real GBA wants in an image's header (or any GBA
+//                         image to take them from); default ~/.config/blutmond/logo.bin
+//   --wait SECONDS        boot: how long to keep asking for a GBA that does not answer (20)
 //   --reset none|xboo     whether the reset wire is connected (default none)
 //   --cycles-per-word N   mGBA: emulated time per word (default 2048, about 8000 words/s)
 //   --errors FLIP MISS    mGBA: bit flips and lost words per million words
@@ -84,6 +87,47 @@ static const char *configPath(void)
   return path;
 }
 
+// The 156 logo bytes a real GBA wants in an image's header are not part of this repository
+// (tools/gbafix.py). They are taken from a file: one with just the logo, or any GBA image.
+static const char *defaultLogoPath(void)
+{
+  static char path[512];
+  const char *home = getenv("HOME");
+  snprintf(path, sizeof(path), "%s/.config/blutmond/logo.bin", home ? home : ".");
+  return path;
+}
+
+/// Makes the header one the BIOS accepts, as xcomms' "header fix" does: logo, fixed value,
+/// device type, complement check. False if there is no logo to put in.
+static bool fixHeader(uint8_t *pImage, uint32_t size, const char *logoPath)
+{
+  if (size < 0xC0) return true;
+  bool haveLogo = false;
+  FILE *f = fopen(logoPath != NULL ? logoPath : defaultLogoPath(), "rb");
+  if (f != NULL)
+  {
+    uint8_t buf[0xA0];
+    size_t n = fread(buf, 1, sizeof(buf), f);
+    // A file of exactly the logo, or an image with the logo at offset 4.
+    int extra = fgetc(f);
+    fclose(f);
+    if (n == 156 && extra == EOF) { memcpy(pImage + 4, buf, 156); haveLogo = true; }
+    else if (n == sizeof(buf)) { memcpy(pImage + 4, buf + 4, 156); haveLogo = true; }
+  }
+  else
+  {
+    // The image may carry it already.
+    for (int i = 4; i < 0xA0 && !haveLogo; i++) haveLogo = pImage[i] != 0;
+  }
+  pImage[0xB2] = 0x96;
+  pImage[0xB4] = 0x80;
+  pImage[0xBE] = pImage[0xBF] = 0;
+  uint8_t sum = 0;
+  for (int i = 0xA0; i < 0xBD; i++) sum = (uint8_t)(sum + pImage[i]);
+  pImage[0xBD] = (uint8_t)(0u - (0x19u + sum));
+  return haveLogo;
+}
+
 static bool loadDelay(const char *device, uint32_t *pDelay)
 {
   const char *path = configPath();
@@ -151,6 +195,8 @@ int main(int argc, char **argv)
   int i = 1;
   uint32_t delay = 1;
   bool delayGiven = false, adaptive = false, resetWired = false;
+  const char *logoPath = NULL;
+  uint32_t bootWait = 20;
   uint32_t cyclesPerWord = 0;
 #ifdef BM_HAVE_MGBA
   uint32_t flip = 0, miss = 0;
@@ -162,6 +208,8 @@ int main(int argc, char **argv)
     else if (strcmp(argv[i], "--tcp") == 0 && i + 1 < argc) tcpAddress = argv[++i];
     else if (strcmp(argv[i], "--delay") == 0 && i + 1 < argc) { delay = (uint32_t)atoi(argv[++i]); delayGiven = true; }
     else if (strcmp(argv[i], "--adaptive") == 0) adaptive = true;
+    else if (strcmp(argv[i], "--logo") == 0 && i + 1 < argc) logoPath = argv[++i];
+    else if (strcmp(argv[i], "--wait") == 0 && i + 1 < argc) bootWait = (uint32_t)atoi(argv[++i]);
     else if (strcmp(argv[i], "--reset") == 0 && i + 1 < argc) resetWired = strcmp(argv[++i], "xboo") == 0;
     else if (strcmp(argv[i], "--cycles-per-word") == 0 && i + 1 < argc) cyclesPerWord = (uint32_t)atoi(argv[++i]);
 #ifdef BM_HAVE_MGBA
@@ -356,7 +404,25 @@ int main(int argc, char **argv)
       if (xbooDevice == NULL) { fprintf(stderr, "boot needs --xboo\n"); failed = 1; break; }
       uint32_t size;
       uint8_t *image = readFile(a1, &size);
-      if (image == NULL || !bmXbooBoot(&xboo, image, size)) { fprintf(stderr, "boot: %s\n", xboo.error); failed = 1; }
+      bool sent = false;
+      if (image == NULL) snprintf(xboo.error, sizeof(xboo.error), "cannot read %s", a1);
+      else
+      {
+        if (!fixHeader(image, size, logoPath))
+          fprintf(stderr, "boot: no logo given (--logo, or %s): a real GBA refuses the image after its header\n", defaultLogoPath());
+        // The GBA only answers while it waits in its BIOS: keep asking for a while.
+        double until = now() + (double)bootWait;
+        bool told = false;
+        for (;;)
+        {
+          sent = bmXbooBoot(&xboo, image, size);
+          if (sent || strstr(xboo.error, "no response") == NULL || now() >= until) break;
+          if (!told) printf("boot: waiting for the GBA (switch it on without a cartridge, or with Start + Select held) ...\n");
+          told = true;
+          fflush(stdout);
+        }
+      }
+      if (!sent) { fprintf(stderr, "boot: %s\n", xboo.error); failed = 1; }
       else
       {
         printf("boot: %s sent (%u bytes)\n", a1, (unsigned)size);
