@@ -6,8 +6,8 @@ Status: plan, nothing built. Milestone M14 in [../PLAN.md](../PLAN.md). Used by
 
 ## 1. What this is for
 
-Today a script class belongs to one object placed in a room, all classes are compiled into
-one module, and the player has no script at all
+Today a script class belongs to one object placed in a room (section 8 says how it gets
+there), all classes are compiled into one module, and the player has no script at all
 ([../spec/mondskript.md](../spec/mondskript.md) §11). A sword's swing, a double jump or a
 poison effect would have to be written into one growing "player" script.
 
@@ -25,7 +25,8 @@ other.
 | Base | An instance exists | Created by |
 |---|---|---|
 | `Actor` | per object in the room | the room, or `spawn` (section 6) |
-| `Attachment` | per (owner, slot) | the inventory, or `attach` |
+| `Player` | one | the engine, from the project setting (section 7) |
+| `Attachment` | per (owner, slot) | the inventory, the level (section 8), or `attach` |
 | `Screen`, `Effect` | while shown | the UI ([ui.md](ui.md)) |
 
 All are the same thing to the interpreter: class, state, wait, place, timer, variables
@@ -147,7 +148,118 @@ These are engine work this plan brings along, because a weapon is useless withou
   health.
 - **Game buttons** instead of raw keys.
 
-## 7. State
+## 7. The player as a script
+
+The player is not scriptable today: its movement, animation choice, hurt, respawn and door
+handling are engine code ([../spec/runtime-core.md](../spec/runtime-core.md) §5, §6, §9),
+and no script class stands behind it. Attachments alone would leave the core of the player
+fixed. So the player becomes a scripted object like any other, with the engine's movement
+as a service it uses:
+
+```
+class Hero extends Player;
+
+var(Move) fix RunSpeed = 1.5;
+var save   int Level = 1;
+
+event spawn()            { layer_play(#Legs, #idle); }
+event hurt(int amount)   { if health() > 0 { gotostate Hurt; } }
+event died()             { gotostate Dying; }
+event entered_room()     { }
+
+state Normal {
+  event tick() { choose_move_anim(); }       // the engine's rule, or the script's own
+}
+state Hurt { begin:
+  control(false);  knock_back(1.5, -2.0);  flash(8);
+  sleep(20);
+  control(true);
+  gotostate Normal;
+}
+state Dying { begin:
+  control(false);  layer_play(#Legs, #die);  finish_anim();
+  respawn();
+  gotostate Normal;
+}
+```
+
+- **What stays engine code**: the body step (collision, slopes, ladders, water, jump
+  rules). It is the part that must be fast and exact, and it is driven by numbers the
+  script and its attachments set: speeds, the capabilities of section 3, and
+  `control(bool)` for whether the buttons reach it.
+- **What moves into the script**: which animation plays when (`choose_move_anim()` does
+  what the engine does today, so a script that only calls it changes nothing), what happens
+  when hurt and when dying, respawning, what a door or a save point does to the player,
+  cutscene control (`walk_to(x)`, `control(false)`).
+- **`Player` is a base class** with the events of the attachments' table (section 3) plus
+  `spawn`, `tick`, `touch`. The API functions about "the owner" (`owner_lock`,
+  `owner_play_anim`, `stat_add`) are the same functions without the prefix here.
+- **Which class is the player** is a project setting (`player = Hero`), and a `PlayerStart`
+  object can override it with a property `class` (a room played as another character).
+  The engine ships a `DefaultPlayer` script that reproduces today's behaviour exactly; a
+  project without the setting uses it. Test: the test level gives the same state checksums
+  with `DefaultPlayer` as with the engine code it replaces.
+- **Order per frame**: the player's script, then its attachments in slot order, then the
+  body step, then the room's objects. So what a weapon decides in a frame moves the player
+  in the same frame.
+- **State**: the player's script object (class, state, wait, place, timer, variables) is a
+  new group of fields in `game` with the flags `snapshot`, its `save` variables as for any
+  object. A snapshot taken while the player is in `Hurt` continues there.
+- The player's class has the limits of every class (8 variables); what does not fit belongs
+  in attachments, which is the point of this plan.
+
+## 8. From the level to a running script
+
+How an object placed in a room gets its script. The first three points are how it works
+today ([../spec/runtime-core.md](../spec/runtime-core.md) §8,
+[../spec/room-format.md](../spec/room-format.md) §5); the rest is planned.
+
+**Today**
+
+1. In Tiled, an object in a layer with the role `objects` has a **class** (the `type` field
+   before Tiled 1.9). The cooker stores the class name, the object's id, position, size,
+   name and its custom properties as text ([../spec/room-format.md](../spec/room-format.md)
+   §7, `OBJS`).
+2. When a room is entered, every object whose class name is **exactly the name of a script
+   class** in the pack becomes a scripted object (the first 8). A script class named like
+   an engine class (`Door`) takes that object over from the engine. An object whose class
+   no script defines is left to the engine, or ignored.
+3. The object's variables get the class's defaults; then every **custom property named
+   like a `var(Category)` variable** sets that variable for this object; then the values
+   kept for `save` variables (keyed by room and the object's Tiled id); then `spawn()`
+   runs. The sprite is the one the class names, else the one named like the class.
+
+**Planned additions**
+
+| In Tiled | Effect |
+|---|---|
+| class = a script class | as today |
+| property `kind = IronBat` | the class, figure, palette and numbers come from that record ([layered-sprites.md](layered-sprites.md) §5); the object's class in Tiled may then stay empty or be `Enemy` |
+| property `attach = Patrol, DropsKey` | these `Attachment` classes are attached to the object when it is created, in this order, in its slots (an actor has 2) |
+| property `Patrol.Speed = 2` | sets the variable `Speed` of the attachment `Patrol`; a plain `Speed = 2` still means the object's own class |
+| property `palette`, `facing`, `state` | the starting palette, facing and state, without a variable for them |
+
+- **A class can ask for attachments itself**: `defaultproperties { attach = Patrol; }`. The
+  level's list is added to the class's. That is how a behaviour written once (patrolling,
+  dropping an item, being frozen) is reused by many classes and switched on per object.
+- **Created at run time** (`spawn(Class, x, y)`, `spawn_kind(record, x, y)`): the same
+  steps without Tiled properties; the script that spawns sets variables through
+  `spawned_set(#Speed, 2)` before the new object's `spawn()` runs.
+- **Checked when cooking**, not when playing: a `kind` that is not a record, an `attach`
+  that is not an `Attachment` class or more of them than the object has slots, a property
+  that matches no editable variable of the class or of its attachments (today such a
+  property is silently unused), a value of the wrong type. Each is reported with the room
+  and the object's id.
+- **Tiled knows the classes**: the cooker writes a Tiled custom-types file from the
+  scripts (every class and attachment with its `var(Category)` variables, their types and
+  defaults; every `kind`), so Tiled offers the classes in its class list and shows their
+  properties with defaults to fill in. The editor's room view does the same in its object
+  panel. Whether the installed Tiled version reads the file as written is to be checked
+  when this is built.
+- **Persistent ids** stay the Tiled object id, for the object and for its attachments
+  (their `save` variables are keyed by the object and the attachment's slot).
+
+## 9. State
 
 A block `attachments`, pool of 24: owner, slot, class (by name hash, so it survives a
 module being exchanged), state, wait, place, timer, 8 variables, lifetime. Flags `snapshot`.
@@ -160,7 +272,7 @@ store keyed by owner slot and variable ([../spec/runtime-core.md](../spec/runtim
 Size: 24 x 48 bytes, about 1.2 KB of snapshot; nothing in the save game beyond the
 inventory.
 
-## 8. In the editor
+## 10. In the editor
 
 - The Script tab shows the kind of each class and where it is used: by which records, in
   which rooms.
@@ -170,7 +282,7 @@ inventory.
 - Saving one script pushes one module; the Messages list says which class was swapped and
   how many instances kept their state.
 
-## 9. Steps
+## 11. Steps
 
 1. One module per class: cooker, loader, name table, verifier unchanged per module. Test:
    the test level plays the same (same state checksums) with split modules.
@@ -182,14 +294,21 @@ inventory.
 4. Stats and capabilities read by the body step; filters; `owner_lock` and actions.
 5. `spawn`, hit boxes, health, `hit`/`struck`, messages.
 6. Attachments from the inventory (needs structures.md step 4); editor views.
+7. The player as a script: the `Player` base class, `DefaultPlayer`, the project setting,
+   `control`, `choose_move_anim`, hurt and death in the script. Test: equal checksums with
+   the engine code it replaces.
+8. From the level: `attach` and dotted properties, attachments asked for by a class, the
+   cook-time checks, the Tiled types file.
 
 Done when: with the game running on the GBA, the script named by a weapon record is
 replaced by another one and the next attack behaves differently, while no other script was
 re-sent or restarted; giving the player the "double jump" ability record attaches one class
 and the second jump works; a snapshot taken mid-swing continues the swing on the other
-machine.
+machine; the demo's player is a script whose hurt state was changed while the game ran;
+and a bat placed in Tiled with `attach = Patrol` and `Patrol.Speed = 2` patrols at that
+speed, while a misspelt property is reported by the cooker.
 
-## 10. Open questions
+## 12. Open questions
 
 - 8 variables per class is tight for a spell that tracks several projectiles. Raising it
   costs snapshot size for every instance; an alternative is to let spawned projectiles be
