@@ -94,5 +94,5 @@ static void setDelay(void *pContext, uint32_t delay)
 
 BmLinkTransport bmTcpLinkTransport(BmTcpLink *l)
 {
-  return (BmLinkTransport){ l, exchange, setDelay, NULL, 0u };
+  return (BmLinkTransport){ l, exchange, setDelay, NULL, 0u, NULL };
 }

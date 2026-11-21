@@ -209,11 +209,22 @@ static void adaptAfter(BmLinkMaster *m, bool clean)
   }
 }
 
+// Words have no frame on the wire: a clock edge too many or a port armed in the middle of a
+// word, and every word after it is cut at the wrong place. The slave arms its port anew when
+// no word has come for a while, so being quiet puts the boundary back.
+#define QUIET_MS 100
+
+static void quiet(BmLinkMaster *m)
+{
+  if (m->transport.pause != NULL) m->transport.pause(m->transport.pContext, QUIET_MS);
+}
+
 bool bmLinkMasterResync(BmLinkMaster *m)
 {
   for (int attempt = 0; attempt < 4; attempt++)
   {
     m->counters.resyncs++;
+    quiet(m);
     for (int i = 0; i < 4; i++) xfer(m, BM_LINK_WORD_FILL);
     m->sawSync = false;
     xfer(m, BM_LINK_WORD_SYNC);
@@ -237,6 +248,7 @@ static bool startSession(BmLinkMaster *m)
   if (m->started) return true;
   for (int attempt = 0; attempt < 4; attempt++)
   {
+    quiet(m);
     for (int i = 0; i < 4; i++) xfer(m, BM_LINK_WORD_FILL);
     m->sawSession = false;
     xfer(m, BM_LINK_WORD_SESSION);

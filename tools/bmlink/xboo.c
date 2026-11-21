@@ -106,6 +106,12 @@ static uint32_t exchange32(BmXboo *x, uint32_t data)
   return data;
 }
 
+static void pauseMs(BmXboo *x, uint32_t milliseconds)
+{
+  checkCancel(x);
+  usleep(milliseconds * 1000u);
+}
+
 void bmXbooReset(BmXboo *x)
 {
   if (!x->resetWired) return;
@@ -127,11 +133,16 @@ void bmXbooClose(BmXboo *x) { (void)x; }
 void bmXbooPortDelay(BmXboo *x, uint32_t delay) { (void)x; (void)delay; }
 static uint32_t exchange32(BmXboo *x, uint32_t data) { (void)x; (void)data; return 0xFFFFFFFFu; }
 void bmXbooReset(BmXboo *x) { (void)x; }
+static void pauseMs(BmXboo *x, uint32_t milliseconds) { (void)x; (void)milliseconds; }
 #endif
 
 uint32_t bmXbooExchange(BmXboo *x, uint32_t out)
 {
   uint32_t in = exchange32(x, out);
+  // BMLINK_TRACE=N prints the first N words each way.
+  static int traced = -1;
+  if (traced < 0) traced = getenv("BMLINK_TRACE") ? atoi(getenv("BMLINK_TRACE")) : 0;
+  if (traced > 0) { traced--; fprintf(stderr, "%08X -> %08X\n", (unsigned)out, (unsigned)in); }
   bmXbooPortDelay(x, x->delay);
   return in;
 }
@@ -173,7 +184,12 @@ static bool transportReset(void *pContext)
   return true;
 }
 
+static void transportPause(void *pContext, uint32_t milliseconds)
+{
+  pauseMs(pContext, milliseconds);
+}
+
 BmLinkTransport bmXbooTransport(BmXboo *x)
 {
-  return (BmLinkTransport){ x, transportExchange, transportDelay, transportReset, x->resetWired ? BM_LINK_CAP_RESET : 0u };
+  return (BmLinkTransport){ x, transportExchange, transportDelay, transportReset, x->resetWired ? BM_LINK_CAP_RESET : 0u, transportPause };
 }

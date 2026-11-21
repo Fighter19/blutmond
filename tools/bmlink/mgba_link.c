@@ -363,7 +363,12 @@ BmMgbaLinkStats bmMgbaLinkStats(const BmMgbaLink *l)
   return l->stats;
 }
 
+static void pauseFrames(void *pContext, uint32_t milliseconds)
+{
+  bmMgbaLinkRunFrames(pContext, milliseconds / 16 + 1);
+}
+
 BmLinkTransport bmMgbaLinkTransport(BmMgbaLink *l)
 {
-  return (BmLinkTransport){ l, exchange, NULL, NULL, 0 };
+  return (BmLinkTransport){ l, exchange, NULL, NULL, 0, pauseFrames };
 }

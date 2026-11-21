@@ -95,7 +95,9 @@ function(bm_add_gba_image name)
     target_link_libraries(${target} PRIVATE blutmond)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:C>:${BM_WARNINGS}>)
     if(kind STREQUAL "mb")
-      target_compile_definitions(${target} PRIVATE BM_GBA_MULTIBOOT)
+      # Everything of a multiboot image shares 256 KB: smaller buffers for pushed content
+      # (48 KB each instead of 64) leave room for the runtime to grow.
+      target_compile_definitions(${target} PRIVATE BM_GBA_MULTIBOOT BM_LIVE_CONTENT_SIZE=49152)
     endif()
     target_link_options(${target} PRIVATE
       -T ${PROJECT_SOURCE_DIR}/src/hal/gba/gba_${kind}.ld

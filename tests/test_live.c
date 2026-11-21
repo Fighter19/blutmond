@@ -83,7 +83,7 @@ static void start(BmLinkMaster *m)
   bmLiveStart(&s_live);
   memset(&s_wire, 0, sizeof(s_wire));
   s_wire.rng = 99;
-  BmLinkTransport t = { NULL, exchange, NULL, NULL, 0 };
+  BmLinkTransport t = { NULL, exchange, NULL, NULL, 0, NULL };
   bmLinkMasterInit(m, &t);
   s_paused = false;
   for (int i = 0; i < 30; i++) frame();

@@ -278,6 +278,9 @@ void bmHalLinkStop(void)
   s_linkHandler = NULL;
 }
 
+void bmHalLinkRealign(void) {}
+void bmHalReset(void) {}
+
 uint32_t bmHalLinkLock(void)
 {
   uint32_t state = atomic_fetch_add(&s_linkLocked, 1u);

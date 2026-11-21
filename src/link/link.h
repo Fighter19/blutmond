@@ -41,6 +41,7 @@ typedef enum BmLinkType {
   BM_LINK_STATUS = 0x16,
   BM_LINK_TEST = 0x17,
   BM_LINK_APPLY = 0x18,
+  BM_LINK_RESET = 0x19,     // start the device over (the GBA goes back to its BIOS and waits for multiboot)
   BM_LINK_STATE_GET = 0x20,
   BM_LINK_STATE_DATA = 0x21,
   BM_LINK_STATE_PUT = 0x22,

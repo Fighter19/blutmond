@@ -25,6 +25,9 @@ typedef struct BmLinkTransport
   void (*setDelay)(void *pContext, uint32_t delay);  // optional
   bool (*reset)(void *pContext);                     // optional (BM_LINK_CAP_RESET)
   uint32_t caps;
+  /// Optional: nothing on the wire for this many milliseconds. Before a resync, so a slave
+  /// whose port lost the word boundary can find it again (link-protocol.md section 4).
+  void (*pause)(void *pContext, uint32_t milliseconds);
 } BmLinkTransport;
 
 typedef struct BmLinkMaster

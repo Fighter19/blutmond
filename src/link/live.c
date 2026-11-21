@@ -411,6 +411,9 @@ static bool handle(BmLive *l, const BmLinkPacket *p)
     return handleApply(l, p);
   case BM_LINK_GDB:
     return handleDebug(l, p);
+  case BM_LINK_RESET:
+    l->resetIn = 20;   // a few frames later: the acknowledgement has to get out first
+    return true;
   case BM_LINK_PPU_SNAPSHOT:
   {
     uint32_t offset = p->length >= 4 ? bmLinkGet32(p->payload) : 0;
@@ -451,6 +454,8 @@ static void pumpSnapshot(BmLive *l)
 
 void bmLiveFrame(BmLive *l)
 {
+  bmHalLinkRealign();
+  if (l->resetIn != 0 && --l->resetIn == 0) bmHalReset();
   for (;;)
   {
     uint32_t lock = bmHalLinkLock();

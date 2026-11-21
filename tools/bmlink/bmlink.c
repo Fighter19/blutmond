@@ -206,7 +206,9 @@ int main(int argc, char **argv)
   setvbuf(stdout, NULL, _IOLBF, 0);
   const char *xbooDevice = NULL, *mgbaImage = NULL, *tcpAddress = NULL;
   int i = 1;
-  uint32_t delay = 1;
+  // Between words the GBA has to arm its port again (in an interrupt): a little time, or it
+  // is caught in the middle of a word.
+  uint32_t delay = 8;
   bool delayGiven = false, adaptive = false, resetWired = false;
   const char *logoPath = NULL;
   uint32_t bootWait = 20;
@@ -419,6 +421,16 @@ int main(int argc, char **argv)
         if (xbooDevice == NULL) { fprintf(stderr, "boot-if-needed: no runtime answers\n"); failed = 1; break; }
       }
       if (xbooDevice == NULL) { fprintf(stderr, "boot needs --xboo\n"); failed = 1; break; }
+      if (strcmp(cmd, "boot") == 0 && !resetWired)
+      {
+        // A runtime that is running is asked to start the device over, so the BIOS takes
+        // the new image.
+        uint32_t polls = m.pollTimeout;
+        m.pollTimeout = 100;
+        if (bmLiveMasterHello(&m, &remote) && bmLinkMasterQueue(&m, BM_LINK_RESET, NULL, 0) && bmLinkMasterFlush(&m))
+          printf("boot: asked the running runtime to start the device over\n");
+        m.pollTimeout = polls;
+      }
       uint32_t size;
       uint8_t *image = readFile(a1, &size);
       bool sent = false;
@@ -481,8 +493,11 @@ int main(int argc, char **argv)
     }
     else if (strcmp(cmd, "reset") == 0)
     {
-      if (transport.reset == NULL || !transport.reset(transport.pContext))
-        printf("reset: no reset wire; switch the GBA off and on\n");
+      // By the wire if there is one, else by asking the runtime.
+      if (transport.reset != NULL && transport.reset(transport.pContext)) printf("reset: by the reset wire\n");
+      else if (bmLinkMasterQueue(&m, BM_LINK_RESET, NULL, 0) && bmLinkMasterFlush(&m)) printf("reset: the runtime starts the device over\n");
+      else { fprintf(stderr, "reset: no reset wire and no runtime that answers; switch the GBA off and on\n"); failed = 1; }
+      haveRemote = false;
     }
     else if (strcmp(cmd, "stats") == 0)
     {

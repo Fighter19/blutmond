@@ -78,7 +78,7 @@ static void wireInit(Wire *w, BmLinkMaster *m, uint32_t seed)
   w->rng = seed;
   bmLinkSlaveInit(&w->slave, handler, w);
   w->prepared = BM_LINK_WORD_IDLE;
-  BmLinkTransport t = { w, wireExchange, NULL, NULL, 0 };
+  BmLinkTransport t = { w, wireExchange, NULL, NULL, 0, NULL };
   bmLinkMasterInit(m, &t);
 }
 

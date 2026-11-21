@@ -273,6 +273,9 @@ void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size)
 static BmHalLinkHandler s_linkHandler;
 static void *s_linkContext;
 static uint32_t s_linkNext BM_IWRAM_DATA = 0xFFFFFFFFu;
+static uint32_t s_linkArmed;          // the word the port is armed with
+static volatile uint32_t s_linkWords; // words received
+static uint32_t s_linkWordsSeen;
 
 /// Called from bm_irq_handler (irq.S) in system mode with the user stack. The port is armed
 /// again first, with the word the handler prepared last time, so the master can clock the
@@ -283,6 +286,8 @@ BM_IWRAM_CODE void bm_hal_serial_irq(void)
   uint32_t in = GBA_REG_SIODATA32;
   GBA_REG_SIODATA32 = s_linkNext;
   GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ | GBA_SIO_START;
+  s_linkArmed = s_linkNext;
+  s_linkWords++;
   s_linkNext = s_linkHandler != NULL ? s_linkHandler(s_linkContext, in) : 0xFFFFFFFFu;
 }
 
@@ -296,9 +301,31 @@ void bmHalLinkStart(BmHalLinkHandler handler, void *pContext, uint32_t firstWord
   GBA_REG_SIOCNT = GBA_SIO_32BIT;   // external clock
   GBA_REG_SIODATA32 = firstWord;
   s_linkNext = firstWord;
+  s_linkArmed = firstWord;
   GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ;
   GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ | GBA_SIO_START;
   GBA_REG_IE |= GBA_IRQ_SERIAL;
+}
+
+void bmHalLinkRealign(void)
+{
+  if (s_linkHandler == NULL) return;
+  uint32_t lock = bmHalLinkLock();
+  if (s_linkWords == s_linkWordsSeen)
+  {
+    // Clearing the start bit drops whatever part of a word was shifted in.
+    GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ;
+    GBA_REG_SIODATA32 = s_linkArmed;
+    GBA_REG_SIOCNT = GBA_SIO_32BIT | GBA_SIO_IRQ | GBA_SIO_START;
+  }
+  s_linkWordsSeen = s_linkWords;
+  bmHalLinkUnlock(lock);
+}
+
+void bmHalReset(void)
+{
+  GBA_REG16(0x208) = 0;          // no interrupts on the way
+  __asm__ volatile("swi 0x26");  // BIOS HardReset: as if switched on
 }
 
 void bmHalLinkStop(void)

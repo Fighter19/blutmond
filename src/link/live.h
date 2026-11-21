@@ -110,6 +110,8 @@ typedef struct BmLive
   BmHalDebugRegs *pDebugRegs; // while stopped
   uint32_t debugStops;        // times the program stopped (for tests)
 
+  uint8_t resetIn;            // frames until the device starts over (RESET), 0: not asked
+
   BmLiveRegion regions[BM_LIVE_REGIONS];
   uint32_t applied, chunksCopied, chunksReceived;
 } BmLive;

@@ -35,6 +35,12 @@ static uint32_t exchangePacket(void *pContext, uint32_t out)
   return in;
 }
 
+static void pausePacket(void *pContext, uint32_t milliseconds)
+{
+  (void)pContext;
+  bmHalLinkMasterWait(milliseconds * 16780u);
+}
+
 static uint32_t exchangeBootstrap(uint32_t out)
 {
   s_words++;
@@ -132,7 +138,7 @@ BmTransferResult bmTransferSend(const BmTransferImages *pImages, const uint8_t *
   memset(&stats, 0, sizeof(stats));
   BmTransferResult result = BM_TRANSFER_OK;
   s_words = 0;
-  BmLinkTransport transport = { NULL, exchangePacket, NULL, NULL, 0 };
+  BmLinkTransport transport = { NULL, exchangePacket, NULL, NULL, 0, pausePacket };
   bmLinkMasterInitFixed(&s_master, &transport, s_queue, sizeof(s_queue) / sizeof(s_queue[0]), s_inbox, sizeof(s_inbox) / sizeof(s_inbox[0]));
   bmHalLinkMasterBegin(true);
 
