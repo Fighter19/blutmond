@@ -156,6 +156,12 @@ missing chunk `CHUNK_BEGIN`, `CHUNK_DATA`…, `CHUNK_END`, in windows; the only 
 - **Resync**: after 4 failed attempts the master sends four `0xFFFFFFFF` and `SYNC`. The slave
   drops any partial packet and answers the next poll with `SYNC`. Both sides then continue with
   the sequence numbers from the last ACK.
+- **Word boundary**: the wire has no frame for words. If the slave's port is armed while a
+  word is already under way (the runtime starting while the master polls, an interrupt that
+  comes late, a glitch on the clock), every later word is cut at the wrong place, on both
+  sides; seen on hardware as the idle word arriving rotated by two bits. So the slave arms its
+  port anew whenever no word arrived during a frame, and the master is quiet for 100 ms before
+  each resync and session start. The emulated port moves whole words and cannot show this.
 - **Resume**: chunks are confirmed window by window, so a transfer continues where it stopped.
 - **Atomic apply**: the slave applies nothing until `APPLY` arrives and every chunk it refers to
   has passed its hash check.
@@ -192,7 +198,16 @@ In mGBA, with `bmlink` clocking the serial port word by word (the GBA side uncha
   and restarts still go through (one resync on average); at 5000 per million 1 KB packets
   rarely arrive whole: smaller packets on bad cables are future work.
 
-The rate on a real Xboo cable still has to be measured (`bmlink --xboo /dev/parport0 ping 50`).
+On a real GBA over a four-wire Xboo cable (parallel port through `ppdev`, about 2.5 µs per
+port access):
+
+- multiboot of the game image (81 KB), then the runtime answers: works;
+- 5 KB there and back: 2270 words/s (9 KB/s) at the default word delay of 8; 2950 words/s at
+  delay 1, but that leaves the GBA only about 15 µs to arm its port again, and words were then
+  cut at the wrong place (section 4, "Word boundary");
+- a restart with a changed level (13 of 21 chunks, 26 KB): 3.4 s; a level it already has: 0.4 s;
+- the video state for the editor's graphics view (101 KB): 11 s;
+- no bad packets and no resyncs in these runs.
 
 ## 8. Debugging
 
@@ -332,4 +347,5 @@ fallback is 256 kHz, one bit in `bmHalLinkMasterBegin`).
   packet that followed another one directly was sent twice).
 - 0.3: debugging (section 8).
 - 0.4: GBA to GBA and the bootstrap (section 9).
+- 0.4.2: the word boundary (section 4), the `RESET` packet (the runtime starts the device over through the BIOS, for cables without a reset wire), measurements on a GBA.
 - 0.4.1: `SESS`. Found on hardware: a second run of `bmlink` counted its packets from 0 while the runtime went on from the first run's numbers, and nothing got through.
