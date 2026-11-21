@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 #include "script_panel.h"
+#include "theme_colors.h"
 
 #include <filesystem>
 #include <fstream>
@@ -160,7 +161,7 @@ void ScriptPanel::compileNow()
                                 std::to_string(module.data.size()) + " bytes in the pack"
                           : std::to_string(module.diagnostics.size()) + (module.diagnostics.size() == 1 ? " problem" : " problems") +
                                 ": the running game keeps the last version that compiled";
-  status_->colorOverride = lastOk_ ? Color{0, 0, 0, 0} : Color{0.75f, 0.1f, 0.1f, 1};
+  status_->colorOverride = lastOk_ ? Color{0, 0, 0, 0} : errorColor(status_->theme());
   fillOutline(module);
 }
 

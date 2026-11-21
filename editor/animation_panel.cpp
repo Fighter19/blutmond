@@ -10,6 +10,7 @@
 #include "ui/menus.h"
 #include "ui/renderer.h"
 #include "ui/theme.h"
+#include "theme_colors.h"
 #include "ui/widgets.h"
 
 using namespace ose::ui;
@@ -368,7 +369,7 @@ void AnimationPanel::rebuild()
   for (const ReportEntry &e : report.entries)
     if (e.level != ReportEntry::Level::Info && problem.empty()) problem = e.message;
   info_->text = problem.empty() ? sprite_.path : problem;
-  info_->colorOverride = problem.empty() ? Color{0, 0, 0, 0} : Color{0.8f, 0.1f, 0.1f, 1};
+  info_->colorOverride = problem.empty() ? Color{0, 0, 0, 0} : errorColor(info_->theme());
 
   // A picture per cooked frame: its pieces, decoded with the cooked palette.
   for (const sprite::CookedFrame &f : cooked_.frames)

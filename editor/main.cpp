@@ -7,19 +7,21 @@
 // Run (F6) plays all rooms: on the PC in the game's window, or on a GBA over the Xboo cable
 // (editor/runner.h). With "Live" on, every cook while it runs is pushed in as a hot reload.
 //
-//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--dark] [--frames N --screenshot out.ppm] [--tab N]
+//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--frames N --screenshot out.ppm] [--tab N]
 //            [--game path] [--bmlink path] [--gba-image path] [--xboo device] [--reset none|xboo]
 //            [--port N]
 //
 // Without arguments it opens assets/test.bmproj.
 
 #include <GLES2/gl2.h>
+#include <SDL3/SDL.h>
 
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -65,7 +67,8 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
       <Item action="room.reload"/><Item action="app.quit"/>
     </Menu>
     <Menu title="Run"><Item action="run.start"/><Item action="run.pc"/><Item action="run.gba"/><Item action="run.stop"/><Item action="gfx.capture"/></Menu>
-    <Menu title="View"><Item action="view.collision"/><Item action="view.objects"/><Item action="view.grid"/></Menu>
+    <Menu title="View"><Item action="view.collision"/><Item action="view.objects"/><Item action="view.grid"/>
+      <Item action="theme.classic"/><Item action="theme.light"/><Item action="theme.dark"/></Menu>
   </MenuBar>
   <PanelContainer theme-type="Toolbar"><HBox>
     <Label text="Profile"/>
@@ -315,9 +318,42 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
   <PanelContainer theme-type="StatusBar"><HBox><Label id="status" text="Ready" expand="1" clip-text="1"/><Label id="run_state" text="Not running"/></HBox></PanelContainer>
 </VBox></Panel>)XML";
 
+// The editor's themes by name; anything else gives the classic one.
+std::shared_ptr<Theme> makeTheme(const std::string &name)
+{
+  if (name == "dark") return Theme::makeDark(OSE_UI_FONT_DIR);
+  if (name == "light") return Theme::makeLight(OSE_UI_FONT_DIR);
+  return Theme::makeClassic(OSE_UI_FONT_DIR);
+}
+
+// The theme chosen in the View menu is kept for the next start.
+std::string themeSettingPath()
+{
+  char *pref = SDL_GetPrefPath("blutmond", "editor");
+  std::string path = pref ? std::string(pref) + "theme" : std::string();
+  SDL_free(pref);
+  return path;
+}
+
+std::string loadThemeName()
+{
+  std::string name;
+  std::ifstream in(themeSettingPath());
+  if (in) in >> name;
+  return name == "dark" || name == "light" ? name : "classic";
+}
+
 struct Editor
 {
   explicit Editor(sdl3::App &a) : app(a) {}
+  std::string themeName = "classic";
+  void setTheme(const std::string &name)
+  {
+    themeName = name;
+    app.ui().setTheme(makeTheme(name));
+    std::ofstream out(themeSettingPath());
+    if (out) out << name << "\n";
+  }
   sdl3::App &app;
   Project project;
   RoomOverview *overview = nullptr;
@@ -548,6 +584,12 @@ struct Editor
     ui.actions().add({"view.objects", "Objects", "", "O", "", [this] { overview->showObjects = !overview->showObjects; }, nullptr, nullptr});
     ui.actions().add({"view.grid", "Grid", "", "G", "", [this] { overview->showGrid = !overview->showGrid; }, nullptr, nullptr});
 
+    for (const char *name : {"classic", "light", "dark"})
+    {
+      std::string n = name, label = n == "classic" ? "Classic theme" : n == "light" ? "Light theme" : "Dark theme";
+      ui.actions().add({"theme." + n, label, "", "", "", [this, n] { setTheme(n); }, nullptr, [this, n] { return themeName == n; }});
+    }
+
     registerControlType("RoomOverview", [] { return std::make_unique<RoomOverview>(); });
     ui.actions().add({"project.open", "Open project...", "folder-open", "Ctrl+O", "", [this] { projectPanel.openProject(); }, nullptr, nullptr});
     ui.actions().add({"project.save_as", "Save project as...", "save", "", "", [this] { projectPanel.saveProjectAs(); }, nullptr, nullptr});
@@ -733,7 +775,7 @@ int main(int argc, char **argv)
   std::vector<std::string> roomFiles;
   std::string projectPath;
   std::string profile = "gba";
-  bool dark = false;
+  std::string themeName = loadThemeName();
   int frames = 0;
   const char *screenshot = nullptr;
   int tab = 0;
@@ -751,7 +793,9 @@ int main(int argc, char **argv)
   for (int i = 1; i < argc; i++)
   {
     if (std::strcmp(argv[i], "--profile") == 0 && i + 1 < argc) profile = argv[++i];
-    else if (std::strcmp(argv[i], "--dark") == 0) dark = true;
+    else if (std::strcmp(argv[i], "--dark") == 0) themeName = "dark";
+    else if (std::strcmp(argv[i], "--light") == 0) themeName = "light";
+    else if (std::strcmp(argv[i], "--theme") == 0 && i + 1 < argc) themeName = argv[++i];
     else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshot = argv[++i];
     else if (std::strcmp(argv[i], "--tab") == 0 && i + 1 < argc) tab = std::atoi(argv[++i]);
@@ -794,7 +838,7 @@ int main(int argc, char **argv)
   desc.title = "Blutmond";
   desc.width = 1440;
   desc.height = 860;
-  desc.theme = dark ? Theme::makeDark(OSE_UI_FONT_DIR) : Theme::makeClassic(OSE_UI_FONT_DIR);
+  desc.theme = makeTheme(themeName);
   std::string error;
   if (!app.init(desc, &error))
   {
@@ -803,6 +847,7 @@ int main(int argc, char **argv)
   }
 
   Editor editor(app);
+  editor.themeName = themeName == "dark" || themeName == "light" ? themeName : "classic";
   editor.runner.settings = run;
   editor.projectFile = projectFile;
 #ifdef BM_EDITOR_ENGINE_DIR

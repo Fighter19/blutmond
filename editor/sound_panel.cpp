@@ -14,6 +14,7 @@
 #include "ui/loader.h"
 #include "ui/menus.h"
 #include "ui/theme.h"
+#include "theme_colors.h"
 #include "ui/widgets.h"
 
 namespace fs = std::filesystem;
@@ -179,7 +180,13 @@ bool PianoRoll::event(const InputEvent &e)
 
 void PianoRoll::draw(Canvas &c)
 {
-  c.rect(rect_, parseColor("#e8e8e8"));
+  // The grid follows the theme; the keys stay white and black.
+  const bool dark = isDarkTheme(theme());
+  const Color back = parseColor(dark ? "#1f2124" : "#e8e8e8"), blackRow = parseColor(dark ? "#191a1d" : "#d8d8d8"),
+              octave = parseColor(dark ? "#4a4e57" : "#b0b0b0"), barLine = parseColor(dark ? "#6a6f7a" : "#808080"),
+              beatLine = parseColor(dark ? "#3c3f46" : "#b4b4b4"), stepLine = parseColor(dark ? "#2a2c31" : "#d4d4d4"),
+              barText = parseColor(dark ? "#9aa0aa" : "#606060");
+  c.rect(rect_, back);
   if (!song) return;
   float kw = keyWidth(), tw = tickWidth(), rh = rowHeight();
   int top = topKey(), rows = int(rect_.h / rh) + 1;
@@ -192,8 +199,8 @@ void PianoRoll::draw(Canvas &c)
     int key = top - r;
     if (key < kLowKey) break;
     float y = rect_.y + float(r) * rh;
-    if (isBlackKey(key)) c.rect({gx, y, rect_.w - kw, rh}, parseColor("#d8d8d8"));
-    if (key % 12 == 0) c.rect({gx, y + rh - 1, rect_.w - kw, 1}, parseColor("#b0b0b0"));
+    if (isBlackKey(key)) c.rect({gx, y, rect_.w - kw, rh}, blackRow);
+    if (key % 12 == 0) c.rect({gx, y + rh - 1, rect_.w - kw, 1}, octave);
   }
   // Columns: sixteenths faint, beats stronger, bars strongest; grey after the song's end.
   int firstTick = int(scrollX_ / tw) / 6 * 6;
@@ -202,8 +209,8 @@ void PianoRoll::draw(Canvas &c)
     float x = gx + float(tick) * tw - scrollX_;
     if (x < gx) continue;
     bool bar = tick % 96 == 0, beat = tick % 24 == 0;
-    c.rect({x, rect_.y, 1, rect_.h}, bar ? parseColor("#808080") : beat ? parseColor("#b4b4b4") : parseColor("#d4d4d4"));
-    if (bar) c.text({x + 3, rect_.y + 1}, std::to_string(tick / 96 + 1), font(), fontSize() * 0.8f, parseColor("#606060"));
+    c.rect({x, rect_.y, 1, rect_.h}, bar ? barLine : beat ? beatLine : stepLine);
+    if (bar) c.text({x + 3, rect_.y + 1}, std::to_string(tick / 96 + 1), font(), fontSize() * 0.8f, barText);
   }
   float endX = gx + float(song->length) * tw - scrollX_;
   if (endX < rect_.right()) c.rect({std::max(gx, endX), rect_.y, rect_.right() - std::max(gx, endX), rect_.h}, {0, 0, 0, 0.25f});
@@ -234,9 +241,10 @@ void PianoRoll::draw(Canvas &c)
       float y = rect_.y + float(top - n.key) * rh, x = gx + float(n.tick) * tw - scrollX_;
       if (x + float(n.length) * tw < gx) continue;
       Rect r{x, y, std::max(3.0f, float(n.length) * tw - 1), rh - 1};
-      // Louder notes are darker.
-      float v = 0.75f - 0.45f * float(n.velocity) / 127.0f;
-      c.rect(r, int(i) == selected ? Color{0.9f, 0.45f, 0.1f, 1} : Color{v * 0.4f, v * 0.7f, 0.2f + v, 1});
+      // Louder notes stand out more: darker on the light grid, brighter on the dark one.
+      float loud = float(n.velocity) / 127.0f, v = 0.75f - 0.45f * loud;
+      Color fill = dark ? Color{0.2f + 0.25f * loud, 0.35f + 0.35f * loud, 0.5f + 0.5f * loud, 1} : Color{v * 0.4f, v * 0.7f, 0.2f + v, 1};
+      c.rect(r, int(i) == selected ? Color{0.9f, 0.45f, 0.1f, 1} : fill);
       c.border(r, {0, 0, 0, 0.5f}, 1);
     }
   }
@@ -494,7 +502,7 @@ void SoundPanel::recook()
   for (const ReportEntry &e : report.entries)
     if (e.level != ReportEntry::Level::Info && problem.empty()) problem = e.message;
   info_->text = problem.empty() ? song_.path : problem;
-  info_->colorOverride = problem.empty() || !cooked_.empty() ? Color{0, 0, 0, 0} : Color{0.8f, 0.1f, 0.1f, 1};
+  info_->colorOverride = problem.empty() || !cooked_.empty() ? Color{0, 0, 0, 0} : errorColor(ui_->theme());
   playing_ = false;
   if (wasPlaying && !cooked_.empty() && bmSoundPlayData(&sound_, cooked_.data(), uint32_t(cooked_.size()), which == 1))
   {

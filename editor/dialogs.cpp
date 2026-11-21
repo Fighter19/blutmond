@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 #include "dialogs.h"
+#include "theme_colors.h"
 
 #include <SDL3/SDL.h>
 
@@ -146,7 +147,7 @@ void openForm(Context &ui, const std::string &title, std::vector<FormField> fiel
   }
 
   auto *error = static_cast<Label *>(box->addChild(std::make_unique<Label>()));
-  error->colorOverride = Color{0.8f, 0.1f, 0.1f, 1};
+  error->colorOverride = errorColor(ui.theme());
   auto buttons = std::make_unique<HBox>();
   buttons->addChild(std::make_unique<Control>())->sizeFlagsH = SizeFlags::Fill | SizeFlags::Expand;
   auto *ok = static_cast<Button *>(buttons->addChild(std::make_unique<Button>(okLabel)));

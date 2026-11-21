@@ -7,6 +7,7 @@
 #include "ui/context.h"
 #include "ui/font.h"
 #include "ui/theme.h"
+#include "theme_colors.h"
 
 using namespace ose::ui;
 using ose::Vec2;
@@ -20,14 +21,22 @@ bool isWordChar(char c)
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
 }
 
-const Color kText = parseColor("#101010");
-const Color kKeyword = parseColor("#0000a0");
-const Color kType = parseColor("#007070");
-const Color kBuiltin = parseColor("#7a3e00");
-const Color kNumber = parseColor("#a00050");
-const Color kString = parseColor("#a04000");
-const Color kComment = parseColor("#408040");
-const Color kName = parseColor("#6a2c91");
+struct CodeColors
+{
+  Color back, gutter, gutterText, lineHighlight, selection, selectionIdle, caret, scroll;
+  Color text, keyword, type, builtin, number, string, comment, name;
+};
+
+const CodeColors kLightCode = {
+    parseColor("#ffffff"), parseColor("#e4e4e4"), parseColor("#707070"), parseColor("#f4f4e6"),
+    parseColor("#b4c8f0"), parseColor("#d8d8d8"), parseColor("#000000"), parseColor("#a0a0a0"),
+    parseColor("#101010"), parseColor("#0000a0"), parseColor("#007070"), parseColor("#7a3e00"),
+    parseColor("#a00050"), parseColor("#a04000"), parseColor("#408040"), parseColor("#6a2c91")};
+const CodeColors kDarkCode = {
+    parseColor("#18191c"), parseColor("#25272b"), parseColor("#7a808a"), parseColor("#22252b"),
+    parseColor("#2b4a80"), parseColor("#3a3d44"), parseColor("#ffffff"), parseColor("#5d626d"),
+    parseColor("#d7d9de"), parseColor("#6ea8ff"), parseColor("#4ec9b0"), parseColor("#dcb67a"),
+    parseColor("#e58fb5"), parseColor("#e0965a"), parseColor("#6fae6f"), parseColor("#c792ea")};
 
 }  // namespace
 
@@ -415,8 +424,9 @@ void CodeEdit::draw(Canvas &c)
 {
   const Font &f = theme().monoFont ? *theme().monoFont : font();
   float px = fontSize(), lh = lineHeight(), cw = charWidth(), gutter = gutterWidth();
-  c.rect(rect_, parseColor("#ffffff"));
-  c.rect({rect_.x, rect_.y, gutter - cw * 0.5f, rect_.h}, parseColor("#e4e4e4"));
+  const CodeColors &k = isDarkTheme(theme()) ? kDarkCode : kLightCode;
+  c.rect(rect_, k.back);
+  c.rect({rect_.x, rect_.y, gutter - cw * 0.5f, rect_.h}, k.gutter);
   int rows = visibleLines() + 1;
   scrollLine_ = std::clamp(scrollLine_, 0, std::max(0, int(lines_.size()) - 1));
 
@@ -446,14 +456,14 @@ void CodeEdit::draw(Canvas &c)
     for (const Marker &m : markers)
       if (m.line == l + 1) marker = &m;
     if (marker) c.rect({rect_.x, y, gutter - cw * 0.5f, lh}, parseColor("#e06060"));
-    c.textIn({rect_.x, y, gutter - cw, lh}, std::to_string(l + 1), f, px, marker ? parseColor("#ffffff") : parseColor("#707070"), Align::End, false);
+    c.textIn({rect_.x, y, gutter - cw, lh}, std::to_string(l + 1), f, px, marker ? parseColor("#ffffff") : k.gutterText, Align::End, false);
 
     c.pushClip({rect_.x + gutter - cw * 0.5f, rect_.y, rect_.w - gutter + cw * 0.5f, rect_.h});
-    if (l == caret_.line && hasFocus() && !hasSelection()) c.rect({rect_.x + gutter - cw * 0.5f, y, rect_.w, lh}, parseColor("#f4f4e6"));
+    if (l == caret_.line && hasFocus() && !hasSelection()) c.rect({rect_.x + gutter - cw * 0.5f, y, rect_.w, lh}, k.lineHighlight);
     if (hasSelection() && l >= selA.line && l <= selB.line)
     {
       int a = l == selA.line ? selA.col : 0, b = l == selB.line ? selB.col : int(s.size()) + 1;
-      c.rect({textX + float(a) * cw, y, float(b - a) * cw, lh}, hasFocus() ? parseColor("#b4c8f0") : parseColor("#d8d8d8"));
+      c.rect({textX + float(a) * cw, y, float(b - a) * cw, lh}, hasFocus() ? k.selection : k.selectionIdle);
     }
 
     // Colours token by token.
@@ -461,45 +471,45 @@ void CodeEdit::draw(Canvas &c)
     while (i < s.size())
     {
       size_t j = i;
-      Color colour = kText;
+      Color colour = k.text;
       if (inComment)
       {
         size_t end = s.find("*/", i);
         j = end == std::string::npos ? s.size() : end + 2;
         if (end != std::string::npos) inComment = false;
-        colour = kComment;
+        colour = k.comment;
       }
-      else if (s.compare(i, 2, "//") == 0) { j = s.size(); colour = kComment; }
+      else if (s.compare(i, 2, "//") == 0) { j = s.size(); colour = k.comment; }
       else if (s.compare(i, 2, "/*") == 0)
       {
         size_t end = s.find("*/", i + 2);
         j = end == std::string::npos ? s.size() : end + 2;
         inComment = end == std::string::npos;
-        colour = kComment;
+        colour = k.comment;
       }
       else if (s[i] == '"')
       {
         j = i + 1;
         while (j < s.size() && s[j] != '"') j += s[j] == '\\' ? 2 : 1;
         j = std::min(s.size(), j + 1);
-        colour = kString;
+        colour = k.string;
       }
       else if (s[i] == '#' && i + 1 < s.size() && isWordChar(s[i + 1]))
       {
         j = i + 1;
         while (j < s.size() && isWordChar(s[j])) j++;
-        colour = kName;
+        colour = k.name;
       }
       else if (s[i] >= '0' && s[i] <= '9')
       {
         while (j < s.size() && (isWordChar(s[j]) || (s[j] == '.' && j + 1 < s.size() && s[j + 1] >= '0' && s[j + 1] <= '9'))) j++;
-        colour = kNumber;
+        colour = k.number;
       }
       else if (isWordChar(s[i]))
       {
         while (j < s.size() && isWordChar(s[j])) j++;
         WordKind kind = classify ? classify(s.substr(i, j - i)) : WordKind::Plain;
-        colour = kind == WordKind::Keyword ? kKeyword : kind == WordKind::Type ? kType : kind == WordKind::Builtin ? kBuiltin : kText;
+        colour = kind == WordKind::Keyword ? k.keyword : kind == WordKind::Type ? k.type : kind == WordKind::Builtin ? k.builtin : k.text;
       }
       else if (s[i] == ' ')
       {
@@ -521,7 +531,7 @@ void CodeEdit::draw(Canvas &c)
     if (l == caret_.line && hasFocus())
     {
       double t = context() ? context()->time() - blinkStart_ : 0;
-      if (int(t * 2) % 2 == 0) c.rect({textX + float(caret_.col) * cw, y, 2, lh}, parseColor("#000000"));
+      if (int(t * 2) % 2 == 0) c.rect({textX + float(caret_.col) * cw, y, 2, lh}, k.caret);
     }
     c.popClip();
   }
@@ -530,7 +540,7 @@ void CodeEdit::draw(Canvas &c)
   if (int(lines_.size()) > rows - 1)
   {
     float total = float(lines_.size()), top = float(scrollLine_) / total, size = float(rows - 1) / total;
-    c.rect({rect_.right() - 6, rect_.y + top * rect_.h, 5, std::max(12.0f, size * rect_.h)}, parseColor("#a0a0a0"));
+    c.rect({rect_.right() - 6, rect_.y + top * rect_.h, 5, std::max(12.0f, size * rect_.h)}, k.scroll);
   }
 }
 

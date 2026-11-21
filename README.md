@@ -79,6 +79,9 @@ build/bmeditor game.bmproj
 build/bmeditor room.tmx room2.tmx    # a project that is not saved yet
 ```
 
+The editor has three themes: classic, light and dark. Choose one in the View menu (it is kept
+for the next start) or with `--theme classic|light|dark`.
+
 It cooks the room, shows it as the runtime renders it (with collision and object overlays), the
 GBA screen at the camera (click into the room), the palette banks, the tiles, the hardware
 budget and the cooker's report, for the GBA or SNES profile. It cooks again when the file

@@ -229,7 +229,7 @@ if(BM_PLATFORM STREQUAL "host")
     include(FetchContent)
     FetchContent_Declare(ose_ui
       GIT_REPOSITORY https://github.com/Fighter19/ose-ui.git
-      GIT_TAG aa7fcdb881e2702005b0d9305d2894b615752a0a)
+      GIT_TAG 0bf77bb4d40d8e1e001605383bdf9d30e6b83c40)
     FetchContent_MakeAvailable(ose_ui)
     add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
       editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
