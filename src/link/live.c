@@ -123,6 +123,9 @@ static void receiveToc(BmLive *l, const BmLinkPacket *p)
       l->transferFailed = true;
       return;
     }
+    // The padding between chunks belongs to the pack's checksum and must be zero; the buffer
+    // may still hold an older pack whose chunks lay elsewhere.
+    memset(l->pStaging, 0, total);
   }
   if (id != l->transferId || l->transferFailed) return;
   for (uint32_t i = 0; i < n && l->tocReceived < l->tocStreamSize; i++, l->tocReceived++)

@@ -186,7 +186,7 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `INST` | instruments |
 | `SMPL` | samples (8-bit signed PCM, loop points) |
 | `SFX ` | sound effects |
-| `MODB` | script module, bytecode, see [mondskript.md](mondskript.md) |
+| `MODB` | script module: classes, variables, states, functions and bytecode ([mondskript.md](mondskript.md) §11) |
 | `MODN` | script module, native code with relocations |
 | `WRLD` | world map: rooms, positions, door links, map screen data |
 

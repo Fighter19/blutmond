@@ -41,6 +41,7 @@ AssetKind kindOf(const std::string &path)
   if (ext == ".tmx") return AssetKind::Room;
   if (ext == ".tsx") return AssetKind::Tileset;
   if (ext == ".bmsprite") return AssetKind::Sprite;
+  if (ext == ".ms") return AssetKind::Script;
   if (ext == ".png" || ext == ".bmp" || ext == ".gif" || ext == ".tga") return AssetKind::Image;
   return AssetKind::Other;
 }
@@ -227,6 +228,31 @@ AssetCatalog AssetCatalog::scan(const ProjectFile &project)
     }
   }
 
+  // Scripts: used by the rooms that hold an object of the script's class.
+  for (auto &[path, a] : found)
+  {
+    if (a.kind != AssetKind::Script || !a.problem.empty()) continue;
+    std::ifstream in(path);
+    std::string word, cls;
+    while (in >> word)
+      if (word == "class" && in >> cls) break;
+    while (!cls.empty() && (cls.back() == ';' || cls.back() == '{')) cls.pop_back();
+    for (const std::string &room : project.rooms)
+    {
+      bool uses = false;
+      try
+      {
+        tmx::Map map = tmx::load(room);
+        for (const tmx::ObjectGroup &g : map.objectGroups)
+          for (const tmx::Object &o : g.objects) uses |= o.type == cls;
+      }
+      catch (const std::exception &)
+      {
+      }
+      if (uses) a.usedBy.push_back(normalPath(room));
+    }
+  }
+
   AssetCatalog c;
   for (auto &[path, a] : found)
   {
@@ -304,6 +330,14 @@ std::vector<std::string> spritePaths(const AssetCatalog &catalog)
   std::vector<std::string> out;
   for (const AssetInfo &a : catalog.assets)
     if (a.kind == AssetKind::Sprite && a.problem.empty()) out.push_back(a.path);
+  return out;
+}
+
+std::vector<std::string> scriptPaths(const AssetCatalog &catalog)
+{
+  std::vector<std::string> out;
+  for (const AssetInfo &a : catalog.assets)
+    if (a.kind == AssetKind::Script && a.problem.empty()) out.push_back(a.path);
   return out;
 }
 

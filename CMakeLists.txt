@@ -228,7 +228,8 @@ if(BM_PLATFORM STREQUAL "host")
       GIT_TAG 81846abb402362fd542952a58e648844a6551520)
     FetchContent_MakeAvailable(ose_ui)
     add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
-      editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp)
+      editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
+      editor/code_edit.cpp editor/script_panel.cpp)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
     target_link_libraries(bmeditor PRIVATE bm_editor_model bm_cooker blutmond ose_ui_sdl3)
     target_compile_definitions(bmeditor PRIVATE
@@ -364,8 +365,20 @@ if(BM_PLATFORM STREQUAL "host")
   target_link_libraries(test_live PRIVATE blutmond bm_link_host)
   target_include_directories(test_live PRIVATE apps/game)
   target_compile_options(test_live PRIVATE ${BM_WARNINGS})
-  add_test(NAME test_live COMMAND test_live ${cooked}/test_level_gba.bmpk ${cooked}/test_level_variant_gba.bmpk)
-  set_tests_properties(test_live PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_variant")
+  # The same level with a changed script (the door stays shut), for pushing scripts live.
+  add_test(NAME make_script_variant
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/make_text_variant.py
+      ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/door.ms ${cooked}/door.ms "enter_door();" "hide();")
+  set_tests_properties(make_script_variant PROPERTIES FIXTURES_SETUP script_variant_source)
+  add_test(NAME cook_test_level_scripts
+    COMMAND bmcook --profile gba -o ${cooked}/test_level_scripts_gba.bmpk
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx
+      ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmsprite ${PROJECT_SOURCE_DIR}/assets/test_room/bat.bmsprite
+      ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bat.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms ${cooked}/door.ms)
+  set_tests_properties(cook_test_level_scripts PROPERTIES FIXTURES_REQUIRED script_variant_source FIXTURES_SETUP test_level_scripts)
+  add_test(NAME test_live COMMAND test_live ${cooked}/test_level_gba.bmpk ${cooked}/test_level_variant_gba.bmpk
+    ${cooked}/test_level_scripts_gba.bmpk)
+  set_tests_properties(test_live PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_variant;test_level_scripts")
   add_test(NAME game_autoplay_host COMMAND game ${cooked}/test_level_gba.bmpk --autoplay --frames 1000 ${cooked}/game_host.ppm)
   set_tests_properties(game_autoplay_host PROPERTIES FIXTURES_REQUIRED test_level_pack FIXTURES_SETUP game_host
     PASS_REGULAR_EXPRESSION "room test_room_2.*deaths 0")

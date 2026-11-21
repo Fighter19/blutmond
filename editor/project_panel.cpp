@@ -29,6 +29,7 @@ const char *kindName(AssetKind k)
   {
   case AssetKind::Room: return "room";
   case AssetKind::Sprite: return "sprite";
+  case AssetKind::Script: return "script";
   case AssetKind::Tileset: return "tileset";
   case AssetKind::Image: return "image";
   default: return "file";
@@ -55,6 +56,7 @@ void ProjectPanel::bind(Control &root, Context &ui)
   tree_->selectionChanged.connect([this] {
     std::string path = selectedPath();
     if (fs::path(path).extension() == ".bmsprite" && spritePicked) spritePicked(path);
+    if (fs::path(path).extension() == ".ms" && scriptPicked) scriptPicked(path);
   });
 }
 
@@ -94,6 +96,7 @@ void ProjectPanel::rebuild()
   };
   Group groups[] = {{"Rooms not in the project", "file-o", AssetKind::Room},
                     {"Sprites", "film", AssetKind::Sprite},
+                    {"Scripts", "terminal", AssetKind::Script},
                     {"Tilesets", "th", AssetKind::Tileset},
                     {"Images", "image", AssetKind::Image},
                     {"Other files", "file", AssetKind::Other}};

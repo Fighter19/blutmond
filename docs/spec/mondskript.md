@@ -179,6 +179,80 @@ source → parser → AST → type check → IR ─┬─► bytecode module ('M
   patches the relocations. `#line` directives in the C make GDB show script lines.
 - Both forms produce identical results; tests compare state hashes per frame.
 
+## 11. What version 0.2 implements
+
+The compiler (`tools/mondskript`), the interpreter (`src/script/vm.h`) and the game's scripted
+objects (`src/world/actors.h`) implement a first part of the above. Script files end in `.ms`
+and hold one class each.
+
+| Area | Implemented | Not yet |
+|---|---|---|
+| Types | `bool`, `int`, `fix`, `name`, `text`; every variable takes 4 bytes | `byte`/`short` and unsigned types, `fix16`, `vec`, enums, structs, arrays, handles (`C`, `C?`) |
+| Classes | `class Name extends Actor;`, `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes, inheritance between script classes, components (`has`) |
+| Functions | functions with up to 3 parameters and a result, calls nested up to 16 deep; all are final | `virtual`, `static` |
+| Events | `spawn()`, `tick()`, `touch()` (the player starts touching the object), in the class and per state | parameters; `hit`, `dies`, `enter_room`, `leave_room`, `use` |
+| States | `state` with events and state code after `begin:`, `gotostate`, `start_state`; latent `sleep(frames)`, `finish_anim()`, `wait_until(condition)` | functions overridden per state; locals and `for` in state code (their values would not survive a wait: use variables of the class) |
+| Statements | `var` locals, `if`/`else`, `while`, `loop`, `for x in a..b`, `break`, `continue`, `return`, assignment with `=`, `+=`, `-=`, `*=`, `/=` | `switch`, `match`, queries |
+| Expressions | `+ - * / %`, comparisons, `&& || !` (short circuit), `fix(...)`, `int(...)`; integer literals become `fix` where `fix` is expected; mixing `int` and `fix` is an error | |
+| defaultproperties | values of variables, `start_state`, `sprite = "name"` | component and struct fields |
+| Run time | 8 scripted objects per room, 16 values of `save` variables kept across rooms and in the save game, 4 items | larger limits need state transfer in several packets |
+
+What scripts can call is one table shared by compiler, verifier and runtime
+(`src/script/script_api.h`); an entry's position is its index in bytecode, so entries are only
+added at the end. This version: `sleep`, `finish_anim`, `play_anim(name)`, `anim_done`,
+`player_x`, `player_y`, `player_distance`, `move_toward_player(fix)`, `move_toward(fix, fix,
+fix)`, `hurt_player(int)`, `enter_door`, `hide`, `show`, `face_player`, `log(int)`,
+`random(int)`, `touching_player`, `give_item(name)`, `has_item(name)`, `abs(int)`; and the
+actor variables `x`, `y`, `facing` and (read only) `home_x`, `home_y`.
+
+Objects of a room whose Tiled class is a script class are scripted; the engine then leaves them
+alone, also for engine classes (a class `Door` in a script decides when the door opens and
+calls `enter_door()`). An object property named like a `var(Category)` variable sets it for
+that object.
+
+### Bytecode module (`MODB`)
+
+```
+0   "BMMB"   u16 version (1)   u16 API entries the module was compiled against
+8   u16 classes   u16 functions   u16 constants   u16 events per class (3)
+16  u32 offset of: classes, functions, constants, code;  u32 code words;  u32 offset of the line table
+
+class (24 bytes):    u16 name, u16 sprite (string ids; 0xFFFF: none), u8 variables, u8 states,
+                     u8 start state (0xFF: none), u8 0, u16 function of each event (0xFFFF: none),
+                     u16 0, u32 offset of its variables, u32 offset of its states
+variable (8 bytes):  u16 name, u8 type, u8 flags (1 save, 2 link, 4 transient, 8 set per object), s32 default
+state (12 bytes):    u16 name, u16 function with its code, u16 function of each event, u16 0
+function (12 bytes): u32 first code word, u16 code words, u8 registers, u8 parameters,
+                     u8 flags (1: state code), u8 0, u16 class
+constants:           s32 each
+code:                u16 words, followed by one spare word
+line table:          per function a u32 offset to: u16 file (string id), u16 n, n × (u16 word, u16 line)
+```
+
+An instruction is `op | a << 8` followed by its operand words:
+
+| Instruction | Words | Effect |
+|---|---|---|
+| `LOADI a, imm` / `LOADK a, k` | 2 | register a = sign-extended word / constant k |
+| `MOVE a, b`, `NEG a, b`, `NOT a, b` | 2 | |
+| `GETF a, f` / `SETF a, f` | 2 | variable f of the object |
+| `GETV a, v` / `SETV a, v` | 2 | actor variable v |
+| `ADD SUB MUL DIV MOD FMUL FDIV EQ NE LT LE a, b, c` | 2 (b and c in one word) | division and modulo by zero give 0; `FMUL`/`FDIV` keep 8 fraction bits |
+| `JMP t`, `JZ a, t`, `JNZ a, t` | 2 | to word t of the function |
+| `CALLN a, api, first` | 2 | runtime function with arguments in the registers from `first`; a = result |
+| `CALL a, function, first` | 3 | a function of the same class |
+| `RET a` | 1 | a = 0xFF: no result |
+| `GOTOSTATE s`, `STOP` | 1 | `STOP` ends state code |
+
+The verifier refuses a module unless: every table lies inside the module; every instruction is
+known and complete; registers are below the function's count, variables inside the class,
+constants, states, functions and API entries exist; arguments fit; jumps land on instructions;
+no function can run off its end; latent functions and `STOP` only appear in state code and
+`RET` only outside; events and state code are functions of their class without parameters.
+At run time an instruction budget (4000 per call) stops endless loops and a depth limit stops
+endless recursion; the object then stops running scripts and the error names the source line.
+
 ## History
 
 - 0.1: first draft.
+- 0.2: the implemented subset, the API table, the bytecode module and its verification.

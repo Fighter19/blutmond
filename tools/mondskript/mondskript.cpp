@@ -1283,6 +1283,22 @@ bool isBuiltin(const std::string &word)
   return false;
 }
 
+std::vector<std::string> apiReference()
+{
+  std::vector<std::string> out;
+  for (const ApiDef &a : kApi)
+  {
+    std::string line = std::string(a.result == BM_SCRIPT_VOID ? "" : std::string(typeName(a.result)) + " ") + a.name + "(";
+    for (int i = 0; i < a.argc; i++) line += std::string(i ? ", " : "") + typeName(a.args[i]);
+    line += ")";
+    if (a.latent) line += "  - takes time: only in state code";
+    out.push_back(line);
+  }
+  for (const VarDef &v : kVars) out.push_back(std::string(typeName(v.type)) + " " + v.name + (v.writable ? "" : "  - read only"));
+  for (const char *e : kEvents) out.push_back(std::string("event ") + e + "()");
+  return out;
+}
+
 Source readSource(const std::string &path)
 {
   std::ifstream in(path, std::ios::binary);

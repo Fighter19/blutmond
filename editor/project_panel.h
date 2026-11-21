@@ -29,6 +29,8 @@ public:
   std::function<void(int)> roomPicked;
   /// A sprite file was picked: show it in the Animation tab.
   std::function<void(const std::string &path)> spritePicked;
+  /// A script file was picked: show it in the Script tab.
+  std::function<void(const std::string &path)> scriptPicked;
   /// Assets were added or removed (the set of sprites may have changed).
   std::function<void()> assetsChanged;
   std::function<void(const std::string &line, bool error)> log;

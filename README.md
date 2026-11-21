@@ -11,7 +11,8 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `src/core/` | platform-independent core: devices and memory heaps, pools, types |
 | `src/graphics/` | graphics API: video (modes, backgrounds, palettes, tiles, maps, sprites, line tables), backdrop, tilemaps |
 | `src/pack/` | packs: reader (ROM/RAM, in place), writer for tools, CRC-32 |
-| `src/world/` | rooms from packs (graphics layers, map streaming), collision, platformer physics, the game loop for the engine classes (player, camera, kill zones, doors, save points), the state schema and save states |
+| `src/world/` | rooms from packs (graphics layers, map streaming), collision, platformer physics, sprites and animations, the game loop for the engine classes (player, camera, kill zones, doors, save points), scripted objects, the state schema and save states |
+| `src/script/` | the bytecode interpreter for Mondskript with its verifier, and the table of what scripts can call |
 | `src/link/` | live link: protocol (both sides), the runtime's live reload module, the PC side's pack push |
 | `src/ppu/` | software PPU: renders the GBA video state in C; reference for tests, host back end, PPU snapshots |
 | `src/hal/public/hal.h` | hardware abstraction layer: the only interface to a platform |
@@ -22,7 +23,7 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `assets/` | `engine/` (Tiled tilesets for collision and materials), `test_room/` (own test room) |
 | `third_party/` | `stb_image.h` (public domain), used by the cooker |
 | `tests/` | host tests |
-| `tools/` | `cooker/` (`bmcook`: Tiled rooms to packs), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_ppu_render.c` (renders a snapshot), `compare_images.py`, `bmlink/` (live link to a running game: Xboo cable, the PC game over TCP, or mGBA) |
+| `tools/` | `cooker/` (`bmcook`: rooms, sprites and scripts to packs), `mondskript/` (the script compiler), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_ppu_render.c` (renders a snapshot), `compare_images.py`, `bmlink/` (live link to a running game: Xboo cable, the PC game over TCP, or mGBA) |
 
 Hardware addresses may only appear in `src/hal/gba/`; a test checks this.
 
@@ -99,6 +100,13 @@ changes, so it can run next to Tiled.
   frame shown for a number of game frames). The preview plays from the cooked sprite and shows
   the hardware sprite pieces and what the sprite costs. Edits are saved to the `.bmsprite`
   file and, with Live on, pushed into the running game.
+- **Script** (centre tab): the project's Mondskript files
+  ([docs/spec/mondskript.md](docs/spec/mondskript.md)) in a code editor. All scripts are
+  compiled while typing; problems are marked on their lines and listed (click to go there),
+  the outline shows the class as the runtime gets it, and a list shows what scripts can call.
+  Files are saved shortly after an edit; when everything compiles and Live is on, the running
+  game gets the new scripts. Objects in a room whose class has a script run it; New script
+  starts one from a template.
 - **Graphics** (centre tab): what is loaded in video memory and how much of the hardware it
   takes: all 96 KB of VRAM as tiles with the maps of each background, overlaps in red and data
   nothing shows; the backgrounds, the sprites in OAM, both palettes, sprite time per line, and
@@ -123,7 +131,8 @@ Cooking rooms by hand:
 ```
 build/bmcook --profile gba --report report.txt -o room.bmpk assets/test_room/room.tmx
 build/room_viewer room.bmpk --frames 200 out.ppm
-build/bmcook -o level.bmpk assets/test_room/room.tmx assets/test_room/room2.tmx
+build/bmcook -o level.bmpk assets/test_room/room.tmx assets/test_room/room2.tmx \
+  assets/test_room/*.bmsprite assets/test_room/scripts/*.ms
 build/game level.bmpk --autoplay --trace --frames 700
 ```
 

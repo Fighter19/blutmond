@@ -26,8 +26,8 @@
 #define CONTENT_SIZE (64 * 1024)
 #define WORDS_PER_FRAME 128   // about 30 KB/s at 60 frames per second
 
-static uint8_t *s_level, *s_variant;
-static uint32_t s_levelSize, s_variantSize;
+static uint8_t *s_level, *s_variant, *s_scripts;
+static uint32_t s_levelSize, s_variantSize, s_scriptsSize;
 
 static BmPack s_pack;
 static BmGame s_game;
@@ -257,6 +257,33 @@ static uint8_t *readFile(const char *path, uint32_t *pSize)
   return p;
 }
 
+// Changed scripts pushed into the running game: only the module (and the strings) travel, the
+// scripted objects start anew with the new code, and the game goes on.
+static void testScriptsArePushedLive(void)
+{
+  if (s_scripts == NULL) return;
+  BmLinkMaster m;
+  start(&m);
+  uint32_t hashBefore = s_game.actors.moduleHash;
+  TEST_ASSERT(s_game.actors.hasModule && hashBefore != 0);
+  BmLiveRemote remote;
+  TEST_ASSERT(bmLiveMasterHello(&m, &remote));
+  BmLivePushStats st;
+  TEST_ASSERT(bmLiveMasterPushPack(&m, s_scripts, s_scriptsSize, 77, &remote, &st));
+  BmLiveStatus status;
+  TEST_ASSERT(bmLiveMasterApply(&m, 77, BM_LIVE_HOT, NULL, &status));
+  if (status.result != BM_LIVE_OK) printf("    apply: result %u\n", status.result);
+  TEST_ASSERT(status.result == BM_LIVE_OK);
+  printf("    %u chunks sent (%u bytes), %u already there\n", (unsigned)st.chunksSent, (unsigned)st.bytesSent, (unsigned)st.chunksResident);
+  TEST_ASSERT(st.chunksSent <= 2);
+  TEST_ASSERT(s_game.actors.hasModule && s_game.actors.moduleHash != hashBefore);
+  // With the changed door script the autopilot reaches the door but stays in the first room.
+  for (int i = 0; i < 900; i++) frame();
+  TEST_ASSERT(s_game.roomChanges == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+  bmLinkMasterFree(&m);
+}
+
 static void testPpuSnapshot(void)
 {
   BmLinkMaster m;
@@ -284,6 +311,7 @@ int main(int argc, char **argv)
   if (argc < 3) { fprintf(stderr, "usage: test_live <level.bmpk> <variant.bmpk>\n"); return 2; }
   s_level = readFile(argv[1], &s_levelSize);
   s_variant = readFile(argv[2], &s_variantSize);
+  if (argc > 3) s_scripts = readFile(argv[3], &s_scriptsSize);
   if (s_level == NULL || s_variant == NULL) { fprintf(stderr, "cannot read the packs\n"); return 2; }
   RUN_TEST(testHello);
   RUN_TEST(testHotReloadKeepsTheGameGoing);
@@ -292,6 +320,7 @@ int main(int argc, char **argv)
   RUN_TEST(testFailedTransferLeavesTheGameAlone);
   RUN_TEST(testPushWithBitErrors);
   RUN_TEST(testPpuSnapshot);
+  RUN_TEST(testScriptsArePushedLive);
   free(s_level);
   free(s_variant);
   return TEST_RESULT();

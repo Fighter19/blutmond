@@ -26,12 +26,14 @@
 
 #include "platform/sdl3/ui_sdl3.h"
 #include "animation_panel.h"
+#include "code_edit.h"
 #include "dialogs.h"
 #include "graphics_view.h"
 #include "palette_panel.h"
 #include "project.h"
 #include "project_panel.h"
 #include "runner.h"
+#include "script_panel.h"
 #include "ui/containers.h"
 #include "ui/lists.h"
 #include "ui/loader.h"
@@ -56,6 +58,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
       <Item action="project.open"/><Item action="project.save_as"/>
       <Item action="room.new"/><Item action="room.add"/><Item action="room.remove"/>
       <Item action="sprite.new"/>
+      <Item action="script.new"/>
       <Item action="asset.import"/><Item action="asset.open"/><Item action="asset.delete"/>
       <Item action="room.reload"/><Item action="app.quit"/>
     </Menu>
@@ -90,11 +93,11 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
           <Button text="Delete" action="asset.delete"/>
           <Button text="Rescan" action="project.refresh"/>
         </Flow>
-        <ItemList id="asset_info" min-size="0 120"/>
+        <Scroll min-size="0 120"><ItemList id="asset_info"/></Scroll>
       </VBox>
       <VBox title="State">
         <Label id="state_totals" text="" clip-text="1"/>
-        <ItemList id="state" expand="1"/>
+        <Scroll expand="1"><ItemList id="state"/></Scroll>
       </VBox>
     </TabContainer></PanelContainer>
     <VBox expand="1">
@@ -119,7 +122,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
               <OptionButton id="colour_scope" expand="1" items="Only for this profile;For all profiles"/>
               <Button id="colour_reset" text="Reset"/>
             </HBox>
-            <ItemList id="colour_sources" min-size="0 80"/>
+            <Scroll min-size="0 80"><ItemList id="colour_sources"/></Scroll>
             <Label text="Hardware (this room, cooked)" bold="1"/>
             <Label id="hw_tiles" text="Tiles"/>
             <ProgressBar id="hw_tiles_bar"/>
@@ -173,14 +176,14 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
             </VBox>
             <PanelContainer min-width="300"><VBox>
               <Label text="Animations" bold="1"/>
-              <ItemList id="anim_list" min-size="0 150"/>
+              <Scroll min-size="0 150"><ItemList id="anim_list"/></Scroll>
               <HBox>
                 <LineEdit id="anim_name" expand="1"/>
                 <CheckBox id="anim_loop" text="Loop"/>
               </HBox>
               <HBox><Button id="anim_add" text="New animation"/><Button id="anim_delete" text="Delete"/></HBox>
               <Label text="Steps" bold="1"/>
-              <ItemList id="anim_steps" expand="1" min-size="0 120"/>
+              <Scroll expand="1" min-size="0 120"><ItemList id="anim_steps"/></Scroll>
               <HBox><Label text="Shown for"/><SpinBox id="anim_duration" expand="1"/><Label text="frames"/></HBox>
               <Flow>
                 <Button id="anim_step_add" text="Add selected frame"/>
@@ -188,6 +191,29 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
                 <Button id="anim_step_up" text="Up"/>
                 <Button id="anim_step_down" text="Down"/>
               </Flow>
+            </VBox></PanelContainer>
+          </HBox>
+        </VBox>
+        <VBox title="Script" separation="0">
+          <PanelContainer theme-type="Toolbar"><HBox>
+            <Label text="Script"/>
+            <OptionButton id="script_file"/>
+            <Button text="New script" action="script.new"/>
+            <Label id="script_status" text="" expand="1" clip-text="1"/>
+          </HBox></PanelContainer>
+          <HBox expand="1" separation="2">
+            <VBox expand="1">
+              <CodeEdit id="script_code" expand="1"/>
+              <PanelContainer><VBox>
+                <Label text="Problems (click to go there)" bold="1"/>
+                <Scroll min-size="0 64"><ItemList id="script_problems"/></Scroll>
+              </VBox></PanelContainer>
+            </VBox>
+            <PanelContainer min-width="330"><VBox>
+              <Label text="Class" bold="1"/>
+              <Scroll expand="1" min-size="0 120"><ItemList id="script_outline"/></Scroll>
+              <Label text="What scripts can use" bold="1"/>
+              <Scroll expand="1" min-size="0 120"><ItemList id="script_reference"/></Scroll>
             </VBox></PanelContainer>
           </HBox>
         </VBox>
@@ -226,11 +252,11 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
       <HBox separation="2">
         <PanelContainer expand="1"><VBox>
           <Label text="Report" bold="1"/>
-          <ItemList id="report" min-size="0 110"/>
+          <Scroll min-size="0 110"><ItemList id="report"/></Scroll>
         </VBox></PanelContainer>
         <PanelContainer expand="1"><VBox>
           <Label text="Messages" bold="1"/>
-          <ItemList id="runlog" min-size="0 110"/>
+          <Scroll min-size="0 110"><ItemList id="runlog"/></Scroll>
         </VBox></PanelContainer>
       </HBox>
     </VBox>
@@ -250,6 +276,7 @@ struct Editor
   ProjectFile projectFile;  // as loaded at start
   PalettePanel palettePanel;
   AnimationPanel animationPanel;
+  ScriptPanel scriptPanel;
   Label *status = nullptr, *camera = nullptr;
   Label *hwTiles = nullptr, *hwBanks = nullptr, *hwMaps = nullptr, *hwLayers = nullptr, *hwPack = nullptr;
   ProgressBar *hwTilesBar = nullptr, *hwBanksBar = nullptr, *hwMapsBar = nullptr;
@@ -393,6 +420,13 @@ struct Editor
     std::vector<std::string> sprites = spritePaths(projectPanel.catalog());
     project.setSprites(sprites);
     animationPanel.setSprites(sprites);
+    std::vector<std::string> scripts = scriptPaths(projectPanel.catalog());
+    project.setScripts(scripts);
+    scriptPanel.setScripts(scripts);
+    // New scripts go next to the existing ones, or into "scripts" in the first asset folder.
+    if (!scripts.empty()) scriptPanel.scriptDir = std::filesystem::path(scripts[0]).parent_path().string();
+    else if (!projectPanel.file().assetDirs.empty())
+      scriptPanel.scriptDir = (std::filesystem::path(projectPanel.file().assetDirs[0]) / "scripts").string();
   }
 
   // The room list of the project changed: keep the room that was shown, if it is still there.
@@ -468,6 +502,8 @@ struct Editor
     ui.actions().add({"asset.delete", "Delete asset...", "trash", "", "", [this] { projectPanel.deleteSelected(); }, nullptr, nullptr});
     registerGraphicsControls();
     registerAnimationControls();
+    registerControlType("CodeEdit", [] { return std::make_unique<CodeEdit>(); });
+    ui.actions().add({"script.new", "New script...", "terminal", "", "", [this] { scriptPanel.newScript(); }, nullptr, nullptr});
     ui.actions().add({"sprite.new", "New sprite...", "film", "", "", [this] { projectPanel.newSprite(); }, nullptr, nullptr});
     ui.actions().add({"gfx.capture", "Capture the running game's graphics", "eye", "F8", "", [this] {
                         graphicsFromGame = true;
@@ -514,6 +550,17 @@ struct Editor
       if (auto *center = app.ui().root() ? app.ui().root()->findAs<TabContainer>("center") : nullptr) center->setCurrent(1);
     };
     projectPanel.assetsChanged = [this] { spritesChanged(); };
+    scriptPanel.bind(*root, ui);
+    scriptPanel.log = projectPanel.log;
+    scriptPanel.changed = [this] { pushLive(); };
+    scriptPanel.created = [this] {
+      projectPanel.refresh();
+      spritesChanged();
+    };
+    projectPanel.scriptPicked = [this](const std::string &path) {
+      if (scriptPanel.path() != path) scriptPanel.open(path);
+      if (auto *center = app.ui().root() ? app.ui().root()->findAs<TabContainer>("center") : nullptr) center->setCurrent(2);
+    };
     palettePanel.bind(*root, project);
     palettePanel.catalog = &projectPanel.catalog();
     palettePanel.log = projectPanel.log;
@@ -570,6 +617,7 @@ struct Editor
     pollFileDialogs();
     palettePanel.update(dt);
     animationPanel.update(dt);
+    scriptPanel.update(dt);
     reloadTimer += dt;
     if (reloadTimer > 1.0f)
     {

@@ -62,6 +62,9 @@ Source readSource(const std::string &path);
 
 const char *typeName(BmScriptType type);
 
+/// What scripts can call and read, one line each ("sleep(int)  takes time"), for the editor.
+std::vector<std::string> apiReference();
+
 /// The words of the language, for syntax colouring.
 bool isKeyword(const std::string &word);
 bool isTypeName(const std::string &word);
