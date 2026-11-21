@@ -82,6 +82,15 @@ uint32_t bmHalCycles(void)
   return 0;
 }
 
+// The PC build is debugged with the PC's debugger.
+bool bmHalDebugInit(BmHalDebugHandler handler, void *pContext) { (void)handler; (void)pContext; return false; }
+bool bmHalDebugSetBreak(uint32_t slot, uint32_t address) { (void)slot; (void)address; return false; }
+void bmHalDebugClearBreak(uint32_t slot) { (void)slot; }
+void bmHalDebugClearAll(void) {}
+void bmHalDebugBreak(void) {}
+bool bmHalDebugRead(uint32_t address, void *pOut, uint32_t size) { (void)address; (void)pOut; (void)size; return false; }
+bool bmHalDebugWrite(uint32_t address, const void *pIn, uint32_t size) { (void)address; (void)pIn; (void)size; return false; }
+
 // Sound: the buffers the program fills, and a short queue of frames for whoever plays them.
 #define AUDIO_QUEUE 8
 static int8_t s_audio[2][BM_HAL_AUDIO_FRAME_SAMPLES];

@@ -14,6 +14,8 @@ BM_IWRAM_CODE static uint32_t exchange(void *pContext, uint32_t received)
   return bmLinkSlaveExchange(&((BmLive *)pContext)->slave, received);
 }
 
+static void debugStopped(void *pContext, BmHalDebugRegs *pRegs, int slot);
+
 void bmLiveInit(BmLive *l, const BmLiveHooks *pHooks, uint8_t *pBuffer0, uint8_t *pBuffer1, uint32_t capacity,
                 const BmPack *pPack)
 {
@@ -29,6 +31,8 @@ void bmLiveInit(BmLive *l, const BmLiveHooks *pHooks, uint8_t *pBuffer0, uint8_t
   l->regions[1] = (BmLiveRegion){ "content 0", pBuffer0, capacity, BM_REGION_CONTENT };
   l->regions[2] = (BmLiveRegion){ "content 1", pBuffer1, capacity, BM_REGION_CONTENT };
   l->regions[3] = (BmLiveRegion){ "state put", l->statePut, sizeof(l->statePut), BM_REGION_CONTENT };
+  l->debugSlot = -1;
+  l->debugAvailable = bmHalDebugInit(debugStopped, l);
 }
 
 void bmLiveStart(BmLive *l)
@@ -254,6 +258,123 @@ static bool handleApply(BmLive *l, const BmLinkPacket *p)
   return true;
 }
 
+// --- Debugging (link-protocol.md §8) --------------------------------------------------------
+
+static bool debugAnswer(BmLive *l, uint8_t command, uint8_t result, uint8_t slot, const void *pData, uint16_t length)
+{
+  uint32_t lock = bmHalLinkLock();
+  BmLinkPacket *p = bmLinkSlaveSendBegin(&l->slave);
+  bmHalLinkUnlock(lock);
+  if (p == NULL) return false;
+  p->type = BM_LINK_GDB;
+  p->length = (uint16_t)(BM_LIVE_DEBUG_HEADER + length);
+  p->payload[0] = command;
+  p->payload[1] = result;
+  p->payload[2] = slot;
+  p->payload[3] = 0;
+  if (length != 0) memcpy(p->payload + BM_LIVE_DEBUG_HEADER, pData, length);
+  lock = bmHalLinkLock();
+  bmLinkSlaveSendCommit(&l->slave);
+  bmHalLinkUnlock(lock);
+  return true;
+}
+
+/// One debugger command; false if the answer has to wait for room.
+static bool handleDebug(BmLive *l, const BmLinkPacket *p)
+{
+  if (p->length < 1) return true;
+  uint8_t command = p->payload[0], slot = p->length > 2 ? p->payload[2] : 0;
+  uint32_t address = p->length >= 8 ? bmLinkGet32(p->payload + 4) : 0;
+  if (!l->debugAvailable && command != BM_DEBUG_INFO) return debugAnswer(l, command, BM_DEBUG_ERROR_UNSUPPORTED, 0, NULL, 0);
+  switch (command)
+  {
+  case BM_DEBUG_INFO:
+  {
+    uint8_t info[4] = { l->debugStopped, BM_HAL_DEBUG_SLOTS, l->debugAvailable, 0 };
+    return debugAnswer(l, command, BM_DEBUG_OK, 0, info, sizeof(info));
+  }
+  case BM_DEBUG_HALT:
+    if (l->debugStopped) l->debugNotify = true;   // it is: say so again
+    else l->debugHalt = true;
+    return true;
+  case BM_DEBUG_CONTINUE:
+    if (!debugAnswer(l, command, l->debugStopped ? BM_DEBUG_OK : BM_DEBUG_ERROR_RUNNING, 0, NULL, 0)) return false;
+    l->debugStopped = false;
+    return true;
+  case BM_DEBUG_READ_REGS:
+  {
+    uint8_t out[17 * 4];
+    if (!l->debugStopped) return debugAnswer(l, command, BM_DEBUG_ERROR_RUNNING, 0, NULL, 0);
+    for (uint32_t i = 0; i < 16; i++) bmLinkPut32(out + i * 4, l->pDebugRegs->r[i]);
+    bmLinkPut32(out + 64, l->pDebugRegs->cpsr);
+    return debugAnswer(l, command, BM_DEBUG_OK, 0, out, sizeof(out));
+  }
+  case BM_DEBUG_WRITE_REGS:
+    // Writing is done before the answer: if the answer has to wait, doing it again is harmless.
+    if (!l->debugStopped || p->length < BM_LIVE_DEBUG_HEADER + 17 * 4) return debugAnswer(l, command, BM_DEBUG_ERROR_RUNNING, 0, NULL, 0);
+    for (uint32_t i = 0; i < 16; i++) l->pDebugRegs->r[i] = bmLinkGet32(p->payload + BM_LIVE_DEBUG_HEADER + i * 4);
+    l->pDebugRegs->cpsr = bmLinkGet32(p->payload + BM_LIVE_DEBUG_HEADER + 64);
+    return debugAnswer(l, command, BM_DEBUG_OK, 0, NULL, 0);
+  case BM_DEBUG_READ_MEM:
+  {
+    uint8_t data[BM_LIVE_DEBUG_DATA_MAX];
+    uint32_t length = p->length >= 10 ? bmLinkGet16(p->payload + 8) : 0;
+    if (length > sizeof(data) || !bmHalDebugRead(address, data, length)) return debugAnswer(l, command, BM_DEBUG_ERROR_MEMORY, 0, NULL, 0);
+    return debugAnswer(l, command, BM_DEBUG_OK, 0, data, (uint16_t)length);
+  }
+  case BM_DEBUG_WRITE_MEM:
+    return debugAnswer(l, command, p->length > 8 && bmHalDebugWrite(address, p->payload + 8, p->length - 8u) ? BM_DEBUG_OK : BM_DEBUG_ERROR_MEMORY, 0, NULL, 0);
+  case BM_DEBUG_SET_BREAK:
+    // Setting it twice is harmless: the slot is cleared first.
+    return debugAnswer(l, command, p->length >= 8 && bmHalDebugSetBreak(slot, address) ? BM_DEBUG_OK : BM_DEBUG_ERROR_MEMORY, slot, NULL, 0);
+  case BM_DEBUG_CLEAR_BREAK:
+    bmHalDebugClearBreak(slot);
+    return debugAnswer(l, command, BM_DEBUG_OK, slot, NULL, 0);
+  default:
+    return debugAnswer(l, command, BM_DEBUG_ERROR_UNSUPPORTED, 0, NULL, 0);
+  }
+}
+
+static void dropPending(BmLive *l, BmLinkPacket *p)
+{
+  uint32_t lock = bmHalLinkLock();
+  uint32_t i = 0;
+  while (i < l->pendingCount && l->pending[i] != p) i++;
+  if (i < l->pendingCount)
+  {
+    l->pendingCount--;
+    for (; i < l->pendingCount; i++) l->pending[i] = l->pending[i + 1];
+    bmLinkSlaveRelease(&l->slave, p);
+  }
+  bmHalLinkUnlock(lock);
+}
+
+// The program is stopped (hal.h): tell the debugger and do what it asks until it says
+// continue. The serial interrupt keeps receiving; anything but debugger commands waits.
+static void debugStopped(void *pContext, BmHalDebugRegs *pRegs, int slot)
+{
+  BmLive *l = pContext;
+  l->pDebugRegs = pRegs;
+  l->debugSlot = (int8_t)slot;
+  l->debugStopped = true;
+  l->debugNotify = true;
+  l->debugStops++;
+  while (l->debugStopped)
+  {
+    if (l->debugNotify && debugAnswer(l, BM_DEBUG_STOPPED, slot >= 0, (uint8_t)slot, NULL, 0)) l->debugNotify = false;
+    uint32_t lock = bmHalLinkLock();
+    BmLinkPacket *p = NULL;
+    for (uint32_t i = 0; i < l->pendingCount && p == NULL; i++)
+    {
+      if (l->pending[i]->type == BM_LINK_GDB) p = l->pending[i];
+    }
+    bmHalLinkUnlock(lock);
+    if (p != NULL && handleDebug(l, p)) dropPending(l, p);
+  }
+  l->pDebugRegs = NULL;
+  l->debugSlot = -1;
+}
+
 /// Handles one received packet; false if it has to wait (no room to answer yet).
 static bool handle(BmLive *l, const BmLinkPacket *p)
 {
@@ -288,6 +409,8 @@ static bool handle(BmLive *l, const BmLinkPacket *p)
     return sendState(l, p->length >= 1 ? p->payload[0] : BM_STATE_SNAPSHOT);
   case BM_LINK_APPLY:
     return handleApply(l, p);
+  case BM_LINK_GDB:
+    return handleDebug(l, p);
   case BM_LINK_PPU_SNAPSHOT:
   {
     uint32_t offset = p->length >= 4 ? bmLinkGet32(p->payload) : 0;
@@ -334,11 +457,12 @@ void bmLiveFrame(BmLive *l)
     BmLinkPacket *p = l->pendingCount != 0 ? l->pending[0] : NULL;
     bmHalLinkUnlock(lock);
     if (p == NULL || !handle(l, p)) break;
-    lock = bmHalLinkLock();
-    l->pendingCount--;
-    for (uint32_t i = 0; i < l->pendingCount; i++) l->pending[i] = l->pending[i + 1];
-    bmLinkSlaveRelease(&l->slave, p);
-    bmHalLinkUnlock(lock);
+    dropPending(l, p);
+  }
+  if (l->debugHalt)
+  {
+    l->debugHalt = false;
+    bmHalDebugBreak();
   }
   pumpSnapshot(l);
 }

@@ -174,6 +174,15 @@ build/bmlink --tcp 7414 push level.bmpk hot      # the PC game in its window
 build/bmlink --tcp 7414 ppu-snapshot vram.bmps   # its video state (build/bm_ppu_render renders it)
 ```
 
+GDB on the running GBA game, with breakpoints on script lines (the scripts built as a native
+module, see above; [docs/spec/link-protocol.md](docs/spec/link-protocol.md) §8):
+
+```
+build/bmlink --xboo /dev/parport0 gdb 2345
+arm-none-eabi-gdb build-gba/game.elf -ex "target remote :2345" \
+  -ex "add-symbol-file scripts.elf &bm_native_slot" -ex "break bat.ms:14"
+```
+
 The comment at the top of `tools/bmlink/bmlink.c` lists all commands. `--adaptive` tunes the
 per-word delay and remembers it per device.
 

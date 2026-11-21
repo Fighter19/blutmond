@@ -13,6 +13,7 @@
 // receive buffers; bmLiveFrame, called once per frame, works through them in order. So the
 // interrupt stays short enough not to miss words; a slow frame only delays acknowledgements.
 
+#include "hal.h"
 #include "link.h"
 #include "pack.h"
 #include "state.h"
@@ -100,6 +101,15 @@ typedef struct BmLive
   // has room (a few per frame).
   uint32_t snapshotOffset, snapshotEnd;
 
+  // Debugging (link-protocol.md §8).
+  bool debugAvailable;        // the device can be stopped (bmHalDebugInit)
+  bool debugStopped;          // the program is stopped; only GDB packets are handled
+  bool debugHalt;             // stop at the next frame boundary
+  bool debugNotify;           // the "stopped" packet is still to be sent
+  int8_t debugSlot;           // the breakpoint it stopped at, or -1
+  BmHalDebugRegs *pDebugRegs; // while stopped
+  uint32_t debugStops;        // times the program stopped (for tests)
+
   BmLiveRegion regions[BM_LIVE_REGIONS];
   uint32_t applied, chunksCopied, chunksReceived;
 } BmLive;
@@ -140,6 +150,24 @@ bool bmLiveLog(BmLive *pLive, const char *pText);
 /// u32 total size, then data.
 #define BM_LIVE_SNAPSHOT_HEADER 8
 #define BM_LIVE_SNAPSHOT_DATA_MAX (BM_LINK_MAX_PAYLOAD - BM_LIVE_SNAPSHOT_HEADER)
+
+/// GDB (debugging): byte 0 is the command, byte 1 of an answer its result (0: done), byte 2
+/// a breakpoint slot, data from byte 4 (link-protocol.md §8).
+#define BM_LIVE_DEBUG_HEADER 4
+#define BM_LIVE_DEBUG_DATA_MAX 512
+enum {
+  BM_DEBUG_INFO = 'i',       // answer: byte 1 stopped, byte 2 breakpoint slots, byte 3 can stop
+  BM_DEBUG_HALT = 'h',       // stop at the next frame boundary; answered by STOPPED
+  BM_DEBUG_CONTINUE = 'c',
+  BM_DEBUG_READ_REGS = 'g',  // answer: r0-r15, cpsr (17 words)
+  BM_DEBUG_WRITE_REGS = 'G',
+  BM_DEBUG_READ_MEM = 'm',   // u32 address at 4, u16 length at 8
+  BM_DEBUG_WRITE_MEM = 'M',  // u32 address at 4, data from 8
+  BM_DEBUG_SET_BREAK = 'Z',  // slot in byte 2, u32 address at 4
+  BM_DEBUG_CLEAR_BREAK = 'z',
+  BM_DEBUG_STOPPED = 'S',    // from the runtime: byte 1 the reason (0 asked to, 1 breakpoint), byte 2 the slot
+};
+enum { BM_DEBUG_OK = 0, BM_DEBUG_ERROR_RUNNING = 1, BM_DEBUG_ERROR_MEMORY = 2, BM_DEBUG_ERROR_UNSUPPORTED = 3 };
 
 /// HELLO answer, fixed part (followed by `hashCount` pairs of u32 hash and u32 size).
 typedef struct BmLiveHello

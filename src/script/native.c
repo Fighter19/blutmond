@@ -13,12 +13,13 @@
 #else
 #define SLOT_SIZE 16   // nothing can be loaded on this machine
 #endif
-static uint32_t s_slot[SLOT_SIZE / 4];
+// Not static: a debugger loads the module's symbols at this address.
+uint32_t bm_native_slot[SLOT_SIZE / 4];
 
 void *bmVmNativeSlot(uint32_t *pSize)
 {
-  if (pSize != NULL) *pSize = sizeof(s_slot);
-  return s_slot;
+  if (pSize != NULL) *pSize = sizeof(bm_native_slot);
+  return bm_native_slot;
 }
 
 static uint32_t rd32(const uint8_t *p)

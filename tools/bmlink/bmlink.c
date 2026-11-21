@@ -34,10 +34,13 @@
 //   screenshot <file.ppm> mGBA
 //   ppu-snapshot <file.bmps>   the video state (VRAM, palettes, OAM, registers) as a PPU
 //                         snapshot, for the editor's graphics view and bm_ppu_render
+//   gdb <port>            a GDB server for the running game (link-protocol.md section 8) until
+//                         the debugger detaches; gdb-verbose also prints the packets
 //   stats                 link counters
 
 #include "link_master.h"
 #include "live_master.h"
+#include "gdb_bridge.h"
 #include "tcp_link.h"
 #include "xboo.h"
 #ifdef BM_HAVE_MGBA
@@ -367,6 +370,11 @@ int main(int argc, char **argv)
         haveRemote = false;
       }
       free(image);
+    }
+    else if ((strcmp(cmd, "gdb") == 0 || strcmp(cmd, "gdb-verbose") == 0) && a1 != NULL)
+    {
+      // A GDB server for this game until the debugger detaches.
+      if (!bmGdbBridgeRun(&m, (uint16_t)atoi(argv[++i]), strcmp(cmd, "gdb-verbose") == 0)) failed = 1;
     }
     else if (strcmp(cmd, "reset") == 0)
     {

@@ -48,7 +48,7 @@ set(BM_SOUND_SOURCES src/sound/sound.c)
 
 if(BM_PLATFORM STREQUAL "gba")
   # The software PPU is not needed on the device; only its register definitions are used.
-  set(BM_HAL_SOURCES src/hal/gba/hal_gba.c src/hal/gba/irq.S)
+  set(BM_HAL_SOURCES src/hal/gba/hal_gba.c src/hal/gba/irq.S src/hal/gba/debug.c src/hal/gba/debug_trap.S)
   set(BM_HAL_DIR src/hal/gba)
 else()
   set(BM_HAL_SOURCES src/hal/host/hal_host.c src/ppu/ppu.c)
@@ -154,6 +154,7 @@ if(BM_PLATFORM STREQUAL "gba")
       ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
     DEPENDS host_tools ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
+      ${PROJECT_SOURCE_DIR}/tools/mondskript/aot.cpp ${PROJECT_SOURCE_DIR}/tools/cooker/native_module.cpp
     COMMENT "Cooking the test level with native scripts")
   add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
 
@@ -324,7 +325,7 @@ if(BM_PLATFORM STREQUAL "host")
     endif()
   endif()
   if(NOT BM_HAVE_MGBA)
-    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c tools/bmlink/tcp_link.c)
+    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c tools/bmlink/tcp_link.c tools/bmlink/gdb_bridge.c)
     target_include_directories(bmlink PRIVATE tools tools/bmlink)
     target_link_libraries(bmlink PRIVATE bm_link_host)
     target_compile_definitions(bmlink PRIVATE _GNU_SOURCE)
@@ -356,6 +357,12 @@ if(BM_PLATFORM STREQUAL "host")
     target_link_libraries(test_script PRIVATE ${CMAKE_DL_LIBS})
   endif()
   add_test(NAME test_script COMMAND test_script)
+  add_executable(test_gdb_step tests/test_gdb_step.c tools/bmlink/gdb_bridge.c)
+  target_link_libraries(test_gdb_step PRIVATE bm_link_host)
+  target_include_directories(test_gdb_step PRIVATE tests tools/bmlink)
+  target_compile_definitions(test_gdb_step PRIVATE _GNU_SOURCE)
+  target_compile_options(test_gdb_step PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_gdb_step COMMAND test_gdb_step)
   # With an ARM compiler around: the cooker's native modules through the real tool chain.
   find_program(BM_ARM_GCC arm-none-eabi-gcc)
   if(BM_ARM_GCC)
@@ -474,7 +481,7 @@ if(BM_PLATFORM STREQUAL "host")
     # The libmgba headers need POSIX definitions such as PATH_MAX.
     target_compile_definitions(bm_mgba_run PRIVATE _GNU_SOURCE)
 
-    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c tools/bmlink/tcp_link.c tools/bmlink/mgba_link.c)
+    add_executable(bmlink tools/bmlink/bmlink.c tools/bmlink/xboo.c tools/bmlink/tcp_link.c tools/bmlink/gdb_bridge.c tools/bmlink/mgba_link.c)
     target_include_directories(bmlink PRIVATE ${MGBA_INCLUDE_DIR} tools tools/bmlink)
     target_link_libraries(bmlink PRIVATE bm_link_host ${MGBA_LIBRARY})
     target_compile_definitions(bmlink PRIVATE _GNU_SOURCE BM_HAVE_MGBA)
@@ -599,6 +606,19 @@ if(BM_PLATFORM STREQUAL "host")
           push ${cooked}/test_level_variant_gba.bmpk hot run 1300
           check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+8=0 check ${elf}:bm_game_stats+12=1 check ${elf}:bm_game_stats+56=0 stats)
       set_tests_properties(native_live_push_interprets PROPERTIES FIXTURES_REQUIRED test_level_variant)
+      # The debugger (docs/spec/link-protocol.md section 8): a session in GDB's remote protocol
+      # against the game in mGBA: stop, a breakpoint on a script line found through the native
+      # module's debug information, registers, memory, single steps, Ctrl-C, detach; then the
+      # game plays on to its end.
+      find_package(Python3 COMPONENTS Interpreter)
+      find_program(BM_ARM_READELF arm-none-eabi-readelf)
+      if(Python3_FOUND AND BM_ARM_READELF)
+        add_test(NAME gdb_session_script_breakpoint
+          COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/gdb_session.py $<TARGET_FILE:bmlink>
+            ${BM_GBA_BUILD_DIR}/game_autoplay_native.gba ${BM_GBA_BUILD_DIR}/game_autoplay_native.elf
+            ${BM_GBA_BUILD_DIR}/test_level_native.elf assets/test_room/scripts/bat.ms 14)
+        set_tests_properties(gdb_session_script_breakpoint PROPERTIES TIMEOUT 120)
+      endif()
       # Native code takes at most 60 % of the interpreter's time for the benchmark script (from
       # ROM about 35 %), with the same result.
       foreach(image script_bench script_bench_mb)

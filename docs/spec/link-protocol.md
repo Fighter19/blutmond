@@ -1,6 +1,6 @@
 # Link protocol
 
-Version 0.2, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
+Version 0.3, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
 
 How the editor (or another GBA) talks to a running Blutmond runtime: booting it, sending
 content, reading state and logs, debugging. Requirement: **wherever xcomms can boot a GBA over
@@ -119,7 +119,7 @@ polling for window acknowledgements, so it needs no round trip of its own.
 | 0x31 | `PROFILE` | S → M | profiler zones and cycle counts for the last frame(s) |
 | 0x32 | `PPU_SNAPSHOT` | both | request (M → S) and data (S → M): registers, VRAM, palettes, OAM, line table |
 | 0x38 | `MEM_READ`, 0x39 `MEM_WRITE` | M → S | debug builds only |
-| 0x40 | `GDB` | both | GDB remote serial protocol data, tunnelled |
+| 0x40 | `GDB` | both | debugger commands and answers (section 8) |
 | 0x50 | `WATCHDOG` | S → M | frame counter and program counter of a detected hang |
 | 0x7F | `ERROR` | both | error code and text |
 
@@ -193,6 +193,81 @@ In mGBA, with `bmlink` clocking the serial port word by word (the GBA side uncha
 
 The rate on a real Xboo cable still has to be measured (`bmlink --xboo /dev/parport0 ping 50`).
 
+## 8. Debugging
+
+`bmlink ... gdb <port>` is a server for GDB's remote protocol on `127.0.0.1:<port>`; it turns
+what GDB asks into `GDB` packets. The runtime's part is small (about 1.7 KB): stop, show and
+change registers and memory, keep breakpoints. Everything that needs knowledge of GDB or of
+instructions is done on the PC.
+
+```
+arm-none-eabi-gdb ──TCP──► bmlink gdb ──link packets──► runtime (serial interrupt, stopped loop)
+```
+
+**Packets.** Byte 0 is the command, byte 2 a breakpoint slot, arguments from byte 4. An answer
+repeats the command in byte 0, has its result in byte 1 (0 done, 1 only while stopped, 2 not
+memory that may be used, 3 not supported) and data from byte 4.
+
+| Command | Arguments | Answer |
+|---|---|---|
+| `i` info | | u8 stopped, u8 breakpoint slots (8), u8 the device can be stopped |
+| `h` halt | | none; a `S` packet follows when the program has stopped at the next frame boundary |
+| `c` continue | | result |
+| `g` / `G` registers | `G`: 17 words | `g`: r0–r15 and cpsr (17 words) |
+| `m` read memory | u32 address, u16 length (≤ 512) | the bytes |
+| `M` write memory | u32 address, bytes | result |
+| `Z` / `z` breakpoint | slot, u32 address (`Z`) | result |
+| `S` stopped (from the runtime) | byte 1: 0 asked to, 1 breakpoint; byte 2: slot | |
+
+Commands are safe to repeat (a write or a breakpoint done twice is the same as once), so a
+command whose answer had to wait for room in the send ring is simply handled again.
+
+**Breakpoints.** The ARM7TDMI has no debug hardware a program can use and the BIOS does not
+pass undefined instructions on, so a breakpoint is a branch written over an ARM instruction in
+RAM, to one of eight landing places in IWRAM (`src/hal/gba/debug_trap.S`), one per slot. The
+landing place saves every register, and `bmHalDebug*` (`hal.h`) hands them to the live
+module, which reports `S` and then handles `GDB` packets in a loop until `c`. The serial
+interrupt keeps running meanwhile; other packets wait. Sound is switched off while stopped.
+On `c` every register is loaded again from the saved (possibly changed) values.
+
+Limits that follow from this:
+
+- breakpoints only in **ARM code in RAM**: native script modules (IWRAM) and the runtime's
+  IWRAM functions; not in Thumb code, not in ROM. `Z0` with another kind or address is refused;
+- never in the link's own code or the serial interrupt, which must keep running;
+- `h` (GDB's Ctrl-C) takes effect at the next frame boundary, so it cannot interrupt a game
+  that hangs inside a frame;
+- at a `h` stop the registers shown are those of the runtime at that point (Thumb code);
+  changes to them are not taken over.
+
+**Single steps** are made by the bridge: it reads the registers and the instruction, works
+out where it goes next (conditions, `B`/`BL`, `BX`, data processing and loads into pc, `LDM`
+with pc; `tools/bmlink/gdb_bridge.c`), puts a breakpoint there and continues. A call into
+Thumb code is stepped over as a whole; a return into Thumb code runs on. Thumb code itself
+cannot be stepped.
+
+**GDB packets** served: `? g G p P m M c s Z0 z0 D k H T`, `qSupported`, `qAttached`, `qC`,
+`qfThreadInfo`; the rest is answered as not supported. The register layout is GDB's default
+for ARM without a target description (r0–r15, eight unused floating point registers, cpsr).
+
+**Script lines.** A native module built with `bmcook --native-elf scripts.elf` has debug
+information whose lines are the script's (`#line`). It is linked at address 0 and loaded at
+`bm_native_slot`:
+
+```
+bmlink --xboo /dev/parport0 gdb 2345          (or --mgba game.gba run 60 gdb 2345)
+arm-none-eabi-gdb game.elf
+(gdb) target remote :2345
+(gdb) add-symbol-file scripts.elf &bm_native_slot
+(gdb) break bat.ms:14
+(gdb) continue
+```
+
+Tested in mGBA with a client that speaks the remote protocol (`tests/gdb_session.py`):
+breakpoint on a script line, registers, memory, steps over a call into the runtime, Ctrl-C,
+detach, and the game plays on to its end. Not yet tried with a real `arm-none-eabi-gdb` or on
+hardware.
+
 ## History
 
 - 0.1: first draft.
@@ -203,3 +278,4 @@ The rate on a real Xboo cable still has to be measured (`bmlink --xboo /dev/parp
 - 0.2.1: `PPU_SNAPSHOT` payloads. An acknowledgement that arrives while the slave is in the
   middle of its next packet must not restart that packet (fixed in the slave: before, every
   packet that followed another one directly was sent twice).
+- 0.3: debugging (section 8).

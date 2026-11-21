@@ -9,6 +9,7 @@
 // linker scripts. See docs/PLAN.md section 3.
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 /// A range of memory the engine may allocate from (one per heap, see BM_MEMORY_HEAP_*).
@@ -106,6 +107,33 @@ uint32_t bmHalCycles(void);
 #define BM_HAL_AUDIO_FRAME_SAMPLES 304
 void bmHalAudioStart(void);
 void bmHalAudioBuffers(int8_t **ppLeft, int8_t **ppRight);
+
+/// Debugging on the device itself (docs/spec/link-protocol.md §8). The program can be stopped
+/// at breakpoints, its registers and memory read and changed, and continued. Breakpoints are
+/// written over ARM instructions in RAM, so they work for code in RAM only and not for Thumb
+/// code. Never put one into the link's own code or what it calls: the program has to keep
+/// talking while it is stopped.
+#define BM_HAL_DEBUG_SLOTS 8
+typedef struct BmHalDebugRegs
+{
+  uint32_t r[16];   // r15: where the program continues
+  uint32_t cpsr;
+} BmHalDebugRegs;
+/// Called when the program stops: at breakpoint `slot`, or with -1 in bmHalDebugBreak. The
+/// program continues when it returns, with the registers as they then are.
+typedef void (*BmHalDebugHandler)(void *pContext, BmHalDebugRegs *pRegs, int slot);
+/// False where the device cannot be debugged this way (the PC: use its debugger).
+bool bmHalDebugInit(BmHalDebugHandler handler, void *pContext);
+/// False if no breakpoint can be put at `address` (not RAM, not an ARM instruction's place).
+bool bmHalDebugSetBreak(uint32_t slot, uint32_t address);
+void bmHalDebugClearBreak(uint32_t slot);
+/// Takes all breakpoints out (before code in RAM is replaced).
+void bmHalDebugClearAll(void);
+/// Stops here.
+void bmHalDebugBreak(void);
+/// False if (part of) the range is not memory the debugger may read or change.
+bool bmHalDebugRead(uint32_t address, void *pOut, uint32_t size);
+bool bmHalDebugWrite(uint32_t address, const void *pIn, uint32_t size);
 
 /// Live link (docs/spec/link-protocol.md): the serial port as the clocked side, 32 bits per
 /// transfer. `handler` runs in the serial interrupt for every word received and returns the

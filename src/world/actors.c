@@ -426,6 +426,7 @@ static void loadNative(BmGame *g, BmVmModule *pModule, uint32_t bytecodeCrc)
   const uint8_t *p = bmPackChunkData(g->pPack, (uint32_t)chunk, &size);
   void *pSlot = bmVmNativeSlot(&slotSize);
   const char *why = NULL;
+  bmHalDebugClearAll();   // breakpoints in the code that is about to be replaced
   const BmVmNativeModule *pNative = bmVmNativeLoad(p, size, pSlot, slotSize, bytecodeCrc, &why);
   if (pNative == NULL || !bmVmModuleSetNative(pModule, pNative))
   {

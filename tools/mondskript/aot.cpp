@@ -142,6 +142,24 @@ std::string emitC(const Module &module, uint32_t bytecodeCrc)
       if (!ec) file = full.lexically_normal().generic_string();
     }
     const char *leave = fn.stateCode ? "return 0xFFFF;" : "return 0;";
+    // Gives the lines written since `startAt` the script line they belong to. Every line gets
+    // its own directive: otherwise the C compiler would count on from the last one.
+    auto stamp = [&](std::streamoff startAt, int line) {
+      if (line == 0 || file.empty()) return;
+      std::string all = o.str(), part = all.substr(size_t(startAt));
+      all.resize(size_t(startAt));
+      o.str(all);
+      o.seekp(0, std::ios::end);
+      size_t at = 0;
+      while (at < part.size())
+      {
+        size_t end = part.find('\n', at);
+        if (end == std::string::npos) end = part.size();
+        o << "#line " << line << " " << cString(file) << "\n" << part.substr(at, end - at) << "\n";
+        at = end + 1;
+      }
+    };
+    const std::streamoff functionAt = std::streamoff(o.tellp());
     if (fn.stateCode) o << "static uint32_t " << fn.name << "(BmVmNativeCtx *c, uint32_t pc)\n{\n";
     else
     {
@@ -161,8 +179,8 @@ std::string emitC(const Module &module, uint32_t bytecodeCrc)
       o << "  default: c->pRt->fail(c, BM_VM_FAIL_INSTRUCTION, " << index << ", pc); return 0xFFFF;\n  }\n";
     }
 
+    stamp(functionAt, fn.lines.empty() ? 0 : fn.lines.front().second);
     size_t lineAt = 0;
-    int lastLine = 0;
     for (uint16_t pc = 0; pc < fn.words;)
     {
       uint16_t w0 = word(pc);
@@ -173,11 +191,7 @@ std::string emitC(const Module &module, uint32_t bytecodeCrc)
       int line = lineAt > 0 ? fn.lines[lineAt - 1].second : 0;
 
       if (labels.count(pc) || resume.count(pc)) o << "L" << pc << ":;\n";
-      if (line != 0 && line != lastLine && !file.empty())
-      {
-        o << "#line " << line << " " << cString(file) << "\n";
-        lastLine = line;
-      }
+      const std::streamoff startAt = std::streamoff(o.tellp());
       if (blocks.count(pc))
       {
         int n = blockSize[pc];
@@ -253,8 +267,10 @@ std::string emitC(const Module &module, uint32_t bytecodeCrc)
         break;
       default: break;
       }
+      stamp(startAt, line);
       pc = uint16_t(pc + length);
     }
+    const std::streamoff trailerAt = std::streamoff(o.tellp());
     o << "  " << leave << "\nLbudget:\n  c->pRt->fail(c, BM_VM_FAIL_BUDGET, " << index << ", at);\n  " << leave << "\n}\n\n";
 
     // Events are run through an entry like state code.
@@ -262,6 +278,7 @@ std::string emitC(const Module &module, uint32_t bytecodeCrc)
     {
       o << "static uint32_t " << fn.name << "_entry(BmVmNativeCtx *c, uint32_t pc)\n{\n  (void)pc;\n  " << fn.name << "(c);\n  return 0xFFFF;\n}\n\n";
     }
+    stamp(trailerAt, fn.lines.empty() ? 0 : fn.lines.back().second);
   }
 
   o << "__attribute__((section(\".bmhead\"), used)) const struct { BmVmNativeHeader head; BmVmNativeEntry entries[" << (functionCount ? functionCount : 1)
