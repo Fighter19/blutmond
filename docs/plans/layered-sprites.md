@@ -1,8 +1,22 @@
 # Plan: layered sprites and variants
 
-Status: plan, nothing built. Milestone M18 in [../PLAN.md](../PLAN.md). Uses records
-([structures.md](structures.md)) for variants and works together with the boxes of
-[hitboxes.md](hitboxes.md).
+Status: plan, nothing built. Milestone M18 in [../PLAN.md](../PLAN.md).
+
+## Dependencies
+
+Steps refer to section 9.
+
+| Step | Needs |
+|---|---|
+| 1 to 3 (palettes and banks, sheets per room, points and layers) | nothing from other plans. Step 3 changes which animation the player's layers play, which [attachable-scripts.md](attachable-scripts.md) step 7 moves into the player's script: whichever comes second adapts |
+| 4 (direction sets, angles, `spawn_at_point`) | `spawn` from attachable-scripts.md step 5; `sin`/`cos` shared with [ui.md](ui.md) step 5 |
+| 5 (enemy kinds as records, equipment that shows) | [structures.md](structures.md) steps 2 and 4. The `kind` property of room objects is built here; attachable-scripts.md step 8 adds `attach` lists on top of it |
+| 6 (the lock, spells from the hand) | attachable-scripts.md step 3, [hitboxes.md](hitboxes.md) step 4, and in the language: optional handles and the first query (specified in mondskript.md, not built) |
+| 7 (figure view) | nothing more |
+
+Both this plan and hitboxes.md change the sprite format to version 2; do that once. Needed
+by: [first-items.md](first-items.md) steps 6 and 7 for aimed spells and variants,
+[dialogue.md](dialogue.md) for portraits with palettes (plain sprites work without it).
 
 ## 1. What this is for
 

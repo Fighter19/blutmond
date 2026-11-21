@@ -1,8 +1,25 @@
 # Plan: attachable scripts
 
-Status: plan, nothing built. Milestone M14 in [../PLAN.md](../PLAN.md). Used by
-[structures.md](structures.md) (a record names the script that makes it work) and
-[ui.md](ui.md) (screens and effects are script classes without a room object).
+Status: plan, nothing built. Milestone M14 in [../PLAN.md](../PLAN.md).
+
+## Dependencies
+
+Steps refer to section 11.
+
+| Step | Needs |
+|---|---|
+| 1, 2 (one module per class, reload of one module) | nothing from other plans |
+| 3 (attachments on the player, game buttons) | nothing from other plans |
+| 4 (stats, capabilities, filters, actions) | the stats of [structures.md](structures.md) step 3 |
+| 5 (spawn, hit boxes, health, messages) | the hit-box part **is** [hitboxes.md](hitboxes.md) steps 1 and 2; build them as one piece of work |
+| 6 (attachments from the inventory) | structures.md step 4 |
+| 7 (the player as a script, its attributes) | steps 3 and 4. The example's `layer_play` needs [layered-sprites.md](layered-sprites.md) step 3; without it the script uses `play_anim` |
+| 8 (attachments and values from the level) | step 3. The `kind` property itself is built in layered-sprites.md step 5; this step makes `attach` lists and attachment values work together with it |
+
+Needed by: [ui.md](ui.md) step 3, structures.md (resolving `attach`),
+[first-items.md](first-items.md), hitboxes.md steps 2 and 4, layered-sprites.md step 6,
+[dialogue.md](dialogue.md) step 5. [versioning.md](versioning.md) gains from step 1 (an
+update for one script is one small chunk) without needing it.
 
 ## 1. What this is for
 

@@ -1,9 +1,23 @@
 # Plan: dialogue and cutscenes
 
-Status: plan, nothing built. Milestone M19 in [../PLAN.md](../PLAN.md). Built on
-[ui.md](ui.md) (the UI layer, text, screens), [attachable-scripts.md](attachable-scripts.md)
-(the scriptable player, `control`, `walk_to`, objects by name) and
-[layered-sprites.md](layered-sprites.md) (portraits and palettes).
+Status: plan, nothing built. Milestone M19 in [../PLAN.md](../PLAN.md).
+
+## Dependencies
+
+Steps refer to section 9.
+
+| Step | Needs |
+|---|---|
+| 1 (flags and counters) | nothing from other plans; stable flag numbers across versions lean on [versioning.md](versioning.md) step 2 |
+| 2 (`say` and the dialogue box) | [ui.md](ui.md) steps 2 and 3; speakers as records: [structures.md](structures.md) step 2; variable-width text: the canvas of ui.md |
+| 3, 4 (talk files, languages) | nothing more |
+| 5 (cutscenes) | the scriptable player with `control` and `walk_to`: [attachable-scripts.md](attachable-scripts.md) step 7; fades and letterbox: ui.md step 1 |
+| 6 (skipping) | nothing more |
+| 7 (bubbles, emotes, puppets) | `spawn` from attachable-scripts.md step 5 |
+| 8 (Talk and Cutscene views) | nothing more |
+
+`set_palette` and layered portraits come from [layered-sprites.md](layered-sprites.md)
+steps 1 and 3; plain sprites as portraits work without them. Nothing depends on this plan.
 
 ## 1. What this is for
 

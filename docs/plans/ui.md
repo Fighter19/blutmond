@@ -1,8 +1,22 @@
 # Plan: menus and UI
 
-Status: plan, nothing built. Milestone M13 in [../PLAN.md](../PLAN.md). Needs
-[structures.md](structures.md) (what the menus show) and
-[attachable-scripts.md](attachable-scripts.md) (script classes that are not room objects).
+Status: plan, nothing built. Milestone M13 in [../PLAN.md](../PLAN.md).
+
+## Dependencies
+
+Steps refer to section 9.
+
+| Step | Needs |
+|---|---|
+| 1 (windows, blending, more line tables) | nothing from other plans; it is the part of milestone M1 that is still open |
+| 2 (UI layer, font, text) | step 1 only for darkening behind windows |
+| 3 (screens as scripts) | script classes that are not room objects: the kinds of class of [attachable-scripts.md](attachable-scripts.md) §2, built in its step 3 |
+| 4 (lists bound to the inventory, Equipment menu) | [structures.md](structures.md) steps 3 and 4 |
+| 5 (backdrops, effects) | step 1; `sin`/`cos` are shared with [layered-sprites.md](layered-sprites.md) step 4 |
+| 6 (save in slices, UI tab) | nothing more |
+
+Needed by: [first-items.md](first-items.md) steps 3 and 4, [dialogue.md](dialogue.md) steps
+2 and 5, the "show boxes" option of [hitboxes.md](hitboxes.md).
 
 ## 1. What this is for
 

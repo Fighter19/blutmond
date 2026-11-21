@@ -809,6 +809,10 @@ is meant for, and the cooker reports per profile what a port would change.
 | M18 | layered sprites and variants ([plans/layered-sprites.md](plans/layered-sprites.md)): palettes per sprite with banks given out on demand, figures of several layers joined at points, direction sets, lock-on and angles, enemy kinds as records, the figure editor | the player locks on to an enemy and the upper body and hand follow the angle while the legs keep running, the bolt leaves from the hand; a red, armoured bat exists as one table row |
 | M19 | dialogue and cutscenes ([plans/dialogue.md](plans/dialogue.md)): talk files compiled to scripts, the dialogue box with typewriter text, portraits and choices, story flags, text per language, cutscene scripts directing actors, camera and fades, skipping by fast-forward, the Talk and Cutscene views | an NPC conversation with a choice and a cutscene with two actors and a camera move play the same on GBA and PC, can be skipped, survive a snapshot in the middle, and exist in two languages |
 
+M12 to M19 are the plans in [plans/](plans/README.md). Their numbers are names, not an order:
+the plans depend on each other step by step, and [plans/README.md](plans/README.md) has the
+dependencies and an order that works.
+
 ### Status
 
 | # | State |

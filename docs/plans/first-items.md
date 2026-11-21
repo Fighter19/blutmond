@@ -1,8 +1,22 @@
 # Plan: the first weapons, spells, abilities, consumables and armour
 
-Status: plan, nothing built. Milestone M15 in [../PLAN.md](../PLAN.md). Built on
-[structures.md](structures.md), [attachable-scripts.md](attachable-scripts.md) and
-[ui.md](ui.md).
+Status: plan, nothing built. Milestone M15 in [../PLAN.md](../PLAN.md).
+
+## Dependencies
+
+This plan is content; everything it needs comes from the others. Steps refer to section 11.
+
+| Step | Needs |
+|---|---|
+| 1 (structures and tables) | [structures.md](structures.md) steps 1 and 2 |
+| 2 (swords, dummy, bat with health) | [attachable-scripts.md](attachable-scripts.md) steps 3 and 5, [hitboxes.md](hitboxes.md) steps 1 and 2 |
+| 3 (armour, Equipment menu, damage rule) | structures.md step 4, attachable-scripts.md steps 4 and 6, [ui.md](ui.md) steps 3 and 4 |
+| 4 (consumables, Items page, quick slots) | ui.md step 4 |
+| 5 (abilities) | attachable-scripts.md step 4 and the capabilities in the body step (its step 7, attributes) |
+| 6 (spells, projectiles, remaining weapons) | hitboxes.md step 4. Casting from the hand at an angle needs [layered-sprites.md](layered-sprites.md) steps 4 and 6; without them spells fly straight ahead |
+| 7 (status effects, new enemies, drops) | attachments on actors and messages (attachable-scripts.md steps 3 and 5); enemy variants as records need layered-sprites.md step 5 |
+
+Nothing depends on this plan; it is the proof that the others work together.
 
 The set is chosen so that every mechanism of those plans is used by at least one item, and
 most items need no script of their own. All of it is content in the test project

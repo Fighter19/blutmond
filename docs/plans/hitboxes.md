@@ -4,6 +4,21 @@ Status: plan, nothing built. Milestone M17 in [../PLAN.md](../PLAN.md). Fills in
 [attachable-scripts.md](attachable-scripts.md) §6 only names ("hit boxes"), and is what the
 weapons and spells of [first-items.md](first-items.md) hit with.
 
+## Dependencies
+
+Steps refer to section 8.
+
+| Step | Needs |
+|---|---|
+| 1 (boxes in the sprite file, drawing them in the editor) | nothing from other plans |
+| 2 (deciding hits, arming) | health, and attachments as the source of a hit: [attachable-scripts.md](attachable-scripts.md) steps 3 and 5 (this step is the hit-box part of its step 5). The damage rule reads stats: [structures.md](structures.md) step 3 |
+| 3 (guard, pierce, hit stop, knock) | `knock_back` from attachable-scripts.md step 7 for knocking the player |
+| 4 (projectiles) | objects created at run time: attachable-scripts.md step 5. `fly_angle` and `aim_at` need the angle functions of [layered-sprites.md](layered-sprites.md) step 4 |
+| 5 (live box view, timeline, frame data) | the Data tab column needs structures.md step 5 |
+
+Boxes on several layers of one figure need layered-sprites.md step 3. Needed by:
+first-items.md steps 2 and 6, layered-sprites.md step 6.
+
 ## 1. What this is for
 
 Today a sprite frame has one box, used to tell whether the player touches an object

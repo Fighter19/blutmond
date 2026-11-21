@@ -2,6 +2,20 @@
 
 Status: plan, nothing built. Milestone M16 in [../PLAN.md](../PLAN.md).
 
+## Dependencies
+
+Steps refer to section 8.
+
+| Step | Needs |
+|---|---|
+| 1 to 4 (versions, save migration, pack sets, update files) | nothing from other plans |
+| 5 (flash model, updater, `FLASH_*` packets) | nothing from other plans |
+| 6 (real cartridges) | a flash cartridge and the answers of section 9 |
+| small updates for one changed script | [attachable-scripts.md](attachable-scripts.md) step 1 (one module per class); without it an update carries the whole script module |
+
+Needed by: [structures.md](structures.md) (renamed records) and [dialogue.md](dialogue.md)
+(flag numbers) rely on step 2 to keep old saves loading.
+
 ## 1. What this is for
 
 Today a change reaches a running GBA in seconds, but only into RAM

@@ -2,6 +2,22 @@
 
 Status: plan, nothing built. Milestone M12 in [../PLAN.md](../PLAN.md).
 
+## Dependencies
+
+Steps refer to section 8.
+
+| Step | Needs |
+|---|---|
+| 1 to 3 (structures, records, inventory) | nothing from other plans. Brings its own engine work: enums and `struct` in the compiler, state transfer in several packets |
+| 2, the `attach` field type | can be stored at once; it is only resolved to a class once [attachable-scripts.md](attachable-scripts.md) step 3 exists |
+| 4 (roles, equipment, stat totals) | nothing more; what equipment *does* needs attachable-scripts.md step 6 |
+| 5 (Data tab) | nothing more |
+| renaming a record without losing saves | [versioning.md](versioning.md) step 2 |
+
+Needed by: [ui.md](ui.md) step 4, attachable-scripts.md steps 4, 6 and 8,
+[first-items.md](first-items.md), [layered-sprites.md](layered-sprites.md) step 5,
+[dialogue.md](dialogue.md) step 2 (speakers).
+
 ## 1. What this is for
 
 A weapon, a spell, an ability, a consumable and a piece of armour are mostly **data**: a
