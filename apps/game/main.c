@@ -280,9 +280,12 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
         continue;
       }
       s_waitForMirror = false;
-      bmLiveFollowCheck(&s_live, s_game.frame, stateCrc());
-      // Behind by more than a frame: catch up without waiting for the screen.
-      catchUp = bmLiveFollowAhead(&s_live, s_game.frame) > 1 && catchUp < 3 ? catchUp + 1 : 0;
+      if (bmLiveFollowWantsCheck(&s_live, s_game.frame)) bmLiveFollowCheck(&s_live, s_game.frame, stateCrc());
+      // Behind: catch up with a second frame before the next screen refresh (one, so the
+      // sound stays whole). Far behind: ask for the other side's state instead.
+      uint32_t behind = bmLiveFollowAhead(&s_live, s_game.frame);
+      if (behind > BM_LIVE_FOLLOW_MAX_BEHIND) bmLiveFollowBehind(&s_live, s_game.frame);
+      catchUp = behind > 2 && catchUp == 0 ? 1 : 0;
       bm_game_stats.followChecks = s_live.followChecks;
       bm_game_stats.followMismatches = s_live.followMismatches;
     }
@@ -338,10 +341,19 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
 #ifdef BM_PLATFORM_HOST
     if (s_frameHook != NULL && !s_frameHook()) break;
     if (s_untilFrame != 0 && s_game.frame >= s_untilFrame) break;
-    if (s_realtime)
+    if (s_realtime || s_live.inputStream)
     {
-      struct timespec nap = { 0, 16666667 };
-      nanosleep(&nap, NULL);
+      // 60 frames per second without a window; and while another device plays along, not
+      // faster than a GBA draws frames (59.7275 per second), or it could never keep up.
+      static struct timespec next;
+      struct timespec nowTime;
+      const long period = s_live.inputStream ? 16742706 : 16666667;
+      clock_gettime(CLOCK_MONOTONIC, &nowTime);
+      if (next.tv_sec == 0 || nowTime.tv_sec - next.tv_sec > 1) next = nowTime;
+      next.tv_nsec += period;
+      if (next.tv_nsec >= 1000000000) { next.tv_nsec -= 1000000000; next.tv_sec++; }
+      if (nowTime.tv_sec < next.tv_sec || (nowTime.tv_sec == next.tv_sec && nowTime.tv_nsec < next.tv_nsec))
+        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
     }
 #endif
   }

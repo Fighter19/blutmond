@@ -16,6 +16,7 @@
 #include "elf_symbol.h"
 
 #include <stdarg.h>
+#include <time.h>
 
 struct BmMgbaLink
 {
@@ -363,9 +364,17 @@ BmMgbaLinkStats bmMgbaLinkStats(const BmMgbaLink *l)
   return l->stats;
 }
 
+// Nothing on the wire for a while: the emulated GBA runs for that long, and so does the real
+// clock, so a program on the PC that talks to both stays in step with it.
 static void pauseFrames(void *pContext, uint32_t milliseconds)
 {
-  bmMgbaLinkRunFrames(pContext, milliseconds / 16 + 1);
+  BmMgbaLink *l = pContext;
+  bool paired = l->paired;
+  l->paired = true;   // the clock event only ends the run
+  runCycles(l, milliseconds * 16780u);
+  l->paired = paired;
+  struct timespec nap = { milliseconds / 1000, (long)(milliseconds % 1000) * 1000000L };
+  nanosleep(&nap, NULL);
 }
 
 BmLinkTransport bmMgbaLinkTransport(BmMgbaLink *l)

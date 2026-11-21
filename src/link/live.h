@@ -138,6 +138,8 @@ typedef struct BmLive
   bool followHasCheck;
   uint32_t followCheckFrame, followCheckCrc;
   uint32_t followChecks, followMismatches;
+  uint32_t followBehindAt;    // frame at which "too far behind" was last reported
+  uint32_t followJumps;       // times it was
 
   BmLiveRegion regions[BM_LIVE_REGIONS];
   uint32_t applied, chunksCopied, chunksReceived;
@@ -175,7 +177,7 @@ static inline bool bmLiveCapturing(const BmLive *pLive)
 /// passed on to the following one): u32 last frame whose keys are known, u8 number of
 /// changes, u8 flags, u16 0; then per change u32 frame, u16 keys, u16 0; with flag 2 then
 /// u32 frame and u32 checksum of the state before that frame. From the following device:
-/// byte 2, u8 0 x3, u32 frame at which its state differed.
+/// byte 2, u8 reason (0 its state differed, 1 too far behind), u8 0 x2, u32 the frame.
 #define BM_LIVE_INPUT_HEADER 8
 #define BM_LIVE_INPUT_FLAG_LOST 1
 #define BM_LIVE_INPUT_FLAG_CHECK 2
@@ -195,9 +197,17 @@ static inline bool bmLiveFollowing(const BmLive *pLive)
 bool bmLiveFollowKeys(BmLive *pLive, uint32_t frame, uint16_t *pKeys);
 /// How many frames the keys are known ahead of `frame` (to catch up when behind).
 uint32_t bmLiveFollowAhead(const BmLive *pLive, uint32_t frame);
-/// Following side: if the reporting device sent a checksum for frame `frame`, compares it with
-/// `crc` (the state before that frame here) and reports a difference to the master.
+/// Following side: whether the reporting device sent a checksum for frame `frame` (so the
+/// state's checksum is only worked out when it is needed: that takes time).
+bool bmLiveFollowWantsCheck(BmLive *pLive, uint32_t frame);
+/// Following side: compares `crc` (the state before frame `frame` here) with the reporting
+/// device's and reports a difference to the master.
 void bmLiveFollowCheck(BmLive *pLive, uint32_t frame, uint32_t crc);
+/// Following side: more than BM_LIVE_FOLLOW_MAX_BEHIND frames behind and not catching up.
+/// Tells the master, which then loads the other side's state here: a jump instead of a
+/// delay that grows.
+void bmLiveFollowBehind(BmLive *pLive, uint32_t frame);
+#define BM_LIVE_FOLLOW_MAX_BEHIND 45
 
 /// Sends a LOG packet (dropped if the link is busy).
 bool bmLiveLog(BmLive *pLive, const char *pText);

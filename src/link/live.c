@@ -418,6 +418,24 @@ uint32_t bmLiveFollowAhead(const BmLive *l, uint32_t frame)
   return ahead > 0 ? (uint32_t)ahead : 0;
 }
 
+bool bmLiveFollowWantsCheck(BmLive *l, uint32_t frame)
+{
+  // A checksum for a frame already passed (a jump) is of no use any more.
+  if (l->followHasCheck && (int32_t)(l->followCheckFrame - frame) < 0) l->followHasCheck = false;
+  return l->followHasCheck && l->followCheckFrame == frame;
+}
+
+void bmLiveFollowBehind(BmLive *l, uint32_t frame)
+{
+  // Once, then again only if it is still so two seconds later.
+  if (l->followBehindAt != 0 && frame - l->followBehindAt < 120) return;
+  uint8_t out[8] = { 2, 1, 0, 0 };
+  bmLinkPut32(out + 4, frame);
+  if (!send(l, BM_LINK_INPUT, out, sizeof(out))) return;
+  l->followBehindAt = frame != 0 ? frame : 1;
+  l->followJumps++;
+}
+
 void bmLiveFollowCheck(BmLive *l, uint32_t frame, uint32_t crc)
 {
   if (!l->followHasCheck || l->followCheckFrame != frame) return;

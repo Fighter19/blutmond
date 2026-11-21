@@ -367,6 +367,15 @@ applied by frame number and not by arrival time; it only makes the PC run a litt
 GBA (the two frames between packets plus the transfer). When packets arrive in a bunch the PC
 game runs up to four frames per screen refresh to catch up, so the delay does not add up.
 
+**Keeping up.** The side that follows must not be slower than the side that plays, or the
+delay grows without end. So: the PC game, while a GBA plays along, runs at the GBA's frame
+rate (59.7275 frames per second, not 60); the following side works out its state's checksum
+only for the frames that have one to compare with; `bmlink` asks the following side for its
+reports only ten times a second and otherwise leaves the cable alone (every word costs a GBA
+an interrupt); a follower two frames behind runs one extra frame before the next refresh; and
+one that is more than 45 frames behind says so and gets the other side's state, a jump
+instead of a growing delay.
+
 **Checks.** Every 64 frames the runtime adds a CRC-32 of its game state to the packet. The PC
 game compares it with its own state at that frame and reports a difference; `bmlink` then
 loads the GBA's state again. The same happens if the runtime had more key changes than fit

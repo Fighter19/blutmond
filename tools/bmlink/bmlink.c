@@ -261,12 +261,14 @@ static bool mirror(BmLinkMaster *pDevice, BmXboo *pXboo, const char *address, bo
   ok = ok && bmLinkMasterQueue(pTo, BM_LINK_INPUT, &ready, 1) && bmLinkMasterFlush(pTo);
   ok = ok && bmLinkMasterQueue(pFrom, BM_LINK_INPUT, &on, 1) && bmLinkMasterFlush(pFrom) && mirrorState(pFrom, pTo, toName);
   if (ok) printf("mirror: %s follows %s\n", toName, fromName);
-  uint32_t firstFrame = 0, lastFrame = 0, packets = 0, restarts = 0;
+  uint32_t firstFrame = 0, lastFrame = 0, packets = 0, restarts = 0, jumps = 0;
   double started = now(), lastReport = started;
+  double lastAsked = now();
   while (ok && !s_cancel)
   {
     BmLinkPacket p;
-    if (bmLinkMasterReceive(pFrom, BM_LINK_INPUT, &p, toDevice ? 4 : 64) && p.length >= BM_LIVE_INPUT_HEADER)
+    bool got = bmLinkMasterReceive(pFrom, BM_LINK_INPUT, &p, 8) && p.length >= BM_LIVE_INPUT_HEADER;
+    if (got)
     {
       lastFrame = bmLinkGet32(p.payload);
       if (packets++ == 0) firstFrame = lastFrame;
@@ -276,17 +278,35 @@ static bool mirror(BmLinkMaster *pDevice, BmXboo *pXboo, const char *address, bo
       if (ok && lost) { restarts++; ok = mirrorState(pFrom, pTo, toName); }
     }
     else if (pFrom->pError != NULL && strstr(pFrom->pError, "resync") != NULL) ok = false;
-    // The following side says so when its state differs.
-    if (ok && bmLinkMasterReceive(pTo, BM_LINK_INPUT, &p, toDevice ? 8 : 1) && p.length >= 8 && p.payload[0] == 2)
+    // The following side says so when its state differs or it has fallen behind. Asked only
+    // ten times a second: every word costs a GBA an interrupt, and time is what it lacks.
+    if (ok && now() - lastAsked >= 0.1)
     {
-      restarts++;
-      printf("mirror: %s differed at frame %u; taking the state of %s again\n", toName, (unsigned)bmLinkGet32(p.payload + 4), fromName);
-      ok = mirrorState(pFrom, pTo, toName);
+      lastAsked = now();
+      if (bmLinkMasterReceive(pTo, BM_LINK_INPUT, &p, 2) && p.length >= 8 && p.payload[0] == 2)
+      {
+        uint32_t frame = bmLinkGet32(p.payload + 4);
+        if (p.payload[1] == 1) { jumps++; printf("mirror: %s fell behind at frame %u; it jumps to where %s is\n", toName, (unsigned)frame, fromName); }
+        else { restarts++; printf("mirror: %s differed at frame %u; taking the state of %s again\n", toName, (unsigned)frame, fromName); }
+        // What is still on the way belongs to before the state: not needed any more.
+        ok = mirrorState(pFrom, pTo, toName);
+      }
+    }
+    if (!got)
+    {
+      // Nothing to pass on: leave the cable alone for a moment (an emulated device runs on
+      // meanwhile, a real one does anyway).
+      if (pDevice->transport.pause != NULL) pDevice->transport.pause(pDevice->transport.pContext, 2);
+      else
+      {
+        struct timespec nap = { 0, 2000000 };
+        nanosleep(&nap, NULL);
+      }
     }
     if (now() - lastReport >= 5.0)
     {
       lastReport = now();
-      printf("mirror: frame %u, %u packets, %u restarts\n", (unsigned)lastFrame, (unsigned)packets, (unsigned)restarts);
+      printf("mirror: frame %u, %u packets, %u restarts, %u jumps\n", (unsigned)lastFrame, (unsigned)packets, (unsigned)restarts, (unsigned)jumps);
     }
     if (frameLimit != 0 && packets != 0 && lastFrame - firstFrame >= frameLimit) break;
   }
@@ -296,8 +316,8 @@ static bool mirror(BmLinkMaster *pDevice, BmXboo *pXboo, const char *address, bo
     bmLinkMasterFlush(pFrom);
     bmLinkMasterQueue(pTo, BM_LINK_INPUT, &off, 1);
     bmLinkMasterFlush(pTo);
-    printf("mirror: ended after %u frames in %.1f s, %u packets, %u restarts from the state of %s\n", (unsigned)(lastFrame - firstFrame),
-           now() - started, (unsigned)packets, (unsigned)restarts, fromName);
+    printf("mirror: ended after %u frames in %.1f s, %u packets, %u restarts from the state of %s, %u jumps because %s fell behind\n",
+           (unsigned)(lastFrame - firstFrame), now() - started, (unsigned)packets, (unsigned)restarts, fromName, (unsigned)jumps, toName);
   }
   else if (pcMaster.pError != NULL) fprintf(stderr, "mirror: PC game: %s\n", pcMaster.pError);
   if (pXboo != NULL) pXboo->cancelByCaller = false;
