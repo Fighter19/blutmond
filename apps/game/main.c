@@ -61,8 +61,14 @@
 #  include <stdlib.h>
 #  include <string.h>
 #else
+#  include "rom_slot.h"
 extern const uint8_t bm_embedded_pack[];
 extern const uint8_t bm_embedded_pack_end[];
+
+// Filled in by the editor's Export when it appends a pack to this image (src/pack/rom_slot.h).
+// Volatile, so that the compiler does not take the empty values for the real ones.
+__attribute__((used, aligned(4), section(".bm_rom_slot"))) const volatile BmRomPackSlot bm_rom_pack_slot = {
+  { 'B', 'M', 'R', 'O', 'M', 'P', 'A', 'C', 'K', 'S', 'L', 'T' }, 0, 0 };
 #endif
 
 #ifndef BM_AUTOPLAY
@@ -494,6 +500,9 @@ int main(int argc, char **argv)
     else out = argv[i];
   }
   if (!window) window = !headless && !framesGiven && !trace && out == NULL;
+#  ifdef __EMSCRIPTEN__
+  listen = false;  // a page has no sockets to listen on; the save game lives as long as the page
+#  endif
 #  ifdef BM_GAME_DEFAULT_PACK
   if (packPath == NULL) packPath = BM_GAME_DEFAULT_PACK;
 #  endif
@@ -602,6 +611,9 @@ int main(int argc, char **argv)
 #else
 int main(void)
 {
+  uint32_t size = bm_rom_pack_slot.size;
+  if (size != 0)  // an exported game: the pack follows the program in ROM
+    return run((const uint8_t *)(0x08000000u + bm_rom_pack_slot.offset), size, 0, BM_AUTOPLAY);
   return run(bm_embedded_pack, (uint32_t)(bm_embedded_pack_end - bm_embedded_pack), 0, BM_AUTOPLAY);
 }
 #endif

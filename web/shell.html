@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blutmond</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1d1f24; color: #d8d8d8; font: 15px system-ui, sans-serif; overflow: hidden; }
+  #canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+  #status { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="status">Loading…</div>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<script>
+  var statusEl = document.getElementById('status');
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    setStatus: function (text) { statusEl.textContent = text || ''; statusEl.style.display = text ? 'flex' : 'none'; },
+    monitorRunDependencies: function (left) { if (!left) Module.setStatus(''); },
+    print: function (text) { console.log(text); },
+    printErr: function (text) { console.warn(text); }
+  };
+  window.onerror = function () { Module.setStatus('Something went wrong; the browser console has the details.'); };
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

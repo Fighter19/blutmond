@@ -284,13 +284,21 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST PRIVATE "BM_NATIVE_INCLUDE_DIR=\"${PROJECT_SOURCE_DIR}/src/script\"")
   target_compile_options(bm_cooker PRIVATE ${BM_WARNINGS})
   # The editor's project model (project file, asset catalogue, new rooms), without UI.
-  add_library(bm_editor_model STATIC editor/project_file.cpp editor/vram.cpp)
-  target_include_directories(bm_editor_model PUBLIC editor)
+  add_library(bm_editor_model STATIC editor/project_file.cpp editor/vram.cpp editor/rom_export.cpp)
+  target_include_directories(bm_editor_model PUBLIC editor src/pack)
   target_link_libraries(bm_editor_model PUBLIC bm_cooker blutmond)
   target_compile_options(bm_editor_model PRIVATE ${BM_WARNINGS})
+  # Export on the command line: the game's cartridge image with a pack appended (editor/rom_export.h).
+  add_executable(bmexport tools/bmexport.cpp)
+  target_link_libraries(bmexport PRIVATE bm_editor_model)
+  target_compile_options(bmexport PRIVATE ${BM_WARNINGS})
   add_executable(bmcook tools/cooker/main.cpp)
   target_link_libraries(bmcook PRIVATE bm_cooker)
   target_compile_options(bmcook PRIVATE ${BM_WARNINGS})
+  if(EMSCRIPTEN)
+    # Built with Emscripten, the cooker runs under Node during the build and reads real files.
+    target_link_options(bmcook PRIVATE -sNODERAWFS=1 -sALLOW_MEMORY_GROWTH=1)
+  endif()
 
   # Editor (on ose-ui with SDL3 and GLES 2). ose-ui is fetched at a pinned commit; point
   # FETCHCONTENT_SOURCE_DIR_OSE_UI at a local checkout to work on both.
@@ -301,23 +309,54 @@ if(BM_PLATFORM STREQUAL "host")
       GIT_REPOSITORY https://github.com/Fighter19/ose-ui.git
       GIT_TAG 0bf77bb4d40d8e1e001605383bdf9d30e6b83c40)
     FetchContent_MakeAvailable(ose_ui)
+    if(EMSCRIPTEN)
+      # Emscripten's libc++ does not bring <cstdlib> in through other headers as libstdc++ does.
+      foreach(t ose_ui ose_ui_gles2 ose_ui_sdl3)
+        if(TARGET ${t})
+          target_compile_options(${t} PRIVATE "SHELL:-include cstdlib")
+        endif()
+      endforeach()
+    endif()
     add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
       editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
       editor/code_edit.cpp editor/script_panel.cpp editor/sound_panel.cpp)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
     target_link_libraries(bmeditor PRIVATE bm_editor_model bm_cooker blutmond ose_ui_sdl3)
-    target_compile_definitions(bmeditor PRIVATE
-      "BM_EDITOR_DEFAULT_PROJECT=\"${PROJECT_SOURCE_DIR}/assets/test.bmproj\""
-      "BM_EDITOR_ENGINE_DIR=\"${PROJECT_SOURCE_DIR}/assets/engine\""
-      "BM_EDITOR_GAME=\"$<TARGET_FILE:game>\""
-      "BM_EDITOR_BMLINK=\"$<TARGET_FILE:bmlink>\"")
-    # Run on the GBA multiboots the runtime from a GBA build (or set gba-image in editor.conf).
     set(BM_GBA_BUILD_DIR "" CACHE PATH "GBA build directory (runtime images for the editor and the mGBA tests)")
-    if(BM_GBA_BUILD_DIR)
-      target_compile_definitions(bmeditor PRIVATE "BM_EDITOR_GBA_IMAGE=\"${BM_GBA_BUILD_DIR}/game_mb.gba\"")
+    if(EMSCRIPTEN)
+      # In the browser (docs/USAGE.md, "The editor in the browser"): the test project and the
+      # game's cartridge image are packed into the page's file system under /blutmond, so
+      # Export works; Run has no game or bmlink to start there.
+      target_compile_definitions(bmeditor PRIVATE
+        "BM_EDITOR_DEFAULT_PROJECT=\"/blutmond/assets/test.bmproj\""
+        "BM_EDITOR_ENGINE_DIR=\"/blutmond/assets/engine\"")
+      target_sources(bmeditor PRIVATE editor/web_stubs.c)
+      set_property(TARGET bmeditor APPEND PROPERTY LINK_DEPENDS ${PROJECT_SOURCE_DIR}/web/shell.html)
+      set_target_properties(bmeditor PROPERTIES SUFFIX ".html")
+      target_link_options(bmeditor PRIVATE -sMAX_WEBGL_VERSION=1 -sMIN_WEBGL_VERSION=1 -sALLOW_MEMORY_GROWTH=1
+        -sSTACK_SIZE=1048576 -sEXPORTED_RUNTIME_METHODS=FS "--shell-file=${PROJECT_SOURCE_DIR}/web/shell.html"
+        "--preload-file=${ose_ui_SOURCE_DIR}/fonts@/fonts" "--preload-file=${ose_ui_SOURCE_DIR}/themes@/themes"
+        "--preload-file=${PROJECT_SOURCE_DIR}/assets@/blutmond/assets")
+      if(BM_GBA_BUILD_DIR)
+        target_compile_definitions(bmeditor PRIVATE "BM_EDITOR_GBA_ROM=\"/blutmond/game.gba\"")
+        target_link_options(bmeditor PRIVATE "--preload-file=${BM_GBA_BUILD_DIR}/game.gba@/blutmond/game.gba")
+        set_property(TARGET bmeditor APPEND PROPERTY LINK_DEPENDS ${BM_GBA_BUILD_DIR}/game.gba)
+      endif()
+    else()
+      target_compile_definitions(bmeditor PRIVATE
+        "BM_EDITOR_DEFAULT_PROJECT=\"${PROJECT_SOURCE_DIR}/assets/test.bmproj\""
+        "BM_EDITOR_ENGINE_DIR=\"${PROJECT_SOURCE_DIR}/assets/engine\""
+        "BM_EDITOR_GAME=\"$<TARGET_FILE:game>\""
+        "BM_EDITOR_BMLINK=\"$<TARGET_FILE:bmlink>\"")
+      # Run on the GBA multiboots the runtime from a GBA build (or set gba-image in editor.conf);
+      # Export appends the pack to the cartridge image (or set gba-rom).
+      if(BM_GBA_BUILD_DIR)
+        target_compile_definitions(bmeditor PRIVATE "BM_EDITOR_GBA_IMAGE=\"${BM_GBA_BUILD_DIR}/game_mb.gba\""
+          "BM_EDITOR_GBA_ROM=\"${BM_GBA_BUILD_DIR}/game.gba\"")
+      endif()
+      # Run needs the game and bmlink next to the editor.
+      add_dependencies(bmeditor game bmlink)
     endif()
-    # Run needs the game and bmlink next to the editor.
-    add_dependencies(bmeditor game bmlink)
     if(NOT MSVC)
       target_compile_options(bmeditor PRIVATE -Wall -Wextra)
     endif()
@@ -345,7 +384,16 @@ if(BM_PLATFORM STREQUAL "host")
     COMMENT "Cooking the test level for the game")
   add_custom_target(game_level_pack ALL DEPENDS ${BM_GAME_LEVEL_PACK})
   add_dependencies(game game_level_pack)
-  target_compile_definitions(game PRIVATE "BM_GAME_DEFAULT_PACK=\"${BM_GAME_LEVEL_PACK}\"")
+  if(EMSCRIPTEN)
+    # The game in the browser plays the test level, packed into the page's file system.
+    target_compile_definitions(game PRIVATE "BM_GAME_DEFAULT_PACK=\"/blutmond/test_level.bmpk\"")
+    set_target_properties(game PROPERTIES SUFFIX ".html")
+    target_link_options(game PRIVATE -sMAX_WEBGL_VERSION=1 -sMIN_WEBGL_VERSION=1 -sALLOW_MEMORY_GROWTH=1 -sASYNCIFY
+      "--shell-file=${PROJECT_SOURCE_DIR}/web/shell.html" "--preload-file=${BM_GAME_LEVEL_PACK}@/blutmond/test_level.bmpk")
+    set_property(TARGET game APPEND PROPERTY LINK_DEPENDS ${PROJECT_SOURCE_DIR}/web/shell.html ${BM_GAME_LEVEL_PACK})
+  else()
+    target_compile_definitions(game PRIVATE "BM_GAME_DEFAULT_PACK=\"${BM_GAME_LEVEL_PACK}\"")
+  endif()
 
   add_executable(bm_ppu_render tools/bm_ppu_render.c src/ppu/ppu.c)
   target_include_directories(bm_ppu_render PRIVATE src/ppu)
@@ -556,6 +604,11 @@ if(BM_PLATFORM STREQUAL "host")
         add_test(NAME mgba_${image}
           COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 90 --expect-backdrop)
       endforeach()
+
+      # Export: the game's cartridge image with a pack appended plays that pack in mGBA.
+      add_test(NAME export_mgba COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/check_export.py
+        $<TARGET_FILE:bmexport> $<TARGET_FILE:bm_mgba_run> ${BM_GBA_BUILD_DIR}/game.gba ${BM_GBA_BUILD_DIR}/game.elf
+        ${BM_GBA_BUILD_DIR}/test_level_gba.bmpk ${out}/export.gba)
 
       # Golden image: the test scene rendered by the software PPU on the host must match
       # the GBA image of the same scene running in mGBA, pixel for pixel.

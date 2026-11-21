@@ -1,0 +1,65 @@
+name: pages
+
+# The editor and the game in the browser (docs/USAGE.md section 10), published on the gh-pages
+# branch. GitHub Pages serves that branch (Settings > Pages > Deploy from a branch > gh-pages).
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  EMSDK_VERSION: 7.0.1
+
+jobs:
+  pages:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Emscripten
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          "$HOME/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$HOME/emsdk/emsdk" activate "$EMSDK_VERSION"
+
+      - name: GBA build (the cartridge image the editor exports with)
+        run: |
+          cmake -S . -B build-gba -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-gba.cmake -DCMAKE_BUILD_TYPE=MinSizeRel
+          cmake --build build-gba --target game
+
+      - name: Web build
+        run: |
+          source "$HOME/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DBM_USE_MGBA=OFF -DBM_GBA_BUILD_DIR=$PWD/build-gba
+          cmake --build build-web --target bmeditor game
+
+      - name: Site
+        run: |
+          mkdir site
+          cp web/index.html site/
+          cp build-web/bmeditor.{html,js,wasm,data} build-web/game.{html,js,wasm,data} site/
+          cp build-gba/game.gba site/game.gba
+          touch site/.nojekyll
+
+      - name: Publish on gh-pages
+        run: |
+          cd site
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Pages: ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

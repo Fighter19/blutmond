@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blutmond</title>
+<style>
+  :root { --bg: #f4f2ee; --fg: #1d1f24; --muted: #5c5f66; --card: #ffffff; --line: #d9d5cc; --accent: #9b1c2c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17181c; --fg: #e6e4df; --muted: #a2a49f; --card: #212329; --line: #33363d; --accent: #e0566a; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px; }
+  h1 { margin: 0 0 4px; font-size: 2rem; }
+  p.lead { margin: 0 0 32px; color: var(--muted); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  a.card { display: block; padding: 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+           color: inherit; text-decoration: none; }
+  a.card:hover { border-color: var(--accent); }
+  a.card strong { display: block; color: var(--accent); font-size: 1.15rem; margin-bottom: 4px; }
+  ul { color: var(--muted); padding-left: 20px; }
+  code { font-size: 0.9em; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Blutmond</h1>
+  <p class="lead">An engine for Metroidvania-style GBA games, running in the browser.</p>
+  <div class="cards">
+    <a class="card" href="bmeditor.html"><strong>Editor</strong>Rooms, sprites, scripts and songs of the test project. <em>Export</em> (Ctrl+E) downloads the game as a <code>.gba</code> file for any emulator.</a>
+    <a class="card" href="game.html"><strong>Game</strong>The test level, played with the keyboard or a gamepad.</a>
+    <a class="card" href="game.gba" download><strong>game.gba</strong>The test level as a ROM, built by CI, for mGBA or another emulator.</a>
+  </div>
+  <ul>
+    <li>Game keys: arrows to move, X or Space to jump, Z is B, A and S are L and R, Return is Start.</li>
+    <li>In the browser, edits last as long as the page. Run, Sync and the Xboo cable need the desktop editor.</li>
+    <li>Source and documentation: <a href="https://github.com/Fighter19/blutmond">github.com/Fighter19/blutmond</a>.</li>
+  </ul>
+</main>
+</body>
+</html>

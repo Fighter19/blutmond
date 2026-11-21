@@ -2,6 +2,7 @@
 #include "dialogs.h"
 #include "theme_colors.h"
 
+#include <cstdlib>
 #include <SDL3/SDL.h>
 
 #include <memory>

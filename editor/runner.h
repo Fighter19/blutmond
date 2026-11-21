@@ -5,7 +5,8 @@
 //
 // Settings: ~/.config/blutmond/editor.conf, "key = value" lines, overridden on the command
 // line: game, bmlink (program paths), port (PC live link, default 7414), xboo (device,
-// default /dev/parport0), reset (none or xboo), gba-image (the runtime's multiboot image).
+// default /dev/parport0), reset (none or xboo), gba-image (the runtime's multiboot image),
+// gba-rom (the game's cartridge image that Export appends the pack to).
 #pragma once
 
 #include <deque>
@@ -19,7 +20,7 @@ namespace bm::editor {
 
 struct RunSettings
 {
-  std::string game, bmlink, gbaImage;
+  std::string game, bmlink, gbaImage, gbaRom;
   std::string xboo = "/dev/parport0";
   std::string reset = "none";
   int port = 7414;

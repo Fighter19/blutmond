@@ -62,6 +62,13 @@ Options: `--theme classic|light|dark` (also in the View menu, remembered), `--ta
   the player stays where they are.
 - **Sync** (Off, GBA > PC, PC > GBA): section 6.
 - **Stop** ends the PC game and any sync. The GBA keeps running.
+- **Export** (Ctrl+E, also in the File menu) cooks all rooms and writes the game as one GBA
+  image, by default `<project name>.gba` next to the project file. It plays in any emulator
+  (mGBA, NanoBoyAdvance, ...) and can be written to a flash cartridge. It is the cartridge
+  image `build-gba/game.gba` with the pack appended; the editor finds it through the GBA build
+  (`-DBM_GBA_BUILD_DIR`), `gba-rom` in `editor.conf` or `--gba-rom file`. On the command line
+  the same is `build/bmexport build-gba/game.gba level.bmpk out.gba`. For real hardware the
+  logo is still missing from the header (section 4): `tools/gbafix.py out.gba --logo FILE`.
 - The tabs (Room, Animation, Script, Sound, Graphics, and Project and State on the left) are
   described in the [README](../README.md).
 
@@ -216,3 +223,27 @@ build/bm_mgba_pair build-gba/game_send.gba build-gba/bootstrap_mb.gba --frames 1
 
 `BMLINK_TRACE=40 build/bmlink --xboo /dev/parport0 hello` prints the first 40 words each way;
 [HARDWARE.md](HARDWARE.md) §5 says how to read them.
+
+## 10. In the browser
+
+The editor and the PC game also build for the browser with Emscripten (WebGL 1). The pages
+are published on GitHub Pages by `.github/workflows/pages.yml`.
+
+```
+cmake -S . -B build-gba -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-gba.cmake -DCMAKE_BUILD_TYPE=MinSizeRel
+cmake --build build-gba
+emcmake cmake -S . -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DBM_USE_MGBA=OFF -DBM_GBA_BUILD_DIR=$PWD/build-gba
+cmake --build build-web --target bmeditor game
+python3 -m http.server -d build-web      # then open http://localhost:8000/bmeditor.html
+```
+
+`web/index.html` is the start page that links both. What is different in the browser:
+
+- The editor opens the test project, which is packed into the page together with the game's
+  cartridge image. Edits live in the page's memory and are gone when it is closed.
+- **Export** downloads the `.gba` file.
+- **Run** and **Sync** need the desktop editor: a page cannot start programs or reach the
+  Xboo cable. File dialogs are not there either; paths are typed into the form.
+- The game plays the test level. It cannot listen for the live link, and its save game lasts
+  as long as the page.
+

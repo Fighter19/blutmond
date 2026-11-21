@@ -20,6 +20,8 @@ __sp_usr_size = 0x1000;
 SECTIONS
 {
   .crt0 : { KEEP(*(.crt0)) } > rom
+  /* The pack slot of an exported game (src/pack/rom_slot.h), right after the header. */
+  .bm_rom_slot : { KEEP(*(.bm_rom_slot)) } > rom
 
   .text :
   {

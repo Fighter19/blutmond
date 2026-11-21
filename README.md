@@ -6,8 +6,9 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 
 ## Documentation
 
-- [docs/USAGE.md](docs/USAGE.md): building, the editor, a real GBA over the Xboo cable, the
-  sync between GBA and PC, what to do when something does not work.
+- [docs/USAGE.md](docs/USAGE.md): building, the editor, exporting a `.gba` file, a real GBA
+  over the Xboo cable, the sync between GBA and PC, the browser build, what to do when
+  something does not work.
 - [docs/HARDWARE.md](docs/HARDWARE.md): what the first runs on a real GBA showed that the
   emulator had not, and what the sync needed.
 - [docs/PLAN.md](docs/PLAN.md): the plan and the state of each milestone.
@@ -87,6 +88,10 @@ build/bmeditor                       # assets/test.bmproj
 build/bmeditor game.bmproj
 build/bmeditor room.tmx room2.tmx    # a project that is not saved yet
 ```
+
+**Export** (Ctrl+E) writes the whole game as one `.gba` file for an emulator or a flash
+cartridge; `build/bmexport` does the same on the command line. The editor and the game also run
+in the browser; see [docs/USAGE.md](docs/USAGE.md) sections 3 and 10.
 
 The editor has three themes: classic, light and dark. Choose one in the View menu (it is kept
 for the next start) or with `--theme classic|light|dark`.

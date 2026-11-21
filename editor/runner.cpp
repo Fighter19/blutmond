@@ -61,6 +61,7 @@ bool RunSettings::set(const std::string &key, const std::string &value)
   if (key == "game") game = value;
   else if (key == "bmlink") bmlink = value;
   else if (key == "gba-image") gbaImage = value;
+  else if (key == "gba-rom") gbaRom = value;
   else if (key == "xboo") xboo = value;
   else if (key == "reset") reset = value;
   else if (key == "port") port = std::atoi(value.c_str());

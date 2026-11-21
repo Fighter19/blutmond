@@ -9,6 +9,9 @@
 
 #include <GLES2/gl2.h>
 #include <SDL3/SDL.h>
+#ifdef __EMSCRIPTEN__
+#  include <emscripten.h>
+#endif
 #include <stdio.h>
 
 // Drawn with GLES 2 (as the editor and, later, the browser build): the 240x160 picture as a
@@ -75,6 +78,9 @@ bool bmWindowOpen(const char *pTitle, int scale)
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   s_window = SDL_CreateWindow(pTitle, BM_HAL_SCREEN_WIDTH * scale, BM_HAL_SCREEN_HEIGHT * scale,
                               SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+#ifdef __EMSCRIPTEN__
+  if (s_window) SDL_SetWindowFillDocument(s_window, true);  // the game takes the whole page
+#endif
   s_gl = s_window ? SDL_GL_CreateContext(s_window) : NULL;
   if (s_gl == NULL || !SDL_GL_MakeCurrent(s_window, s_gl) || !initGl())
   {
@@ -204,8 +210,14 @@ bool bmWindowFrame(const uint16_t *pPixels, uint16_t *pKeys)
   // Pace at the GBA frame rate; after a long stall start over instead of racing to catch up.
   s_next += FRAME_NS;
   Uint64 now = SDL_GetTicksNS();
+#ifdef __EMSCRIPTEN__
+  // In the browser the loop must give the page a turn every frame (built with ASYNCIFY).
+  emscripten_sleep(s_next > now ? (unsigned)((s_next - now) / 1000000u) : 0);
+  if (now > s_next && now - s_next > 4 * FRAME_NS) s_next = now;
+#else
   if (s_next > now) SDL_DelayPrecise(s_next - now);
   else if (now - s_next > 4 * FRAME_NS) s_next = now;
+#endif
   return true;
 }
 

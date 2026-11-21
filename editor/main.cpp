@@ -9,7 +9,10 @@
 //
 //   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--target pc|gba] [--frames N --screenshot out.ppm] [--tab N]
 //            [--game path] [--bmlink path] [--gba-image path] [--xboo device] [--reset none|xboo]
-//            [--port N]
+//            [--port N] [--gba-rom path]
+//
+// Export (Ctrl+E) cooks all rooms and writes one GBA image with them (editor/rom_export.h),
+// to play in an emulator or from a flash cartridge. In the browser it is downloaded.
 //
 // Without arguments it opens assets/test.bmproj.
 
@@ -17,6 +20,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -34,6 +38,7 @@
 #include "palette_panel.h"
 #include "project.h"
 #include "project_panel.h"
+#include "rom_export.h"
 #include "runner.h"
 #include "script_panel.h"
 #include "sound_panel.h"
@@ -50,6 +55,22 @@ extern "C" {
 #include "state.h"
 }
 
+#ifdef __EMSCRIPTEN__
+#  include <emscripten.h>
+// Hands a file of the page's file system to the browser as a download.
+EM_JS(void, bmDownloadFile, (const char *path, const char *name), {
+  const data = FS.readFile(UTF8ToString(path));
+  const url = URL.createObjectURL(new Blob([data], { type: 'application/octet-stream' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = UTF8ToString(name);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+#endif
+
 using namespace ose::ui;
 using namespace bm::editor;
 
@@ -64,7 +85,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
       <Item action="script.new"/>
       <Item action="song.new"/>
       <Item action="asset.import"/><Item action="asset.open"/><Item action="asset.delete"/>
-      <Item action="room.reload"/><Item action="app.quit"/>
+      <Item action="room.reload"/><Item action="project.export"/><Item action="app.quit"/>
     </Menu>
     <Menu title="Run"><Item action="run.start"/><Item action="run.pc"/><Item action="run.gba"/><Item action="run.stop"/><Item action="gfx.capture"/>
       <Item action="sync.off"/><Item action="sync.gba_pc"/><Item action="sync.pc_gba"/></Menu>
@@ -78,6 +99,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
     <Button text="Run" action="run.start"/>
     <OptionButton id="run_target" items="PC;GBA (Xboo)"/>
     <Button text="Stop" action="run.stop"/>
+    <Button text="Export" action="project.export" tooltip="Write the game as one GBA image for an emulator or a flash cartridge"/>
     <CheckBox id="live" text="Live" pressed="1"/>
     <Label text="  Sync"/>
     <Button id="sync_off" text="Off" toggle="1" pressed="1" action="sync.off" tooltip="The GBA and the PC game each play on their own"/>
@@ -454,6 +476,64 @@ struct Editor
     runner.setSync(mode, path);
   }
 
+  // Export: the game's cartridge image with all rooms cooked into it, as one .gba file.
+  std::string exportRuntime() const
+  {
+    std::string rom = runner.settings.gbaRom;
+    const std::string mb = "_mb.gba";
+    std::string image = runner.settings.gbaImage;
+    if (rom.empty() && image.size() > mb.size() && image.compare(image.size() - mb.size(), mb.size(), mb) == 0)
+      rom = image.substr(0, image.size() - mb.size()) + ".gba";
+    return rom;
+  }
+
+  std::string exportName() const
+  {
+    std::string name = projectPanel.file().name.empty() ? "game" : projectPanel.file().name;
+    for (char &c : name)
+      if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') c = '_';
+    return name + ".gba";
+  }
+
+  void exportRom()
+  {
+    std::string runtime = exportRuntime();
+    std::error_code ec;
+    if (runtime.empty() || !std::filesystem::exists(runtime, ec))
+    {
+      runLine("Export needs the game's cartridge image (game.gba of a GBA build): set gba-rom in "
+              "~/.config/blutmond/editor.conf or pass --gba-rom", true);
+      return;
+    }
+    std::string pack;
+    if (!cookLevel(pack)) return;
+#ifdef __EMSCRIPTEN__
+    // In the browser the image is written into the page's file system and downloaded.
+    std::string out = "/tmp/" + exportName();
+    std::string error;
+    if (!exportRomFiles(runtime, pack, out, &error))
+    {
+      runLine("Export failed: " + error, true);
+      return;
+    }
+    bmDownloadFile(out.c_str(), exportName().c_str());
+    runLine("exported " + exportName() + " (" + std::to_string(std::filesystem::file_size(out, ec) / 1024) + " KB)", false);
+#else
+    std::string dir = projectPanel.file().path.empty() ? std::filesystem::current_path(ec).string()
+                                                       : std::filesystem::path(projectPanel.file().path).parent_path().string();
+    std::string suggestion = (std::filesystem::path(dir) / exportName()).string();
+    openForm(app.ui(), "Export GBA ROM", {{"File", suggestion, FormField::Kind::SaveFile, {}, 0, 0, "GBA ROM;gba"}}, "Export",
+             [this, runtime, pack](const std::vector<std::string> &v, std::string *pError) {
+               std::string out = v[0];
+               if (std::filesystem::path(out).extension() != ".gba") out += ".gba";
+               if (!exportRomFiles(runtime, pack, out, pError)) return false;
+               std::error_code e;
+               runLine("exported " + out + " (" + std::to_string(std::filesystem::file_size(out, e) / 1024) + " KB)", false);
+               return true;
+             });
+#endif
+  }
+
   void startRun(RunTarget t)
   {
     std::string path;
@@ -589,6 +669,8 @@ struct Editor
   {
     Context &ui = app.ui();
     ui.actions().add({"room.reload", "Cook again", "refresh", "F5", "", [this] { cook(); pushLive(); }, nullptr, nullptr});
+    ui.actions().add({"project.export", "Export GBA ROM...", "share-square-o", "Ctrl+E", "Write the game as one GBA image for an emulator or a flash cartridge",
+                      [this] { exportRom(); }, nullptr, nullptr});
     ui.actions().add({"run.start", "Run", "play", "F6", "Play all rooms on the chosen target", [this] { startRun(target); }, nullptr, nullptr});
     ui.actions().add({"run.pc", "Run on the PC", "play", "", "", [this] { startRun(RunTarget::Pc); }, nullptr, nullptr});
     ui.actions().add({"run.gba", "Run on the GBA (Xboo)", "gamepad", "F7", "", [this] { startRun(RunTarget::Gba); }, nullptr, nullptr});
@@ -817,6 +899,9 @@ int main(int argc, char **argv)
 #ifdef BM_EDITOR_GBA_IMAGE
   run.gbaImage = BM_EDITOR_GBA_IMAGE;
 #endif
+#ifdef BM_EDITOR_GBA_ROM
+  run.gbaRom = BM_EDITOR_GBA_ROM;
+#endif
   run.load();
   for (int i = 1; i < argc; i++)
   {
@@ -874,6 +959,16 @@ int main(int argc, char **argv)
     std::fprintf(stderr, "%s\n", error.c_str());
     return 1;
   }
+
+#ifdef __EMSCRIPTEN__
+  // In the browser the editor takes the whole page and follows its size.
+  int windowCount = 0;
+  if (SDL_Window **windows = SDL_GetWindows(&windowCount))
+  {
+    if (windowCount > 0) SDL_SetWindowFillDocument(windows[0], true);
+    SDL_free(windows);
+  }
+#endif
 
   Editor editor(app);
   editor.themeName = themeName == "dark" || themeName == "light" ? themeName : "classic";
