@@ -52,89 +52,163 @@ and a hash per flash sector of the image. It is what later builds diff against, 
 
 ## 3. A cartridge image that updates well
 
-Flash memory is erased in sectors (commonly 64 KB or more) and erasing is the slow part.
-Bits can be programmed from 1 to 0 without erasing. So:
+What flash memory allows decides the design (sources and what is not verified: section 10):
+
+- **Erasing** works on whole sectors only and sets them to 0xFF. Sector sizes differ by
+  chip: 128 KB on the S29GL256 common in GBA cartridges, 4 KB on others (SST39VF). Erasing
+  is slow (around half a second per sector on the large-sector chips) and is what wears
+  flash out.
+- **Programming** only clears bits and needs no erase if the place is still erased. It
+  works word by word at any address.
+- **A programmed unit should not be programmed again** before its sector is erased. Some
+  chips protect each 32-byte unit with an error-correcting code, and a second programming
+  of that unit switches the protection off for it. This is the alignment that matters: not
+  for where a write may start, but for never touching a unit twice.
+
+So the rules of this design:
+
+1. An update is **appended into erased space**. Nothing that is already on the cartridge is
+   modified to add it: not the old pack, not an index, not a "superseded" mark.
+2. There is **no directory**. No sector is rewritten on every update, so none wears faster
+   than the others.
+3. Everything appended is made of **64-byte units, each programmed exactly once**.
+4. An erase touches **one sector of the update area**, and only when the next update does
+   not fit into what is still erased.
 
 ```
-0x000000  runtime                          padded to a reserved size (default 192 KB)
-          directory A, directory B         one sector each
-          base pack
-          update pack 1, update pack 2 ... each starting where the previous one ended
-          free space                       left erased (0xFF)
+runtime            reserved size (default 192 KB, whole sectors); holds the layout block
+update area        a ring of whole sectors, fixed place and size
+base pack A
+base pack B        optional second place for a base pack (consolidation, below)
+free space         left erased
 ```
 
-- **The runtime has a fixed, reserved size**, so a new runtime never moves the content.
-- **Free space stays erased**, and padding inside the image is 0xFF, not 0. Appending data
-  there needs no erase at all.
-- **The directory** lists the packs in order (offset, size, CRC, content build number) and
-  has a sequence number and a CRC of its own. There are two copies; an update writes the
-  older one, and the runtime uses the valid one with the higher number. If power is lost
-  during an update, the previous directory is still valid and the game starts as before.
-- The sector size is a setting of the device profile; layout decisions are made in whole
-  sectors.
+The **layout block** is part of the runtime image and never changes after the build: where
+the update area is and how large, where base pack A and B are. The sector size is not in
+it; the updater reads it from the chip (section 6).
+
+### Update records
+
+The update area holds a sequence of records. Each record is:
+
+| Part | Size | Content |
+|---|---|---|
+| head | 64 bytes | `BMUR`, format, **sequence number** (counts up with every record), length of the whole record, kind, the base pack it builds on (offset and CRC), content build number, CRC of the head |
+| body | a multiple of 64 bytes | kind "update": an update pack (below). Kind "base": nothing; the head names the base pack that is valid from now on |
+| tail | 64 bytes | `BMUT`, the sequence number again, CRC of the body |
+
+- Head, body and tail are separate units, written in this order. **A record counts only
+  with a correct tail.** A record cut off by a lost cable or power is simply not there, and
+  the one before it stays in use.
+- A record starts on a 64-byte boundary. The first record of a sector starts at the
+  sector's first byte. A record may run on into the following sectors; it does not wrap
+  around the end of the area (it starts at the area's beginning instead).
+- **An update pack is cumulative**: it has a complete table of contents for the new version
+  and carries every chunk that differs from the **base pack**; all other entries point into
+  the base pack. It never refers to an earlier update. So only the newest record matters,
+  and every older one is free to be erased.
+
+### Finding the newest record
+
+At start the runtime does this, reading straight from ROM:
+
+1. Read the 64 bytes at the start of every sector of the update area (4 to 64 sectors,
+   section 9) and keep the valid head with the highest sequence number.
+2. From there, step from record to record by the length in each head, as long as heads are
+   valid and their numbers go up.
+3. Take the last record whose tail is correct. Check its body's CRC. If that fails, take
+   the one before.
+4. No valid record: the base pack A alone is the game.
+
+That is at most a few dozen reads of 64 bytes and one CRC over the newest update, well
+under a frame for the sizes expected. The result (which base, which update pack) is kept
+in RAM; the cartridge is not searched again.
+
+Anything unexpected at a place where a head should be (not erased, not a valid head) ends
+step 2; a newer record can then only start at a sector boundary, where step 1 has already
+seen it.
+
+### Adding an update
+
+1. The place for the new record is right after the newest one, if the record fits into
+   the rest of that sector and that rest is still erased.
+2. Otherwise the record starts at the next sector of the ring (a record larger than a
+   sector therefore always starts at a sector's first byte). The sectors it needs are
+   erased first if they are not blank. They never hold the record in use: the area has at
+   least two sectors and a record may be at most a quarter of it. An erase that was cut
+   off leaves a sector that is not blank, and it is simply erased again next time.
+3. Program head, body, tail. Read back and compare the CRCs.
+
+So most updates program a few kilobytes and erase nothing. With 128 KB sectors and updates
+of 2 KB, one sector is erased about every 60 updates; with 4 KB sectors, one per update,
+but there an erase is quick and small. In both cases the erases go round the ring, so the
+wear is spread evenly over the area.
 
 ### Pack sets
 
-The runtime mounts the base pack and the update packs as one **pack set**. An update pack
-has a complete table of contents for the new version of the game, but holds only the chunks
-that changed; the entries of unchanged chunks point into an earlier pack of the set.
+The runtime mounts the base pack and the newest update pack as one **pack set**:
 
-- This is the same idea as the live link's transfer (new table, copy what is already there:
-  [../spec/link-protocol.md](../spec/link-protocol.md) §3), by reference instead of by
-  copy, which is possible because ROM is read in place.
-- Chunk indices stay what they are for the runtime: it reads the newest table and follows
-  each entry to the pack that holds the bytes. Nothing else in the engine changes.
-- Format change: a table entry gets a "source pack" number (pack format minor 2; four bits
-  taken from the compression byte, 0 meaning this pack). The pack's CRC covers its table
-  and its own chunks.
-- An update for a changed script is its module (a few hundred bytes with one module per
+- This is the same idea as the live link's transfer (new table, take from the old pack what
+  did not change: [../spec/link-protocol.md](../spec/link-protocol.md) §3), by reference
+  instead of by copy, which is possible because ROM is read in place.
+- Chunk indices stay what they are for the runtime: it reads the update's table and follows
+  each entry either into the update or into the base. Nothing else in the engine changes.
+- Format change: a table entry gets a flag "in the base pack" (pack format minor 2). The
+  update pack's CRC covers its table and its own chunks; the head names the base by CRC, so
+  an update can never be combined with the wrong base.
+- An update for one changed script is its module (a few hundred bytes with one module per
   script, [attachable-scripts.md](attachable-scripts.md) §4), the string table if a name
   was added, and the table of contents: about 1 to 2 KB for the demo.
 
 ### Consolidating
 
-Update packs pile up. When free space runs low, after 16 packs, or for a release, the cooker
-writes a new base pack with a **stable layout**: given the manifest of what is on the
-cartridge, every unchanged chunk keeps its offset, a changed chunk stays in place if it
-still fits (chunks get a little slack, by default 1/16 of their size, at least up to the
-next 256 bytes), and only what cannot stay moves to the end. The result differs from the
-old image in as few sectors as possible. This is the `relayout` idea of
-[../spec/pack-format.md](../spec/pack-format.md) §2.6 with "what is already there" as the
-layout to keep.
+A cumulative update grows as the game moves away from its base. When it passes a quarter of
+the update area, or for a release, a new base pack is written:
+
+1. The new base goes into the base place that is not in use (B if A is, and the other way
+   round), erased first. The current game keeps running from the old one.
+2. The cooker lays the new base out **stably**: given the manifest of the old base, every
+   unchanged chunk keeps its offset, a changed chunk stays in place if it still fits
+   (chunks get a little slack), and only what cannot stay moves to the end. Sectors that
+   come out identical are copied on the device from the old base to the new place; only the
+   others travel over the cable.
+3. A record of kind "base" is appended to the update area. From the moment its tail is
+   written, the new base is the game. Until then the old one is, whatever happens.
+
+A cartridge too small for two base packs can consolidate in place (erase and rewrite the
+sectors that differ). That is not safe against a lost cable: the game may not start until
+the update is run again, which the updater can always do because it runs from RAM.
 
 ## 4. Update files
 
-`bmpack update old.bmbuild new.gba -o game-1.2.0-to-1.2.1.bmup`
+`bmpack update old.bmbuild new.bmbuild -o game-1.2.0-to-1.2.1.bmup`
 
 ```
 "BMUP", format version
-base:   runtime build id, directory sequence number, content id      (what it applies to)
-result: content id, image CRC
-sector size
-operations, in order:
-  program  offset, length, bytes        into erased space, no erase needed
-  rewrite  sector offset, bytes         erase and write a whole sector
-  directory bytes                       always last
+applies to: runtime build id, base pack CRC
+result:     content build number, content id
+either      an update pack                    (the record is made on the device, which
+                                               knows the sequence number and the place)
+or          a new base pack, as a list of sectors: "same as old sector n" or the bytes
 ```
 
-- By default the tool makes an **append update** (one `program`, one `directory`). With
-  `--consolidate` it makes a stable-layout update (`rewrite` for each differing sector).
-- An update only applies to the exact base it names. `bmpack update` can chain or squash
-  updates between any two kept manifests.
+- An update is always made against the **base pack**, not against the previous update, so
+  it applies to a cartridge whatever updates it has seen since that base.
 - For people who only have the ROM file, the same step also writes a standard binary patch
-  between the two images, and the full image.
+  between two full images, and the full image. A full image is: runtime, an erased update
+  area, the consolidated base pack.
 
 ## 5. Getting it onto the cartridge
 
 | Way | For | How | Cost of a small change |
 |---|---|---|---|
 | **RAM only** | iterating | the live link as today; nothing is kept | 0.4 to 3.4 s (measured, [../HARDWARE.md](../HARDWARE.md) §6) |
-| **Over the link, into the cartridge** | development on a real cartridge; updating a friend's GBA | section 6 | the append: about 1 s plus transfer of 1 to 2 KB at 9 KB/s |
-| **Cartridge writer on the PC** | writers that can address sectors | `bmflash apply update.bmup --device <profile>`; a device profile says how to call the writer's tool for "erase sector" and "write range" | the changed sectors |
+| **Over the link, into the cartridge** | development on a real cartridge; updating a friend's GBA | section 6 | sending 1 to 2 KB at 9 KB/s and programming them; now and then one sector erase |
+| **Cartridge writer on the PC** | writers that can write a range without erasing the chip | `bmflash apply update.bmup --device <profile>`: reads the update area, finds the place as section 3 does, writes one record | the same; depends on the writer |
 | **File on an SD card** | flash cards that load a ROM file | copy `game.gba`; the editor's "Export" names it by version and can copy it to a mounted card | a file copy; incremental writing gains nothing here |
 
 For SD cards the versions and the save rules of section 7 are what matters. For everything
-that is real flash, the update file is.
+that is real flash, the update record is.
 
 ## 6. Updating over the link
 
@@ -147,27 +221,36 @@ New packets, handled only by the updater:
 
 | Packet | Content |
 |---|---|
-| `FLASH_INFO` | answer: chip identification, size, sector size, whether the chip is supported; the runtime version block and the valid directory |
-| `FLASH_SUMS` | request: range; answer: a CRC per sector. The PC can find what differs without a manifest and without reading the cartridge out |
-| `FLASH_ERASE` | sector |
-| `FLASH_PROGRAM` | offset and bytes, which must lie in erased space; answered with a CRC read back from the cartridge |
+| `FLASH_INFO` | answer: chip identification, size, the sector layout, the largest buffered write, whether the chip is supported; the runtime's version and layout blocks; the newest record's head and where the next one would go |
+| `FLASH_SUMS` | request: range; answer: a CRC per sector. The PC can compare a cartridge with an image without reading it out |
+| `FLASH_APPEND` | an update pack, in parts. The updater builds the record: finds the place, erases the next sector of the ring if it has to, programs head, body and tail, and answers with the CRC read back |
+| `FLASH_ERASE`, `FLASH_PROGRAM`, `FLASH_COPY` | one sector; bytes into erased space; a sector copied from another place on the cartridge. For base packs and for bringing a cartridge with unknown content to a known image |
 | `FLASH_DONE` | start the cartridge game again |
 
-`bmlink flash update.bmup` checks the base with `FLASH_INFO`, runs the operations, verifies
-each by CRC, writes the directory last and restarts. `bmlink flash game.gba` without an
-update file compares sector CRCs and writes what differs, which is also how a cartridge
-with an unknown state is brought to a known one.
+`bmlink flash update.bmup` checks runtime and base with `FLASH_INFO` and sends the update.
+`bmlink flash game.gba` compares sector CRCs and writes what differs.
 
-- **Flash drivers** sit behind a new part of the hardware interface
-  (`bmHalFlashIdentify/Erase/Program`). Chips are recognised by their identification and
-  only those tried on real cartridges are enabled; an unknown chip is reported and not
-  touched.
-- **The editor**: a "Keep on cartridge" button next to Run. Run pushes to RAM as now; Keep
-  writes what was pushed as an update pack. With "Live" and "Keep" both on, every saved
-  change is on the cartridge a few seconds later.
-- **GBA to GBA**: a GBA with a newer build offers the update to another one over the link
-  cable ([../spec/link-protocol.md](../spec/link-protocol.md) §9) at the 60 KB/s measured
-  there, by the same packets, with the sending game as master.
+**The flash driver** sits behind a new part of the hardware interface
+(`bmHalFlashIdentify/Erase/Program`):
+
+- It asks the chip for its layout (the Common Flash Interface: regions of sectors with
+  count and size, and the size of the write buffer) instead of assuming one.
+- Many cartridges have data lines 0 and 1 swapped, which changes every command value and
+  every value read from the chip's own tables, but not the data. The driver detects it from
+  the answer to the query (`QRY` reads as `RQZ`).
+- Programming is word by word to start with. Buffered programming is faster and is used
+  where the chip offers it; a buffered write must stay inside one aligned buffer block, so
+  the driver cuts writes there. Records are aligned to 64 bytes anyway.
+- Only command sets and chips tried on real cartridges are enabled. An unknown chip is
+  reported and not touched.
+
+**The editor**: a "Keep on cartridge" button next to Run. Run pushes to RAM as now; Keep
+appends what was pushed as an update record. With "Live" and "Keep" both on, every saved
+change is on the cartridge a few seconds later.
+
+**GBA to GBA**: a GBA with a newer build offers the update to another one over the link
+cable ([../spec/link-protocol.md](../spec/link-protocol.md) §9) at the 60 KB/s measured
+there, by the same packets, with the sending game as master.
 
 ## 7. Save games across versions
 
@@ -194,32 +277,76 @@ with an unknown state is brought to a known one.
    editor.
 2. Schema history, `MIGR`, save migration. Test: a save from the tag
    `milestone-gba-hardware` loads after a field was added.
-3. Image layout with reserved runtime size, directories, 0xFF padding; pack sets in the
-   runtime (source pack in the table). Test on host and in mGBA: base plus two update
-   packs plays like the consolidated pack, same state checksums.
-4. `bmpack update`, `.bmup`, stable layout and consolidation. Test: applying the update to
-   the old image file gives the new image, byte for byte; a one-script change touches one
-   program operation and the directory.
-5. The flash interface with a model of a flash chip on the host (erase sets 0xFF, program
-   can only clear bits, a write to a busy chip fails), the updater image, the `FLASH_*`
-   packets, `bmlink flash`. Test against the model, including power loss at every step.
-6. Real cartridges: identify, measure erase and program times, enable the chips that work.
-   Editor: "Keep on cartridge", Export.
+3. Pack sets in the runtime (table entries that point into the base pack); the layout
+   block; update records and the search of section 3, reading from an image in memory.
+   Test on host and in mGBA: base plus update plays like the consolidated pack, same state
+   checksums; with a cut-off record, a torn head and a wrong body CRC the previous record
+   is used.
+4. `bmpack update`, `.bmup`, stable layout. Test: a one-script change gives an update of
+   the expected size; base A to base B with identical sectors marked as copies.
+5. The flash interface with a model of a flash chip on the host: erase sets a sector to
+   0xFF, programming can only clear bits, programming a 64-byte unit twice is an error, the
+   sector size is a parameter (4 KB, 64 KB, 128 KB), power can be cut after any word. The
+   updater image, the `FLASH_*` packets, `bmlink flash`. Test against the model: a
+   thousand updates in a row, counting erases per sector, with power cuts at random
+   places; after each, the newest complete update or the one before is found.
+6. Real cartridges (section 9): identify, measure, enable the chips that work. Editor:
+   "Keep on cartridge", Export.
 
 Done when: with a game on a flash cartridge in a GBA on the Xboo cable, a changed script is
 written to the cartridge in under 5 seconds and is there after switching the GBA off and
-on; no sector outside the appended range and the directory was erased; pulling the cable in
-the middle leaves the previous version running; a save game made before the update loads
-after it.
+on; the write erased nothing, or one sector of the update area; no byte outside the new
+record changed; pulling the cable in the middle leaves the previous version running; a save
+game made before the update loads after it.
 
 ## 9. To find out first
 
-- Which flash cartridges and writers are at hand, their chips, sector sizes, and erase and
-  program times. Everything in section 3 is parameterised by the sector size, but the
-  defaults (64 KB sectors, 192 KB for the runtime) should come from real parts.
-- Whether the cartridges at hand let a program in RAM write them at all (some need an
-  unlock sequence of their own, some only map part of the chip).
+- Which flash cartridges and writers are at hand, and for each chip: its sector layout, its
+  command set, whether lines are swapped, erase and program times.
+- Whether those cartridges let a program in RAM write them at all (some need an unlock
+  sequence of their own, some map only part of the chip, some keep save data in the same
+  chip, which must then stay clear of the update area).
+- Whether programming the erased rest of a partly used sector is reliable on each chip
+  (it is what flash is specified to do, but cheap cartridges are worth a test of a
+  thousand appends with read-back).
 - Whether mGBA can stand in for a writable cartridge in tests, or the host model of step 5
   is the only automatic test.
 - How large the updater is. The link and CRC code are about 6 KB today; the aim is under
   16 KB so it loads in two seconds.
+- Default sizes. With 128 KB sectors the update area needs at least two sectors; four
+  (512 KB) is the proposal. With 4 KB sectors, 16 to 64 sectors.
+
+## 10. What was checked
+
+Checked against data sheets and the gbadev documentation when this plan was written
+(November 2026). The data sheets were read as search excerpts, not in full:
+
+| Statement | Source |
+|---|---|
+| Programming only changes bits from 1 to 0; erasing a sector sets it to 0xFFFF | S29GL-S data sheet; gbadev "Bootleg Carts" |
+| S29GL-S: buffered programming of up to 512 bytes, inside one aligned 512-byte line; 1 to 256 words anywhere in it | S29GL-S data sheet |
+| S29GL-S: a 32-byte page has an error-correcting code; programming a page more than once switches it off for that page until the sector is erased | S29GL064S and S29GL-S data sheets |
+| S29GL256 as used in GBA cartridges: 32 MB, sectors of 0x20000 (128 KB) | the FlashGBX profile quoted in a write-up on Chisflash cartridges |
+| SST39VF640x: uniform sectors of 2 KWord (4 KB), blocks of 32 KWord, programming word by word | SST39VF640x data sheet |
+| MX29GL256F: sector erase 0.5 s typical, 3.5 s at most | Macronix data sheet |
+| The chip reports its sector regions and its write-buffer size (2^N bytes at query offset 0x2A, regions from 0x2C) | CFI publication 100; U-Boot `cfi_flash.h` |
+| Many GBA cartridges swap data lines 0 and 1 (commands and query answers change, data does not); flash code must run from RAM; cartridges are 4 to 32 MB | gbadev "Bootleg Carts" |
+
+Sources: [S29GL064S data sheet](https://www.infineon.com/assets/row/public/documents/10/49/infineon-s29gl064s-64-mbit8-mbyte3-datasheet-en.pdf),
+[S29GL-S data sheet](https://www.farnell.com/datasheets/2785316.pdf),
+[MX29GL256F data sheet](https://www.macronix.com/Lists/Datasheet/Attachments/8527/MX29GL256F,%203V,%20256Mb,%20v1.5.pdf),
+[SST39VF640x data sheet](https://www.farnell.com/datasheets/9872.pdf),
+[CFI publication 100](https://freecalypso.org/pub/embedded/flash/cfi_100_20011201.pdf),
+[gbadev: Bootleg Carts](https://gbadev.net/gbadoc/bootleg-carts/introduction.html),
+[Chisflash write-up](https://gitendo.gitlab.io/blog/posts/writing-32mb-eeprom-to-chisflash/).
+
+Not checked, and marked as assumptions above: how many erase cycles each chip is specified
+for (data sheets of this kind usually say around 100,000 per sector); sector erase time of
+the 4 KB chips; which chips are in the cartridges at hand; whether any of them forbids a
+second programming of a larger unit than 32 bytes (the 64-byte rule would then grow);
+writers' abilities; mGBA.
+
+With those numbers: one erase per sector for every turn of the ring. At 2 KB per update and
+four sectors of 128 KB that is about 250 updates per turn, so 100,000 cycles would be 25
+million updates. A directory sector rewritten on every update would have been worn out
+250 times sooner.
