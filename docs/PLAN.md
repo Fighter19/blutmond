@@ -800,6 +800,7 @@ is meant for, and the cooker reports per profile what a port would change.
 | M9 | sound engine (mixer, sequencer, instruments, SFX) and the **sound window** (song, piano roll, instruments, CPU and memory display) | song with synth, samples and reverb under budget; preview bit exact; a changed song plays in the running game |
 | M10 | GBA to GBA: bootstrap, 2 MHz protocol; optional Raspberry Pi/RP2040 transport | runtime + content + state transferred, measured times documented |
 | M11 | shader PPU (HDMA effects), browser game, world map, polish | game runs in the browser with raster effects matching the software PPU |
+| M12 | custom structures and records ([plans/structures.md](plans/structures.md)): enums and `struct` in Mondskript, record tables as assets, `DTAB` chunks, inventory and stats in the game state, Data tab | a record changed in the editor reaches the running game; an older save game still loads |
 
 ### Status
 

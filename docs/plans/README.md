@@ -1,0 +1,10 @@
+# Plans
+
+Designs for what is not built yet. Each one says what it needs from the others and in which
+steps it can be built. The overall plan and the milestones are in [../PLAN.md](../PLAN.md);
+what is built is specified in [../spec/](../spec/README.md). When a plan is built, its
+content moves into the spec and the plan shrinks to what is still open.
+
+| Plan | Covers |
+|---|---|
+| [structures.md](structures.md) | custom structures and records: the data behind weapons, spells, abilities, consumables and armour |
