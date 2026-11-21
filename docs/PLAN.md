@@ -695,6 +695,26 @@ font, fixed colours, in the style of Lunar Magic and Windows 9x tools.
 | Build & run | host emulation, mGBA, real hardware |
 | Debugger | breakpoints, variables, live state, frame step, PPU snapshot |
 
+**Rule: a subsystem is not done without its window.** The editor is how the engine is used, so
+every milestone that adds a kind of content (rooms, sprites, scripts, sound) includes the
+window that creates and edits it, its budget display (section 16), and Run/Live: a change
+made in the window reaches the running game on the PC and on the GBA without a restart. A
+runtime feature that can only be reached through files and command-line tools counts as
+half done. Where the windows stand:
+
+| Window | State |
+|---|---|
+| Project | rooms and assets, usage, import, new room (after M6) |
+| Room | view with collision and objects; painting stays in Tiled for now |
+| Tiles & palettes | cooked tiles and banks, colour overrides; the interactive packer is open |
+| Sprites & animation | M6a |
+| Script | M7 (text first, nodes after) |
+| Sound | M9 |
+| State | state map (M5) |
+| Hardware | the Graphics tab: VRAM, OAM, palettes, budgets, from the preview or the running game; CPU profiler zones are open |
+| Build & run | Run on the PC and on the GBA, Live |
+| World map, Live link, Debugger | open |
+
 ## 16. Showing hardware limits in the editor
 
 Rule: **hard limits are enforced, soft limits are explained.** Every warning says what the
@@ -767,9 +787,10 @@ is meant for, and the cooker reports per profile what a port would change.
 | M4 | room editor, collision grid, player physics, objects and engine classes, camera, room changes, VRAM tile streaming | the test level is playable on the GBA: both pits can be jumped, the cliff can be climbed, the kill zone respawns the player, the door leads to a second room |
 | M5 | state schema, save states, state map in the editor | save state taken on the host loads in mGBA (and back) |
 | M6 | live link: `xboo` library (measure the rate first), packet protocol with CRC/retry/resync, adaptive delay, region table, reload modes | the runtime stays on the GBA; a changed room and a changed state are pushed without a reset over a four-wire Xboo cable; the bit-error test passes |
-| M7 | scripting: parser, types, bytecode, verifier, interpreter; text view; then node view | enemy and door scripted; text/node switch is lossless; script swap over the live link |
+| M6a | sprites and animation: sprite source format (sheet, frames, anchors, hitboxes, animations), cooker (OBJ tiles, meta sprites, OBJ palette banks), animation player in the runtime, **animation editor** | the player and an enemy are drawn from sprite assets on GBA and host; an animation changed in the editor plays in the running game |
+| M7 | scripting: parser, types, bytecode, verifier, interpreter; **script window** (text view; then node view) | enemy and door scripted; text/node switch is lossless; script swap over the live link |
 | M8 | AOT: C back end, relocation packer, module loader/overlays; GDB stub over the transport | AOT module in IWRAM faster than bytecode with the same state hashes; breakpoint on a script line on hardware |
-| M9 | sound engine and sound editor | song with synth, samples and reverb under budget; preview bit exact |
+| M9 | sound engine (mixer, sequencer, instruments, SFX) and the **sound window** (song, piano roll, instruments, CPU and memory display) | song with synth, samples and reverb under budget; preview bit exact; a changed song plays in the running game |
 | M10 | GBA to GBA: bootstrap, 2 MHz protocol; optional Raspberry Pi/RP2040 transport | runtime + content + state transferred, measured times documented |
 | M11 | shader PPU (HDMA effects), browser game, world map, polish | game runs in the browser with raster effects matching the software PPU |
 
