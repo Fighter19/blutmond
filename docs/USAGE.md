@@ -72,6 +72,10 @@ Options: `--theme classic|light|dark` (also in the View menu, remembered), `--ta
   logo is still missing from the header (section 4): `tools/gbafix.py out.gba --logo FILE`.
 - The tabs (Room, Animation, Script, Sound, Graphics, and Project and State on the left) are
   described in the [README](../README.md).
+- The window can have any size: the dividers between the project panel, the tabs, the side
+  panels and Report/Messages can be dragged; side panels keep their width when the window
+  grows; toolbars wrap onto a second row when they do not fit. Below about 1050 x 750 pixels
+  the editor scrolls instead of cutting panels off.
 
 Messages from the tools appear in the Messages list at the bottom. A job that has to wait for
 another one says so there.
