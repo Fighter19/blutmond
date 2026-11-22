@@ -31,7 +31,19 @@ the element resisted. Not yet as the plan has it: icons and sounds, the stat pre
 the Antidote's cure and the Fire Flask wait for steps 6 and 7 (effects, projectiles); the new
 items are not placed in the level yet (step 5, the room with the chests). Weapons strike with
 their element (`hit_box` takes one: the Flame Brand burns, its `#Ignite` waits for step 7). Armour names its slot with the game's
-`enum Slot` (Weapon, Spell, Head, Body, Accessory: the equipment slots 0 to 4) instead of a byte. Steps 5 to 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
+`enum Slot` (Weapon, Spell, Head, Body, Accessory: the equipment slots 0 to 4) instead of a byte. Step 5 built in part: the abilities act while owned
+(the role `ability`, data-format.md §6: their stats count, their scripts are attached in the 4
+ability slots): Double Jump and Wall Jump are only stats the body step reads (AirJumps,
+WallSlide), `AbilityDash` (L: 12 frames at 3.5, then 30 to rest), `AbilityPound` (Down and
+Jump in the air, not Down and B, which is the weapon's stab: straight down as fast as the room
+lets things fall, 4 in the test level, not 6; landing strikes both sides for 6) and
+`AbilitySecondWind` (a `damage_in` filter: once, then 30 seconds to come back, not once per
+room: no script hears of a room change yet). A `Pedestal` gives each in the third room, the
+Hall of Abilities behind the boss hall (`ability_hall.tmx`): Double Jump and Second Wind on
+the floor, Dash on a ledge two jumps high, Wall Jump beyond a pit, Ground Pound atop a shaft
+climbed by wall jumps. Not yet: the chests, the cracked floor (breakable blocks are not
+built), player animations for the abilities; the Dash button is L, which also uses quick slot
+1. Steps 6 and 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

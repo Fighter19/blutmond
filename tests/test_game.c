@@ -860,11 +860,11 @@ static void testTheWorldMap(void)
 {
   start();
   frames(3, 0);
-  // test_room (4 x 1 cells), test_room_2 (2 x 1) and the boss hall (2 x 1) in a row; the debug
-  // rooms are hidden.
-  TEST_ASSERT(s_game.map.pChunk != NULL && s_game.map.roomCount == 3 && s_game.map.cellCount == 8);
+  // test_room (4 x 1 cells), test_room_2 (2 x 1) and the boss hall (2 x 1) in a row, the hall of
+  // abilities (2 x 2) behind it; the debug rooms are hidden.
+  TEST_ASSERT(s_game.map.pChunk != NULL && s_game.map.roomCount == 4 && s_game.map.cellCount == 12);
   TEST_ASSERT(s_game.map.room == 0);
-  TEST_ASSERT(exploredCells() == 1 && bmMapPercent(&s_game) == 12);
+  TEST_ASSERT(exploredCells() == 1 && bmMapPercent(&s_game) == 8);
   // The HUD's map: the player's cell in the middle (26, 2), marked, in the room they are in.
   uint16_t look = 0;
   TEST_ASSERT(mapCodeAt(26, 2, &look));
@@ -875,7 +875,7 @@ static void testTheWorldMap(void)
   frames(60, BM_KEY_RIGHT);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
   frames(5, 0);
-  TEST_ASSERT(s_game.map.room == 1 && exploredCells() == 3 && bmMapPercent(&s_game) == 37);
+  TEST_ASSERT(s_game.map.room == 1 && exploredCells() == 3 && bmMapPercent(&s_game) == 25);
   // The door shows on the HUD's map: test_room's last cell, left of the player, has a door east.
   TEST_ASSERT(mapCodeAt(25, 2, &look) && (look & 0x22) == 0x22 && ((look >> 8) & 3) == BM_UI_MAP_ROOM_KIND);
   TEST_ASSERT(mapCodeAt(26, 2, &look) && (look & 0x88) == 0x88);   // and west in the player's cell
@@ -885,7 +885,7 @@ static void testTheWorldMap(void)
   press(BM_KEY_DOWN);
   press(BM_KEY_DOWN);
   press(BM_KEY_A);
-  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Map") && uiShows("37"));
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Map") && uiShows("25"));
   TEST_ASSERT(mapCellsIn(2, 4, 26, 14) == 3);
   // The player's cell blinks: drawn again with the frame.
   int marked = 0;
@@ -1035,6 +1035,88 @@ static void testEquipmentRoles(void)
   s_pack = old;
   TEST_ASSERT(bmGameAfterLoad(&s_game) == BM_SUCCESS && bmInventoryStat(inv, BM_STAT_DEFENCE) == 8);
   free(changed);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+// first-items.md step 5: the abilities, from their pedestals in the hall behind the boss
+// (assets/test_room/ability_hall.tmx). Each acts while owned (the role ability): Double Jump and
+// Wall Jump are only stats the body step reads; Dash, Ground Pound and Second Wind attach their
+// scripts in the ability slots. A save game brings them back.
+static int slotOfClass(const char *cls)
+{
+  for (int s = BM_ATTACH_ABILITY_FIRST; s < BM_ATTACH_ABILITY_FIRST + BM_ATTACH_ABILITY_SLOTS; s++)
+    if (s_game.attachments.classKey[s] == keyOf(cls)) return s;
+  return -1;
+}
+
+static void touchAt(int32_t x, int32_t y)
+{
+  bmBodyPlace(&s_game.player, x, y);
+  frames(4, 0);
+}
+
+static void testAbilities(void)
+{
+  startWith(s_data, s_size, "ability_hall");
+  BmInventory *inv = &s_game.inventory;
+  BmBody *b = &s_game.player;
+  frames(30, 0);
+  TEST_ASSERT(actorOfClass("Pedestal") >= 0);
+  // Double Jump: a stat, no script.
+  touchAt(56, 288);
+  TEST_ASSERT(bmInventoryCount(inv, keyOf("DoubleJump")) == 1 && bmInventoryStat(inv, BM_STAT_AIR_JUMPS) == 1);
+  TEST_ASSERT(s_game.attachments.classKey[BM_ATTACH_ABILITY_FIRST] == 0);
+  frames(10, 0);
+  TEST_ASSERT(b->onGround && b->airJumpsLeft == 1);
+  // Second Wind: a blow that would end the player leaves 1 health, once.
+  touchAt(88, 288);
+  int wind = slotOfClass("AbilitySecondWind");
+  TEST_ASSERT(wind == BM_ATTACH_ABILITY_FIRST);
+  uint32_t deaths = s_game.deaths;
+  s_game.hurtTimer = 0;
+  TEST_ASSERT(bmGameStrikePlayer(&s_game, 100, b->x));
+  TEST_ASSERT(s_game.health == 1 && s_game.deaths == deaths);
+  s_game.hurtTimer = 0;
+  TEST_ASSERT(bmGameStrikePlayer(&s_game, 100, b->x));
+  TEST_ASSERT(s_game.deaths == deaths + 1);
+  s_game.hurtTimer = 0;
+  // Dash, on the ledge: L sends the player ahead.
+  touchAt(152, 208);
+  int dash = slotOfClass("AbilityDash");
+  TEST_ASSERT(dash == BM_ATTACH_ABILITY_FIRST + 1 && bmInventoryStat(inv, BM_STAT_DASH) == 1);
+  bmBodyPlace(b, 24, 288);   // the ledge's wall is at 112
+  b->facing = 1;
+  frames(20, 0);
+  int32_t x0 = b->x;
+  frames(1, BM_KEY_L);
+  frames(11, 0);
+  TEST_ASSERT(b->x - x0 >= BM_FIX(40));   // 12 frames at 3.5
+  // Wall Jump, beyond the pit: a stat the body step reads.
+  touchAt(360, 208);
+  TEST_ASSERT(bmInventoryStat(inv, BM_STAT_WALL_SLIDE) == 1 && slotOfClass("AbilityWallJump") < 0);
+  // Ground Pound, at the top of the shaft: Down and Jump in the air go down fast.
+  touchAt(360, 48);
+  int pound = slotOfClass("AbilityPound");
+  TEST_ASSERT(pound == BM_ATTACH_ABILITY_FIRST + 2);
+  bmBodyPlace(b, 464, 100);
+  frames(2, 0);
+  frames(1, BM_KEY_DOWN | BM_KEY_A);
+  frames(2, BM_KEY_DOWN);
+  TEST_ASSERT(b->vy == s_game.physics.maxFallSpeed && b->vx == 0 && !b->onGround);   // as fast as the room lets
+  frames(60, 0);
+  TEST_ASSERT(b->onGround && s_game.attachments.fields[pound * BM_SCRIPT_MAX_FIELDS + 1] == 1);   // Pounds
+  // The save game: the abilities come back with their scripts.
+  memset(bmHalHostSaveMemory(), 0xFF, BM_HAL_SAVE_SIZE);
+  TEST_ASSERT(bmGameWriteSaveGame(&s_game));
+  start();
+  TEST_ASSERT(bmInventoryStat(inv, BM_STAT_AIR_JUMPS) == 0 && slotOfClass("AbilityDash") < 0);
+  TEST_ASSERT(bmGameReadSaveGame(&s_game));
+  TEST_ASSERT(bmInventoryStat(inv, BM_STAT_AIR_JUMPS) == 1 && bmInventoryStat(inv, BM_STAT_WALL_SLIDE) == 1);
+  TEST_ASSERT(slotOfClass("AbilitySecondWind") == wind && slotOfClass("AbilityDash") == dash && slotOfClass("AbilityPound") == pound);
+  // An ability lost: its script and stats go, the others move up.
+  TEST_ASSERT(bmInventoryTake(inv, keyOf("SecondWind"), 1));
+  bmGameInventoryChanged(&s_game);
+  TEST_ASSERT(slotOfClass("AbilitySecondWind") < 0 && slotOfClass("AbilityDash") == BM_ATTACH_ABILITY_FIRST);
   TEST_ASSERT(bm_script_errors == 0);
 }
 
@@ -1859,6 +1941,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheWorldMap);
   RUN_TEST(testElementsArmourAndConsumables);
   RUN_TEST(testEquipmentRoles);
+  RUN_TEST(testAbilities);
   RUN_TEST(testKnockbackAndFlash);
   RUN_TEST(testADropFallsAndIsTaken);
   RUN_TEST(testTheDebugLobby);

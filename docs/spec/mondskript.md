@@ -213,7 +213,8 @@ every other file of the same module.
 ### Attachments
 
 A class that `extends Attachment` is not placed in rooms as an object: it is attached at run
-time to the player, in one of 8 slots, or to the room, in one of 4
+time to the player, in one of 12 slots (0 to 7 go with the equipment slots, 8 to 11 with the
+abilities owned, [data-format.md](data-format.md) §6), or to the room, in one of 4
 ([../plans/attachable-scripts.md](../plans/attachable-scripts.md), the runtime in
 `src/world/attachments.h`). Every frame, before the player's body step and in
 slot order, each attachment gets `press`/`release` for the game buttons that changed (`#Jump`

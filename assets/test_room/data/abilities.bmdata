@@ -18,7 +18,6 @@ record WallJump {
   title = "Wall Jump"
   description = "Slide down walls and jump off them."
   stats.wall_slide = 1
-  behaviour = AbilityWallJump
 }
 
 record GroundPound {

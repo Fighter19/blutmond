@@ -262,6 +262,10 @@ BmResult bmGameAfterLoad(BmGame *pGame);
 /// after equipping, loading a state and a pack that changed.
 void bmGameEquipmentChanged(BmGame *pGame);
 
+/// After something was given or taken: the abilities owned (their stats, their scripts in the
+/// ability slots, attachments.h).
+void bmGameInventoryChanged(BmGame *pGame);
+
 /// The player's most health: 30 + the stat MaxHealth (inventory.h).
 int32_t bmGameMaxHealth(const BmGame *pGame);
 

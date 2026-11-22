@@ -65,6 +65,11 @@ Down-Fwd, Fwd + B for the Short Sword's Lunge), and a charm worn gives its comma
 weapon (the Crimson Charm absorbs blood, the Moon Charm flips gravity). While attacking the player cannot walk, but a run's speed fades rather than stopping, and in the air the player steers; each weapon's record says otherwise if wanted (`ground_move`, `air_move` in the Data tab). Up + B strikes above, Down + B sweeps low, and in the air stabs downwards (bouncing off what it hits). Start, Commands lists
 what the player has now. The debug lobby has a Dagger and both charms lying about to try them.
 
+**Abilities**: the boss hall has a door east into the Hall of Abilities. Its pedestals give
+Double Jump (a jump in the air), Second Wind (a blow that would end you leaves 1 health),
+Dash (L), Wall Jump (hold against a wall while falling to slide, jump to leap off) and Ground
+Pound (Down and Jump in the air), each behind the obstacle the one before overcomes.
+
 **The map**: the top right corner shows the rooms around the player as cells of a map, one
 cell a screen, with their walls and doors (orange); the room the player is in is lighter, the
 yellow square is where they are. Only cells the player has been in are shown; the save game

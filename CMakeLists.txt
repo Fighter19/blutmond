@@ -62,6 +62,7 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/world.bmworld)
 set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/boss_hall.tmx
+  ${PROJECT_SOURCE_DIR}/assets/test_room/ability_hall.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_lobby.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_wave.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_spotlight.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_pulse.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx)
@@ -104,6 +105,10 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/system_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/commands_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/map_menu.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/ability_dash.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/ability_pound.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/ability_second_wind.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pedestal.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/commands.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/command_strike.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/command_absorb.ms

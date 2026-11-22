@@ -125,7 +125,8 @@ than 64 rooms or 512 cells, or cells outside the table.
   room grew, rooms moved in the file's order) they now mark other cells.
 
 The test level's map: `assets/test_room/world.bmworld` places `test_room` at (0, 0); the second
-room and the boss hall follow by their doors; the debug rooms are hidden. Its Start menu has a
+room, the boss hall and the Hall of Abilities behind it follow by their doors; the debug rooms
+are hidden. Its Start menu has a
 **Map** page (`screens/map_menu.ms`); the boss's health bar moved below the player's (the top
 right is the small map's).
 

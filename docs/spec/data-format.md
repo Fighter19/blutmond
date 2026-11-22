@@ -154,7 +154,8 @@ struct Consumable is Item : item, usable { ... }
 | `item` | fields `title` (text), `icon` (sprite), `max_stack` (a whole number) | nothing yet: it marks what can be carried |
 | `equip(X)` | an `enum Slot` (at most 8 values); X is a value of it (every record goes into that slot) or a field of type `Slot` (each record says) | `equip(slot, record)` puts a record of the structure only into its slot (false otherwise) |
 | `usable` | a field of type `attach` | nothing yet: `use_item` attaches the first `attach` field, as for any record |
-| `stat_source(F)` | F (default `stats`) is an inner structure of at most 16 whole numbers (`bool` to `uint`), each a single value | while a record is equipped, field i of F is added to stat i |
+| `stat_source(F)` | F (default `stats`) is an inner structure of at most 16 whole numbers (`bool` to `uint`), each a single value | while a record is equipped (an ability: while it is owned), field i of F is added to stat i |
+| `ability` | not `equip` as well | a record acts while the player owns it: its stats count (with `stat_source`), and the class its first `attach` field names is attached in one of the 4 ability slots (attachments 8 to 11), in the order the abilities were obtained, with the record in its first `record<S>` variable; one no longer owned is detached, the ones after it move up. After a save game is read and a pack pushed, the slots follow what is owned again |
 
 - Roles are not inherited from a base. A role given twice, an unknown role or one whose needs
   are not met is an error. A stat whose field is named unlike the value of `enum Stat` with
@@ -162,7 +163,7 @@ struct Consumable is Item : item, usable { ... }
 - **Equipping**: a record of a structure with roles goes only into the slot its role says; a
   structure without roles (a game that declares none) may go anywhere, as before.
 - **Stat totals**: `stat(i)` is the player's own value plus what attachments add plus what
-  equipment adds. The equipment's part is derived (not saved, not in snapshots): worked out
+  equipment and abilities add. The equipment's part is derived (not saved, not in snapshots): worked out
   again whenever something is equipped or taken off, a state or save game is loaded, and a
   pack is pushed (a changed record counts at once). So a save game with armour on counts it
   once after loading.

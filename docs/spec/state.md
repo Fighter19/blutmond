@@ -173,13 +173,14 @@ In serialisation order. Count is the array length.
 | `inventory.quick` | u32 | 4 | save, link |
 | `inventory.statBase` | s16 | 16 | save, link |
 | `inventory.statBonus` | s16 | 16 | snapshot |
-| `attachments.classKey` | u32 | 12 | snapshot |
-| `attachments.state`, `attachments.wait` | u8 | 12 each | snapshot |
-| `attachments.pc`, `attachments.timer` | u16 | 12 each | snapshot |
-| `attachments.fields` | s32 | 96 | snapshot |
-| `attachments.lifetime` | u16 | 12 | snapshot |
-| `attachments.statOf` | u8 | 48 | snapshot |
-| `attachments.statAdded` | s16 | 48 | snapshot |
+| `attachments.classKey` | u32 | 16 | snapshot |
+| `attachments.state`, `attachments.wait` | u8 | 16 each | snapshot |
+| `attachments.pc`, `attachments.timer` | u16 | 16 each | snapshot |
+| `attachments.fields` | s32 | 128 | snapshot |
+| `attachments.lifetime` | u16 | 16 | snapshot |
+| `attachments.statOf` | u8 | 64 | snapshot |
+| `attachments.statAdded` | s16 | 64 | snapshot |
+| `attachments.abilityKey` | u32 | 4 | snapshot |
 | `hits.source`, `hits.slot` | u8 | 8 each | snapshot |
 | `hits.name` | u16 | 8 | snapshot |
 | `hits.damage` | s16 | 8 | snapshot |
@@ -197,9 +198,9 @@ In serialisation order. Count is the array length.
 | `screens.repeat` | u8 |  | transient |
 
 Sizes with this table: a save game is 655 bytes of payload, a link transfer 501, a snapshot
-2351 (2357 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
-pushed state hold 3072 bytes. Attachment slots 0 to 7 are the
-player's, 8 to 11 the room's. A snapshot is larger than one
+2591 (2597 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
+pushed state hold 3072 bytes. Attachment slots 0 to 11 are the
+player's (8 to 11 the abilities', in `abilityKey` the record each holds), 12 to 15 the room's. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).
 
 The inventory ([data-format.md](data-format.md), `src/world/inventory.h`): `count` entries in

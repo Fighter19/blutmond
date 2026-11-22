@@ -660,11 +660,15 @@ void bmGameEquipmentChanged(BmGame *g)
 {
   BmInventory *inv = &g->inventory;
   memset(inv->statEquip, 0, sizeof(inv->statEquip));
-  for (uint8_t s = 0; s < BM_INVENTORY_EQUIP; s++)
+  // What is equipped, then the abilities owned.
+  for (uint8_t s = 0; s < BM_INVENTORY_EQUIP + BM_INVENTORY_SLOTS; s++)
   {
     BmDataTable table;
     const uint8_t *record;
-    if (inv->equipped[s] == 0 || !bmDataFindRecord(g->pPack, inv->equipped[s], &table, &record)) continue;
+    bool owned = s >= BM_INVENTORY_EQUIP;
+    uint32_t key = owned ? (s - BM_INVENTORY_EQUIP < inv->count ? inv->key[s - BM_INVENTORY_EQUIP] : 0) : inv->equipped[s];
+    if (key == 0 || !bmDataFindRecord(g->pPack, key, &table, &record)) continue;
+    if (owned != ((bmDataTableRoles(&table) & BM_DATA_ROLE_ABILITY) != 0)) continue;
     int32_t stats[BM_DATA_MAX_STATS];
     uint32_t n = bmDataRecordStats(&table, record, stats);
     for (uint32_t i = 0; i < n && i < BM_INVENTORY_STATS; i++)
@@ -673,6 +677,12 @@ void bmGameEquipmentChanged(BmGame *g)
       inv->statEquip[i] = (int16_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v);
     }
   }
+}
+
+void bmGameInventoryChanged(BmGame *g)
+{
+  bmGameEquipmentChanged(g);
+  bmAttachmentsAbilities(g);
 }
 
 int32_t bmGameMaxHealth(const BmGame *g)
@@ -1371,6 +1381,7 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, attachments.lifetime, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
   BM_STATE_ARRAY(BmGame, attachments.statOf, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS * BM_ATTACH_STATS),
   BM_STATE_ARRAY(BmGame, attachments.statAdded, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS * BM_ATTACH_STATS),
+  BM_STATE_ARRAY(BmGame, attachments.abilityKey, BM_TYPE_U32, BM_STATE_SNAPSHOT, BM_ATTACH_ABILITY_SLOTS),
   // Hits in the middle of a swing: a snapshot continues them with the same targets still to come.
   BM_STATE_ARRAY(BmGame, hits.source, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   BM_STATE_ARRAY(BmGame, hits.slot, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
@@ -1415,8 +1426,10 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   bmUiShow(&g->ui, false);
   g->hudDirty = true;
   bmDataPrepare(g->pPack);
-  // A changed record (a pushed pack) counts at once.
+  // A changed record (a pushed pack) counts at once; the abilities owned are attached (a save
+  // game has no attachments).
   bmGameEquipmentChanged(g);
+  bmAttachmentsAbilities(g);
   bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
   bmGameDrawDialogue(g);
   bmScreensRedraw(g);

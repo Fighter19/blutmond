@@ -322,6 +322,8 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_take:
   case BM_SCRIPT_API_stat:
     bmInventoryScriptCall(&g->inventory, api, args, result);
+    // An ability obtained or lost: its stats and its script.
+    if ((api == BM_SCRIPT_API_give || api == BM_SCRIPT_API_take) && *result > 0) bmGameInventoryChanged(g);
     // What the player obtains is shown at the bottom left.
     if (api == BM_SCRIPT_API_give && *result > 0)
     {
@@ -1618,6 +1620,38 @@ bool bmAttachmentsUse(BmGame *g, uint32_t key)
   a->current = current;
   a->currentSlot = slot;
   return used;
+}
+
+void bmAttachmentsAbilities(BmGame *g)
+{
+  BmAttachments *t = &g->attachments;
+  BmActors *a = &g->actors;
+  uint32_t want[BM_ATTACH_ABILITY_SLOTS] = { 0 };
+  uint16_t cls[BM_ATTACH_ABILITY_SLOTS] = { 0 };
+  uint8_t n = 0;
+  for (uint8_t i = 0; i < g->inventory.count && n < BM_ATTACH_ABILITY_SLOTS; i++)
+  {
+    BmDataTable table;
+    const uint8_t *record;
+    uint32_t key = g->inventory.key[i];
+    if (!bmDataFindRecord(g->pPack, key, &table, &record) || !(bmDataTableRoles(&table) & BM_DATA_ROLE_ABILITY)) continue;
+    uint16_t behaviour = bmDataRecordBehaviour(&table, record);
+    if (behaviour == BM_DATA_NONE_ID) continue;
+    want[n] = key;
+    cls[n++] = behaviour;
+  }
+  uint8_t current = a->current, currentSlot = a->currentSlot;
+  for (uint8_t k = 0; k < BM_ATTACH_ABILITY_SLOTS; k++)
+  {
+    uint8_t slot = (uint8_t)(BM_ATTACH_ABILITY_FIRST + k);
+    if (t->abilityKey[k] == want[k] && (want[k] == 0 || t->classKey[slot] != 0)) continue;
+    bmAttachmentsDetach(g, slot);
+    t->abilityKey[k] = want[k];
+    const char *name = want[k] != 0 ? bmPackString(g->pPack, cls[k]) : NULL;
+    if (name != NULL && !attachKey(g, slot, hashName(name), 0, want[k])) t->abilityKey[k] = 0;
+  }
+  a->current = current;
+  a->currentSlot = currentSlot;
 }
 
 void bmAttachmentsEquipAll(BmGame *g)

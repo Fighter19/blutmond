@@ -64,7 +64,8 @@ struct Spell is Item : item, equip(Spell) {
   attach  behaviour;
 }
 
-struct Ability is Item : item {
+// Abilities act while owned: their stats count, their behaviour is attached in an ability slot.
+struct Ability is Item : item, ability, stat_source(stats) {
   StatBlock stats;
   attach    behaviour;   // none: pure data
 }

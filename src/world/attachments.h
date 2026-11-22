@@ -17,8 +17,10 @@
 #include "shared.h"
 #include "script_api.h"
 
-#define BM_ATTACH_PLAYER_SLOTS 8   // slots 0 to 7: the player's
-#define BM_ATTACH_ROOM_SLOTS 4     // slots 8 to 11: the room's
+#define BM_ATTACH_PLAYER_SLOTS 12  // slots 0 to 11: the player's (0 to 7 the equipment's, 8 to 11 abilities')
+#define BM_ATTACH_ABILITY_FIRST 8  // the abilities owned (the role ability), in the order they came
+#define BM_ATTACH_ABILITY_SLOTS 4
+#define BM_ATTACH_ROOM_SLOTS 4     // slots 12 to 15: the room's
 #define BM_ATTACH_ROOM_FIRST BM_ATTACH_PLAYER_SLOTS
 #define BM_ATTACH_SLOTS (BM_ATTACH_PLAYER_SLOTS + BM_ATTACH_ROOM_SLOTS)
 #define BM_ATTACH_STATS 4          // stats one attachment's add_stat is undone for when it goes
@@ -43,6 +45,7 @@ typedef struct BmAttachments
   // the slot is emptied.
   uint8_t statOf[BM_ATTACH_SLOTS * BM_ATTACH_STATS];
   int16_t statAdded[BM_ATTACH_SLOTS * BM_ATTACH_STATS];
+  uint32_t abilityKey[BM_ATTACH_ABILITY_SLOTS];   // the ability record in each ability slot, 0 none
   // Derived: the class in the actors' class table, or -1 (not in the pack now: the slot rests).
   int8_t cls[BM_ATTACH_SLOTS];
   uint16_t occupied;                      // a bit per slot with an attachment: nothing to do if 0
@@ -68,6 +71,11 @@ bool bmAttachmentsEquip(struct BmGame *pGame, uint8_t slot, uint32_t key);
 
 /// Attaches again what is equipped (after a save game was read: attachments are not in it).
 void bmAttachmentsEquipAll(struct BmGame *pGame);
+
+/// The ability slots follow what the player owns: the behaviour of each owned record of a
+/// structure with the role ability, in the order they were obtained (the first 4 with one), is
+/// attached with the record; one no longer owned is detached. After the inventory changed.
+void bmAttachmentsAbilities(struct BmGame *pGame);
 
 /// Attaches the class named `className` (string id) in `slot` for `lifetime` frames (0: until
 /// detached) with its first record<S> variable set to `record` (a command, commands.h).

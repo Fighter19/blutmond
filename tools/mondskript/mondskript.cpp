@@ -391,7 +391,7 @@ private:
       while (true)
       {
         RawRole r;
-        r.name = ident("a role (item, equip, usable, stat_source)");
+        r.name = ident("a role (item, equip, usable, stat_source, ability)");
         if (isPunct("("))
         {
           pos_++;
@@ -507,6 +507,8 @@ public:
     info.defaults.resize(info.size, 0);
     s.state = 2;
     for (const RawRole &r : s.roles) role(s, r);
+    if ((info.roles & BM_DATA_ROLE_EQUIP) && (info.roles & BM_DATA_ROLE_ABILITY))
+      throw CompileError{s.roles[0].name.line, s.roles[0].name.column, "a structure is equipment or an ability, not both"};
   }
 
   /// Warnings found while laying out (a stat whose field is named unlike the enum Stat says).
@@ -552,6 +554,11 @@ private:
       need("max_stack", m && isWhole(m->type), "a whole number");
       if (r.hasParam) fail(r.param, "role 'item' takes nothing in brackets");
       info.roles |= BM_DATA_ROLE_ITEM;
+    }
+    else if (r.name.text == "ability")
+    {
+      if (r.hasParam) fail(r.param, "role 'ability' takes nothing in brackets");
+      info.roles |= BM_DATA_ROLE_ABILITY;
     }
     else if (r.name.text == "usable")
     {
@@ -613,7 +620,7 @@ private:
       }
       info.roles |= BM_DATA_ROLE_STAT_SOURCE;
     }
-    else fail(r.name, "'" + r.name.text + "' is not a role (item, equip, usable, stat_source)");
+    else fail(r.name, "'" + r.name.text + "' is not a role (item, equip, usable, stat_source, ability)");
   }
 
   const std::vector<EnumInfo> &enums_;
