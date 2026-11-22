@@ -59,8 +59,8 @@ void bmEffectsPresent(struct BmGame *pGame);
 /// bottom): drawn as if turning about the hinge, an affine sprite scaled in x only, standing on
 /// the ground under the door. Closed far from the player, open near: `direction` east and west
 /// doors stand in the side wall (narrow: their depth shows 0.4 wide) and swing out of the room,
-/// widening; others (north) face the screen and turn away, narrowing. Scaled to the door's
-/// height.
+/// widening; others (north) face the screen and turn away, narrowing, in front of the dark of
+/// the opening (the sprite's frame 1, if any). Scaled to the door's height.
 /// Returns the OAM entries used, from `firstOam`.
 uint8_t bmEffectsDrawDoors(struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
 

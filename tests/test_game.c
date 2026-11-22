@@ -1017,7 +1017,7 @@ static void testDoorPanelsOpenNearby(void)
   // The lobby's doors on screen are drawn (a sprite of 32x32 and one of 32x16 each).
   bmBodyPlace(&s_game.player, 40, y);
   frames(1, 0);
-  TEST_ASSERT(bmEffectsDrawDoors(&s_game, 0, 128) >= 2);
+  TEST_ASSERT(bmEffectsDrawDoors(&s_game, 0, 128) >= 4);   // with the dark of the opening behind
 }
 
 // A line of dialogue appears a letter a frame; A shows the rest at once, the next A closes

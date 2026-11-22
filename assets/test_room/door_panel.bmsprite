@@ -2,6 +2,7 @@
 <sprite version="1" image="door_panel.png">
  <hitbox x="0" y="-48" w="32" h="48"/>
  <frame x="0" y="0" w="32" h="48" ax="0" ay="48"/>
+ <frame x="32" y="0" w="32" h="48" ax="0" ay="48"/>
  <animation name="idle" loop="1">
   <step frame="0" duration="60"/>
  </animation>

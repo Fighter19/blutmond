@@ -620,8 +620,10 @@ with `scale` = the door's height / the panel's and `xs = scale * cos a`, for eas
 affine sprite's matrix. The ground is the floor under the door's middle, searched from its top
 to 32 px below its bottom (platforms count), else its bottom. The hinge is at its left for north
 doors and `closed width` (`panel width * scale * 0.4`) left of its right edge for east and west.
-Each door's pieces share a matrix (the doors in object order, matrices from 0), double size,
-priority 1. Doors more than 64 px off screen are skipped. The panel's sprite, the direction and
+Behind a north door the panel sprite's frame 1, if it has one, is drawn at the hinge with x
+scale `scale` (the dark of the opening; after the panel in OAM, so behind it). Each door's
+pieces share a matrix, the opening its own (the doors in object order, matrices from 0), double
+size, priority 1. Doors more than 64 px off screen are skipped. The panel's sprite, the direction and
 the ground are found when the room's sprites are bound.
 
 **Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has

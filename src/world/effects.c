@@ -181,6 +181,14 @@ uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
                                          (uint8_t)(firstOam + used), (uint8_t)(maxOam - used));
     if (n != 0) matrix++;
     used = (uint8_t)(used + n);
+    // Behind a door in the back wall, the dark of the opening (the panel's frame 1): after the
+    // panel in OAM, so behind it.
+    if (side == 0 && s->frameCount > 1 && matrix < 32 && used < maxOam)
+    {
+      n = bmSpriteSheetDrawSheared(s, 1, sx, sy, scale, 0, scale, matrix, 1, (uint8_t)(firstOam + used), (uint8_t)(maxOam - used));
+      if (n != 0) matrix++;
+      used = (uint8_t)(used + n);
+    }
   }
   return used;
 }

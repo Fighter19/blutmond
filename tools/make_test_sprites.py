@@ -42,6 +42,9 @@ PALETTE = {
     'o': (128, 84, 50, 255),    # door planks
     'p': (88, 92, 104, 255),    # iron
     'q': (150, 156, 170, 255),  # iron, light
+    'r': (14, 10, 22, 255),     # doorway, darkest
+    's': (30, 24, 40, 255),     # doorway, dark
+    't': (48, 40, 58, 255),     # doorway, the edge's light
 }
 
 HEAD = [
@@ -252,6 +255,24 @@ def door_panel():
     return rows
 
 
+def doorway():
+    """The dark behind a door in the back wall, 32 x 48: the opening's sides and top catch a
+    little light, the depth is near black."""
+    rows = []
+    for y in range(48):
+        row = ""
+        for x in range(32):
+            if y < 2 or x < 2:
+                c = 't'                           # the frame's inner edge, lit
+            elif y < 6 or x < 5 or x > 28:
+                c = 's'
+            else:
+                c = 'r'
+            row += c
+        rows.append(row)
+    return rows
+
+
 def sheet(frames, columns, w, h):
     rows = (len(frames) + columns - 1) // columns
     img = Image.new("RGBA", (columns * w, rows * h), (0, 0, 0, 0))
@@ -324,8 +345,9 @@ def main():
         sprite_file(os.path.join(out, kind + "_face.bmsprite"), kind + "_face.png", 1, 1, 32, 32, (0, 0), (0, 0, 32, 32), [
             ("neutral", True, [(0, 60)]),
         ])
-    sheet([door_panel()], 1, 32, 48).save(os.path.join(out, "door_panel.png"))
-    sprite_file(os.path.join(out, "door_panel.bmsprite"), "door_panel.png", 1, 1, 32, 48, (0, 48), (0, -48, 32, 48), [
+    # Frame 1: the dark doorway, drawn behind doors in the back wall.
+    sheet([door_panel(), doorway()], 2, 32, 48).save(os.path.join(out, "door_panel.png"))
+    sprite_file(os.path.join(out, "door_panel.bmsprite"), "door_panel.png", 2, 2, 32, 48, (0, 48), (0, -48, 32, 48), [
         ("idle", True, [(0, 60)]),
     ])
     sheet(BAG_FRAMES, 2, 16, 16).save(os.path.join(out, "drop.png"))
