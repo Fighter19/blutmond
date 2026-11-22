@@ -466,7 +466,8 @@ void bmGameHurtPlayer(BmGame *g, int32_t damage)
 void bmGameFrame(BmGame *g, uint16_t keys)
 {
   g->frame++;
-  uint16_t pressed = (uint16_t)(keys & ~g->keysPrevious);
+  uint16_t previous = g->keysPrevious;
+  uint16_t pressed = (uint16_t)(keys & ~previous);
   g->keysPrevious = keys;
 
   BmBodyInput in = {
@@ -475,7 +476,10 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     .jumpPressed = (pressed & BM_KEY_A) != 0,
     .jumpHeld = (keys & BM_KEY_A) != 0,
   };
+  // Attachments first: what they decide this frame moves the player this frame.
+  bmAttachmentsFrame(g, keys, previous);
   uint32_t events = bmBodyStep(&g->player, &g->playerParams, &g->collision, &g->physics, in);
+  bmAttachmentsBodyEvents(g, events);
   if (g->hurtTimer) g->hurtTimer--;
   if (g->doorCooldown) g->doorCooldown--;
   if (g->saveCooldown) g->saveCooldown--;
@@ -611,6 +615,15 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, inventory.equipped, BM_TYPE_U32, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_EQUIP),
   BM_STATE_ARRAY(BmGame, inventory.quick, BM_TYPE_U32, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_QUICK),
   BM_STATE_ARRAY(BmGame, inventory.statBase, BM_TYPE_S16, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_STATS),
+  // Attachments: in the middle of what they do, exactly (snapshot); a save game makes them
+  // again from what the player owns (not yet: attachable-scripts.md step 6).
+  BM_STATE_ARRAY(BmGame, attachments.classKey, BM_TYPE_U32, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
+  BM_STATE_ARRAY(BmGame, attachments.state, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
+  BM_STATE_ARRAY(BmGame, attachments.wait, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
+  BM_STATE_ARRAY(BmGame, attachments.pc, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
+  BM_STATE_ARRAY(BmGame, attachments.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
+  BM_STATE_ARRAY(BmGame, attachments.fields, BM_TYPE_S32, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS * BM_SCRIPT_MAX_FIELDS),
+  BM_STATE_ARRAY(BmGame, attachments.lifetime, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
 };
 #undef F
 

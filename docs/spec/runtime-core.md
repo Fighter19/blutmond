@@ -320,6 +320,10 @@ value is dropped and counts as a script error.
 | 27 | `take(record, amount)` | takes them away if there are that many (true), else changes nothing (false); an entry at 0 is removed |
 | 28 | `stat(value)` | the player's own value of a stat: the enum value's number picks one of 16 (`statBase`); 0 outside |
 | 29 | `add_stat(value, amount)` | adds to it, clamped to a 16-bit signed number |
+| 30 | `attach(slot, class)` | attaches the Attachment class of that name to the player in slot 0 to 7, replacing what is there (which gets `detached()`); the new one gets `attached()` at once. False if there is no such class or slot ([mondskript.md](mondskript.md) §11, "Attachments") |
+| 31 | `attach_for(slot, class, frames)` | the same, detached by itself after that many frames (at the end of a frame's work) |
+| 32 | `detach(slot)` | `detached()`, then the slot is empty |
+| 33 | `impulse(vx, vy)` | added to the player's speed once (fix) |
 
 `dist(a, b) = max(|a|, |b|) + min(|a|, |b|) / 2`.
 

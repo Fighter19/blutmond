@@ -14,11 +14,16 @@
 
 #include "script_api.h"
 
-#define BM_VM_VERSION 1
+#define BM_VM_VERSION 2   // 2: the events of script_api.h, class kinds, events with a parameter
 #define BM_VM_HEADER_SIZE 40
-#define BM_VM_CLASS_SIZE 24
+// A class: name, sprite, fields, states, start state, kind, a function per event (padded to
+// 4 bytes), the offsets of its fields and its states. A state: name, code, a function per event.
+#define BM_VM_EVENTS_SIZE (((uint32_t)BM_SCRIPT_EVENT_COUNT * 2 + 3) & ~3u)
+#define BM_VM_CLASS_FIELDS_AT (8 + BM_VM_EVENTS_SIZE)
+#define BM_VM_CLASS_STATES_AT (12 + BM_VM_EVENTS_SIZE)
+#define BM_VM_CLASS_SIZE (16 + BM_VM_EVENTS_SIZE)
 #define BM_VM_FIELD_SIZE 8
-#define BM_VM_STATE_SIZE 12
+#define BM_VM_STATE_SIZE ((4 + (uint32_t)BM_SCRIPT_EVENT_COUNT * 2 + 3) & ~3u)
 #define BM_VM_FUNCTION_SIZE 12
 #define BM_VM_NONE 0xFFFFu
 
@@ -118,6 +123,7 @@ uint8_t bmVmClassFieldCount(const BmVmModule *pModule, uint16_t cls);
 /// Field `field` of a class: name (string id), type (BmScriptType), flags and default value.
 void bmVmClassField(const BmVmModule *pModule, uint16_t cls, uint8_t field, uint16_t *pName, uint8_t *pType, uint8_t *pFlags, int32_t *pDefault);
 uint8_t bmVmClassStateCount(const BmVmModule *pModule, uint16_t cls);
+BmScriptKind bmVmClassKind(const BmVmModule *pModule, uint16_t cls);
 uint16_t bmVmStateName(const BmVmModule *pModule, uint16_t cls, uint8_t state);
 /// Whether the class (in any state) handles an event.
 bool bmVmClassHandles(const BmVmModule *pModule, uint16_t cls, BmScriptEvent event);
@@ -129,6 +135,8 @@ void bmVmInstanceInit(const BmVmModule *pModule, BmVmInstance *pInstance, uint16
 
 /// Calls an event: the current state's version if it has one, else the class's.
 void bmVmEvent(const BmVmModule *pModule, const BmVmHost *pHost, BmVmInstance *pInstance, BmScriptEvent event);
+/// The same for an event with a parameter (press, release): `arg` is its value.
+void bmVmEventWith(const BmVmModule *pModule, const BmVmHost *pHost, BmVmInstance *pInstance, BmScriptEvent event, int32_t arg);
 
 /// Once per frame: counts down sleeps, checks waits and continues the state code.
 void bmVmStep(const BmVmModule *pModule, const BmVmHost *pHost, BmVmInstance *pInstance);

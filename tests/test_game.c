@@ -210,6 +210,70 @@ static void testAPickupStaysTaken(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+static uint16_t stringId(const char *text)
+{
+  for (uint32_t id = 0; id < 0xFFFF; id++)
+  {
+    const char *s = bmPackString(&s_pack, (uint16_t)id);
+    if (s == NULL) break;
+    if (strcmp(s, text) == 0) return (uint16_t)id;
+  }
+  return 0xFFFF;
+}
+
+// How high a jump from standing goes (fix): settle, press A, hold it, land again.
+static int32_t jumpHeight(void)
+{
+  frames(40, 0);
+  int32_t ground = s_game.player.y, top = ground;
+  frames(1, BM_KEY_A);
+  for (int i = 0; i < 60; i++)
+  {
+    frames(1, BM_KEY_A);
+    if (s_game.player.y < top) top = s_game.player.y;
+  }
+  frames(60, 0);
+  return ground - top;
+}
+
+// attachable-scripts.md step 3: an attachment on the player, with game buttons, events of what
+// the player did, a lifetime, and its state in a snapshot.
+static void testAnAttachmentMakesThePlayerJumpHigher(void)
+{
+  start();
+  BmAttachments *t = &s_game.attachments;
+  int32_t plain = jumpHeight();
+  TEST_ASSERT(plain > BM_FIX(16));
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 2, stringId("HighJump"), 0));
+  TEST_ASSERT(t->classKey[2] != 0 && t->cls[2] >= 0);
+  int32_t boosted = jumpHeight();
+  printf("    jump %d px, with HighJump %d px\n", (int)BM_FIX_INT(plain), (int)BM_FIX_INT(boosted));
+  TEST_ASSERT(boosted > plain + BM_FIX(8));
+  TEST_ASSERT(t->fields[2 * BM_SCRIPT_MAX_FIELDS + 1] == 1);   // Jumps
+  TEST_ASSERT(t->fields[2 * BM_SCRIPT_MAX_FIELDS + 2] == 1);   // Presses: the game button Jump
+  // A snapshot taken with it attached brings it back, bound to its class.
+  static uint8_t snap[2048];
+  BmStateBlock block = bmGameStateBlock(&s_game);
+  uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
+  TEST_ASSERT(size > 0);
+  bmAttachmentsDetach(&s_game, 2);
+  TEST_ASSERT(t->classKey[2] == 0);
+  TEST_ASSERT(jumpHeight() == plain);                          // detached: as before
+  TEST_ASSERT(bmStateRead(&block, 1, snap, size) == BM_STATE_OK && bmGameAfterLoad(&s_game) == BM_SUCCESS);
+  TEST_ASSERT(t->classKey[2] != 0 && t->cls[2] >= 0 && t->fields[2 * BM_SCRIPT_MAX_FIELDS + 1] == 1);
+  TEST_ASSERT(jumpHeight() == boosted);
+  // A lifetime: gone after that many frames.
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 5, stringId("HighJump"), 3));
+  frames(2, 0);
+  TEST_ASSERT(t->classKey[5] != 0);
+  frames(1, 0);
+  TEST_ASSERT(t->classKey[5] == 0);
+  // Only Attachment classes can be attached.
+  TEST_ASSERT(!bmAttachmentsAttach(&s_game, 1, stringId("Bat"), 0) && !bmAttachmentsAttach(&s_game, 1, stringId("Nothing"), 0));
+  TEST_ASSERT(!bmAttachmentsAttach(&s_game, BM_ATTACH_SLOTS, stringId("HighJump"), 0));
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -232,6 +296,7 @@ int main(int argc, char **argv)
   RUN_TEST(testSavePointWritesASaveGame);
   RUN_TEST(testTheBatChasesHitsAndGoesHome);
   RUN_TEST(testAPickupStaysTaken);
+  RUN_TEST(testAnAttachmentMakesThePlayerJumpHigher);
   free(s_data);
   return TEST_RESULT();
 }

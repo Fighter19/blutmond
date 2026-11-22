@@ -5,7 +5,12 @@ class ([../spec/mondskript.md](../spec/mondskript.md) §10 and §12), the reload
 ([../spec/runtime-abi.md](../spec/runtime-abi.md) §5). The layout hash of section 4 is
 worked out by the runtime from the class table instead of being stored in the module header;
 an object whose module changed restarts its state's code whether or not that code changed.
-Steps 3 to 8 are open. Milestone M14 in [../PLAN.md](../PLAN.md).
+Step 3 built: `Attachment` classes on the player
+([../spec/mondskript.md](../spec/mondskript.md) §11 "Attachments"), the test level has a
+`HighJump` attachment that makes jumps go higher. Where step 3 differs from sections 3 and 9:
+8 slots, all the player's, no attachments on actors yet; the game buttons' mapping is fixed;
+attachments keep no `save` variables; `impulse` (section 7) came early, for the test;
+`jumped()` and `landed()` arrive after the body step. Steps 4 to 8 are open. Milestone M14 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

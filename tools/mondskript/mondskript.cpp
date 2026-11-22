@@ -43,11 +43,28 @@ const VarDef kVars[] = {
   BM_SCRIPT_ACTOR_VARS(X)
 #undef X
 };
-const char *const kEvents[] = {
-#define X(name) #name,
+struct EventDef
+{
+  const char *name;
+  BmScriptType arg;   // VOID: none
+  int kinds;          // 1 << BmScriptKind
+};
+const EventDef kEventDefs[] = {
+#define X(name, arg, kinds) {#name, BM_SCRIPT_##arg, kinds},
   BM_SCRIPT_EVENTS(X)
 #undef X
 };
+const char *const kEvents[] = {
+#define X(name, arg, kinds) #name,
+  BM_SCRIPT_EVENTS(X)
+#undef X
+};
+const char *const kActorOnly[] = {
+#define X(name) #name,
+  BM_SCRIPT_ACTOR_ONLY(X)
+#undef X
+};
+const char *const kBaseClasses[] = {"Actor", "Attachment"};   // by BmScriptKind
 const char *const kKeywords[] = {"class", "extends", "var", "const", "function", "event", "state", "begin", "gotostate", "if", "else",
                                  "while", "for", "in", "loop", "break", "continue", "return", "defaultproperties", "true", "false",
                                  "save", "link", "transient", "derived", "wait_until", "enum", "struct", "is"};
@@ -848,8 +865,19 @@ private:
   {
     Token name = expectIdent("the name of an event");
     int e = eventIndex(name);
+    const EventDef &def = kEventDefs[e];
+    if (!(def.kinds & (1 << cls_.info.kind)))
+      error(name, "an " + cls_.info.base + " does not get the event '" + name.text + "'");
     expectPunct("(");
-    if (!isPunct(")")) error(peek(), "events take no parameters in this version");
+    std::vector<std::pair<std::string, BmScriptType>> params;
+    if (def.arg != BM_SCRIPT_VOID)
+    {
+      BmScriptType t;
+      Token at = peek();
+      if (!parseType(&t) || t != def.arg) error(at, "event '" + name.text + "' takes one " + tn(def.arg) + ": " + name.text + "(" + tn(def.arg) + " value)");
+      params.push_back({expectIdent("the name of the parameter").text, t});
+    }
+    else if (!isPunct(")")) error(peek(), "event '" + name.text + "' takes no parameters");
     expectPunct(")");
     int &slot = state >= 0 ? cls_.states[size_t(state)].events[e] : cls_.events[e];
     if (slot >= 0) error(name, "event '" + name.text + "' is defined twice");
@@ -857,6 +885,7 @@ private:
     f.name = name.text;
     f.event = e;
     f.state = state;
+    f.params = params;
     f.bodyToken = pos_;
     skipBlock();
     slot = addFunction(f);
@@ -883,8 +912,12 @@ private:
     if (acceptWord("extends"))
     {
       Token base = expectIdent("the base class");
-      if (base.text != "Actor") error(base, "classes extend Actor in this version");
+      int kind = -1;
+      for (int k = 0; k < BM_SCRIPT_KIND_COUNT; k++)
+        if (base.text == kBaseClasses[k]) kind = k;
+      if (kind < 0) error(base, "classes extend Actor or Attachment in this version");
       cls_.info.base = base.text;
+      cls_.info.kind = BmScriptKind(kind);
     }
     expectPunct(";");
 
@@ -1281,6 +1314,9 @@ private:
       if (api < 0 && fnIt == cls_.functions.end()) error(t, "there is no function '" + t.text + "'");
       int argc = api >= 0 ? kApi[api].argc : int(functions_[size_t(fnIt->second)].params.size());
       if (int(args.size()) != argc) error(t, "'" + t.text + "' takes " + std::to_string(argc) + " values, here are " + std::to_string(args.size()));
+      if (api >= 0 && cls_.info.kind != BM_SCRIPT_KIND_ACTOR)
+        for (const char *only : kActorOnly)
+          if (t.text == only) error(t, "'" + t.text + "' acts on a room's object: an " + cls_.info.base + " cannot use it");
       if (api >= 0 && kApi[api].latent && !(fn_->stateCode))
         error(t, "'" + t.text + "' takes time: it can only be used in the code of a state (after 'begin:')");
       // Arguments go into registers that follow each other.
@@ -1326,6 +1362,9 @@ private:
     }
     if (int var = lookupVar(t.text); var >= 0)
     {
+      // In an attachment x, y and facing are its owner's.
+      if (cls_.info.kind != BM_SCRIPT_KIND_ACTOR && (var == BM_SCRIPT_VAR_home_x || var == BM_SCRIPT_VAR_home_y))
+        error(t, "'" + t.text + "' belongs to a room's object: an " + cls_.info.base + " has none");
       v.type = kVars[var].type;
       v.reg = temp(t);
       op2(BM_OP_GETV, v.reg, var);
@@ -1523,6 +1562,7 @@ private:
     if (int var = lookupVar(target.text); var >= 0)
     {
       if (!kVars[var].writable) error(target, "'" + target.text + "' cannot be changed");
+      if (cls_.info.kind != BM_SCRIPT_KIND_ACTOR) error(target, "an " + cls_.info.base + " reads its owner's '" + target.text + "' but cannot change it (use impulse)");
       expectType(v, kVars[var].type, target, "the value");
       op2(BM_OP_SETV, materialise(v, target), var);
       return;
@@ -1926,7 +1966,9 @@ std::vector<std::string> apiReference()
     out.push_back(line);
   }
   for (const VarDef &v : kVars) out.push_back(std::string(typeName(v.type)) + " " + v.name + (v.writable ? "" : "  - read only"));
-  for (const char *e : kEvents) out.push_back(std::string("event ") + e + "()");
+  for (const EventDef &e : kEventDefs)
+    out.push_back(std::string("event ") + e.name + "(" + (e.arg == BM_SCRIPT_VOID ? "" : typeName(e.arg)) + ")" +
+                  (e.kinds == 1 ? "  - Actor" : e.kinds == 2 ? "  - Attachment" : ""));
   return out;
 }
 
@@ -1987,8 +2029,9 @@ static std::vector<uint8_t> writeModule(const std::vector<Class> &classes, const
     b[at + 4] = uint8_t(c.info.fields.size());
     b[at + 5] = uint8_t(c.states.size());
     b[at + 6] = uint8_t(c.startState < 0 ? 0xFF : c.startState);
+    b[at + 7] = uint8_t(c.info.kind);
     for (int e = 0; e < BM_SCRIPT_EVENT_COUNT; e++) hdr16(at + 8 + size_t(e) * 2, c.events[e] < 0 ? BM_VM_NONE : fnIndex(ci, c.events[e]));
-    set32(b, at + 16, uint32_t(b.size()));
+    set32(b, at + BM_VM_CLASS_FIELDS_AT, uint32_t(b.size()));
     for (const FieldInfo &f : c.info.fields)
     {
       put16(b, stringId(f.name));
@@ -1996,13 +2039,14 @@ static std::vector<uint8_t> writeModule(const std::vector<Class> &classes, const
       b.push_back(f.flags);
       put32(b, uint32_t(f.defaultValue));
     }
-    set32(b, at + 20, uint32_t(b.size()));
+    set32(b, at + BM_VM_CLASS_STATES_AT, uint32_t(b.size()));
     for (const State &st : c.states)
     {
+      size_t stateAt = b.size();
       put16(b, stringId(st.name));
       put16(b, st.code < 0 ? BM_VM_NONE : fnIndex(ci, st.code));
       for (int e = 0; e < BM_SCRIPT_EVENT_COUNT; e++) put16(b, st.events[e] < 0 ? BM_VM_NONE : fnIndex(ci, st.events[e]));
-      put16(b, 0);
+      b.resize(stateAt + BM_VM_STATE_SIZE, 0);
     }
   }
   set32(b, 20, uint32_t(b.size()));

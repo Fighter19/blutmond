@@ -51,6 +51,13 @@ static const ApiInfo s_api[BM_SCRIPT_API_COUNT] = {
 #undef X
 };
 
+// Parameters of each event (0 or 1).
+static const uint8_t s_eventArgs[BM_SCRIPT_EVENT_COUNT] = {
+#define X(name, arg, kinds) BM_SCRIPT_##arg != BM_SCRIPT_VOID,
+  BM_SCRIPT_EVENTS(X)
+#undef X
+};
+
 // --- Tables ---------------------------------------------------------------------------------
 
 static const uint8_t *classAt(const BmVmModule *m, uint16_t cls)
@@ -65,18 +72,19 @@ static const uint8_t *functionAt(const BmVmModule *m, uint16_t f)
 
 static const uint8_t *stateAt(const BmVmModule *m, uint16_t cls, uint8_t state)
 {
-  return m->pData + rd32(classAt(m, cls) + 20) + (uint32_t)state * BM_VM_STATE_SIZE;
+  return m->pData + rd32(classAt(m, cls) + BM_VM_CLASS_STATES_AT) + (uint32_t)state * BM_VM_STATE_SIZE;
 }
 
 uint16_t bmVmClassName(const BmVmModule *m, uint16_t cls) { return rd16(classAt(m, cls)); }
 uint16_t bmVmClassSprite(const BmVmModule *m, uint16_t cls) { return rd16(classAt(m, cls) + 2); }
 uint8_t bmVmClassFieldCount(const BmVmModule *m, uint16_t cls) { return classAt(m, cls)[4]; }
 uint8_t bmVmClassStateCount(const BmVmModule *m, uint16_t cls) { return classAt(m, cls)[5]; }
+BmScriptKind bmVmClassKind(const BmVmModule *m, uint16_t cls) { return (BmScriptKind)classAt(m, cls)[7]; }
 uint16_t bmVmStateName(const BmVmModule *m, uint16_t cls, uint8_t state) { return rd16(stateAt(m, cls, state)); }
 
 void bmVmClassField(const BmVmModule *m, uint16_t cls, uint8_t field, uint16_t *pName, uint8_t *pType, uint8_t *pFlags, int32_t *pDefault)
 {
-  const uint8_t *f = m->pData + rd32(classAt(m, cls) + 16) + (uint32_t)field * BM_VM_FIELD_SIZE;
+  const uint8_t *f = m->pData + rd32(classAt(m, cls) + BM_VM_CLASS_FIELDS_AT) + (uint32_t)field * BM_VM_FIELD_SIZE;
   if (pName) *pName = rd16(f);
   if (pType) *pType = f[2];
   if (pFlags) *pFlags = f[3];
@@ -258,8 +266,9 @@ bool bmVmModuleOpen(BmVmModule *m, const uint8_t *p, uint32_t size, const char *
   {
     const uint8_t *cls = classAt(m, c);
     uint8_t fields = cls[4], states = cls[5], start = cls[6];
-    uint32_t fieldsAt = rd32(cls + 16), statesAt = rd32(cls + 20);
+    uint32_t fieldsAt = rd32(cls + BM_VM_CLASS_FIELDS_AT), statesAt = rd32(cls + BM_VM_CLASS_STATES_AT);
     if (fields > BM_SCRIPT_MAX_FIELDS) FAIL("too many fields");
+    if (cls[7] >= BM_SCRIPT_KIND_COUNT) FAIL("unknown kind of class");
     if (fieldsAt > size || (uint32_t)fields * BM_VM_FIELD_SIZE > size - fieldsAt) FAIL("fields outside the module");
     if (statesAt > size || (uint32_t)states * BM_VM_STATE_SIZE > size - statesAt) FAIL("states outside the module");
     if (start != 0xFF && start >= states) FAIL("unknown start state");
@@ -282,7 +291,7 @@ bool bmVmModuleOpen(BmVmModule *m, const uint8_t *p, uint32_t size, const char *
         if (fn == BM_VM_NONE) continue;
         if (fn >= m->functionCount) FAIL("event without a function");
         const uint8_t *f = functionAt(m, fn);
-        if (rd16(f + 10) != c || f[7] != 0 || (f[8] & BM_VM_FUNCTION_STATE_CODE)) FAIL("bad event function");
+        if (rd16(f + 10) != c || f[7] != s_eventArgs[e] || (f[8] & BM_VM_FUNCTION_STATE_CODE)) FAIL("bad event function");
       }
       if (s < cls[5])
       {
@@ -358,10 +367,15 @@ uint32_t bm_native_calls;
 
 static uint16_t interpret(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, uint16_t function, uint16_t pc);
 
+// The parameter of the event being started (press, release). Not a parameter of interpret():
+// that would cost the interpreter's loop a register.
+static int32_t s_eventArg;
+
 // Runs function `function` from word `pc`: as native code if the module has it. Returns the
 // word to continue at if a latent function started waiting, else 0xFFFF.
-static uint16_t run(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, uint16_t function, uint16_t pc)
+static uint16_t run(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, uint16_t function, uint16_t pc, int32_t arg)
 {
+  // Native entries exist only for functions without parameters.
   if (m->pNative != NULL && m->pNative->entries[function] != NULL)
   {
     // One instruction less than the budget: the interpreter stops before the last one.
@@ -369,6 +383,7 @@ static uint16_t run(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, 
     bm_native_calls++;
     return (uint16_t)m->pNative->entries[function](&c, pc);
   }
+  s_eventArg = arg;
   return interpret(m, h, inst, function, pc);
 }
 
@@ -391,6 +406,7 @@ BM_IWRAM_CODE static uint16_t interpret(const BmVmModule *m, const BmVmHost *h, 
   uint32_t base = 0;
   bool stateCode = (f[8] & BM_VM_FUNCTION_STATE_CODE) != 0;
   memset(regs, 0, (size_t)f[6] * sizeof(int32_t));
+  if (f[7] != 0) regs[0] = s_eventArg;   // an event's parameter
 
   for (;;)
   {
@@ -498,13 +514,18 @@ BM_IWRAM_CODE static uint16_t interpret(const BmVmModule *m, const BmVmHost *h, 
 
 void bmVmEvent(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, BmScriptEvent event)
 {
+  bmVmEventWith(m, h, inst, event, 0);
+}
+
+void bmVmEventWith(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, BmScriptEvent event, int32_t arg)
+{
   if (inst->wait == BM_VM_FAILED || inst->classIndex >= m->classCount) return;
   uint16_t fn = BM_VM_NONE;
   if (inst->state != 0xFF && inst->state < bmVmClassStateCount(m, inst->classIndex))
     fn = rd16(stateAt(m, inst->classIndex, inst->state) + 4 + event * 2);
   if (fn == BM_VM_NONE) fn = rd16(classAt(m, inst->classIndex) + 8 + event * 2);
   if (fn == BM_VM_NONE) return;
-  run(m, h, inst, fn, 0);
+  run(m, h, inst, fn, 0, arg);
 }
 
 void bmVmStep(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst)
@@ -537,7 +558,7 @@ void bmVmStep(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst)
   }
   inst->wait = BM_VM_RUNNING;
   uint8_t state = inst->state;
-  uint16_t next = run(m, h, inst, fn, inst->pc);
+  uint16_t next = run(m, h, inst, fn, inst->pc, 0);
   // A latent call keeps its place unless the state changed meanwhile.
   if (next != 0xFFFF && inst->state == state) inst->pc = next;
 }

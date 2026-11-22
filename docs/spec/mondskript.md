@@ -1,6 +1,6 @@
 # Mondskript
 
-Version 0.7, draft.
+Version 0.8, draft.
 
 Mondskript is Blutmond's scripting language. It is modelled on the old UnrealScript (classes
 with declared fields, states with latent functions, `defaultproperties`) and avoids its known
@@ -195,14 +195,33 @@ every other file of the same module.
 | Enums | `enum E { A, B }` before the class or in a file of its own; variables and parameters of type `E`; values written `E.A`, or just `A` where the type is known (defaults, `defaultproperties`); `==` and `!=` between values of the same enum. An enum is not a number: assigning one to `int` or to another enum is an error | `switch`, conversion to `int` |
 | Structures | `struct S { ... }` and `struct S is Base { ... }` declared and laid out for records: field types, alignment, defaults, sizes, see "Structures" below | structures as variables of a class |
 | Records | `record<S>` variables, parameters and results, `#Name` as a record, field access (`.field`, `.inner.field`, `.array[2]`, through `record<T>` fields), `for x in records(S)`; [data-format.md](data-format.md) §5 | a dynamic array index |
-| Classes | `class Name extends Actor;`, `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes, inheritance between script classes, components (`has`) |
+| Classes | `class Name extends Actor;` and `extends Attachment` (below), `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes (`Player`, `Screen`), inheritance between script classes, components (`has`) |
 | Functions | functions with up to 3 parameters and a result, calls nested up to 16 deep; all are final | `virtual`, `static` |
-| Events | `spawn()`, `tick()`, `touch()` (the player starts touching the object), in the class and per state | parameters; `hit`, `dies`, `enter_room`, `leave_room`, `use` |
+| Events | Actor: `spawn()`, `tick()`, `touch()` (the player starts touching the object); Attachment: `attached()`, `detached()`, `tick()`, `press(name button)`, `release(name button)`, `jumped()`, `landed()`; in the class and per state | `hit`, `dies`, `enter_room`, `leave_room`, `use`, `hurt`, `struck`, `message` |
 | States | `state` with events and state code after `begin:`, `gotostate`, `start_state`; latent `sleep(frames)`, `finish_anim()`, `wait_until(condition)` | functions overridden per state; locals and `for` in state code (their values would not survive a wait: use variables of the class) |
 | Statements | `var` locals, `if`/`else`, `while`, `loop`, `for x in a..b`, `break`, `continue`, `return`, assignment with `=`, `+=`, `-=`, `*=`, `/=` | `switch`, `match`, queries |
 | Expressions | `+ - * / %`, comparisons, `&& || !` (short circuit), `fix(...)`, `int(...)`; integer literals become `fix` where `fix` is expected; mixing `int` and `fix` is an error | |
 | defaultproperties | values of variables, `start_state`, `sprite = "name"` | component and struct fields |
 | Run time | 8 scripted objects per room, 16 values of `save` variables kept across rooms and in the save game; an inventory of 64 kinds of things up to 255 each and 16 stat values ([state.md](state.md) §4) | more objects and variables |
+
+### Attachments
+
+A class that `extends Attachment` is not placed in rooms: it is attached to the player at run
+time in one of 8 slots ([../plans/attachable-scripts.md](../plans/attachable-scripts.md), the
+runtime in `src/world/attachments.h`). Every frame, before the player's body step and in
+slot order, each attachment gets `press`/`release` for the game buttons that changed (`#Jump`
+A, `#Attack` B, `#Dash` L, `#Spell` R, `#Use` Select), then `tick()`, then its state code runs;
+after the body step it gets `jumped()` and `landed()`. `attach(slot, #Class)` (replacing what
+is there; `attached()` runs at once), `attach_for(slot, #Class, frames)` and `detach(slot)`
+(`detached()` first) can be called by any script; `impulse(vx, vy)` adds to the player's speed.
+
+The compiler refuses in an attachment what acts on a room's own object (`hide`, `show`,
+`play_anim`, `finish_anim`, `anim_done`, `face_player`, `player_distance`, `touching_player`,
+`move_toward*`, `enter_door`; the list is `BM_SCRIPT_ACTOR_ONLY` in `script_api.h`) and the
+variables `home_x`, `home_y`; `x`, `y` and `facing` read the player's and cannot be written.
+The runtime ignores such calls from a module made by hand. An attachment's class is kept by
+the hash of its name; its state is in the snapshot (state.md). Not yet: attachments on actors,
+`save` variables of attachments, attachments from the inventory.
 
 ### Structures
 
@@ -249,15 +268,18 @@ that object.
 ### Bytecode module (`MODB`)
 
 ```
-0   "BMMB"   u16 version (1)   u16 API entries the module was compiled against
-8   u16 classes   u16 functions   u16 constants   u16 events per class (3)
+0   "BMMB"   u16 version (2)   u16 API entries the module was compiled against
+8   u16 classes   u16 functions   u16 constants   u16 events per class (E = 9)
 16  u32 offset of: classes, functions, constants, code;  u32 code words;  u32 offset of the line table
 
-class (24 bytes):    u16 name, u16 sprite (string ids; 0xFFFF: none), u8 variables, u8 states,
-                     u8 start state (0xFF: none), u8 0, u16 function of each event (0xFFFF: none),
-                     u16 0, u32 offset of its variables, u32 offset of its states
+class (16 + P bytes, P = 2 E rounded up to a multiple of 4; 36 with 9 events):
+                     u16 name, u16 sprite (string ids; 0xFFFF: none), u8 variables, u8 states,
+                     u8 start state (0xFF: none), u8 kind (0 Actor, 1 Attachment),
+                     u16 function of each event (0xFFFF: none), padded to P bytes,
+                     u32 offset of its variables, u32 offset of its states
 variable (8 bytes):  u16 name, u8 type, u8 flags (1 save, 2 link, 4 transient, 8 set per object), s32 default
-state (12 bytes):    u16 name, u16 function with its code, u16 function of each event, u16 0
+state (4 + 2 E bytes rounded up to a multiple of 4; 24 with 9 events):
+                     u16 name, u16 function with its code, u16 function of each event, padding
 function (12 bytes): u32 first code word, u16 code words, u8 registers, u8 parameters,
                      u8 flags (1: state code), u8 0, u16 class
 constants:           s32 each
@@ -267,8 +289,11 @@ line table:          per function a u32 offset to: u16 file (string id), u16 n, 
 
 Everything is little endian. Variable types: 0 void, 1 bool, 2 int, 3 fix, 4 name, 5 text
 (names and texts are string ids), 6 enum (a value of an enum, numbered from 0 in declaration
-order; which enum is known only to the compiler), 7 record (a record's key). Events in the order of their numbers: 0 `spawn`, 1 `tick`,
-2 `touch`. The line table's offset may be 0 (none).
+order; which enum is known only to the compiler), 7 record (a record's key). Events in the
+order of their numbers, with the kinds of class that get them: 0 `spawn()` (Actor), 1
+`tick()` (both), 2 `touch()` (Actor), 3 `attached()`, 4 `detached()`, 5 `press(name)`, 6
+`release(name)`, 7 `jumped()`, 8 `landed()` (Attachment). The line table's offset may be 0
+(none). Version 1 had the three events of an Actor and 0 in place of the kind; it is refused.
 
 #### Instructions
 
@@ -354,10 +379,10 @@ state code reached `STOP`), 4 failed.
 
 A module is refused unless all of this holds:
 
-- header: `BMMB`, version 1, events per class 3, and not more API entries than the runtime
+- header: `BMMB`, version 2, events per class 9, and not more API entries than the runtime
   has;
 - every table lies inside the module, and one word of space follows the code;
-- a class has at most 8 variables; its start state exists or is 0xFF;
+- a class has at most 8 variables; its start state exists or is 0xFF; its kind is known;
 - a function is not empty, at most 512 words, has at most 32 registers, at most 3 parameters
   and not more parameters than registers, and belongs to a class that exists;
 - every instruction is known and complete; registers are below the function's count;
@@ -367,8 +392,12 @@ A module is refused unless all of this holds:
 - the last instruction of a function is `RET`, `STOP` or `JMP`;
 - latent functions and `STOP` only in state code, `RET` only outside it;
 - `CALL` only to a function of the same class that is not state code;
-- an event's function and a state's code belong to that class, have no parameters, and are
-  (not) state code as their use says.
+- an event's function and a state's code belong to that class, have as many parameters as
+  the event has (`press` and `release` one, the others none; state code none), and are (not)
+  state code as their use says.
+
+An event with a parameter gets its value in register 0. Native code has entries only for
+functions without parameters, so such events are always interpreted.
 
 ## 12. Native modules (`MODN`)
 
@@ -453,3 +482,5 @@ for now), per-class modules loaded on room changes.
 - 0.6: `record<S>`, field access, `for x in records(S)`; variable type 7 (record); runtime
   functions 22 to 24; the inventory functions 25 to 29.
 - 0.7: one bytecode module per class; native images of version 2 with a module per class.
+- 0.8: module version 2: nine events, class kinds, events with a parameter; `extends
+  Attachment`; runtime functions 30 to 33.

@@ -22,6 +22,7 @@
 #define BM_ACTORS_STORE 16
 #define BM_ACTORS_MODULES 24   // script modules in a pack (one per class)
 #define BM_ACTORS_CLASSES 32   // classes in all of them
+#define BM_ACTORS_OWNER 0xFF   // `current` while an attachment of the player runs
 
 struct BmGame;
 

@@ -128,9 +128,14 @@ In serialisation order. Count is the array length.
 | `inventory.equipped` | u32 | 8 | save, link |
 | `inventory.quick` | u32 | 4 | save, link |
 | `inventory.statBase` | s16 | 16 | save, link |
+| `attachments.classKey` | u32 | 8 | snapshot |
+| `attachments.state`, `attachments.wait` | u8 | 8 each | snapshot |
+| `attachments.pc`, `attachments.timer` | u16 | 8 each | snapshot |
+| `attachments.fields` | s32 | 64 | snapshot |
+| `attachments.lifetime` | u16 | 8 | snapshot |
 
 Sizes with this table: a save game is 567 bytes of payload, a link transfer 424, a snapshot
-1062 (1066 with the autopilot); each plus the 16-byte header. A snapshot is larger than one
+1414 (1418 with the autopilot); each plus the 16-byte header. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).
 
 The inventory ([data-format.md](data-format.md), `src/world/inventory.h`): `count` entries in

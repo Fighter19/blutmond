@@ -53,7 +53,11 @@ typedef enum BmScriptType {
   X(give,               INT,  2, RECORD, INT,  VOID, 0) \
   X(take,               BOOL, 2, RECORD, INT,  VOID, 0) \
   X(stat,               INT,  1, ENUM, VOID, VOID, 0) \
-  X(add_stat,           VOID, 2, ENUM, INT,  VOID, 0)
+  X(add_stat,           VOID, 2, ENUM, INT,  VOID, 0) \
+  X(attach,             BOOL, 2, INT,  NAME, VOID, 0) \
+  X(attach_for,         BOOL, 3, INT,  NAME, INT,  0) \
+  X(detach,             VOID, 1, INT,  VOID, VOID, 0) \
+  X(impulse,            VOID, 2, FIX,  FIX,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -63,6 +67,11 @@ typedef enum BmScriptType {
 // (src/world/inventory.h); an argument of type RECORD takes a record of any structure (or
 // #Name). stat(value), add_stat(value, amount): the player's own stat values, numbered by the
 // values of an enum the game declares (by convention `enum Stat { ... }`, at most 16).
+//
+// attach(slot, #Class), attach_for(slot, #Class, frames), detach(slot): the player's
+// attachment slots (src/world/attachments.h); attach replaces what is in the slot and is false
+// if there is no Attachment class of that name. impulse(vx, vy): added to the player's speed
+// once.
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {
@@ -88,18 +97,37 @@ typedef enum BmScriptActorVar {
   BM_SCRIPT_VAR_COUNT
 } BmScriptActorVar;
 
-// Events the runtime calls. X(name)
+// Kinds of class (attachable-scripts.md §2), by the base class a script extends.
+typedef enum BmScriptKind {
+  BM_SCRIPT_KIND_ACTOR = 0,        // `extends Actor`: an object of a room
+  BM_SCRIPT_KIND_ATTACHMENT = 1,   // `extends Attachment`: attached to the player at run time
+  BM_SCRIPT_KIND_COUNT
+} BmScriptKind;
+
+// Events the runtime calls. X(name, type of the parameter (VOID: none), kinds that get it:
+// 1 Actor, 2 Attachment)
 #define BM_SCRIPT_EVENTS(X) \
-  X(spawn) \
-  X(tick) \
-  X(touch)
+  X(spawn,    VOID, 1) \
+  X(tick,     VOID, 3) \
+  X(touch,    VOID, 1) \
+  X(attached, VOID, 2) \
+  X(detached, VOID, 2) \
+  X(press,    NAME, 2) \
+  X(release,  NAME, 2) \
+  X(jumped,   VOID, 2) \
+  X(landed,   VOID, 2)
 
 typedef enum BmScriptEvent {
-#define X(name) BM_SCRIPT_EVENT_##name,
+#define X(name, arg, kinds) BM_SCRIPT_EVENT_##name,
   BM_SCRIPT_EVENTS(X)
 #undef X
   BM_SCRIPT_EVENT_COUNT
 } BmScriptEvent;
+
+// Runtime functions only an Actor may call: they act on the object itself. X(name)
+#define BM_SCRIPT_ACTOR_ONLY(X) \
+  X(finish_anim) X(play_anim) X(anim_done) X(player_distance) X(move_toward_player) X(move_toward) \
+  X(enter_door) X(hide) X(show) X(face_player) X(touching_player)
 
 // Field flags in the class table: the storage flags of docs/spec/state.md.
 #define BM_SCRIPT_FIELD_SAVE 1

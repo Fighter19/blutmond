@@ -38,6 +38,7 @@ struct FieldInfo
 struct ClassInfo
 {
   std::string name, base, file, sprite, startState;
+  BmScriptKind kind = BM_SCRIPT_KIND_ACTOR;
   std::vector<FieldInfo> fields;
   std::vector<std::string> states, events, functions;
   int codeWords = 0;

@@ -565,6 +565,34 @@ static void testOneModulePerClass()
   TEST_ASSERT(inst.fields[0] == 654322 && game.errors.empty());
 }
 
+// Attachment classes: their events (one with a parameter), what they may not call, and the
+// class kind in the module.
+static void testAttachmentClasses()
+{
+  Run r(R"(class Boost extends Attachment;
+var int Presses;
+var int Ticks;
+event attached() { Presses = 100; }
+event press(name button) { if button == #Jump { Presses += 1; } }
+event tick() { Ticks += 1; }
+)");
+  TEST_ASSERT(r.ok && r.module.classes[0].kind == BM_SCRIPT_KIND_ATTACHMENT && bmVmClassKind(&r.vm, 0) == BM_SCRIPT_KIND_ATTACHMENT);
+  bmVmEvent(&r.vm, &r.host, &r.inst, BM_SCRIPT_EVENT_attached);
+  bmVmEventWith(&r.vm, &r.host, &r.inst, BM_SCRIPT_EVENT_press, stringId("Jump"));
+  bmVmEventWith(&r.vm, &r.host, &r.inst, BM_SCRIPT_EVENT_press, stringId("Attack"));
+  bmVmEvent(&r.vm, &r.host, &r.inst, BM_SCRIPT_EVENT_tick);
+  TEST_ASSERT(r.inst.fields[0] == 101 && r.inst.fields[1] == 1 && r.game.errors.empty());
+  const std::string head = "class A extends Attachment;\n";
+  TEST_ASSERT(firstError(head + "event touch() { }").find("does not get the event 'touch'") != std::string::npos);
+  TEST_ASSERT(firstError("class T extends Actor;\nevent jumped() { }").find("does not get the event 'jumped'") != std::string::npos);
+  TEST_ASSERT(firstError(head + "event press() { }").find("takes one name") != std::string::npos);
+  TEST_ASSERT(firstError(head + "event tick() { hide(); }").find("cannot use it") != std::string::npos);
+  TEST_ASSERT(firstError(head + "event tick() { log(home_x); }").find("has none") != std::string::npos);
+  TEST_ASSERT(firstError(head + "event tick() { x = 1.0; }").find("cannot change it") != std::string::npos);
+  TEST_ASSERT(firstError("class T extends Player;\n").find("extend Actor or Attachment") != std::string::npos);
+  TEST_ASSERT(firstError(head + "event tick() { if attach(1, #HighJump) { detach(1); impulse(0, -1.5); } }").empty());
+}
+
 static void testEndlessLoopIsStopped()
 {
   Run r("class T extends Actor;\nevent tick() {\n  loop {\n    x = x + 1.0;\n  }\n}\n");
@@ -768,6 +796,7 @@ int main()
   RUN_TEST(testEnums);
   RUN_TEST(testStructures);
   RUN_TEST(testOneModulePerClass);
+  RUN_TEST(testAttachmentClasses);
   RUN_TEST(testEndlessLoopIsStopped);
   RUN_TEST(testCorruptModulesAreSafe);
   RUN_TEST(testNativeLoaderChecks);
