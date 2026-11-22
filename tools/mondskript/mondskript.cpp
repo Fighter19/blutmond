@@ -24,11 +24,11 @@ struct ApiDef
   const char *name;
   BmScriptType result;
   int argc;
-  BmScriptType args[3];
+  BmScriptType args[BM_SCRIPT_MAX_API_ARGS];
   bool latent;
 };
 const ApiDef kApi[] = {
-#define X(name, result, argc, a0, a1, a2, latent) {#name, BM_SCRIPT_##result, argc, {BM_SCRIPT_##a0, BM_SCRIPT_##a1, BM_SCRIPT_##a2}, latent != 0},
+#define X(name, result, argc, a0, a1, a2, a3, latent) {#name, BM_SCRIPT_##result, argc, {BM_SCRIPT_##a0, BM_SCRIPT_##a1, BM_SCRIPT_##a2, BM_SCRIPT_##a3}, latent != 0},
   BM_SCRIPT_API(X)
 #undef X
 };

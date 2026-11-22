@@ -49,7 +49,7 @@ std::string cString(const std::string &s)
 }
 
 const struct { uint8_t argc; bool latent; } kApi[BM_SCRIPT_API_COUNT] = {
-#define X(name, result, argc, a0, a1, a2, latent) {argc, latent != 0},
+#define X(name, result, argc, a0, a1, a2, a3, latent) {argc, latent != 0},
     BM_SCRIPT_API(X)
 #undef X
 };
@@ -231,8 +231,8 @@ static void emitModule(std::ostringstream &o, const NativeSource &src, size_t in
       case BM_OP_CALLN:
       {
         int api = b, first = cc;
-        o << "  {\n    int32_t args[" << BM_SCRIPT_MAX_ARGS << "] = {";
-        for (int i = 0; i < BM_SCRIPT_MAX_ARGS; i++) o << (i ? ", " : "") << (i < kApi[api].argc ? R(first + i) : std::string("0"));
+        o << "  {\n    int32_t args[" << BM_SCRIPT_MAX_API_ARGS << "] = {";
+        for (int i = 0; i < BM_SCRIPT_MAX_API_ARGS; i++) o << (i ? ", " : "") << (i < kApi[api].argc ? R(first + i) : std::string("0"));
         o << "}, result = 0;\n";
         o << "    bool waiting = h->call(h->pContext, inst, " << api << ", args, &result);\n";
         if (a != 0xFF) o << "    " << R(a) << " = result;\n";

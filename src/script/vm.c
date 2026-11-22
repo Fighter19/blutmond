@@ -46,7 +46,7 @@ typedef struct ApiInfo
 } ApiInfo;
 
 static const ApiInfo s_api[BM_SCRIPT_API_COUNT] = {
-#define X(name, result, argc, a0, a1, a2, latent) { argc, latent },
+#define X(name, result, argc, a0, a1, a2, a3, latent) { argc, latent },
   BM_SCRIPT_API(X)
 #undef X
 };

@@ -21,52 +21,52 @@ typedef enum BmScriptType {
   BM_SCRIPT_RECORD, // record<S>: the key of a record (FNV-1a of its name), 0 none
 } BmScriptType;
 
-// X(name, result type, argument count, argument types..., latent)
+// X(name, result type, argument count, argument types (4)..., latent)
 // Latent functions may only be called from state code; they can take more than one frame.
 #define BM_SCRIPT_API(X) \
-  X(sleep,              VOID, 1, INT,  VOID, VOID, 1) \
-  X(finish_anim,        VOID, 0, VOID, VOID, VOID, 1) \
-  X(play_anim,          VOID, 1, NAME, VOID, VOID, 0) \
-  X(anim_done,          BOOL, 0, VOID, VOID, VOID, 0) \
-  X(player_x,           FIX,  0, VOID, VOID, VOID, 0) \
-  X(player_y,           FIX,  0, VOID, VOID, VOID, 0) \
-  X(player_distance,    INT,  0, VOID, VOID, VOID, 0) \
-  X(move_toward_player, VOID, 1, FIX,  VOID, VOID, 0) \
-  X(move_toward,        BOOL, 3, FIX,  FIX,  FIX,  0) \
-  X(hurt_player,        VOID, 1, INT,  VOID, VOID, 0) \
-  X(enter_door,         VOID, 0, VOID, VOID, VOID, 0) \
-  X(hide,               VOID, 0, VOID, VOID, VOID, 0) \
-  X(show,               VOID, 0, VOID, VOID, VOID, 0) \
-  X(face_player,        VOID, 0, VOID, VOID, VOID, 0) \
-  X(log,                VOID, 1, INT,  VOID, VOID, 0) \
-  X(random,             INT,  1, INT,  VOID, VOID, 0) \
-  X(touching_player,    BOOL, 0, VOID, VOID, VOID, 0) \
-  X(give_item,          VOID, 1, NAME, VOID, VOID, 0) \
-  X(has_item,           BOOL, 1, NAME, VOID, VOID, 0) \
-  X(abs,                INT,  1, INT,  VOID, VOID, 0) \
-  X(play_sound,         VOID, 1, NAME, VOID, VOID, 0) \
-  X(play_music,         VOID, 1, NAME, VOID, VOID, 0) \
-  X(record_get,         INT,  3, INT,  INT,  INT,  0) \
-  X(record_count,       INT,  1, INT,  VOID, VOID, 0) \
-  X(record_at,          INT,  2, INT,  INT,  VOID, 0) \
-  X(item_count,         INT,  1, RECORD, VOID, VOID, 0) \
-  X(give,               INT,  2, RECORD, INT,  VOID, 0) \
-  X(take,               BOOL, 2, RECORD, INT,  VOID, 0) \
-  X(stat,               INT,  1, ENUM, VOID, VOID, 0) \
-  X(add_stat,           VOID, 2, ENUM, INT,  VOID, 0) \
-  X(attach,             BOOL, 2, INT,  NAME, VOID, 0) \
-  X(attach_for,         BOOL, 3, INT,  NAME, INT,  0) \
-  X(detach,             VOID, 1, INT,  VOID, VOID, 0) \
-  X(impulse,            VOID, 2, FIX,  FIX,  VOID, 0) \
-  X(room_attach,        BOOL, 2, INT,  NAME, VOID, 0) \
-  X(room_detach,        VOID, 1, INT,  VOID, VOID, 0) \
-  X(arm,                VOID, 3, NAME, INT,  ENUM, 0) \
-  X(disarm,             VOID, 1, NAME, VOID, VOID, 0) \
-  X(hit_box,            VOID, 3, INT,  INT,  INT,  0) \
-  X(equip,              BOOL, 2, INT,  RECORD, VOID, 0) \
-  X(owner_lock,         VOID, 1, INT,  VOID, VOID, 0) \
-  X(owner_play_anim,    VOID, 1, NAME, VOID, VOID, 0) \
-  X(owner_busy,         BOOL, 0, VOID, VOID, VOID, 0)
+  X(sleep,             VOID, 1, INT,   VOID,  VOID,  VOID, 1) \
+  X(finish_anim,       VOID, 0, VOID,  VOID,  VOID,  VOID, 1) \
+  X(play_anim,         VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(anim_done,         BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(player_x,          FIX,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(player_y,          FIX,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(player_distance,   INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(move_toward_player, VOID, 1, FIX,   VOID,  VOID,  VOID, 0) \
+  X(move_toward,       BOOL, 3, FIX,   FIX,   FIX,   VOID, 0) \
+  X(hurt_player,       VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(enter_door,        VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(hide,              VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(show,              VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(face_player,       VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(log,               VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(random,            INT,  1, INT,   VOID,  VOID,  VOID, 0) \
+  X(touching_player,   BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(give_item,         VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(has_item,          BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(abs,               INT,  1, INT,   VOID,  VOID,  VOID, 0) \
+  X(play_sound,        VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(play_music,        VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(record_get,        INT,  3, INT,   INT,   INT,   VOID, 0) \
+  X(record_count,      INT,  1, INT,   VOID,  VOID,  VOID, 0) \
+  X(record_at,         INT,  2, INT,   INT,   VOID,  VOID, 0) \
+  X(item_count,        INT,  1, RECORD, VOID,  VOID,  VOID, 0) \
+  X(give,              INT,  2, RECORD, INT,   VOID,  VOID, 0) \
+  X(take,              BOOL, 2, RECORD, INT,   VOID,  VOID, 0) \
+  X(stat,              INT,  1, ENUM,  VOID,  VOID,  VOID, 0) \
+  X(add_stat,          VOID, 2, ENUM,  INT,   VOID,  VOID, 0) \
+  X(attach,            BOOL, 2, INT,   NAME,  VOID,  VOID, 0) \
+  X(attach_for,        BOOL, 3, INT,   NAME,  INT,   VOID, 0) \
+  X(detach,            VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(impulse,           VOID, 2, FIX,   FIX,   VOID,  VOID, 0) \
+  X(room_attach,       BOOL, 2, INT,   NAME,  VOID,  VOID, 0) \
+  X(room_detach,       VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(arm,               VOID, 3, NAME,  INT,   ENUM,  VOID, 0) \
+  X(disarm,            VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(hit_box,           VOID, 3, INT,   INT,   INT,   VOID, 0) \
+  X(equip,             BOOL, 2, INT,   RECORD, VOID,  VOID, 0) \
+  X(owner_lock,        VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(owner_play_anim,   VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(owner_busy,        BOOL, 0, VOID,  VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -100,7 +100,7 @@ typedef enum BmScriptType {
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {
-#define X(name, result, argc, a0, a1, a2, latent) BM_SCRIPT_API_##name,
+#define X(name, result, argc, a0, a1, a2, a3, latent) BM_SCRIPT_API_##name,
   BM_SCRIPT_API(X)
 #undef X
   BM_SCRIPT_API_COUNT
@@ -172,4 +172,5 @@ typedef enum BmScriptEvent {
 // Limits of this version.
 #define BM_SCRIPT_MAX_FIELDS 8        // per class
 #define BM_SCRIPT_MAX_REGISTERS 32    // per function
-#define BM_SCRIPT_MAX_ARGS 3
+#define BM_SCRIPT_MAX_ARGS 3         // parameters of a script's own function
+#define BM_SCRIPT_MAX_API_ARGS 4     // arguments of a runtime function
