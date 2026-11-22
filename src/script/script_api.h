@@ -116,7 +116,8 @@ typedef enum BmScriptType {
   X(aim,               VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
   X(held,              BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
   X(on_ground,         BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
-  X(bounce,            VOID, 1, FIX,   VOID,  VOID,  VOID, 0)
+  X(bounce,            VOID, 1, FIX,   VOID,  VOID,  VOID, 0) \
+  X(lock_move,         VOID, 2, ENUM,  ENUM,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -146,6 +147,11 @@ typedef enum BmScriptType {
 // d-pad or a game button is held now (Fwd and Back: the way the player faces). on_ground(): the
 // player stands. bounce(speed): the player's upward speed is `speed` now (a stab downwards that
 // strikes).
+//
+// lock_move(ground, air): how the player moves while the lock owner_lock just set holds them
+// (src/world/game.h: on the ground 0 slide, 1 stop, 2 keep, 3 walk; in the air 0 steer, 1 keep,
+// 2 drift; the enums GroundMove and AirMove of the test level's data). owner_lock sets slide
+// and steer, player_lock slide and drift.
 //
 // flip_gravity(): the player's gravity turns over (standing on ceilings, src/world/body.h) or
 // back; true if it now pulls up.

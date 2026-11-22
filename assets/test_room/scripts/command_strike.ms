@@ -12,6 +12,8 @@ event attached() {
   var int every = Item.every;
   if every < 1 { every = 1; }
   owner_lock(Item.startup + (Item.hits - 1) * every + 10);
+  var record<Weapon> weapon = equipped(0);
+  lock_move(weapon.ground_move, weapon.air_move);   // as the weapon's own swing
   if Item.dash != 0.0 || Item.hop != 0.0 { impulse(fix(facing) * Item.dash, -Item.hop); }
   play_sound(#jump);
 }

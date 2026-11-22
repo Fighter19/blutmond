@@ -19,6 +19,7 @@ record Dagger {
   reach = 12
   startup = 2
   recovery = 5
+  ground_move = Walk   # light enough to stab on the move
 }
 
 record GreatAxe {
@@ -31,6 +32,8 @@ record GreatAxe {
   recovery = 18
   swing = #Overhead
   behaviour = WeaponOverhead
+  ground_move = Stop   # too heavy to swing on the run
+  air_move = Drift
 }
 
 record ChainWhip {

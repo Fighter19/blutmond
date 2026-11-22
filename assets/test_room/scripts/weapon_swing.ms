@@ -55,6 +55,7 @@ state Swing {
 begin:
   Swings += 1;
   owner_lock(Item.startup + Item.recovery);
+  lock_move(Item.ground_move, Item.air_move);   // the weapon's (its record)
   swingAnim();
   play_sound(Item.sfx);
   sleep(Item.startup);

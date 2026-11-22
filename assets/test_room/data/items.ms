@@ -4,6 +4,11 @@
 
 enum Element { None, Fire, Ice, Holy }
 enum EquipSlot { Head, Body, Accessory }
+// How the player moves while an attack holds them (lock_move, src/world/game.h), on the ground:
+// no walking, the speed fades; stopped at once; the speed kept; walking. In the air: steering;
+// the speed kept; no steering, slowed by the air.
+enum GroundMove { Slide, Stop, Keep, Walk }
+enum AirMove { Steer, Keep, Drift }
 // The player's stats (first-items.md §1), read with stat(Stat.Attack).
 enum Stat { MaxHealth, MaxMana, Attack, Defence, Luck, AirJumps, Dash, WallSlide, GroundPound }
 
@@ -38,6 +43,8 @@ struct Weapon is Item {
   sound     sfx;
   attach    behaviour = WeaponSwing;
   StatBlock stats;
+  GroundMove ground_move;   // while it swings (and its commands strike)
+  AirMove    air_move;
 }
 
 struct Spell is Item {

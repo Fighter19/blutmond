@@ -31,6 +31,13 @@
 #define BM_GAME_ELEMENTS 4         // element values 0 (none) to 3; the game's enum names them
 #define BM_GAME_ITEM_SLOT 7        // the attachment slot an item being used takes (use_item)
 #define BM_GAME_COMMAND_SLOT 6     // the attachment slot a command's behaviour takes (commands.h)
+
+/// While a lock (owner_lock: an attack, player_lock: a scene) holds the player, on the ground:
+/// no walking, the speed fades with friction; stopped at once; the speed kept (no friction);
+/// walking as usual. The facing stays during an attack's lock.
+typedef enum BmLockGround { BM_LOCK_SLIDE = 0, BM_LOCK_STOP, BM_LOCK_KEEP, BM_LOCK_WALK } BmLockGround;
+/// In the air: steering as usual; the speed kept (no air drag); no steering, air drag.
+typedef enum BmLockAir { BM_LOCK_STEER = 0, BM_LOCK_AIR_KEEP, BM_LOCK_DRIFT } BmLockAir;
 #define BM_GAME_NOTICE_FRAMES 120  // how long an obtained item is shown
 #define BM_GAME_MUSIC_FADE 120     // frames the music takes to fade away in a room with music "none"
 #define BM_GAME_PORTRAIT_X 8       // where a speaker's portrait (32 x 32) is, in the dialogue box
@@ -83,7 +90,8 @@ typedef struct BmGame
   uint8_t resists[BM_GAME_ELEMENTS];   // per element: what the player wears that resists it
   uint8_t striker;                 // the figure striking the player right now (hits.h), else 0xFF
   uint8_t returnPending;           // bmGameReturnToSave asked for: done at the next frame's start
-  uint8_t lockCoast;               // the lock is an attack's (owner_lock): the player keeps their speed
+  // How the player moves while a lock holds them (lock_move; BmLockGround, BmLockAir).
+  uint8_t lockGround, lockAir;
   // A door with a panel being walked through (effects.h): its object + 1 (0 none) and the
   // frames so far; the door just come through, closing behind the player, and frames left.
   uint8_t doorSeq, doorTimer, doorArrive, doorArriveTimer;

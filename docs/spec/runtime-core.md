@@ -135,11 +135,14 @@ State: `x`, `y` (fix, the feet: bottom centre of the box), `vx`, `vy` (fix per f
 `onGround`, `climbing`, `inWater`, `jumpCutDone`, `facing` (-1 or 1), `coyote`, `jumpBuffer`,
 `dropThrough` (frames), `safeX`, `safeY` (pixels), `flipped`.
 
-**An attack never stops the player**: `owner_lock` sets `lockCoast = 1`, `player_lock` (a
-scene) `lockCoast = 0`. While `lockTimer` holds the player the body gets no direction and no
-jump, and with `lockCoast` also `coast`: without a direction and with `coast` the horizontal
-speed stays as it is, on the ground (no friction) and in the air (no air drag). A scene's lock
-stands the player still (friction) as before.
+**Moving while locked** (`lockGround`, `lockAir`, game.h): while `lockTimer` holds the player
+there is no jump, and on the ground by `lockGround`: 0 slide (no direction: the speed fades
+with friction), 1 stop (`vx = 0`, no direction), 2 keep (no direction, `coast`: no friction),
+3 walk (as usual); in the air by `lockAir`: 0 steer (as usual), 1 keep (no direction, `coast`:
+no air drag), 2 drift (no direction: air drag). After the body step `facing` is put back as it
+was (an attack goes where it was aimed). `owner_lock` sets slide and steer, `player_lock`
+(a scene) slide and drift, `lock_move(ground, air)` after it what the script wants (the test
+level's swings: the weapon record's `ground_move`, `air_move`).
 
 **Gravity flipped** (`flipped`, `flip_gravity`): gravity pulls up. The box stays `[y - height,
 y]`, but the feet are its top: everything below is mirrored (jumping goes down, the gravity and
@@ -465,6 +468,7 @@ value is dropped and counts as a script error.
 | 85 | `music_intensity(level)` | the sound engine's intensity (0..15): which layers of the music are heard |
 | 86 | `teleport(room, x, y)` | a teleport (section 12) to the room of that id (`#here`: this one) at `x`, `y`; false if there is no such room or a teleport is under way |
 | 87 | `screen_effect(name, a, b)` | the room's effect now (section 12): `#none`, `#wave`, `#spotlight`, `#pulse`, `#gradient`; `a`, `b` 0 for the defaults |
+| 93 | `lock_move(ground, air)` | for the lock just set (`owner_lock`): `lockGround`, `lockAir` (section 5, "Moving while locked"); out of range: slide, steer |
 | 89 | `aim(name)` | the figure's next `hit_box` lies `#Up` above its head, `#Down` below its feet, `#Low` ahead in the lower half of its body, or `#Ahead` (section 10) |
 | 90 | `held(name)` | `#Up`, `#Down`, `#Left`, `#Right`, `#Fwd`, `#Back` (by `facing`) or a game button is held now |
 | 91 | `on_ground()` | the player stands |

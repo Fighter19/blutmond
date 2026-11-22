@@ -115,6 +115,9 @@ Four scripts and one projectile class for six weapons. `WeaponSwing` is the one 
 attachable-scripts.md §3. It aims by the d-pad held when Attack is pressed: Up strikes above
 the head (`slash_up`), Down sweeps low on the ground (`slash_low`) and stabs below the feet in
 the air (`slash_down`; what it strikes bounces the player up at 4.5 px/frame), else ahead.
+While it swings the player cannot walk but keeps their speed, which fades on the ground, and
+steers in the air; a weapon's `ground_move` (Slide, Stop, Keep, Walk) and `air_move` (Steer,
+Keep, Drift) choose otherwise: the Dagger walks, the Great Axe stops and drifts.
 
 ## 4. Spells
 

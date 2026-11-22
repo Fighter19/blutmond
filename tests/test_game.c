@@ -1248,38 +1248,70 @@ static void testAimedSwings(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
-// Attacking never stops the player: the swing holds the controls, but the run or the jump keeps
-// its speed.
-static void testAnAttackKeepsTheMomentum(void)
+// While an attack holds the player (owner_lock), the controls do not move them but their speed
+// is not cut off: on the ground it fades with friction, in the air the player steers, facing
+// the way the swing goes. A weapon's record chooses otherwise (ground_move, air_move: the
+// Dagger walks), and a script with lock_move.
+static void testAttacksAndMovement(void)
 {
   TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);
   frames(2, 0);
-  const uint32_t sword = keyOf("ShortSword");
+  const uint32_t sword = keyOf("ShortSword"), dagger = keyOf("Dagger");
   bmInventoryGive(&s_game.inventory, sword, 1);
+  bmInventoryGive(&s_game.inventory, dagger, 1);
   TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, sword));
-  bmBodyPlace(&s_game.player, 40, 160);
-  frames(5, 0);
-  frames(20, BM_KEY_RIGHT);                       // running
-  bm_fix run = s_game.player.vx;
-  frames(1, BM_KEY_RIGHT | BM_KEY_A);             // jump
-  frames(2, BM_KEY_RIGHT | BM_KEY_A);
-  frames(1, BM_KEY_RIGHT | BM_KEY_A | BM_KEY_B);  // and swing
-  TEST_ASSERT(s_game.lockTimer != 0 && !s_game.player.onGround);
-  frames(8, BM_KEY_RIGHT | BM_KEY_A);
-  TEST_ASSERT(s_game.lockTimer != 0 && !s_game.player.onGround && s_game.player.vx == run && run > 0);
-  // On the ground too: the run goes on through the swing.
-  frames(60, 0);
+  // Running, then a swing: no more running, the speed fades (not cut off at once).
   bmBodyPlace(&s_game.player, 40, 160);
   frames(5, 0);
   frames(20, BM_KEY_RIGHT);
+  bm_fix run = s_game.player.vx;
   frames(1, BM_KEY_RIGHT | BM_KEY_B);
-  frames(6, BM_KEY_RIGHT);
-  TEST_ASSERT(s_game.lockTimer != 0 && s_game.player.onGround && s_game.player.vx == run);
-  // A scene's lock (player_lock) still stands the player: the run slows down.
+  TEST_ASSERT(s_game.lockTimer != 0 && s_game.player.vx > 0 && s_game.player.vx < run);
+  frames(2, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.player.vx > 0 && s_game.player.vx < run);
+  frames(4, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.lockTimer != 0 && s_game.player.vx == 0);
+  // In the air: the player steers (back to the left here), still facing the swing's way.
+  frames(30, 0);
+  bmBodyPlace(&s_game.player, 40, 160);
+  frames(5, 0);
+  frames(20, BM_KEY_RIGHT);
+  frames(1, BM_KEY_RIGHT | BM_KEY_A);
+  frames(2, BM_KEY_RIGHT | BM_KEY_A);
+  frames(1, BM_KEY_RIGHT | BM_KEY_A | BM_KEY_B);
+  TEST_ASSERT(s_game.lockTimer != 0 && !s_game.player.onGround);
+  bm_fix flying = s_game.player.vx;
+  frames(8, BM_KEY_LEFT | BM_KEY_A);
+  TEST_ASSERT(s_game.lockTimer != 0 && !s_game.player.onGround && s_game.player.vx <= flying - BM_FIX(1.5) && s_game.player.facing == 1);
+  // The Dagger's record walks: running on through the stab.
+  frames(60, 0);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, dagger));
+  bmBodyPlace(&s_game.player, 40, 160);
+  frames(5, 0);
+  frames(20, BM_KEY_RIGHT);
+  run = s_game.player.vx;
+  frames(1, BM_KEY_RIGHT | BM_KEY_B);
+  frames(4, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.lockTimer != 0 && s_game.lockGround == BM_LOCK_WALK && s_game.player.vx == run);
+  // The other choices: kept (no friction) and stopped at once.
   s_game.lockTimer = 10;
-  s_game.lockCoast = 0;
-  frames(6, BM_KEY_RIGHT);
+  s_game.lockGround = BM_LOCK_KEEP;
+  frames(4, 0);
+  TEST_ASSERT(s_game.player.vx == run);
+  s_game.lockGround = BM_LOCK_STOP;
+  frames(1, BM_KEY_RIGHT);
   TEST_ASSERT(s_game.player.vx == 0);
+  // A scene's lock (player_lock) in the air: no steering.
+  frames(30, 0);
+  frames(1, BM_KEY_A);
+  frames(3, BM_KEY_A);
+  s_game.lockTimer = 10;
+  s_game.lockGround = BM_LOCK_SLIDE;
+  s_game.lockAir = BM_LOCK_DRIFT;
+  bm_fix vx = s_game.player.vx;
+  frames(4, BM_KEY_RIGHT | BM_KEY_A);
+  TEST_ASSERT(!s_game.player.onGround && s_game.player.vx <= vx);
+  TEST_ASSERT(bm_script_errors == 0);
 }
 
 // Doors with a panel open only as the player goes through: touching one starts a walk through
@@ -1476,7 +1508,7 @@ int main(int argc, char **argv)
   RUN_TEST(testDoorsOpenAsThePlayerWalksThrough);
   RUN_TEST(testCommands);
   RUN_TEST(testEveryWeaponHasCommands);
-  RUN_TEST(testAnAttackKeepsTheMomentum);
+  RUN_TEST(testAttacksAndMovement);
   RUN_TEST(testAimedSwings);
   RUN_TEST(testALineAppearsLetterByLetter);
   RUN_TEST(testTheBossIsDefeated);

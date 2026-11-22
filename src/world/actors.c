@@ -372,7 +372,9 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     else if (api == BM_SCRIPT_API_owner_lock)
     {
       g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
-      g->lockCoast = 1;   // an attack: the player's speed goes on
+      // An attack: no walking, the speed fades; steering in the air (lock_move changes it).
+      g->lockGround = BM_LOCK_SLIDE;
+      g->lockAir = BM_LOCK_STEER;
     }
     else bmGamePlayPlayerAnim(g, (uint16_t)args[0]);
     break;
@@ -513,6 +515,11 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_return_to_save:
     bmGameReturnToSave(g);
     break;
+  case BM_SCRIPT_API_lock_move:
+    if (i != BM_ACTORS_OWNER) break;
+    g->lockGround = (uint8_t)(args[0] >= 0 && args[0] <= BM_LOCK_WALK ? args[0] : BM_LOCK_SLIDE);
+    g->lockAir = (uint8_t)(args[1] >= 0 && args[1] <= BM_LOCK_DRIFT ? args[1] : BM_LOCK_STEER);
+    break;
   case BM_SCRIPT_API_aim:
   {
     if (i == BM_ACTORS_ROOM) break;
@@ -601,7 +608,9 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     break;
   case BM_SCRIPT_API_player_lock:
     g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
-    g->lockCoast = 0;   // a scene: the player stands
+    // A scene: the player comes to a stand, no steering.
+    g->lockGround = BM_LOCK_SLIDE;
+    g->lockAir = BM_LOCK_DRIFT;
     break;
   case BM_SCRIPT_API_spawn:
   case BM_SCRIPT_API_spawn_with:

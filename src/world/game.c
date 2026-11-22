@@ -993,12 +993,25 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   // Attachments first: what they decide this frame moves the player this frame.
   bmAttachmentsFrame(g, keys, (uint16_t)(previous | taken));
   // A lock (a swing) takes walking and jumping away; set this frame, it already counts.
+  bool keepFacing = false;
+  int8_t facing = g->player.facing;
   if (g->lockTimer != 0)
   {
-    // An attack's lock keeps the player's speed, on the ground and in the air; a scene's
-    // (player_lock) stands the player still.
-    in.coast = g->lockCoast != 0;
-    in.dx = 0;
+    // What the player's movement does meanwhile is the lock's (lock_move): by default an
+    // attack cancels walking but not the speed, which fades with friction, and in the air the
+    // player steers; the facing stays (the swing goes where it was aimed).
+    if (g->player.onGround)
+    {
+      if (g->lockGround == BM_LOCK_STOP) g->player.vx = 0;
+      if (g->lockGround != BM_LOCK_WALK) in.dx = 0;
+      in.coast = g->lockGround == BM_LOCK_KEEP;
+    }
+    else
+    {
+      if (g->lockAir != BM_LOCK_STEER) in.dx = 0;
+      in.coast = g->lockAir == BM_LOCK_AIR_KEEP;
+    }
+    keepFacing = true;
     in.jumpPressed = false;
     g->lockTimer--;
   }
@@ -1032,6 +1045,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   else
   {
     events = bmBodyStep(&g->player, &params, &g->collision, &g->physics, in);
+    if (keepFacing) g->player.facing = facing;
   }
   bmAttachmentsBodyEvents(g, events);
   if (g->hurtTimer) g->hurtTimer--;
@@ -1161,7 +1175,8 @@ static const BmStateField s_gameFields[] = {
   F(speedPercent, BM_TYPE_S16, BM_STATE_SNAPSHOT),
   BM_STATE_ARRAY(BmGame, resists, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_GAME_ELEMENTS),
   F(returnPending, BM_TYPE_U8, BM_STATE_SNAPSHOT),
-  F(lockCoast, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(lockGround, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(lockAir, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(doorSeq, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(doorTimer, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(doorArrive, BM_TYPE_U8, BM_STATE_SNAPSHOT),

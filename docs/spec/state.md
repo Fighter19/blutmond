@@ -99,7 +99,7 @@ In serialisation order. Count is the array length.
 | `speedPercent` | s16 |  | snapshot |
 | `resists` | u8 | 4 | snapshot |
 | `returnPending` | u8 |  | snapshot |
-| `lockCoast` | u8 |  | snapshot |
+| `lockGround`, `lockAir` | u8 |  | snapshot |
 | `doorSeq`, `doorTimer`, `doorArrive`, `doorArriveTimer` | u8 |  | snapshot |
 | `cmdDirs` | u8 | 8 | snapshot |
 | `cmdTimes` | u16 | 8 | snapshot |
