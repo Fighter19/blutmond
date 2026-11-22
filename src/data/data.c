@@ -50,8 +50,76 @@ bool bmDataTableOpen(BmDataTable *pTable, const uint8_t *pData, uint32_t size)
   }
   for (uint16_t r = 1; r < t.recordCount; r++)
     if (bmDataRecordKey(&t, (uint16_t)(r - 1)) >= bmDataRecordKey(&t, r)) return false;
+  // The roles block, if there is one and it lies inside the chunk with its stats inside a record.
+  t.pRoles = NULL;
+  const uint8_t *roles = t.pRecords + (uint32_t)t.recordCount * t.recordSize;
+  if (size >= need + 12 && roles[0] == 'R' && roles[1] == 'O' && roles[2] == 'L' && roles[3] == 'E')
+  {
+    uint8_t stats = roles[8];
+    if (stats > BM_DATA_MAX_STATS || size < need + 12 + stats * 4u) return false;
+    if (roles[5] == BM_DATA_SLOT_FROM_FIELD ? rd16(roles + 6) >= t.recordSize : roles[5] >= BM_DATA_MAX_EQUIP_SLOTS) return false;
+    for (uint8_t i = 0; i < stats; i++)
+    {
+      const uint8_t *e = roles + 12 + i * 4;
+      if (e[2] >= BM_DATA_TYPE_COUNT || rd16(e) + bmDataTypeSize((BmDataType)e[2]) > t.recordSize) return false;
+    }
+    t.pRoles = roles;
+  }
   *pTable = t;
   return true;
+}
+
+uint8_t bmDataTableRoles(const BmDataTable *pTable)
+{
+  return pTable->pRoles != NULL ? pTable->pRoles[4] : 0;
+}
+
+uint8_t bmDataRecordSlot(const BmDataTable *pTable, const uint8_t *pRecord)
+{
+  if (!(bmDataTableRoles(pTable) & BM_DATA_ROLE_EQUIP)) return 0xFF;
+  uint8_t slot = pTable->pRoles[5];
+  if (slot == BM_DATA_SLOT_FROM_FIELD) slot = pRecord[rd16(pTable->pRoles + 6)];
+  return slot < BM_DATA_MAX_EQUIP_SLOTS ? slot : 0xFF;
+}
+
+uint32_t bmDataRecordStats(const BmDataTable *pTable, const uint8_t *pRecord, int32_t *pStats)
+{
+  if (!(bmDataTableRoles(pTable) & BM_DATA_ROLE_STAT_SOURCE)) return 0;
+  uint8_t n = pTable->pRoles[8];
+  for (uint8_t i = 0; i < n; i++)
+  {
+    const uint8_t *e = pTable->pRoles + 12 + i * 4;
+    pStats[i] = bmDataRead(pTable, pRecord, rd16(e), (BmDataType)e[2]);
+  }
+  return n;
+}
+
+// Every table of the pack, opened (and so checked) once: a record is looked up by key often
+// (equipping, a menu's lines, an item's title), and checking a table each time cost the GBA
+// tens of thousands of cycles per lookup.
+#define ALL_TABLES 32
+static struct
+{
+  const uint8_t *pPackData;
+  uint32_t packSize, packCrc;
+  uint8_t count;
+  BmDataTable tables[ALL_TABLES];
+} s_all BM_EWRAM_BSS;
+
+static void openAll(const BmPack *pPack)
+{
+  if (s_all.pPackData == pPack->pData && s_all.pPackData != NULL && s_all.packSize == pPack->size && s_all.packCrc == pPack->header.crc32)
+    return;
+  s_all.pPackData = pPack->pData;
+  s_all.packSize = pPack->size;
+  s_all.packCrc = pPack->header.crc32;
+  s_all.count = 0;
+  for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, 0); c >= 0 && s_all.count < ALL_TABLES; c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, (uint32_t)c + 1))
+  {
+    uint32_t size = 0;
+    const uint8_t *p = bmPackChunkData(pPack, (uint32_t)c, &size);
+    if (p != NULL && bmDataTableOpen(&s_all.tables[s_all.count], p, size)) s_all.count++;
+  }
 }
 
 // Tables found lately: looking one up walks the pack's chunks and checks the table, too slow to
@@ -78,12 +146,27 @@ bool bmDataFindTable(const BmPack *pPack, uint16_t structure, BmDataTable *pTabl
       return true;
     }
   }
-  for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, 0); c >= 0; c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, (uint32_t)c + 1))
+  // The tables opened for the pack already (bmDataPrepare); walking the pack's chunks and
+  // checking a table again cost a multiboot GBA a third of a frame.
+  bool found = false;
+  openAll(pPack);
+  for (uint8_t t = 0; t < s_all.count && !found; t++)
+    if (s_all.tables[t].structure == structure)
+    {
+      *pTable = s_all.tables[t];
+      found = true;
+    }
+  for (int32_t c = found ? -1 : bmPackFindChunk(pPack, BM_CHUNK_DTAB, 0); c >= 0; c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, (uint32_t)c + 1))
   {
     uint32_t size = 0;
     const uint8_t *p = bmPackChunkData(pPack, (uint32_t)c, &size);
     if (p == NULL || size < 2 || rd16(p) != structure) continue;
     if (!bmDataTableOpen(pTable, p, size)) return false;
+    found = true;
+    break;
+  }
+  if (found)
+  {
     s_cache[s_cacheNext].pPackData = pPack->pData;
     s_cache[s_cacheNext].packSize = pPack->size;
     s_cache[s_cacheNext].packCrc = pPack->header.crc32;
@@ -93,34 +176,6 @@ bool bmDataFindTable(const BmPack *pPack, uint16_t structure, BmDataTable *pTabl
     return true;
   }
   return false;
-}
-
-// Every table of the pack, opened (and so checked) once: a record is looked up by key often
-// (equipping, a menu's lines, an item's title), and checking a table each time cost the GBA
-// tens of thousands of cycles per lookup.
-#define ALL_TABLES 16
-static struct
-{
-  const uint8_t *pPackData;
-  uint32_t packSize, packCrc;
-  uint8_t count;
-  BmDataTable tables[ALL_TABLES];
-} s_all BM_EWRAM_BSS;
-
-static void openAll(const BmPack *pPack)
-{
-  if (s_all.pPackData == pPack->pData && s_all.pPackData != NULL && s_all.packSize == pPack->size && s_all.packCrc == pPack->header.crc32)
-    return;
-  s_all.pPackData = pPack->pData;
-  s_all.packSize = pPack->size;
-  s_all.packCrc = pPack->header.crc32;
-  s_all.count = 0;
-  for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, 0); c >= 0 && s_all.count < ALL_TABLES; c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, (uint32_t)c + 1))
-  {
-    uint32_t size = 0;
-    const uint8_t *p = bmPackChunkData(pPack, (uint32_t)c, &size);
-    if (p != NULL && bmDataTableOpen(&s_all.tables[s_all.count], p, size)) s_all.count++;
-  }
 }
 
 void bmDataPrepare(const BmPack *pPack)

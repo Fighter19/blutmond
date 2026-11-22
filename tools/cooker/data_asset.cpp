@@ -516,6 +516,23 @@ std::vector<DataTable> cookData(const std::vector<std::string> &paths, const scr
     }
     b.insert(b.end(), s.defaults.begin(), s.defaults.end());
     for (const Record *r : rows) b.insert(b.end(), r->bytes.begin(), r->bytes.end());
+    // The roles block (data-format.md §6), only for a structure with roles.
+    if (s.roles != 0)
+    {
+      b.insert(b.end(), {'R', 'O', 'L', 'E'});
+      b.push_back(s.roles);
+      b.push_back(s.equipSlot);
+      put16(b, s.equipOffset);
+      b.push_back(uint8_t(s.stats.size()));
+      b.push_back(0);
+      put16(b, 0);
+      for (const script::StructInfo::Stat &st : s.stats)
+      {
+        put16(b, st.offset);
+        b.push_back(uint8_t(st.type));
+        b.push_back(0);
+      }
+    }
     report.info("data", s.file, s.name + ": " + std::to_string(rows.size()) + " records of " + std::to_string(s.size) + " bytes");
     out.push_back(std::move(t));
   }

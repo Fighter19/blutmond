@@ -256,6 +256,10 @@ BmStateBlock bmGameStateBlock(BmGame *pGame);
 /// (collision, objects, camera, streamed maps, sprites) without moving the player.
 BmResult bmGameAfterLoad(BmGame *pGame);
 
+/// Works out what the equipment adds to the stats (the role stat_source, data-format.md §6):
+/// after equipping, loading a state and a pack that changed.
+void bmGameEquipmentChanged(BmGame *pGame);
+
 /// The player's most health: 30 + the stat MaxHealth (inventory.h).
 int32_t bmGameMaxHealth(const BmGame *pGame);
 

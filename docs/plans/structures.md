@@ -9,13 +9,23 @@ from an `Enemy` record, the coin it collects goes into the inventory, and a GBA 
 where another one is carries it along. Step 5 is built too: the editor's Data tab (records of
 a table as a list, a record's fields as a form chosen by type, inherited values shown, every
 change written to its line of the file and cooked and pushed at once, a preview of the sprite
-it names; right click for new, duplicate, delete). Step 4 is open.
+it names; right click for new, duplicate, delete). Step 4 is built too: roles
+([../spec/data-format.md](../spec/data-format.md) §6) after a colon in the structure's
+declaration (`struct Armour is Item : item, equip(slot), stat_source(stats)`), checked by the
+compiler and cooked into a roles block of `DTAB`; `equip` puts a record only into its slot;
+equipment that is a `stat_source` adds its stats to the totals by itself (derived, worked out
+again after equipping, loading and a pushed pack), so the test level's weapon and armour
+scripts no longer add them. Where step 4 differs from sections 5 and 7: the slots are the
+values of the game's `enum Slot` (no `slots { ... }` declaration), as the stats are those of
+`enum Stat`; the stats structure's field i adds to stat i (a name that does not match is a
+warning); `item` and `usable` are checked, but the engine does nothing more with them yet
+(`max_stack` is not enforced by `give`).
 
 Where the built version differs from sections 2 to 7: `DTAB` also holds the defaults record;
 reading an unknown key gives the defaults silently (no report through the link yet);
 `record_get` takes the field as `offset | type << 16`. There is no `stats { ... }`
 declaration: stats are numbered by the values of an enum the game declares (`enum Stat`),
-and `stat()` returns the base value until equipment adds to it (step 4). Items given with
+and `stat()` adds what attachments and equipment add to the base value. Items given with
 `give_item` stay at most one of a kind, as before; `give` and `take` count.
 
 Milestone M12 in [../PLAN.md](../PLAN.md).

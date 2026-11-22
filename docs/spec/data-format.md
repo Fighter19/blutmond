@@ -2,8 +2,7 @@
 
 Version 0.1, draft. Structures and records: data a game declares for itself (weapons, spells,
 enemy kinds), edited as text, cooked into the pack and read by scripts. The design and what
-is still to come (the inventory, roles, the Data tab) are in
-[../plans/structures.md](../plans/structures.md).
+is still to come are in [../plans/structures.md](../plans/structures.md).
 
 ## 1. Structures
 
@@ -66,6 +65,14 @@ fields   { u16 name; u8 type; u8 count; u16 offset; u16 detail; } [field_count]
 keys     { u32 key; u16 name; u16 0; } [record_count]       ascending by key
 defaults u8[record_size]                                     every field at its default
 records  u8[record_count * record_size]                      in the order of the keys
+roles    (only for a structure with roles, section 6)
+         u8[4] "ROLE"
+         u8  roles           BM_DATA_ROLE_*: 1 item, 2 equip, 4 usable, 8 stat_source
+         u8  slot            the equipment slot; 0xFF: each record's, from the field below
+         u16 slot_field      offset of that field (one byte, a value of enum Slot)
+         u8  stat_count      at most 16
+         u8  0; u16 0
+         { u16 offset; u8 type; u8 0; } [stat_count]   where stat i is in a record
 ```
 
 - `type` is a `BmDataType` (`src/data/data_types.h`), `count` the number of elements (1 for a
@@ -80,7 +87,10 @@ records  u8[record_count * record_size]                      in the order of the
   structure has the same hash lay its records out the same way.
 
 A reader MUST refuse a chunk whose sizes do not add up, whose record size is not a multiple of
-4 or above 64, whose fields lie outside a record, or whose keys are not strictly ascending.
+4 or above 64, whose fields lie outside a record, or whose keys are not strictly ascending. A
+roles block is there if the chunk goes on after the records with "ROLE"; a reader MUST refuse
+one whose stats lie outside a record or whose slot is 8 or more (and not 0xFF); a chunk
+without it has no roles.
 
 ## 4. Reading records
 
@@ -92,8 +102,9 @@ A reader MUST refuse a chunk whose sizes do not add up, whose record size is not
   other records, or a record that was removed, never makes a script read something undefined;
 - a value is read by offset and type and widened to 32 bits (signed types sign-extended).
 
-For finding a record by key, every table of the pack is opened and checked once (at most 16;
-`bmDataPrepare` when a game starts or a state is loaded, else at the first lookup). A table once found is remembered (four at a time) for that pack: the same place, size and
+For finding a record by key, every table of the pack is opened and checked once (at most 32;
+`bmDataPrepare` when a game starts or a state is loaded, else at the first lookup). Finding a
+table by its structure looks there too. A table once found is remembered (four at a time) for that pack: the same place, size and
 checksum. A pack pushed over the link has another checksum, so after a hot reload of a changed
 table the next read sees the new values.
 - `equip(slot, record)` finds the table of a record of any structure by its key, and in it the
@@ -125,6 +136,39 @@ for e in records(Enemy) { ... }
 - An object property in Tiled named like a `var(Category) record<S>` variable sets it to the
   record with that name (the property's text is hashed).
 
+## 6. Roles
+
+A structure can say what its records are to the engine, after its base:
+
+```
+enum Slot { Weapon, Spell, Head, Body, Accessory }        // the equipment slots, at most 8
+enum Stat { MaxHealth, MaxMana, Attack, Defence, Luck }   // the stats, at most 16
+
+struct Weapon is Item : item, equip(Weapon), stat_source(stats) { ... StatBlock stats; }
+struct Armour is Item : item, equip(slot), stat_source(stats) { Slot slot; StatBlock stats; }
+struct Consumable is Item : item, usable { ... }
+```
+
+| Role | Needs (checked by the compiler) | What the engine does |
+|---|---|---|
+| `item` | fields `title` (text), `icon` (sprite), `max_stack` (a whole number) | nothing yet: it marks what can be carried |
+| `equip(X)` | an `enum Slot` (at most 8 values); X is a value of it (every record goes into that slot) or a field of type `Slot` (each record says) | `equip(slot, record)` puts a record of the structure only into its slot (false otherwise) |
+| `usable` | a field of type `attach` | nothing yet: `use_item` attaches the first `attach` field, as for any record |
+| `stat_source(F)` | F (default `stats`) is an inner structure of at most 16 whole numbers (`bool` to `uint`), each a single value | while a record is equipped, field i of F is added to stat i |
+
+- Roles are not inherited from a base. A role given twice, an unknown role or one whose needs
+  are not met is an error. A stat whose field is named unlike the value of `enum Stat` with
+  its number (ignoring case and `_`: `max_health` and `MaxHealth` are alike) is a warning.
+- **Equipping**: a record of a structure with roles goes only into the slot its role says; a
+  structure without roles (a game that declares none) may go anywhere, as before.
+- **Stat totals**: `stat(i)` is the player's own value plus what attachments add plus what
+  equipment adds. The equipment's part is derived (not saved, not in snapshots): worked out
+  again whenever something is equipped or taken off, a state or save game is loaded, and a
+  pack is pushed (a changed record counts at once). So a save game with armour on counts it
+  once after loading.
+
 ## History
+
+- 0.2: roles (section 6) and the roles block of `DTAB`.
 
 - 0.1: structures, record files, the `DTAB` chunk, reading records from scripts.

@@ -199,7 +199,7 @@ every other file of the same module.
 |---|---|---|
 | Types | `bool`, `int`, `fix`, `name`, `text`, enums; every variable takes 4 bytes | `byte`/`short` and unsigned types in classes, `fix16`, `vec`, structs as variables, arrays, handles (`C`, `C?`) |
 | Enums | `enum E { A, B }` before the class or in a file of its own; variables and parameters of type `E`; values written `E.A`, or just `A` where the type is known (defaults, `defaultproperties`); `==` and `!=` between values of the same enum. An enum is not a number: assigning one to `int` or to another enum is an error | `switch`, conversion to `int` |
-| Structures | `struct S { ... }` and `struct S is Base { ... }` declared and laid out for records: field types, alignment, defaults, sizes, see "Structures" below | structures as variables of a class |
+| Structures | `struct S { ... }` and `struct S is Base { ... }` declared and laid out for records: field types, alignment, defaults, sizes, see "Structures" below; roles after a colon, `struct S is Base : item, equip(Weapon), stat_source(stats) { ... }` ([data-format.md](data-format.md) §6) | structures as variables of a class |
 | Records | `record<S>` variables, parameters and results, `#Name` as a record, field access (`.field`, `.inner.field`, `.array[2]`, through `record<T>` fields), `for x in records(S)`; [data-format.md](data-format.md) §5 | a dynamic array index |
 | Classes | `class Name extends Actor;`, `extends Attachment` and `extends Screen` (below), `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes (`Player`, `Screen`), inheritance between script classes, components (`has`) |
 | Functions | functions with up to 3 parameters and a result (also `record<S>`), calls nested up to 16 deep; all are final; runtime functions take up to 4 values | `virtual`, `static` |
@@ -266,7 +266,8 @@ attachment that made the hit gets `struck(amount)`. An object has the variables 
 figure is the player.
 
 **Equipment and the player's actions.** `equip(slot, record)` puts a record the player owns in
-an equipment slot (0 to 7); the class named by the record's first `attach` field is attached in
+an equipment slot (0 to 7; only its own slot if its structure has the role `equip`,
+[data-format.md](data-format.md) §6); the class named by the record's first `attach` field is attached in
 the player's attachment slot of the same number, with its first `record<S>` variable set to
 the record, so one script serves several weapons:
 

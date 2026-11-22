@@ -1,9 +1,12 @@
 // What the player can find, carry, equip and use (docs/plans/first-items.md §2): the data
 // behind weapons, spells, abilities, consumables and armour. Behaviour lives in the scripts
 // their `behaviour` fields name; numbers live in the tables (*.bmdata) next to this file.
+// The roles after ':' (docs/spec/data-format.md §6) tell the engine what a structure's records
+// are: items to carry, equipment for a slot of enum Slot, whose stats count while it is worn.
 
 enum Element { None, Fire, Ice, Holy }
-enum EquipSlot { Head, Body, Accessory }
+// The equipment slots (equip(slot, record), the role equip).
+enum Slot { Weapon, Spell, Head, Body, Accessory }
 // How the player moves while an attack holds them (lock_move, src/world/game.h), on the ground:
 // no walking, the speed fades; stopped at once; the speed kept; walking. In the air: steering;
 // the speed kept; no steering, slowed by the air.
@@ -36,7 +39,7 @@ struct StatBlock {
   byte  ground_pound;
 }
 
-struct Weapon is Item {
+struct Weapon is Item : item, equip(Weapon), stat_source(stats) {
   int       attack;
   int       reach;       // pixels in front of the player
   int       startup;     // frames before the hit
@@ -51,7 +54,7 @@ struct Weapon is Item {
   WeaponStyle style;
 }
 
-struct Spell is Item {
+struct Spell is Item : item, equip(Spell) {
   int     cost;
   int     power;
   Element element;
@@ -61,26 +64,26 @@ struct Spell is Item {
   attach  behaviour;
 }
 
-struct Ability is Item {
+struct Ability is Item : item {
   StatBlock stats;
   attach    behaviour;   // none: pure data
 }
 
-struct Consumable is Item {
+struct Consumable is Item : item, usable {
   int    health;
   int    mana;
   name   cures;
   attach behaviour = UseRestore;
 }
 
-struct Armour is Item {
-  EquipSlot slot;
+struct Armour is Item : item, equip(slot), stat_source(stats) {
+  Slot      slot;
   StatBlock stats;
   Element   resists;
   attach    behaviour = ArmourStats;   // its stats while worn
 }
 
-struct KeyItem is Item {
+struct KeyItem is Item : item {
 }
 
 // A special move (src/world/commands.h): directions, then a button. It belongs to a weapon, or

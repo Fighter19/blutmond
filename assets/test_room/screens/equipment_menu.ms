@@ -5,7 +5,7 @@ class EquipmentMenu extends Screen;
 // a slot, then equips; B goes back. Weapons go in equipment slot 0, helmets in 2, body armour
 // in 3, an accessory in 4 (slot 1 is the spell's).
 
-var int Slot;          // 0 weapon, 1 head, 2 body, 3 accessory
+var int Row;           // 0 weapon, 1 head, 2 body, 3 accessory
 var bool Choosing;     // in the list on the right
 var int Pick;          // there: 0 is "nothing", then what fits in the order of the records
 var int Count;
@@ -29,9 +29,9 @@ function int equipSlot(int s) {
 }
 
 function bool fits(record<Armour> a, int s) {
-  if s == 1 { return a.slot == EquipSlot.Head; }
-  if s == 2 { return a.slot == EquipSlot.Body; }
-  return a.slot == EquipSlot.Accessory;
+  if s == 1 { return a.slot == Slot.Head; }
+  if s == 2 { return a.slot == Slot.Body; }
+  return a.slot == Slot.Accessory;
 }
 
 // The weapon or armour at place n of the list (n from 1).
@@ -51,7 +51,7 @@ function record<Armour> armourAt(int n) {
   var int k = 0;
   var record<Armour> none;
   for a in records(Armour) {
-    if item_count(a) > 0 && fits(a, Slot) {
+    if item_count(a) > 0 && fits(a, Row) {
       k += 1;
       if k == n { return a; }
     }
@@ -69,7 +69,7 @@ function slots() {
 
 function slotCursor() {
   for s in 0..4 { ui_label(2, 2 + s * 3, " "); }
-  if !Choosing { ui_label(2, 2 + Slot * 3, ">"); }
+  if !Choosing { ui_label(2, 2 + Row * 3, ">"); }
 }
 
 function listCursor() {
@@ -81,7 +81,7 @@ function list() {
   for y in 2..13 { ui_label(15, y, "             "); }
   ui_label(16, 2, "-");
   Count = 1;
-  if Slot == 0 {
+  if Row == 0 {
     for w in records(Weapon) {
       if item_count(w) > 0 && Count < 11 {
         ui_label(16, 2 + Count, w.title);
@@ -90,7 +90,7 @@ function list() {
     }
   } else {
     for a in records(Armour) {
-      if item_count(a) > 0 && fits(a, Slot) && Count < 11 {
+      if item_count(a) > 0 && fits(a, Row) && Count < 11 {
         ui_label(16, 2 + Count, a.title);
         Count += 1;
       }
@@ -106,14 +106,14 @@ function preview() {
   var int defence = stat(Stat.Defence);
   var int newAttack = attack;
   var int newDefence = defence;
-  if Choosing && Slot == 0 {
+  if Choosing && Row == 0 {
     var record<Weapon> now = equipped(0);
     var record<Weapon> w = weaponAt(Pick);
     newAttack = w.attack + w.stats.attack + stat(Stat.Attack) - now.stats.attack;
     newDefence = defence + w.stats.defence - now.stats.defence;
   }
-  if Choosing && Slot > 0 {
-    var record<Armour> now = equipped(equipSlot(Slot));
+  if Choosing && Row > 0 {
+    var record<Armour> now = equipped(equipSlot(Row));
     var record<Armour> a = armourAt(Pick);
     newAttack = attack + a.stats.attack - now.stats.attack;
     newDefence = defence + a.stats.defence - now.stats.defence;
@@ -134,8 +134,8 @@ function preview() {
 event press(name b) {
   if !Choosing {
     if b == #Up || b == #Down {
-      if b == #Up { Slot = (Slot + 3) % 4; }
-      else { Slot = (Slot + 1) % 4; }
+      if b == #Up { Row = (Row + 3) % 4; }
+      else { Row = (Row + 1) % 4; }
       slotCursor();
       list();
     }
@@ -156,8 +156,8 @@ event press(name b) {
     preview();
   }
   if b == #A {
-    if Slot == 0 { equip(0, weaponAt(Pick)); }
-    else { equip(equipSlot(Slot), armourAt(Pick)); }
+    if Row == 0 { equip(0, weaponAt(Pick)); }
+    else { equip(equipSlot(Row), armourAt(Pick)); }
     play_sound(#jump);
     Choosing = false;
     slots();

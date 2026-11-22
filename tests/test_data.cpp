@@ -410,6 +410,78 @@ static void testDataErrors()
   }
 }
 
+// Roles (docs/spec/data-format.md §6): what a structure's records are to the engine, checked by
+// the compiler and found by the runtime in the DTAB chunk's roles block.
+static const char *kRoles = R"(
+enum Slot { Weapon, Spell, Head, Body }
+enum Stat { MaxHealth, Attack, Defence }
+struct Stats { short max_health; short attack; byte defence; }
+struct Item { text title; sprite icon; int max_stack = 1; }
+struct Sword is Item : item, equip(Weapon), stat_source(stats) { Stats stats; attach behaviour; }
+struct Armour is Item : item, equip(slot), stat_source { Slot slot; Stats stats; }
+struct Potion is Item : item, usable { attach behaviour = UseRestore; }
+struct Note { text says; }
+)";
+
+static const char *kSwords = "table Sword\nrecord Blade {\n  stats.attack = 4\n}\n";
+static const char *kArmour = "table Armour\nrecord Helm {\n  slot = Head\n  stats.defence = 3\n  stats.max_health = -2\n}\n"
+                             "record Mail {\n  slot = Body\n  stats.defence = 5\n}\n";
+static const char *kPotions = "table Potion\nrecord Tonic {\n}\n";
+
+static std::string compileError(const std::string &text, bool *pWarning = nullptr)
+{
+  script::Module m = script::compile({{"r.ms", text}}, stringId);
+  for (const script::Diagnostic &d : m.diagnostics)
+  {
+    if (pWarning) *pWarning = d.warning;
+    if (!d.warning || pWarning) return d.message;
+  }
+  return {};
+}
+
+static void testRoles()
+{
+  Cooked c;
+  cookPack(c, {write("roles.ms", kRoles)}, {write("swords.bmdata", kSwords), write("armour.bmdata", kArmour), write("potions.bmdata", kPotions)});
+  if (c.report.hasErrors()) printf("%s", c.report.text().c_str());
+  TEST_ASSERT(c.module.ok() && !c.report.hasErrors());
+  BmDataTable sword, armour, potion, note;
+  TEST_ASSERT(bmDataFindTable(&c.opened, stringId("Sword"), &sword) && bmDataFindTable(&c.opened, stringId("Armour"), &armour));
+  TEST_ASSERT(bmDataFindTable(&c.opened, stringId("Potion"), &potion) && bmDataFindTable(&c.opened, stringId("Note"), &note));
+  TEST_ASSERT(bmDataTableRoles(&sword) == (BM_DATA_ROLE_ITEM | BM_DATA_ROLE_EQUIP | BM_DATA_ROLE_STAT_SOURCE));
+  TEST_ASSERT(bmDataTableRoles(&armour) == (BM_DATA_ROLE_ITEM | BM_DATA_ROLE_EQUIP | BM_DATA_ROLE_STAT_SOURCE));
+  TEST_ASSERT(bmDataTableRoles(&potion) == (BM_DATA_ROLE_ITEM | BM_DATA_ROLE_USABLE));
+  TEST_ASSERT(bmDataTableRoles(&note) == 0 && note.pRoles == nullptr);
+  // The slot: the structure's own (a sword is a weapon), or each record's (armour).
+  const uint8_t *blade = bmDataRecord(&sword, script::nameKey("Blade"));
+  const uint8_t *helm = bmDataRecord(&armour, script::nameKey("Helm")), *mail = bmDataRecord(&armour, script::nameKey("Mail"));
+  TEST_ASSERT(blade && helm && mail);
+  TEST_ASSERT(bmDataRecordSlot(&sword, blade) == 0 && bmDataRecordSlot(&armour, helm) == 2 && bmDataRecordSlot(&armour, mail) == 3);
+  TEST_ASSERT(bmDataRecordSlot(&potion, bmDataRecord(&potion, script::nameKey("Tonic"))) == 0xFF);
+  // The stats, field i of the stats structure for stat i.
+  int32_t stats[BM_DATA_MAX_STATS] = {};
+  TEST_ASSERT(bmDataRecordStats(&sword, blade, stats) == 3 && stats[0] == 0 && stats[1] == 4 && stats[2] == 0);
+  TEST_ASSERT(bmDataRecordStats(&armour, helm, stats) == 3 && stats[0] == -2 && stats[1] == 0 && stats[2] == 3);
+  TEST_ASSERT(bmDataRecordStats(&potion, nullptr, stats) == 0);
+
+  // What the compiler refuses.
+  const std::string base = "enum Slot { Weapon }\nstruct Item { text title; sprite icon; int max_stack; }\n";
+  TEST_ASSERT(compileError("struct Item { text title; }\nstruct A is Item : item { }") .find("needs a field 'icon'") != std::string::npos);
+  TEST_ASSERT(compileError("struct A : equip(Weapon) { }").find("enum Slot") != std::string::npos);
+  TEST_ASSERT(compileError(base + "struct A : equip(Shield) { }").find("neither a value of enum Slot nor a field") != std::string::npos);
+  TEST_ASSERT(compileError(base + "struct A : equip(n) { int n; }").find("not of type Slot") != std::string::npos);
+  TEST_ASSERT(compileError(base + "struct A : equip { }").find("needs its slot") != std::string::npos);
+  TEST_ASSERT(compileError(base + "struct A : usable { }").find("attach") != std::string::npos);
+  TEST_ASSERT(compileError(base + "struct S { fix x; }\nstruct A : stat_source { S stats; }").find("not a whole number") != std::string::npos);
+  TEST_ASSERT(compileError(base + "struct A : stat_source { int stats; }").find("structure of numbers") != std::string::npos);
+  TEST_ASSERT(compileError(base + "struct A : magic { }").find("is not a role") != std::string::npos);
+  TEST_ASSERT(compileError(base + "struct A : item, item { }").find("given twice") != std::string::npos);
+  // A stat named unlike the enum Stat says: a warning, not an error.
+  bool warning = false;
+  std::string w = compileError("enum Stat { Health, Speed }\nstruct S { short health; short luck; }\nstruct A : stat_source { S stats; }", &warning);
+  TEST_ASSERT(warning && w.find("adds to stat 1 (Speed)") != std::string::npos);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -426,5 +498,6 @@ int main(int argc, char **argv)
   RUN_TEST(testInventory);
   RUN_TEST(testInventoryScripts);
   RUN_TEST(testDataErrors);
+  RUN_TEST(testRoles);
   return TEST_RESULT();
 }

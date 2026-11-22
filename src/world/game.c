@@ -656,6 +656,25 @@ void bmGameHurtPlayer(BmGame *g, int32_t damage)
   bmGameStrikePlayer(g, damage, g->player.x + g->player.facing);
 }
 
+void bmGameEquipmentChanged(BmGame *g)
+{
+  BmInventory *inv = &g->inventory;
+  memset(inv->statEquip, 0, sizeof(inv->statEquip));
+  for (uint8_t s = 0; s < BM_INVENTORY_EQUIP; s++)
+  {
+    BmDataTable table;
+    const uint8_t *record;
+    if (inv->equipped[s] == 0 || !bmDataFindRecord(g->pPack, inv->equipped[s], &table, &record)) continue;
+    int32_t stats[BM_DATA_MAX_STATS];
+    uint32_t n = bmDataRecordStats(&table, record, stats);
+    for (uint32_t i = 0; i < n && i < BM_INVENTORY_STATS; i++)
+    {
+      int32_t v = inv->statEquip[i] + stats[i];
+      inv->statEquip[i] = (int16_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v);
+    }
+  }
+}
+
 int32_t bmGameMaxHealth(const BmGame *g)
 {
   int32_t max = BM_GAME_PLAYER_HEALTH + bmInventoryStat(&g->inventory, BM_STAT_MAX_HEALTH);
@@ -1385,6 +1404,8 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   bmUiShow(&g->ui, false);
   g->hudDirty = true;
   bmDataPrepare(g->pPack);
+  // A changed record (a pushed pack) counts at once.
+  bmGameEquipmentChanged(g);
   bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
   bmGameDrawDialogue(g);
   bmScreensRedraw(g);

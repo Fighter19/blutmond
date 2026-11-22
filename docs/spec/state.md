@@ -201,8 +201,10 @@ link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](
 The inventory ([data-format.md](data-format.md), `src/world/inventory.h`): `count` entries in
 the order their kinds were first given, each a key (the FNV-1a hash of a record's or item's
 name) and an amount from 1 to 255; an entry that reaches 0 is removed and the ones behind it
-move up. `equipped` and `quick` hold keys (0 none) and are not used by the engine yet;
-`statBase` holds the player's own stat values, numbered by an enum the game declares.
+move up. `equipped` and `quick` hold keys (0 none): the equipment and quick slots;
+`statBase` holds the player's own stat values, numbered by an enum the game declares,
+`statBonus` what attachments add. What equipment adds (`statEquip`, data-format.md §6) is not
+in the state: it is worked out again after a load.
 
 The world map ([world-format.md](world-format.md) §4): `mapExplored` has a bit per cell of the
 map (bit `cell % 8` of byte `cell / 8`, cells numbered as in the `WRLD` chunk), set when the

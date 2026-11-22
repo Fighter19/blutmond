@@ -432,7 +432,7 @@ value is dropped and counts as a script error.
 | 25 | `item_count(record)` | how many of that record the inventory holds |
 | 26 | `give(record, amount)` | adds up to 255 of a kind (a new kind needs one of the 64 entries); returns how many were added |
 | 27 | `take(record, amount)` | takes them away if there are that many (true), else changes nothing (false); an entry at 0 is removed |
-| 28 | `stat(value)` | the player's own value of a stat: the enum value's number picks one of 16 (`statBase`); 0 outside |
+| 28 | `stat(value)` | a stat of the player: the enum value's number picks one of 16; `statBase + statBonus + statEquip` (below); 0 outside |
 | 29 | `add_stat(value, amount)` | adds to it, clamped to a 16-bit signed number |
 | 30 | `attach(slot, class)` | attaches the Attachment class of that name to the player in slot 0 to 7, replacing what is there (which gets `detached()`); the new one gets `attached()` at once. False if there is no such class or slot ([mondskript.md](mondskript.md) §11, "Attachments") |
 | 31 | `attach_for(slot, class, frames)` | the same, detached by itself after that many frames (at the end of a frame's work) |
@@ -443,7 +443,7 @@ value is dropped and counts as a script error.
 | 36 | `arm(box, damage, element)` | starts a hit of this figure with its hit boxes named `box` (section 10); arming the same name again replaces it with a new hit |
 | 37 | `disarm(box)` | ends this figure's hits with that box name |
 | 38 | `hit_box(reach, frames, damage, element)` | starts a hit of this figure with a rectangle `reach` (0..255) pixels ahead for `frames` (1..65535) frames, of that element (1 to 3; others 0); a negative `reach` (to -255): that far on both sides |
-| 39 | `equip(slot, record)` | slot 0 to 7, record 0 empties it: false if the player has none of the record (nothing changes). Else `equipped[slot] = record`; the class its first field of type `attach` names (its table found by the key among all `DTAB` chunks) is attached in the player's slot of the same number, its first variable of type record set to the record before `attached()`; without such a class the slot is emptied |
+| 39 | `equip(slot, record)` | slot 0 to 7, record 0 empties it: false if the player has none of the record, or if its structure has roles and `slot` is not the one its role `equip` gives (data-format.md §6; nothing changes). Else `equipped[slot] = record`; the class its first field of type `attach` names (its table found by the key among all `DTAB` chunks) is attached in the player's slot of the same number, its first variable of type record set to the record before `attached()`; without such a class the slot is emptied |
 | 40 | `owner_lock(frames)` | from a player's attachment: `lockTimer = frames` (0..65535) |
 | 41 | `owner_play_anim(name)` | from a player's attachment: the player's sheet's animation of that name from its start; `animHeld = 2` if `lockTimer != 0`, else 1. Unknown: nothing |
 | 42 | `owner_busy()` | from a player's attachment: `lockTimer != 0` |
@@ -480,8 +480,11 @@ value is dropped and counts as a script error.
 | 88 | `flip_gravity()` | the player's gravity turns over or back (section 5, "Gravity flipped"): `flipped` toggled, `vy = 0`, not on the ground, no coyote time; true if it now pulls up |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
-(state.md §4): what equipment adds, taken away in its `detached()`, not saved. `stat` (28)
-reads `statBase + statBonus`.
+(state.md §4): what an attachment adds while it is attached, taken away in its `detached()`,
+not saved. `statEquip` is what the equipped records of structures with the role
+`stat_source` add ([data-format.md](data-format.md) §6), worked out again after every
+`equip`, a loaded state and a pushed pack. `stat` (28) reads `statBase + statBonus +
+statEquip`.
 
 `arm`, `disarm` and `hit_box` from one of the player's attachments act for the player and
 remember the slot; from a room's attachment they do nothing.

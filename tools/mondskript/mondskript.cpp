@@ -2,6 +2,7 @@
 #include "mondskript.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -277,10 +278,18 @@ struct RawField
   std::vector<Token> value;   // the default, up to ';'
 };
 
+struct RawRole
+{
+  Token name;
+  Token param;      // equip(Slot value or field), stat_source(field)
+  bool hasParam = false;
+};
+
 struct RawStruct
 {
   StructInfo info;
   Token base;
+  std::vector<RawRole> roles;
   std::vector<RawField> fields;
   int state = 0;              // layout: 0 not yet, 1 in progress, 2 done
 };
@@ -374,6 +383,28 @@ private:
       pos_++;
       s.base = ident("the structure it is based on");
       s.info.base = s.base.text;
+    }
+    // Roles: struct Armour is Item : item, equip(slot), stat_source(stats) { ... }
+    if (isPunct(":"))
+    {
+      pos_++;
+      while (true)
+      {
+        RawRole r;
+        r.name = ident("a role (item, equip, usable, stat_source)");
+        if (isPunct("("))
+        {
+          pos_++;
+          r.param = ident("what the role refers to");
+          r.hasParam = true;
+          expectPunct(")");
+        }
+        for (const RawRole &o : s.roles)
+          if (o.name.text == r.name.text) error(r.name, "role '" + r.name.text + "' is given twice");
+        s.roles.push_back(r);
+        if (!isPunct(",")) break;
+        pos_++;
+      }
     }
     expectPunct("{");
     while (!isPunct("}"))
@@ -475,9 +506,116 @@ public:
     if (info.size == 0) info.size = 4;
     info.defaults.resize(info.size, 0);
     s.state = 2;
+    for (const RawRole &r : s.roles) role(s, r);
   }
 
+  /// Warnings found while laying out (a stat whose field is named unlike the enum Stat says).
+  std::vector<Diagnostic> warnings;
+
 private:
+  const StructField *fieldNamed(const StructInfo &info, const std::string &name) const
+  {
+    for (const StructField &f : info.fields)
+      if (f.name == name) return &f;
+    return nullptr;
+  }
+
+  static bool isWhole(BmDataType t)
+  {
+    return t == BM_DATA_BOOL || t == BM_DATA_BYTE || t == BM_DATA_UBYTE || t == BM_DATA_SHORT || t == BM_DATA_USHORT ||
+           t == BM_DATA_INT || t == BM_DATA_UINT;
+  }
+
+  // "MaxHealth" and "max_health" are the same name.
+  static std::string plain(const std::string &s)
+  {
+    std::string out;
+    for (char c : s)
+      if (c != '_') out += char(std::tolower(uint8_t(c)));
+    return out;
+  }
+
+  void role(RawStruct &s, const RawRole &r)
+  {
+    StructInfo &info = s.info;
+    auto fail = [&](const Token &t, const std::string &why) { throw CompileError{t.line, t.column, why}; };
+    auto need = [&](const char *field, bool ok, const char *what) {
+      const StructField *f = fieldNamed(info, field);
+      if (f == nullptr || !ok)
+        fail(r.name, "role '" + r.name.text + "' needs a field '" + field + "' (" + what + ")");
+    };
+    if (r.name.text == "item")
+    {
+      const StructField *t = fieldNamed(info, "title"), *i = fieldNamed(info, "icon"), *m = fieldNamed(info, "max_stack");
+      need("title", t && t->type == BM_DATA_TEXT, "text");
+      need("icon", i && i->type == BM_DATA_SPRITE, "sprite");
+      need("max_stack", m && isWhole(m->type), "a whole number");
+      if (r.hasParam) fail(r.param, "role 'item' takes nothing in brackets");
+      info.roles |= BM_DATA_ROLE_ITEM;
+    }
+    else if (r.name.text == "usable")
+    {
+      bool any = false;
+      for (const StructField &f : info.fields) any |= f.type == BM_DATA_ATTACH;
+      if (!any) fail(r.name, "role 'usable' needs a field of type attach (what using it does)");
+      if (r.hasParam) fail(r.param, "role 'usable' takes nothing in brackets");
+      info.roles |= BM_DATA_ROLE_USABLE;
+    }
+    else if (r.name.text == "equip")
+    {
+      int slots = findEnum("Slot");
+      if (slots < 0) fail(r.name, "role 'equip' needs the equipment slots: declare 'enum Slot { ... }'");
+      const EnumInfo &e = enums_[size_t(slots)];
+      if (e.values.size() > BM_DATA_MAX_EQUIP_SLOTS)
+        fail(r.name, "enum Slot has at most " + std::to_string(BM_DATA_MAX_EQUIP_SLOTS) + " values (the equipment slots)");
+      if (!r.hasParam) fail(r.name, "role 'equip' needs its slot: equip(Weapon), or the field that names it: equip(slot)");
+      if (const StructField *f = fieldNamed(info, r.param.text))
+      {
+        if (f->type != BM_DATA_ENUM || f->detail != "Slot" || f->count != 1) fail(r.param, "field '" + f->name + "' is not of type Slot");
+        info.equipSlot = BM_DATA_SLOT_FROM_FIELD;
+        info.equipOffset = f->offset;
+      }
+      else
+      {
+        int v = Types::findValue(e, r.param.text);
+        if (v < 0) fail(r.param, "'" + r.param.text + "' is neither a value of enum Slot nor a field of type Slot");
+        info.equipSlot = uint8_t(v);
+      }
+      info.roles |= BM_DATA_ROLE_EQUIP;
+    }
+    else if (r.name.text == "stat_source")
+    {
+      std::string name = r.hasParam ? r.param.text : "stats";
+      const StructField *f = fieldNamed(info, name);
+      if (f == nullptr || f->type != BM_DATA_STRUCT || f->count != 1)
+        fail(r.hasParam ? r.param : r.name, "role 'stat_source' needs a field '" + name + "' that is a structure of numbers");
+      const StructInfo &inner = raw_[size_t(find(f->detail))].info;
+      if (inner.fields.size() > BM_DATA_MAX_STATS)
+        fail(r.name, "structure '" + inner.name + "' has more than " + std::to_string(BM_DATA_MAX_STATS) + " stats");
+      int stat = findEnum("Stat");
+      info.stats.clear();
+      for (size_t i = 0; i < inner.fields.size(); i++)
+      {
+        const StructField &g = inner.fields[i];
+        if (!isWhole(g.type) || g.count != 1)
+          fail(r.name, "stat '" + g.name + "' of '" + inner.name + "' is not a whole number (field i adds to stat i)");
+        info.stats.push_back({uint16_t(f->offset + g.offset), g.type});
+        // Field i adds to stat i: say so when the names do not match.
+        if (stat >= 0)
+        {
+          const EnumInfo &e = enums_[size_t(stat)];
+          if (i >= e.values.size() || plain(e.values[i]) != plain(g.name))
+            warnings.push_back({info.file, g.line, 1,
+                                "'" + inner.name + "." + g.name + "' adds to stat " + std::to_string(i) +
+                                    (i < e.values.size() ? " (" + e.values[i] + ")" : " (Stat has no value there)"),
+                                true});
+        }
+      }
+      info.roles |= BM_DATA_ROLE_STAT_SOURCE;
+    }
+    else fail(r.name, "'" + r.name.text + "' is not a role (item, equip, usable, stat_source)");
+  }
+
   const std::vector<EnumInfo> &enums_;
   std::vector<RawStruct> &raw_;
   const std::function<uint16_t(const std::string &)> &stringId_;
@@ -2161,6 +2299,7 @@ Module compile(const std::vector<Source> &sources, const std::function<uint16_t(
       raw[i].state = 2;  // reported once
     }
   }
+  for (const Diagnostic &w : layout.warnings) out.diagnostics.push_back(w);
   for (const RawStruct &r : raw) types.structs.push_back(r.info);
   out.enums = types.enums;
   out.structs = types.structs;

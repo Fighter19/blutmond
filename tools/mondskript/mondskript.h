@@ -73,6 +73,16 @@ struct StructInfo
   uint16_t align = 1;
   std::vector<uint8_t> defaults;    // a record with every field at its default (little endian)
   int line = 0;
+  // Roles (BM_DATA_ROLE_*, docs/spec/data-format.md §6), resolved by the compiler.
+  uint8_t roles = 0;
+  uint8_t equipSlot = BM_DATA_SLOT_FROM_FIELD;   // the slot (enum Slot), or from the field below
+  uint16_t equipOffset = 0;                      // the field of type Slot when it is per record
+  struct Stat
+  {
+    uint16_t offset = 0;
+    BmDataType type = BM_DATA_INT;
+  };
+  std::vector<Stat> stats;                       // stat i: where its value is in a record
 };
 
 struct Source

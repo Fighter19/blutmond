@@ -25,13 +25,13 @@ its `hit()`); mana (20 plus MaxMana, 1 back every 90 frames); consumables used t
 behaviour (`use_item` attaches it for a frame in slot 7): `UseRestore` for potions and the
 mana vial (nothing taken when nothing would be restored), `UseReturn` for the Return Feather
 (to the last save point, or the start); the quick slots (L and Select), set in the Items page
-with L and R; luck adds 2 % per point to the bat's drop. Not yet as the plan has it: the roles
-(`role item, equip(...)`, they come with structures.md step 4), the Data tab (structures.md
-step 5), icons and sounds, the stat preview of the Blood Ring's trade-off, a "no" sound;
+with L and R; luck adds 2 % per point to the bat's drop. The structures have their roles (structures.md step 4: `item`, `equip`, `usable`,
+`stat_source`): weapons and armour add their stats by themselves, `ArmourStats` only counts
+the element resisted. Not yet as the plan has it: icons and sounds, the stat preview of the Blood Ring's trade-off, a "no" sound;
 the Antidote's cure and the Fire Flask wait for steps 6 and 7 (effects, projectiles); the new
 items are not placed in the level yet (step 5, the room with the chests). Weapons strike with
-their element (`hit_box` takes one: the Flame Brand burns, its `#Ignite` waits for step 7). Armour names its slot with an enum
-`EquipSlot` instead of a byte. Steps 5 to 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
+their element (`hit_box` takes one: the Flame Brand burns, its `#Ignite` waits for step 7). Armour names its slot with the game's
+`enum Slot` (Weapon, Spell, Head, Body, Accessory: the equipment slots 0 to 4) instead of a byte. Steps 5 to 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

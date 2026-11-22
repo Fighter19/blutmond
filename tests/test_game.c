@@ -908,6 +908,56 @@ static void testKnockbackAndFlash(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// structures.md step 4: the roles of the test level's structures (items.ms). Equipment goes only
+// into its slot; what it adds to the stats is the engine's (stat_source), not its script's: it
+// counts once after a save game is loaded, and a pushed pack with a changed record changes the
+// total at once.
+static void testEquipmentRoles(void)
+{
+  start();
+  BmInventory *inv = &s_game.inventory;
+  const uint32_t helm = keyOf("IronHelm"), sword = keyOf("ShortSword"), brand = keyOf("FlameBrand"), mail = keyOf("ChainMail");
+  bmInventoryGive(inv, helm, 1);
+  bmInventoryGive(inv, sword, 1);
+  bmInventoryGive(inv, brand, 1);
+  bmInventoryGive(inv, mail, 1);
+  frames(2, 0);
+  // Only into its own slot: the helm on the head (2), weapons in 0.
+  TEST_ASSERT(!bmAttachmentsEquip(&s_game, 0, helm) && !bmAttachmentsEquip(&s_game, 3, helm));
+  TEST_ASSERT(!bmAttachmentsEquip(&s_game, 2, sword) && inv->equipped[2] == 0 && inv->equipped[0] == 0);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 2, helm) && bmAttachmentsEquip(&s_game, 0, brand));
+  // The stats: the helm's defence 3, the Flame Brand's attack 2; nothing in the base values.
+  TEST_ASSERT(bmInventoryStat(inv, BM_STAT_DEFENCE) == 3 && bmInventoryStat(inv, BM_STAT_ATTACK) == 2);
+  TEST_ASSERT(inv->statBase[BM_STAT_DEFENCE] == 0 && inv->statBase[BM_STAT_ATTACK] == 0);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 3, mail) && bmInventoryStat(inv, BM_STAT_DEFENCE) == 8);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, sword) && bmInventoryStat(inv, BM_STAT_ATTACK) == 0);
+  // A save game: equipped again when loaded, counted once.
+  memset(bmHalHostSaveMemory(), 0xFF, BM_HAL_SAVE_SIZE);
+  TEST_ASSERT(bmGameWriteSaveGame(&s_game));
+  start();
+  TEST_ASSERT(bmInventoryStat(inv, BM_STAT_DEFENCE) == 0);
+  TEST_ASSERT(bmGameReadSaveGame(&s_game));
+  TEST_ASSERT(inv->equipped[2] == helm && inv->equipped[3] == mail && bmInventoryStat(inv, BM_STAT_DEFENCE) == 8);
+  // A pack whose Iron Helm gives 7 pushed in (as a hot reload): the total follows.
+  BmDataTable table;
+  const uint8_t *record;
+  TEST_ASSERT(bmDataFindRecord(&s_pack, helm, &table, &record) && table.pRoles != NULL);
+  uint16_t defence = (uint16_t)(table.pRoles[12 + 3 * 4] | table.pRoles[12 + 3 * 4 + 1] << 8);   // stat 3, Defence
+  uint8_t *changed = malloc(s_size);
+  memcpy(changed, s_data, s_size);
+  size_t at = (size_t)(record - s_data) + defence;
+  changed[at] = 7;
+  changed[at + 1] = 0;
+  BmPack old = s_pack;
+  TEST_ASSERT(bmPackOpen(&s_pack, changed, s_size, false) == BM_PACK_OK);
+  TEST_ASSERT(bmGameAfterLoad(&s_game) == BM_SUCCESS);
+  TEST_ASSERT(bmInventoryStat(inv, BM_STAT_DEFENCE) == 12);
+  s_pack = old;
+  TEST_ASSERT(bmGameAfterLoad(&s_game) == BM_SUCCESS && bmInventoryStat(inv, BM_STAT_DEFENCE) == 8);
+  free(changed);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // first-items.md steps 3 and 4: the element rule (the Ember Cloak resists fire, the bat is weak
 // to holy), Chain Mail slows the player, the Thorn Band strikes back, mana and its refill,
 // items used through their behaviour scripts (UseRestore only when it helps, UseReturn back to
@@ -1727,6 +1777,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheMenus);
   RUN_TEST(testTheWorldMap);
   RUN_TEST(testElementsArmourAndConsumables);
+  RUN_TEST(testEquipmentRoles);
   RUN_TEST(testKnockbackAndFlash);
   RUN_TEST(testADropFallsAndIsTaken);
   RUN_TEST(testTheDebugLobby);

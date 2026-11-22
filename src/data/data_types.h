@@ -31,3 +31,13 @@ typedef enum BmDataType {
 #define BM_DATA_MAX_FIELDS 32         // per structure, inherited ones included
 #define BM_DATA_MAX_RECORD_SIZE 64    // bytes
 #define BM_DATA_MAX_ENUM_VALUES 256
+
+// Roles a structure declares (docs/spec/data-format.md §6): what the engine does with its
+// records. Stored in the DTAB chunk's roles block.
+#define BM_DATA_ROLE_ITEM 1           // can be carried: has title, icon, max_stack
+#define BM_DATA_ROLE_EQUIP 2          // goes into an equipment slot (one, or the one a field names)
+#define BM_DATA_ROLE_USABLE 4         // can be used (use_item): has an attach field
+#define BM_DATA_ROLE_STAT_SOURCE 8    // its stats count while it is equipped
+#define BM_DATA_MAX_EQUIP_SLOTS 8     // values of the game's enum Slot
+#define BM_DATA_MAX_STATS 16          // values of the game's enum Stat
+#define BM_DATA_SLOT_FROM_FIELD 0xFFu // the equipment slot is a field of each record

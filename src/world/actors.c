@@ -1552,10 +1552,15 @@ bool bmAttachmentsEquip(BmGame *g, uint8_t slot, uint32_t key)
 {
   if (slot >= BM_INVENTORY_EQUIP || slot >= BM_ATTACH_PLAYER_SLOTS) return false;
   if (key != 0 && bmInventoryCount(&g->inventory, key) == 0) return false;
-  g->inventory.equipped[slot] = key;
   BmDataTable table;
   const uint8_t *record;
-  uint16_t behaviour = key != 0 && bmDataFindRecord(g->pPack, key, &table, &record) ? bmDataRecordBehaviour(&table, record) : BM_DATA_NONE_ID;
+  bool found = key != 0 && bmDataFindRecord(g->pPack, key, &table, &record);
+  // A structure with roles says where its records go: only equipment, and only into its slot
+  // (data-format.md §6). Without roles anything goes anywhere.
+  if (found && bmDataTableRoles(&table) != 0 && bmDataRecordSlot(&table, record) != slot) return false;
+  g->inventory.equipped[slot] = key;
+  bmGameEquipmentChanged(g);
+  uint16_t behaviour = found ? bmDataRecordBehaviour(&table, record) : BM_DATA_NONE_ID;
   const char *cls = behaviour != BM_DATA_NONE_ID ? bmPackString(g->pPack, behaviour) : NULL;
   if (cls == NULL || !attachKey(g, slot, hashName(cls), 0, key)) bmAttachmentsDetach(g, slot);
   return true;

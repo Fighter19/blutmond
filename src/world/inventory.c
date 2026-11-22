@@ -85,5 +85,5 @@ bool bmInventoryScriptCall(BmInventory *pInv, uint16_t api, const int32_t *pArgs
 
 int32_t bmInventoryStat(const BmInventory *pInv, uint32_t stat)
 {
-  return stat < BM_INVENTORY_STATS ? (int32_t)pInv->statBase[stat] + pInv->statBonus[stat] : 0;
+  return stat < BM_INVENTORY_STATS ? (int32_t)pInv->statBase[stat] + pInv->statBonus[stat] + pInv->statEquip[stat] : 0;
 }

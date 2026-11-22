@@ -15,16 +15,8 @@ var int Swings;
 var int Strikes;
 var name Aim;     // #Ahead, #Up, #Low or #Down: where this swing goes
 
-// The weapon's stats (Flame Brand: +2 attack) count while it is equipped.
-event attached() {
-  add_stat(Stat.Attack, Item.stats.attack);
-  add_stat(Stat.Defence, Item.stats.defence);
-}
-
-event detached() {
-  add_stat(Stat.Attack, -Item.stats.attack);
-  add_stat(Stat.Defence, -Item.stats.defence);
-}
+// The weapon's stats (Flame Brand: +2 attack) count while it is equipped by themselves: Weapon
+// is a stat_source (items.ms).
 
 event press(name button) {
   if button == #Attack && !owner_busy() {

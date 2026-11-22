@@ -27,6 +27,8 @@ typedef struct BmInventory
   int16_t statBase[BM_INVENTORY_STATS];     // the player's own values (level-ups, upgrades)
   int16_t statBonus[BM_INVENTORY_STATS];    // what attachments add while attached (not saved:
                                             // equipping again after loading adds it again)
+  int16_t statEquip[BM_INVENTORY_STATS];    // what equipment with the role stat_source adds
+                                            // (derived: bmGameEquipmentChanged works it out)
 } BmInventory;
 
 // Stats the engine reads, by the convention of first-items.md §1 (the game's `enum Stat`
@@ -37,7 +39,7 @@ typedef struct BmInventory
 #define BM_STAT_ATTACK 2
 #define BM_STAT_DEFENCE 3
 
-/// A stat's value: own plus what attachments add.
+/// A stat's value: own plus what attachments and equipment add.
 int32_t bmInventoryStat(const BmInventory *pInv, uint32_t stat);
 
 /// How many of `key` the player has (0 if none).
