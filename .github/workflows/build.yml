@@ -1,7 +1,10 @@
 name: build
 
+# On develop (where finished work is merged) and on pull requests; feature branches can be
+# pushed without starting a build.
 on:
   push:
+    branches: [develop]
   pull_request:
 
 jobs:

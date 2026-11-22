@@ -354,6 +354,28 @@ today ([../spec/runtime-core.md](../spec/runtime-core.md) §8,
 - **Persistent ids** stay the Tiled object id, for the object and for its attachments
   (their `save` variables are keyed by the object and the attachment's slot).
 
+### The room as an owner
+
+Room-wide scripting without an object to hang it on: the room itself owns attachments.
+
+| In Tiled (map properties) | Effect |
+|---|---|
+| `attach = Wind, Rain` | these `Attachment` classes are attached to the room when it is entered, in this order, in the room's slots (4) |
+| `Wind.Strength = 2` | sets the variable `Strength` of the attachment `Wind`, as for objects |
+
+- They are detached (`detached()`) when the room is left, and attached anew when it is
+  entered again; a room's `save` variables keep what has to last (a lever pulled, a boss
+  beaten), keyed by the room and the slot.
+- They get `tick()` and state code every frame after the player's attachments and before
+  the room's objects, and `entered_room()` once; game buttons and the player's events
+  (`jumped`, `landed`, ...) are not theirs. Reading `x`, `y` gives the camera's position.
+- What they are for: weather and wind, timed events, a boss arena that locks its doors
+  while the fight lasts, music cues, a puzzle that watches several levers (through
+  messages, section 5).
+- A script can attach to the room as well: `room_attach(slot, Class)`, `room_detach(slot)`.
+- State: a pool of 4 next to the player's 8, in the snapshot; nothing in the save game but
+  the `save` variables.
+
 ## 9. State
 
 A block `attachments`, pool of 24: owner, slot, class (by name hash, so it survives a
@@ -395,7 +417,9 @@ inventory.
    the state instead of constants (same checksums again), reading and writing from scripts,
    modifiers, `knock_back`, `impulse`, `push`, `move_to`.
 8. From the level: `attach` and dotted properties, attachments asked for by a class, the
-   cook-time checks, the Tiled types file.
+   cook-time checks, the Tiled types file; the room as an owner (section 8), with
+   `room_attach`/`room_detach`. Test: a wind attachment on the second room pushes the
+   player there and stops when the room is left.
 
 Done when: with the game running on the GBA, the script named by a weapon record is
 replaced by another one and the next attack behaves differently, while no other script was
