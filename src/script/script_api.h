@@ -109,7 +109,9 @@ typedef enum BmScriptType {
   X(say_line,          VOID, 1, RECORD, VOID,  VOID,  VOID, 0) \
   X(say_as,            VOID, 2, RECORD, TEXT,  VOID,  VOID, 0) \
   X(fade_music,        VOID, 2, INT,   INT,   VOID,  VOID, 0) \
-  X(music_intensity,   VOID, 1, INT,   VOID,  VOID,  VOID, 0)
+  X(music_intensity,   VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(teleport,          BOOL, 3, NAME,  INT,   INT,   VOID, 0) \
+  X(screen_effect,     VOID, 3, NAME,  INT,   INT,   VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -181,6 +183,11 @@ typedef enum BmScriptType {
 // frames; at 0 it stops. music_intensity(level): dynamic music: the song's instruments of layer
 // 1 to 15 are heard while level is at least their layer, fading in and out (set it before
 // play_music for a song to begin that way).
+//
+// teleport(#room_id, x, y): the player to (x, y) of that room (#here or the room's own id:
+// within it), with the wave (effects.h): false while one is under way or if there is no such
+// room. screen_effect(#name, a, b): the room's effect from now on (#wave, #spotlight, #pulse,
+// #gradient, #none; a and b 0 for the defaults).
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {

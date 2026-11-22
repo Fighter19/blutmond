@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define POOL_SIZE (192 * 1024)   // about as a cartridge image (src/hal/gba/gba_cart.ld)
+#define POOL_SIZE (320 * 1024)   // room for the test level twice and more (a cartridge has about 200 KB)
 #define WORDS_PER_FRAME 128   // about 30 KB/s at 60 frames per second
 
 static uint8_t *s_level, *s_variant, *s_scripts;
@@ -115,6 +115,7 @@ static void testHello(void)
   TEST_ASSERT(r.hello.protocolVersion == BM_LINK_PROTOCOL_VERSION);
   TEST_ASSERT(r.hello.activeSize == s_levelSize);
   TEST_ASSERT(r.hello.chunkCount == bmPackChunkCount(&s_pack));
+  // All chunks listed, in parts of 82 (one packet each).
   TEST_ASSERT(r.hello.hashCount == r.hello.chunkCount);
   TEST_ASSERT(r.hello.contentCapacity == POOL_SIZE);   // the level is outside: all of it is free
   TEST_ASSERT(r.hello.poolCapacity == POOL_SIZE);

@@ -3,6 +3,11 @@
  <room path="test_room/room.tmx"/>
  <room path="test_room/room2.tmx"/>
  <room path="test_room/boss_hall.tmx"/>
+ <room path="test_room/debug_lobby.tmx"/>
+ <room path="test_room/debug_wave.tmx"/>
+ <room path="test_room/debug_spotlight.tmx"/>
+ <room path="test_room/debug_pulse.tmx"/>
+ <room path="test_room/debug_gradient.tmx"/>
  <assets path="test_room"/>
  <assets path="engine"/>
 </project>

@@ -82,6 +82,13 @@ typedef struct BmGame
   uint8_t resists[BM_GAME_ELEMENTS];   // per element: what the player wears that resists it
   uint8_t striker;                 // the figure striking the player right now (hits.h), else 0xFF
   uint8_t returnPending;           // bmGameReturnToSave asked for: done at the next frame's start
+  // Screen effects and the teleport (effects.h).
+  uint8_t fxKind;
+  int16_t fxA, fxB;
+  uint8_t teleTimer;               // frames left of a teleport, 0 none
+  uint32_t teleRoom;
+  int16_t teleX, teleY;
+  uint8_t fxApplied;               // line-table slots the effects set (not state: video)
   // The HUD (top left: health and mana, while no screen is open) and the notice of an item
   // obtained (bottom left, for a while). What it shows is drawn from the state; only the
   // notice's text and time are state.
@@ -183,6 +190,10 @@ void bmGameReturnToSave(BmGame *pGame);
 /// The notice at the bottom left: `count` of the record `key` were obtained (its `title`, or
 /// the string `nameId` if it has none), shown for BM_GAME_NOTICE_FRAMES.
 void bmGameNotice(BmGame *pGame, uint32_t key, uint16_t nameId, int32_t count);
+
+/// Puts the player at (x, y) of room `roomIndex` (entered fresh if it is another), as the middle
+/// of a teleport does.
+void bmGameMovePlayer(BmGame *pGame, uint32_t roomIndex, int32_t x, int32_t y);
 
 /// Uses the item on quick slot `slot` (0: L, 1: Select) if the player has one.
 bool bmGameUseQuick(BmGame *pGame, uint8_t slot);

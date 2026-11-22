@@ -94,6 +94,13 @@ def main():
     vesper(out)
     voices(out)
 
+    # A teleport (the wave, effects.h): a shimmer rising and falling over a second.
+    shimmer = [(i * 3, 72 + (i * 5) % 24 if i < 10 else 96 - (i * 5) % 24, 4, 70) for i in range(20)]
+    song(os.path.join(out, "teleport.bmsong"), 'bpm="120" length="64" loop="-1" effect="1" echo="0" echo-feedback="0"', [
+        'name="glass" wave="sine" attack="0" decay="6" sustain="0" release="2" volume="110" pan="0"',
+        'name="hum" wave="triangle" attack="10" decay="20" sustain="0" release="6" volume="90" pan="0"',
+    ], [("glass", "glass", shimmer), ("hum", "hum", [(0, 48, 56, 90)])])
+
 
 def vesper(out):
     """The moon bat's song: 8 bars at 92 bpm, D phrygian, in four layers."""

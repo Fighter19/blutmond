@@ -138,7 +138,10 @@ changes, so it can run next to Tiled.
   time and the size. Edits are saved and, with Live on, pushed into the running game. A room's
   `music` property names its song (`none` fades the music away); an instrument's `layer` makes
   dynamic music that scripts bring in with `music_intensity` (the moon bat's song grows in four
-  layers as the fight does); effects called `jump` and `hurt` play by themselves, others
+  layers as the fight does). The track list shows each track's layer and whether it is heard
+  at the intensity chosen to preview; Mute and Solo pick tracks to hear, Fade fades the song
+  out as a room's `none` does, and Speak plays a text as a dialogue voice would (a sound
+  effect per letter). Effects called `jump` and `hurt` play by themselves, others
   from scripts with `play_sound(#name)`.
 - **Graphics** (centre tab): what is loaded in video memory and how much of the hardware it
   takes: all 96 KB of VRAM as tiles with the maps of each background, overlaps in red and data

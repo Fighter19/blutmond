@@ -446,7 +446,7 @@ int main(int argc, char **argv)
   m.adaptive = adaptive;
   m.minDelay = 0;
   bmLinkMasterSetDelay(&m, delay);
-  BmLiveRemote remote;
+  static BmLiveRemote remote;
   bool haveRemote = false;
   uint32_t transferId = (uint32_t)time(NULL);
   int failed = 0;

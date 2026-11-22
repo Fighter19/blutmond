@@ -187,6 +187,7 @@ static void updateLayer(BmRoomLayer *pLayer, int32_t cameraX, int32_t cameraY)
       writeRow(pLayer, pLayer->windowY);
     }
   }
+  pLayer->scrollX = (int16_t)(lx & 511);
   bmBgSetScroll(pLayer->bg, (int16_t)(lx & 511), (int16_t)(ly & 255));
 }
 

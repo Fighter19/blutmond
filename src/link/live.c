@@ -290,12 +290,15 @@ static void receiveChunkData(BmLive *l, const BmLinkPacket *p)
   memcpy(l->pStaging + offset + at, p->payload + BM_LIVE_CHUNK_DATA_HEADER, n);
 }
 
-static bool sendHello(BmLive *l)
+// HELLO: what runs here, and the running pack's chunks from `first` on (as many as fit; the
+// master asks again from where the list stopped).
+static bool sendHello(BmLive *l, uint32_t first)
 {
   static uint8_t out[BM_LINK_MAX_PAYLOAD] BM_EWRAM_BSS;
   const BmPackHeader *h = &l->active.header;
   uint32_t count = bmPackChunkCount(&l->active);
-  uint32_t hashes = count < BM_LIVE_HELLO_MAX_HASHES ? count : BM_LIVE_HELLO_MAX_HASHES;
+  if (first > count) first = count;
+  uint32_t hashes = count - first < BM_LIVE_HELLO_MAX_HASHES ? count - first : BM_LIVE_HELLO_MAX_HASHES;
   bmLinkPut16(out + 0, BM_LINK_PROTOCOL_VERSION);
   bmLinkPut16(out + 2, BM_LIVE_RUNTIME_VERSION);
   bmLinkPut16(out + 4, h->abiMajor);
@@ -311,7 +314,7 @@ static bool sendHello(BmLive *l)
   for (uint32_t i = 0; i < hashes; i++)
   {
     BmChunkEntry e;
-    bmPackGetChunk(&l->active, i, &e);
+    bmPackGetChunk(&l->active, first + i, &e);
     uint8_t *o = out + BM_LIVE_HELLO_SIZE + i * BM_LIVE_HELLO_ENTRY;
     bmLinkPut32(o, e.hash);
     bmLinkPut32(o + 4, e.size);
@@ -767,7 +770,7 @@ static bool handle(BmLive *l, const BmLinkPacket *p)
     }
     return true;
   case BM_LINK_HELLO:
-    return sendHello(l);
+    return sendHello(l, p->length >= 4 ? bmLinkGet32(p->payload) : 0);
   case BM_LINK_STATE_GET:
     return sendState(l, p->length >= 1 ? p->payload[0] : BM_STATE_SNAPSHOT);
   case BM_LINK_APPLY:

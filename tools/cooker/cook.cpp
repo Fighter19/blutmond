@@ -657,15 +657,23 @@ Bytes objectsChunk(const tmx::Map &map, StringTable &strings, Report &report, ui
     for (const tmx::Object &o : g.objects) objects.push_back(&o);
   }
 
-  // The room's own scripts (attachable-scripts.md §8, "The room as an owner"): the map's
-  // properties `attach` and `Class.variable` go into one more object of the class "@room".
+  // The room's own object, of the class "@room": the map's properties for the runtime. `attach`
+  // and `Class.variable` for the room's scripts (attachable-scripts.md §8, "The room as an
+  // owner"), `effect`, `effect_a`, `effect_b` (screen effects) and `title` (said when the room
+  // is entered).
   tmx::Object roomObject;
   roomObject.type = "@room";
   roomObject.id = 0;
+  bool attachValues = false;
   for (const auto &[key, value] : map.properties)
-    if (key == "attach" || (key.find('.') != std::string::npos && key.find('.') > 0)) roomObject.properties[key] = value;
-  if (roomObject.properties.count("attach")) objects.push_back(&roomObject);
-  else if (!roomObject.properties.empty())
+  {
+    bool classValue = key.find('.') != std::string::npos && key.find('.') > 0;
+    attachValues = attachValues || classValue;
+    if (key == "attach" || classValue || key == "effect" || key == "effect_a" || key == "effect_b" || key == "title")
+      roomObject.properties[key] = value;
+  }
+  if (!roomObject.properties.empty()) objects.push_back(&roomObject);
+  if (attachValues && !roomObject.properties.count("attach"))
     report.warning("room-scripts", map.path, "properties for the room's attachments, but no 'attach' property");
 
   int starts = 0;

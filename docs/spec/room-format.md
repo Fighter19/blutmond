@@ -48,6 +48,9 @@ Map-level custom properties:
 | `area` | string | `default` | area the room belongs to; rooms of an area share graphics, palettes and VRAM layout ([pack-format.md](pack-format.md) §2) |
 | `attach` | string | – | the room's own scripts: `Attachment` classes, separated by commas, attached to the room in this order when it is entered and detached when it is left ([mondskript.md](mondskript.md) §11, "Attachments") |
 | `Class.variable` | any | – | for a class named in `attach`: the value of its `var(Category)` variable of that name |
+| `effect` | string | `none` | the screen effect while in the room: `wave`, `spotlight`, `pulse`, `gradient` ([runtime-core.md](runtime-core.md) §12) |
+| `effect_a`, `effect_b` | int | 0 | the effect's two values (0: its default) |
+| `title` | string | – | shown as a notice at the bottom left when the room is entered |
 
 The map's tile size MUST be a multiple of 8. Map width and height MUST be at least one screen
 of the profile (240×160 px on GBA).
@@ -380,9 +383,9 @@ little endian; offsets are from the start of the chunk.
 ```
 
 Objects are in the order of the Tiled file. An object without class or name has the id of the
-empty string there. A room with the property `attach` has one more object at the end, of the
-class `@room`, persistent id 0, position and size 0, whose properties are the map's `attach`
-and `Class.variable` properties: that is how the runtime finds the room's own scripts. Coordinates are Tiled's, rounded to whole pixels; `w` and `h` are 0 for a
+empty string there. A room with any of the properties `attach`, `effect`, `effect_a`, `effect_b`, `title` has one
+more object at the end, of the class `@room`, persistent id 0, position and size 0, whose
+properties are those and the map's `Class.variable` properties: that is how the runtime finds the room's own scripts. Coordinates are Tiled's, rounded to whole pixels; `w` and `h` are 0 for a
 point. Property values are stored as their text (`true`, `12`, `1.5`, a name), pairs sorted
 by key; the runtime converts them when it creates the object
 ([runtime-core.md](runtime-core.md) §8). The layers of a room are stored in the order of the
@@ -410,3 +413,4 @@ room IDs and song names.
 - 0.1.2: room property `area`; dependency list in `ROOM`.
 - 0.1.3: exact layouts of `ROOM`, `TMAP`, `OBJS`, `PALE` and `TILE` as implemented by the cooker.
 - 0.2.1: room properties `attach` and `Class.variable`; the `@room` object in `OBJS`.
+- 0.2.2: room properties `effect`, `effect_a`, `effect_b`, `title`.

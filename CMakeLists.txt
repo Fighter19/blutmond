@@ -60,7 +60,10 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong)
-set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/boss_hall.tmx)
+set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/boss_hall.tmx
+  ${PROJECT_SOURCE_DIR}/assets/test_room/debug_lobby.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_wave.tmx
+  ${PROJECT_SOURCE_DIR}/assets/test_room/debug_spotlight.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_pulse.tmx
+  ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx)
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata
@@ -79,6 +82,9 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/vesper.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/voice_hero.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/voice_vesper.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/teleport.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/use_debug_mirror.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/teleporter.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/drop.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/moon_bat.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/fireball.ms

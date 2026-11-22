@@ -2,6 +2,7 @@
 #include "autopilot.h"
 #include "data.h"
 #include "device.h"
+#include "effects.h"
 #include "game.h"
 #include "hal_host.h"
 #include "hits.h"
@@ -231,7 +232,7 @@ static void testTheItemTables(void)
 {
   start();
   static const struct { const char *table; uint16_t records; } tables[] = {
-    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 6 }, { "Armour", 8 }, { "KeyItem", 3 } };
+    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 7 }, { "Armour", 8 }, { "KeyItem", 3 } };
   for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++)
   {
     BmDataTable t;
@@ -869,6 +870,8 @@ static void testElementsArmourAndConsumables(void)
   inv->quick[1] = feather;
   press(BM_KEY_SELECT);
   frames(1, 0);
+  TEST_ASSERT(s_game.teleTimer != 0);   // with the wave of a teleport
+  frames(BM_TELEPORT_FRAMES, 0);
   TEST_ASSERT(bmInventoryCount(inv, feather) == 0);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);   // it started here
   TEST_ASSERT(BM_FIX_INT(s_game.player.x) == s_game.savedX);
@@ -930,6 +933,62 @@ static void testADropFallsAndIsTaken(void)
   bmBodyPlace(&s_game.player, 8, 160);
   frames(2, 0);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0 && a->spawned[0] == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+// The debug lobby: L + R + Start gives the Debug Mirror; used, it teleports the player there
+// with the wave (the move at the middle, the player held still meanwhile); each of its doors
+// leads into a room with a screen effect, which the room's property chooses; the teleporter
+// takes the player back to the start.
+static void testTheDebugLobby(void)
+{
+  start();
+  frames(2, 0);
+  const uint32_t mirror = keyOf("DebugMirror");
+  // L + R + Start: the mirror, and no menu.
+  frames(1, BM_KEY_L | BM_KEY_R);
+  frames(1, BM_KEY_L | BM_KEY_R | BM_KEY_START);
+  frames(1, 0);
+  TEST_ASSERT(bmInventoryCount(&s_game.inventory, mirror) == 1 && s_game.screens.count == 0);
+  // Used: a teleport; the room changes at its middle.
+  TEST_ASSERT(bmAttachmentsUse(&s_game, mirror));
+  TEST_ASSERT(s_game.teleTimer == BM_TELEPORT_FRAMES);
+  frames(BM_TELEPORT_FRAMES / 2 - 1, BM_KEY_RIGHT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0 && bmEffectsWaveAt(&s_game, 40) >= 0);
+  int32_t x = s_game.player.x;
+  frames(2, BM_KEY_RIGHT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "debug_lobby") == 0 && BM_FIX_INT(s_game.player.x) == 40);
+  frames(BM_TELEPORT_FRAMES / 2, 0);
+  TEST_ASSERT(s_game.teleTimer == 0 && bmInventoryCount(&s_game.inventory, mirror) == 1);   // not used up
+  (void)x;
+  // The lobby's doors: a room per effect.
+  static const char *const rooms[4][2] = {{"debug_wave", "wave"}, {"debug_spotlight", "spotlight"}, {"debug_pulse", "pulse"}, {"debug_gradient", "gradient"}};
+  for (int i = 0; i < 4; i++)
+  {
+    TEST_ASSERT(bmGameStart(&s_game, &s_pack, rooms[i][0]) == BM_SUCCESS);
+    frames(3, 0);
+    TEST_ASSERT(s_game.fxKind == (uint8_t)bmEffectNamed(rooms[i][1]));
+  }
+  // The wave pulls the room left by 0 to 8 pixels, never more.
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);
+  int lo = 99, hi = -99;
+  for (int f = 0; f < 90; f++)
+  {
+    frames(1, 0);
+    for (int y = 0; y < 160; y += 7)
+    {
+      int v = bmEffectsWaveAt(&s_game, y);
+      lo = v < lo ? v : lo;
+      hi = v > hi ? v : hi;
+    }
+  }
+  TEST_ASSERT(lo == 0 && hi > 0 && hi <= BM_EFFECT_WAVE_MAX);
+  // Back from the lobby: its teleporter.
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_lobby") == BM_SUCCESS);
+  frames(2, 0);
+  bmBodyPlace(&s_game.player, 520, 160);
+  frames(BM_TELEPORT_FRAMES + 4, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0 && BM_FIX_INT(s_game.player.x) == 40);
   TEST_ASSERT(bm_script_errors == 0);
 }
 
@@ -1061,6 +1120,7 @@ int main(int argc, char **argv)
   RUN_TEST(testElementsArmourAndConsumables);
   RUN_TEST(testKnockbackAndFlash);
   RUN_TEST(testADropFallsAndIsTaken);
+  RUN_TEST(testTheDebugLobby);
   RUN_TEST(testALineAppearsLetterByLetter);
   RUN_TEST(testTheBossIsDefeated);
   free(s_data);

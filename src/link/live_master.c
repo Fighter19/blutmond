@@ -8,13 +8,27 @@
 
 bool bmLiveMasterHello(BmLinkMaster *m, BmLiveRemote *r)
 {
-  BmLinkPacket p;
-  if (!bmLinkMasterRequest(m, BM_LINK_HELLO, NULL, 0, BM_LINK_HELLO, &p, BM_LIVE_ANSWER_POLLS)) return false;
-  if (p.length < BM_LIVE_HELLO_SIZE) return false;
-  bmLiveDecodeHello(p.payload, &r->hello);
-  if (r->hello.hashCount > BM_LIVE_HELLO_MAX_HASHES || p.length < BM_LIVE_HELLO_SIZE + r->hello.hashCount * BM_LIVE_HELLO_ENTRY)
-    return false;
-  for (uint32_t i = 0; i < 3 * r->hello.hashCount; i++) r->pairs[i] = bmLinkGet32(p.payload + BM_LIVE_HELLO_SIZE + i * 4);
+  // The chunk list may take several answers (82 chunks each): asked again from where it stopped
+  // (runtime version 4 on; an older one lists only the first ones).
+  uint32_t listed = 0;
+  for (int part = 0; part < 8; part++)
+  {
+    uint8_t ask[4];
+    bmLinkPut32(ask, listed);
+    BmLinkPacket p;
+    if (!bmLinkMasterRequest(m, BM_LINK_HELLO, ask, part == 0 ? 0 : 4, BM_LINK_HELLO, &p, BM_LIVE_ANSWER_POLLS)) return false;
+    if (p.length < BM_LIVE_HELLO_SIZE) return false;
+    BmLiveHello h;
+    bmLiveDecodeHello(p.payload, &h);
+    if (h.hashCount > BM_LIVE_HELLO_MAX_HASHES || p.length < BM_LIVE_HELLO_SIZE + h.hashCount * BM_LIVE_HELLO_ENTRY ||
+        listed + h.hashCount > BM_LIVE_MAX_CHUNKS)
+      return false;
+    if (part == 0) r->hello = h;
+    for (uint32_t i = 0; i < 3 * h.hashCount; i++) r->pairs[3 * listed + i] = bmLinkGet32(p.payload + BM_LIVE_HELLO_SIZE + i * 4);
+    listed += h.hashCount;
+    r->hello.hashCount = listed;
+    if (h.hashCount == 0 || listed >= r->hello.chunkCount || r->hello.runtimeVersion < 4) break;
+  }
   return true;
 }
 

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="120" length="64" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="glass" wave="sine" attack="0" decay="6" sustain="0" release="2" volume="110" pan="0"/>
+ <instrument name="hum" wave="triangle" attack="10" decay="20" sustain="0" release="6" volume="90" pan="0"/>
+ <track name="glass" instrument="glass">
+  <note t="0" key="72" len="4" vel="70"/>
+  <note t="3" key="77" len="4" vel="70"/>
+  <note t="6" key="82" len="4" vel="70"/>
+  <note t="9" key="87" len="4" vel="70"/>
+  <note t="12" key="92" len="4" vel="70"/>
+  <note t="15" key="73" len="4" vel="70"/>
+  <note t="18" key="78" len="4" vel="70"/>
+  <note t="21" key="83" len="4" vel="70"/>
+  <note t="24" key="88" len="4" vel="70"/>
+  <note t="27" key="93" len="4" vel="70"/>
+  <note t="30" key="94" len="4" vel="70"/>
+  <note t="33" key="89" len="4" vel="70"/>
+  <note t="36" key="84" len="4" vel="70"/>
+  <note t="39" key="79" len="4" vel="70"/>
+  <note t="42" key="74" len="4" vel="70"/>
+  <note t="45" key="93" len="4" vel="70"/>
+  <note t="48" key="88" len="4" vel="70"/>
+  <note t="51" key="83" len="4" vel="70"/>
+  <note t="54" key="78" len="4" vel="70"/>
+  <note t="57" key="73" len="4" vel="70"/>
+ </track>
+ <track name="hum" instrument="hum">
+  <note t="0" key="48" len="56" vel="90"/>
+ </track>
+</song>

@@ -10,6 +10,7 @@
 #include "screens.h"
 #include "body.h"
 #include "data.h"
+#include "effects.h"
 #include "game.h"
 #include "hal.h"
 #include "hits.h"
@@ -517,6 +518,19 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_say:
     bmGameSay(g, (uint16_t)args[0], (uint16_t)args[1]);
     break;
+  case BM_SCRIPT_API_teleport:
+  {
+    const char *id = bmPackString(g->pPack, (uint16_t)args[0]);
+    int32_t index = id != NULL && strcmp(id, "here") == 0 ? (int32_t)g->roomIndex : bmGameFindRoom(g->pPack, id);
+    *result = index >= 0 && bmEffectsTeleport(g, (uint32_t)index, args[1], args[2]);
+    break;
+  }
+  case BM_SCRIPT_API_screen_effect:
+  {
+    int32_t kind = bmEffectNamed(bmPackString(g->pPack, (uint16_t)args[0]));
+    bmEffectsSet(g, kind > 0 ? (BmEffect)kind : BM_EFFECT_NONE, args[1], args[2]);
+    break;
+  }
   case BM_SCRIPT_API_fade_music:
   {
     int32_t percent = args[0] < 0 ? 0 : args[0] > 100 ? 100 : args[0];

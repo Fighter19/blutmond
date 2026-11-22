@@ -5,6 +5,7 @@
 #include "game.h"
 
 #include "data.h"
+#include "effects.h"
 #include "text.h"
 
 #include "hal.h"
@@ -300,6 +301,8 @@ static void updateSprites(BmGame *g)
 {
   int32_t camX = g->room.cameraX, camY = g->room.cameraY;
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
+  // The player sways with a wave (a teleport's) as the room behind does.
+  px -= bmEffectsWaveAt(g, py - 16 - camY);
   bool blink = g->hurtTimer && (g->hurtTimer & 4);
   uint8_t next = 0;
   // The speaker's portrait in the dialogue box, first: in front of everything.
@@ -428,6 +431,23 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   g->physics.waterGravity = g->room.waterGravity;
   g->physics.waterMaxFallSpeed = g->room.waterMaxFallSpeed;
   readObjects(g);
+  if (fresh)
+  {
+    bmEffectsEnterRoom(g);
+    // The last room's notice goes (its title); a room with a `title` says it in the corner when
+    // it is entered.
+    if (g->noticeTimer != 0) g->noticeTimer = 1;
+    for (uint16_t i = 0; i < g->objectCount; i++)
+    {
+      const BmObjectView *o = &g->objects[i];
+      if (strcmp(o->className, "@room") != 0) continue;
+      for (uint16_t k = 0; k < o->propertyCount; k++)
+      {
+        const char *key = bmPackString(g->pPack, bmRead16(o->pProperties + k * 4));
+        if (key != NULL && strcmp(key, "title") == 0) bmGameNotice(g, 0, bmRead16(o->pProperties + k * 4 + 2), 1);
+      }
+    }
+  }
   loadSprites(g);
   bmActorsEnterRoom(g, fresh);
   if (fresh) bmAttachmentsEnterRoom(g);
@@ -473,6 +493,7 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   g->savedY = BM_FIX_INT(g->player.y);
   updateCamera(g);
   updateSprites(g);
+  bmEffectsPresent(g);
   return BM_SUCCESS;
 }
 
@@ -777,13 +798,19 @@ static void returnToSave(BmGame *g)
 {
   g->returnPending = 0;
   while (g->screens.count != 0) bmScreensClose(g);
-  if (g->savedRoom != g->roomIndex)
+  // With the wave, as every teleport (effects.h).
+  bmEffectsTeleport(g, g->savedRoom, g->savedX, g->savedY);
+}
+
+void bmGameMovePlayer(BmGame *g, uint32_t roomIndex, int32_t x, int32_t y)
+{
+  if (roomIndex != g->roomIndex)
   {
-    if (enterRoom(g, g->savedRoom, true) != BM_SUCCESS) return;
+    if (enterRoom(g, roomIndex, true) != BM_SUCCESS) return;
     g->roomChanges++;
   }
   int8_t facing = g->player.facing;
-  bmBodyPlace(&g->player, g->savedX, g->savedY);
+  bmBodyPlace(&g->player, x, y);
   g->player.facing = facing;
   g->doorCooldown = 20;
   updateCamera(g);
@@ -832,6 +859,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   uint16_t pressed = (uint16_t)(keys & ~previous);
   g->keysPrevious = keys;
   if (g->returnPending) returnToSave(g);
+  bmEffectsFrame(g);
   // Mana comes back slowly (first-items.md §1).
   if (g->frame % BM_GAME_MANA_EVERY == 0 && g->mana < bmGameMaxMana(g)) g->mana++;
 
@@ -843,6 +871,19 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   };
   // A screen open (or Start opening the Start menu): the room stands still, the screens get
   // the buttons.
+  // Debug: L + R + Start gives the Debug Mirror (the debug lobby, effects.h), if the game has
+  // one; the menu stays shut.
+  if (g->screens.count == 0 && (pressed & BM_KEY_START) && (keys & BM_KEY_L) && (keys & BM_KEY_R))
+  {
+    uint32_t mirror = 2166136261u;
+    for (const char *n = "DebugMirror"; *n; n++) mirror = (mirror ^ (uint8_t)*n) * 16777619u;
+    BmDataTable table;
+    const uint8_t *record;
+    if (bmDataFindRecord(g->pPack, mirror, &table, &record) && bmInventoryCount(&g->inventory, mirror) == 0 &&
+        bmInventoryGive(&g->inventory, mirror, 1) > 0)
+      bmGameNotice(g, mirror, 0xFFFF, 1);
+    pressed = (uint16_t)(pressed & ~BM_KEY_START);
+  }
   if (g->screens.count == 0 && (pressed & BM_KEY_START) && g->dialogue == 0)
   {
     uint16_t start = 0xFFFF;
@@ -979,6 +1020,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   bmHitsFrame(g);
   updateCamera(g);
   updateSprites(g);
+  bmEffectsPresent(g);
   hudFrame(g);
   bmUiPresent(&g->ui);
 
@@ -1017,6 +1059,13 @@ static const BmStateField s_gameFields[] = {
   F(speedPercent, BM_TYPE_S16, BM_STATE_SNAPSHOT),
   BM_STATE_ARRAY(BmGame, resists, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_GAME_ELEMENTS),
   F(returnPending, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(fxKind, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(fxA, BM_TYPE_S16, BM_STATE_SNAPSHOT),
+  F(fxB, BM_TYPE_S16, BM_STATE_SNAPSHOT),
+  F(teleTimer, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(teleRoom, BM_TYPE_U32, BM_STATE_SNAPSHOT),
+  F(teleX, BM_TYPE_S16, BM_STATE_SNAPSHOT),
+  F(teleY, BM_TYPE_S16, BM_STATE_SNAPSHOT),
   F(noticeKey, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   F(noticeTitled, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(noticeText, BM_TYPE_U16, BM_STATE_SNAPSHOT),
@@ -1137,6 +1186,8 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   bmScreensRedraw(g);
   updateCamera(g);
   updateSprites(g);
+  g->fxApplied = 7;   // the video state was rebuilt: every slot is set again or switched off
+  bmEffectsPresent(g);
   return BM_SUCCESS;
 }
 

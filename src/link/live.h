@@ -18,7 +18,7 @@
 #include "pack.h"
 #include "state.h"
 
-#define BM_LIVE_RUNTIME_VERSION 3
+#define BM_LIVE_RUNTIME_VERSION 4
 #define BM_LIVE_MAX_CHUNKS 512
 #define BM_LIVE_STATE_CAPACITY 3072
 

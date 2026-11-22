@@ -227,9 +227,8 @@ start:
   nor Select is held uses `quick[0]`, Select pressed while neither L nor R is held `quick[1]`,
   as `use_item` does; before the attachments' frame.
 - **Return** (`returnPending`): first thing in the next frame after the frame count and before
-  mana: every screen is closed; if `savedRoom` is not the room, it is entered as through a door
-  (scripted objects anew, `roomChanges += 1`); `place(savedX, savedY)` keeping `facing`;
-  `doorCooldown = 20`; the camera follows. `savedRoom`, `savedX`, `savedY` are the start room
+  mana: every screen is closed and a teleport to `savedRoom`, `savedX`, `savedY` begins
+  (section 12, "Teleport"). `savedRoom`, `savedX`, `savedY` are the start room
   and the player's place at the start, and the room and the save point's place whenever a save
   is written at a save point.
 - **The most health**: 30 + the stat MaxHealth (number 0), at least 1. The stats' numbers are
@@ -429,6 +428,8 @@ value is dropped and counts as a script error.
 | 82, 83 | `say_line(record)`, `say_as(speaker, line)` | the dialogue box with a portrait (section 6, "Dialogue") |
 | 84 | `fade_music(percent, frames)` | the music's volume to `percent * 256 / 100` (0..100) in `frames` (0..65535); at 0 it stops (sound-format.md, "Dynamic music") |
 | 85 | `music_intensity(level)` | the sound engine's intensity (0..15): which layers of the music are heard |
+| 86 | `teleport(room, x, y)` | a teleport (section 12) to the room of that id (`#here`: this one) at `x`, `y`; false if there is no such room or a teleport is under way |
+| 87 | `screen_effect(name, a, b)` | the room's effect now (section 12): `#none`, `#wave`, `#spotlight`, `#pulse`, `#gradient`; `a`, `b` 0 for the defaults |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
 (state.md §4): what equipment adds, taken away in its `detached()`, not saved. `stat` (28)
@@ -566,7 +567,9 @@ counts it down; while the dialogue box is shown nothing more happens. In the fra
 nothing is drawn, in the next the title is looked up, in the one after a frame of `w x 3` cells
 at (0, 17) is drawn with the title (or the name, `_` as spaces and the first letter upper case)
 at (1, 18), followed by ` xN` if more than one came; `w` = its characters + 2, at most 30. At 0
-the cells are cleared. (The steps keep the GBA in its frame: the frame an item comes has its
+the cells are cleared. Entering a room fresh (not when a state is loaded) ends a notice
+(`noticeTimer = 1`); a room with the property `title` then sets its own (key 0, the title as
+the name). (The steps keep the GBA in its frame: the frame an item comes has its
 scripts' work, a title lookup and new glyphs cost time.)
 
 **A screens' frame**: buttons that changed go to the top screen as `press(name)` or
@@ -576,7 +579,36 @@ at 15 and every 5 after (else `repeat = 0`). Then each screen from the bottom ge
 one step of its state code. Variables a screen reads (`x`, `y`, `facing`, `health`, `team`) are
 the player's; it writes none.
 
-## 12. What is not specified here
+## 12. Screen effects and the teleport
+
+`src/world/effects.h`. A room's effect comes from the map properties `effect`, `effect_a`,
+`effect_b` (room-format.md) when the room is entered fresh, or from `screen_effect`; state
+`fxKind`, `fxA`, `fxB` (0 for `a` or `b` takes the effect's default). After the sprites each
+frame the effect is presented; the UI layer (BG3) never takes part.
+
+| effect | a (default) | b (default) | what |
+| --- | --- | --- | --- |
+| `wave` | amplitude in px, 0..8 (6) | speed (3) | the room's backgrounds sway per line: HOFS of each = its scroll + `a * (sin(y * 4 + frame * b) + 64) / 128` (sin of 256 to a turn, -64..64), a line table per background (slots 0-2). The player's sprite moves with the line at its feet. Only 0..8 px to the right of the scroll: the map has spare columns only right of the screen |
+| `spotlight` | radius in px, 8..120 (44) | darkness 0..16 (12) | window 0 a circle around the player (a WIN0H span per line, slot 0); outside it the room and sprites are darkened |
+| `pulse` | strength 0..16 (8) | speed (2) | the room brightened, then darkened: `sin(frame * b) * a / 64` (BLDY) |
+| `gradient` | darkness at the top 0..16 (10) | – | dusk: BLDY per line (slot 2) from `a` at the top to 0 at line 96, with a slight shimmer |
+
+Line-table slots no longer used are switched off; the windows and blend are set each frame
+while a screen is not open.
+
+**Teleport** (`bmEffectsTeleport`, `teleport`, the Return Feather): `teleTimer = 64`, the target
+in `teleRoom`, `teleX`, `teleY`, the sound `teleport`. At the start of each frame, while it
+lasts: at 64 the screens close; it counts down; `lockTimer` and `hurtTimer` are kept at least
+2, the player's speed 0; at 32 the player is moved (another room entered as through a door,
+`roomChanges += 1`; placed keeping `facing`; `doorCooldown = 20`; the camera follows). Shown
+in place of the room's effect: the wave at 8 px times the phase (0 at the ends, 1 at 32), speed
+6, and the room brightened up to 14 by the phase.
+
+**Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has
+it and the player has none (the menu does not open then). The test level's mirror teleports to
+the debug lobby.
+
+## 13. What is not specified here
 
 Sound ([sound-format.md](sound-format.md)), the script interpreter
 ([mondskript.md](mondskript.md)), the link ([link-protocol.md](link-protocol.md)) and the

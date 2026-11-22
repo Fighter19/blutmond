@@ -47,3 +47,11 @@ record ReturnFeather {
   price = 80
   behaviour = UseReturn
 }
+
+# A tool for developers: L + R + Start gives it (runtime-core.md §6); it takes the player to the
+# debug lobby, where a room shows each screen effect. Not used up.
+record DebugMirror {
+  title = "Debug Mirror"
+  description = "To the debug lobby and its rooms of screen effects."
+  behaviour = UseDebugMirror
+}

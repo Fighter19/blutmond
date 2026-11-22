@@ -374,7 +374,7 @@ def write_tmx(path):
     ET.ElementTree(m).write(path, encoding="UTF-8", xml_declaration=True)
 
 
-def write_small_room(path, room_id, area, w, h, main_layer, objects, music="castle"):
+def write_small_room(path, room_id, area, w, h, main_layer, objects, music="castle", props=()):
     """A room with a background, a main layer and its collision, and objects."""
     bg = [[gid("sky_top" if y < 4 else ("sky_mid" if y < 8 else "sky_bottom")) for _ in range(w)] for y in range(h)]
     first_col = 1 + len(TILES)
@@ -389,6 +389,8 @@ def write_small_room(path, room_id, area, w, h, main_layer, objects, music="cast
     prop(mp, "music", music)
     prop(mp, "room_id", room_id)
     prop(mp, "area", area)
+    for k, v in props:
+        prop(mp, k, v)
     ts = ET.SubElement(m, "tileset", {"firstgid": "1", "name": "test_tiles", "tilewidth": str(T),
                                       "tileheight": str(T), "tilecount": str(len(TILES)), "columns": str(COLS)})
     rows = (len(TILES) + COLS - 1) // COLS
@@ -483,6 +485,51 @@ def write_boss_hall(path):
     write_small_room(path, "boss_hall", "keep", w, h, main_layer, objects, music="none")
 
 
+def debug_floor(w, h, ground=10):
+    """A plain room's main layer: a floor of bricks, walls at both ends but for door gaps."""
+    main_layer = [[0] * w for _ in range(h)]
+    for x in range(w):
+        main_layer[ground][x] = gid("brick" if x % 2 else "brick2")
+        main_layer[ground + 1][x] = gid("dirt" if x % 2 else "dirt2")
+    return main_layer
+
+
+# The debug lobby's rooms: (room id, title, effect, door's x in the lobby).
+DEBUG_ROOMS = [("debug_wave", "Wave", "wave", 96), ("debug_spotlight", "Spotlight", "spotlight", 208),
+               ("debug_pulse", "Pulse", "pulse", 320), ("debug_gradient", "Dusk", "gradient", 432)]
+
+
+def write_debug_lobby(path):
+    """The debug lobby (the Debug Mirror takes the player there): a door into a room per
+    screen effect, each under a stone arch, and a teleporter back to the start."""
+    w, h = 36, 12
+    main_layer = debug_floor(w, h)
+    for _, _, _, x in DEBUG_ROOMS:
+        tx = x // T
+        for y in range(5, 7):
+            main_layer[y][tx - 1] = gid("stone")
+            main_layer[y][tx + 1] = gid("stone2")
+        main_layer[5][tx] = gid("stone")
+    objects = [("CameraZone", "room", 0, 0, w * T, h * T, False, []),
+               ("Teleporter", "home", 520, 160, 0, 0, True, [("Room", "test_room"), ("X", "40"), ("Y", "160")])]
+    for room, _, _, x in DEBUG_ROOMS:
+        objects.append(("Door", "to_" + room, x - 8, 112, 16, 48, False, [("target_room", room), ("target_door", "exit_west"), ("direction", "north")]))
+    write_small_room(path, "debug_lobby", "debug", w, h, main_layer, objects, props=[("title", "Debug lobby")])
+
+
+def write_debug_room(path, room, title, effect):
+    """A room showing one screen effect, a door back to the lobby at its west end."""
+    w, h = 30, 12
+    main_layer = debug_floor(w, h)
+    for x in list(range(6, 10)) + list(range(18, 22)):
+        main_layer[6][x] = gid("platform")
+    for y in range(7, 10):
+        main_layer[y][14] = gid("stone" if y % 2 else "stone2")
+    objects = [("CameraZone", "room", 0, 0, w * T, h * T, False, []),
+               ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "debug_lobby"), ("target_door", "to_" + room), ("direction", "west")])]
+    write_small_room(path, room, "debug", w, h, main_layer, objects, props=[("title", title), ("effect", effect)])
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "assets", "test_room")
     os.makedirs(out, exist_ok=True)
@@ -490,6 +537,9 @@ def main():
     write_tmx(os.path.join(out, "room.tmx"))
     write_room2(os.path.join(out, "room2.tmx"))
     write_boss_hall(os.path.join(out, "boss_hall.tmx"))
+    write_debug_lobby(os.path.join(out, "debug_lobby.tmx"))
+    for room, title, effect, _ in DEBUG_ROOMS:
+        write_debug_room(os.path.join(out, room + ".tmx"), room, title, effect)
 
 
 if __name__ == "__main__":

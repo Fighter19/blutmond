@@ -32,6 +32,7 @@ typedef struct BmRoomLayer
   // Streaming state: the window of map cells currently in the hardware map.
   bool loaded;
   int32_t windowX, windowY;
+  int16_t scrollX;        // the horizontal scroll last set (effects.h: a wave builds on it)
 } BmRoomLayer;
 
 typedef struct BmRoom

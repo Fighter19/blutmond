@@ -49,6 +49,12 @@ Holding L and R and pressing Select shows or hides the debug overlay (room, game
 position, health, and on the GBA how much of the frame the game took); `--overlay` shows it
 from the start.
 
+**The debug lobby**: holding L and R and pressing Start gives the Debug Mirror (Items). Using it
+teleports, with a wave, to a lobby with four doors: Wave, Spotlight, Pulse and Dusk, a room
+for each screen effect, and a teleporter at the east end back to the first room. `--room ID`
+starts in that room (`--room debug_lobby`), `--debug-item` puts the mirror in the bag at the
+start.
+
 Without a window (for tests and scripts): `--frames N`, `--headless`, `--autoplay`,
 `--snapshot-at N file`, `--load file`, `--listen PORT`, `--follow`, `--until-frame N`,
 `--realtime`, `--random-keys N`. The comment at the top of `apps/game/main.c` describes them.
@@ -64,7 +70,8 @@ Options: `--theme classic|light|dark` (also in the View menu, remembered), `--ta
 `--xboo device`, `--reset none|xboo`, `--gba-image file`, `--bmlink file`, `--game file`,
 `--port N`. The last six can also stand in `~/.config/blutmond/editor.conf` as `key = value`.
 `--action name` runs a menu action at the start (`help.version`, `run.start`, ...), `--room N`
-shows the project's room N, `--record Name` opens a record in the Data tab, `--object-menu N`
+shows the project's room N, `--record Name` opens a record in the Data tab, `--open FILE` opens a
+sprite, script, song or record file in its tab, `--object-menu N`
 opens the context menu of object N of the room shown, and with `--frames N --screenshot
 out.ppm` the editor draws N frames, saves the picture and quits.
 **Help > Version** shows the commit the editor was built from (marked if the tree had changes

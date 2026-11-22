@@ -16,7 +16,7 @@
 typedef struct BmLiveRemote
 {
   BmLiveHello hello;
-  uint32_t pairs[3 * BM_LIVE_HELLO_MAX_HASHES];  // hash, size, offset of the chunks it has
+  uint32_t pairs[3 * BM_LIVE_MAX_CHUNKS];  // hash, size, offset of the chunks it has (hello.hashCount)
 } BmLiveRemote;
 
 typedef struct BmLivePushStats

@@ -29,6 +29,7 @@
 //   --scale N  --listen PORT  --no-listen  --save file  --no-save  --sound-check file
 //   --follow  (wait for another device's keys: bmlink mirror)  --until-frame N  --realtime
 //   --random-keys N  (keys change at random every N frames on average)
+//   --room id  (start in that room)  --debug-item  (the Debug Mirror from the start)
 
 #if defined(BM_PLATFORM_HOST) && !defined(_POSIX_C_SOURCE)
 #  define _POSIX_C_SOURCE 200809L   // nanosleep
@@ -98,6 +99,8 @@ BmStateMailbox bm_state_outbox BM_EWRAM_BSS;
 
 #ifdef BM_PLATFORM_HOST
 static const char *s_loadPath, *s_snapshotPath;
+static const char *s_startRoom;   // --room: the room the game starts in (its id)
+static bool s_debugItem;          // --debug-item: the Debug Mirror from the start
 static uint8_t s_load[BM_SNAPSHOT_CAPACITY];
 static uint32_t s_loadSize;
 static void writeSnapshotFile(void);
@@ -241,7 +244,18 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
   if (bmCreateDevice(bmGetPhysicalDevice(), &device) != BM_SUCCESS) return 1;
   g_defaultDevice = device;
   if (bmPackOpen(&s_pack, pData, size, false) != BM_PACK_OK) return 2;
+#ifdef BM_PLATFORM_HOST
+  if (bmGameStart(&s_game, &s_pack, s_startRoom) != BM_SUCCESS) return 3;
+  if (s_debugItem)
+  {
+    // --debug-item: the Debug Mirror from the start (as L + R + Start gives it).
+    uint32_t key = 2166136261u;
+    for (const char *n = "DebugMirror"; *n; n++) key = (key ^ (uint8_t)*n) * 16777619u;
+    bmInventoryGive(&s_game.inventory, key, 1);
+  }
+#else
   if (bmGameStart(&s_game, &s_pack, NULL) != BM_SUCCESS) return 3;
+#endif
 #ifdef BM_PLATFORM_GBA
   if (!autoplay) bmGameReadSaveGame(&s_game);  // continue where the last save point was
 #else
@@ -556,6 +570,8 @@ int main(int argc, char **argv)
     else if (strcmp(argv[i], "--sound-check") == 0 && i + 1 < argc) soundCheckPath = argv[++i];
     else if (strcmp(argv[i], "--autoplay") == 0) autoplay = true;
     else if (strcmp(argv[i], "--overlay") == 0) s_overlay = true;
+    else if (strcmp(argv[i], "--room") == 0 && i + 1 < argc) s_startRoom = argv[++i];
+    else if (strcmp(argv[i], "--debug-item") == 0) s_debugItem = true;
     else if (strcmp(argv[i], "--follow") == 0) s_waitForMirror = true;
     else if (strcmp(argv[i], "--realtime") == 0) s_realtime = true;
     else if (strcmp(argv[i], "--random-keys") == 0 && i + 1 < argc) s_randomKeys = (uint32_t)atoi(argv[++i]);
