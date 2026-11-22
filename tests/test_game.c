@@ -232,7 +232,7 @@ static void testTheItemTables(void)
 {
   start();
   static const struct { const char *table; uint16_t records; } tables[] = {
-    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 7 }, { "Armour", 10 }, { "KeyItem", 3 }, { "Command", 15 } };
+    { "Weapon", 7 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 7 }, { "Armour", 10 }, { "KeyItem", 3 }, { "Command", 17 } };
   for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++)
   {
     BmDataTable t;
@@ -1199,20 +1199,21 @@ static void testEveryWeaponHasCommands(void)
 }
 
 // Aimed swings: Up + attack strikes above the head, Down + attack sweeps low on the ground and
-// stabs below the feet in the air (the player bounces off what it strikes).
+// strikes below the feet in the air (the player bounces off what it strikes). A sword cuts in
+// arcs (its frames' blade boxes), a lance thrusts straight (rectangles).
 static int16_t swingAt(int bat, int32_t px, int32_t py, int32_t bx, int32_t by, uint16_t keys, bool air)
 {
   BmActors *a = &s_game.actors;
-  a->health[bat] = 4;
+  a->health[bat] = 10;   // enough for any strike here
   frames(40, 0);   // the last strike's invulnerability is over
   bmBodyPlace(&s_game.player, px, py);
   if (!air) frames(2, 0);
   s_game.player.facing = 1;
-  for (int f = 0; f < 8; f++)
+  for (int f = 0; f < 16; f++)
   {
     a->x[bat] = BM_FIX(bx);   // held in place while the swing comes
     a->y[bat] = BM_FIX(by);
-    if (air && a->health[bat] == 4)
+    if (air && a->health[bat] == 10)
     {
       s_game.player.x = BM_FIX(px);   // and the player in the air above it, until it strikes
       s_game.player.y = BM_FIX(py);
@@ -1220,7 +1221,7 @@ static int16_t swingAt(int bat, int32_t px, int32_t py, int32_t bx, int32_t by, 
     }
     frames(1, f == 0 ? (uint16_t)(keys | BM_KEY_B) : keys);
   }
-  return (int16_t)(4 - a->health[bat]);
+  return (int16_t)(10 - a->health[bat]);
 }
 
 static void testAimedSwings(void)
@@ -1242,9 +1243,22 @@ static void testAimedSwings(void)
   TEST_ASSERT(swingAt(bat, 200, 160, 212, 138, BM_KEY_DOWN, false) == 0);
   // At the feet ahead: the low sweep strikes it.
   TEST_ASSERT(swingAt(bat, 200, 160, 212, 160, BM_KEY_DOWN, false) == 3);
-  // Below the player in the air: Down stabs it, and the player bounces up.
+  // Below the player in the air: Down cuts it, and the player bounces up.
   TEST_ASSERT(swingAt(bat, 200, 100, 200, 116, BM_KEY_DOWN, true) == 3);
-  TEST_ASSERT(s_game.player.vy < 0 && !s_game.player.onGround && BM_FIX_INT(s_game.player.y) < 100);
+  TEST_ASSERT(!s_game.player.onGround && BM_FIX_INT(s_game.player.y) < 100);   // bounced up
+  // The sword cuts in an arc: up, it also strikes ahead of the head and behind it, where a
+  // thrust straight up does not reach.
+  TEST_ASSERT(swingAt(bat, 200, 160, 212, 126, BM_KEY_UP, false) == 3);
+  TEST_ASSERT(swingAt(bat, 200, 160, 191, 126, BM_KEY_UP, false) == 3);
+  // The lance thrusts straight: above the head and below the feet, at its reach, but not ahead
+  // of the head.
+  const uint32_t lance = keyOf("Lance");
+  bmInventoryGive(&s_game.inventory, lance, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, lance));
+  TEST_ASSERT(swingAt(bat, 200, 160, 200, 112, BM_KEY_UP, false) == 4);   // attack 4, 20 px above the head
+  TEST_ASSERT(swingAt(bat, 200, 160, 218, 126, BM_KEY_UP, false) == 0);
+  TEST_ASSERT(swingAt(bat, 200, 100, 200, 124, BM_KEY_DOWN, true) == 4);
+  TEST_ASSERT(!s_game.player.onGround && BM_FIX_INT(s_game.player.y) < 100);
   TEST_ASSERT(bm_script_errors == 0);
 }
 

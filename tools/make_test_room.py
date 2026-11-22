@@ -515,6 +515,7 @@ def write_debug_lobby(path):
                ("Teleporter", "home", 520, 160, 0, 0, True, [("Room", "test_room"), ("X", "40"), ("Y", "160")]),
                # To try the commands (data/commands.bmdata): a dagger and the two charms.
                ("WeaponStand", "dagger", 152, 160, 0, 0, True, [("Gives", "Dagger")]),
+               ("WeaponStand", "lance", 480, 160, 0, 0, True, [("Gives", "Lance")]),
                ("Gift", "crimson", 264, 160, 0, 0, True, [("Gives", "CrimsonCharm")]),
                ("Gift", "moon", 376, 160, 0, 0, True, [("Gives", "MoonCharm")])]
     for room, _, _, x in DEBUG_ROOMS:

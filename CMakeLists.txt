@@ -275,7 +275,7 @@ if(BM_PLATFORM STREQUAL "gba")
       target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/apps/game)
       if(variant STREQUAL "game_autoplay_native" OR (variant STREQUAL "game" AND NOT target MATCHES "_mb$"))
         # These run native code (mondskript.md §12): 12 KB of IWRAM for it.
-        target_compile_definitions(${target} PRIVATE BM_NATIVE_SLOT_BYTES=12288)
+        target_compile_definitions(${target} PRIVATE BM_NATIVE_SLOT_BYTES=14336)
       endif()
       if(variant STREQUAL "game_autoplay_native")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_NATIVE_PACK}\"")

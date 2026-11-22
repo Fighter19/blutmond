@@ -26,6 +26,47 @@ int toInt(const xml::Element *e, const char *key, int fallback)
 // The 12 hardware sprite sizes, in tiles.
 const int kSizes[12][2] = {{1, 1}, {2, 2}, {4, 4}, {8, 8}, {2, 1}, {4, 1}, {4, 2}, {8, 4}, {1, 2}, {1, 4}, {2, 4}, {4, 8}};
 
+// Packed tiles (sprite-format.md): LZ77 with a window of 512 bytes, so that the runtime unpacks
+// with 512 bytes of history. Groups of 8 items behind a flags byte (bit i for item i, from the
+// lowest): 0 a byte as it is, 1 a copy of 3 to 18 bytes from 1 to 512 back, in two bytes:
+// (length - 3) << 4 | (distance - 1) >> 8, (distance - 1) & 255.
+std::vector<uint8_t> packTiles(const std::vector<uint8_t> &in)
+{
+  std::vector<uint8_t> out;
+  size_t i = 0;
+  while (i < in.size())
+  {
+    size_t flagsAt = out.size();
+    out.push_back(0);
+    for (int item = 0; item < 8 && i < in.size(); item++)
+    {
+      size_t bestLength = 0, bestDistance = 0;
+      for (size_t d = 1; d <= 512 && d <= i; d++)
+      {
+        size_t n = 0;
+        while (n < 18 && i + n < in.size() && in[i + n] == in[i + n - d]) n++;
+        if (n > bestLength)
+        {
+          bestLength = n;
+          bestDistance = d;
+        }
+      }
+      if (bestLength >= 3)
+      {
+        out[flagsAt] = uint8_t(out[flagsAt] | (1u << item));
+        out.push_back(uint8_t(((bestLength - 3) << 4) | ((bestDistance - 1) >> 8)));
+        out.push_back(uint8_t((bestDistance - 1) & 255));
+        i += bestLength;
+      }
+      else
+      {
+        out.push_back(in[i++]);
+      }
+    }
+  }
+  return out;
+}
+
 int luminance(uint16_t c)
 {
   return (c & 31) * 2 + ((c >> 5) & 31) * 5 + ((c >> 10) & 31);
@@ -333,12 +374,21 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   for (const CookedFrame &f : c.frames) pieces += f.pieces.size();
   for (const CookedFrame &f : c.frames) boxes += f.boxes.size();
   for (const Animation &a : s.animations) steps += a.steps.size();
+  // The tiles, packed (sprite-format.md "Packed tiles") when that is smaller.
+  std::vector<uint8_t> tileBytes;
+  for (const auto &t : c.tiles)
+    for (int y = 0; y < 8; y++)
+      for (int x = 0; x < 8; x += 2) tileBytes.push_back(uint8_t(t[size_t(y * 8 + x)] | (t[size_t(y * 8 + x + 1)] << 4)));
+  std::vector<uint8_t> packed = packTiles(tileBytes);
+  bool isPacked = packed.size() < tileBytes.size();
+  const std::vector<uint8_t> &tileData = isPacked ? packed : tileBytes;
+
   // Version 2: the header goes on with the boxes' tables (a version 1 chunk has a 36-byte
   // header, so its frames start at 36).
   const uint32_t header = 52;
   uint32_t framesAt = header, piecesAt = framesAt + uint32_t(c.frames.size()) * 12, animsAt = piecesAt + uint32_t(pieces) * 6;
   uint32_t stepsAt = animsAt + uint32_t(s.animations.size()) * 8, paletteAt = stepsAt + uint32_t(steps) * 4, tilesAt = paletteAt + 32;
-  uint32_t boxIndexAt = tilesAt + uint32_t(c.tiles.size()) * 32, boxesAt = boxIndexAt + uint32_t(c.frames.size()) * 2;
+  uint32_t boxIndexAt = tilesAt + uint32_t((tileData.size() + 1) & ~size_t(1)), boxesAt = boxIndexAt + uint32_t(c.frames.size()) * 2;
   uint32_t namesAt = boxesAt + uint32_t(boxes) * 6;
 
   u16(nameId);
@@ -358,7 +408,7 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   u32(namesAt);
   u16(uint32_t(boxes));
   u8(int(c.boxNames.size()));
-  u8(0);
+  u8(isPacked ? 1 : 0);   // flags: bit 0 the tiles are packed
 
   uint32_t pieceStart = 0;
   for (const CookedFrame &f : c.frames)
@@ -406,9 +456,8 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
       u16(uint32_t(std::max(1, st.duration)));
     }
   for (int i = 0; i < 16; i++) u16(c.palette[size_t(i)]);
-  for (const auto &t : c.tiles)
-    for (int y = 0; y < 8; y++)
-      for (int x = 0; x < 8; x += 2) u8(t[size_t(y * 8 + x)] | (t[size_t(y * 8 + x + 1)] << 4));
+  for (uint8_t v : tileData) u8(v);
+  if (tileData.size() % 2) u8(0);
   uint32_t boxStart = 0;
   for (const CookedFrame &f : c.frames)
   {

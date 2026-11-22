@@ -22,6 +22,18 @@ record Dagger {
   ground_move = Walk   # light enough to stab on the move
 }
 
+record Lance {
+  title = "Lance"
+  description = "Long and straight: thrusts up, and down from the air."
+  price = 160
+  attack = 4
+  reach = 30
+  startup = 6
+  recovery = 12
+  swing = #thrust
+  style = Thrust
+}
+
 record GreatAxe {
   title = "Great Axe"
   description = "Slow and heavy; strikes from above as well."

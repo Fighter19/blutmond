@@ -294,7 +294,14 @@ def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, 
         out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>'
                    % ((i % columns) * w, (i // columns) * h, w, h, anchor[0], anchor[1]))
     for f in extra:
-        out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>' % f)
+        # (x, y, w, h, ax, ay) or with its own boxes: (..., [(kind, name, x, y, w, h), ...])
+        if len(f) > 6 and f[6]:
+            out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d">' % f[:6])
+            for kind, name, bx, by, bw, bh in f[6]:
+                out.append('  <box kind="%s" name="%s" x="%d" y="%d" w="%d" h="%d"/>' % (kind, name, bx, by, bw, bh))
+            out.append(' </frame>')
+        else:
+            out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>' % f[:6])
     for name, loop, steps in animations:
         out.append(' <animation name="%s" loop="%d">' % (name, 1 if loop else 0))
         for frame, duration in steps:
@@ -324,16 +331,56 @@ def blade_line(x, y0, y1, hilt):
     return out
 
 
-# Upwards: arm raised, the blade above the head (wind-up short, then at full length).
-SLASH_UP_FRAMES = [
-    tall_frame(False, TORSO_ARMS_UP_R, legs(-1, 1), blade_line(12, 14, 21, 22) + [(12, 23, 'c')]),
-    tall_frame(False, TORSO_ARMS_UP_R, legs(-2, 2), blade_line(12, 1, 21, 22) + [(12, 23, 'c')]),
+def lance_line(x, y0, y1, tip_at_top):
+    """A lance in column x from y0 to y1: a wooden shaft with a steel tip of 4 at one end."""
+    lo, hi = min(y0, y1), max(y0, y1)
+    out = []
+    for y in range(lo, hi + 1):
+        tip = y < lo + 4 if tip_at_top else y > hi - 4
+        out.append((x, y, 'b' if tip else 'c'))
+    return out
+
+
+# The lance: thrust straight up above the head (drawn back, then at full length) and, in the
+# air, straight down below the feet.
+THRUST_UP_FRAMES = [
+    tall_frame(False, TORSO_ARMS_UP_R, legs(-1, 1), lance_line(12, 12, 30, True)),
+    tall_frame(False, TORSO_ARMS_UP_R, legs(-2, 2), lance_line(12, 0, 28, True)),
 ]
-# Downwards in the air: knees up, the blade held point down below the feet.
-SLASH_DOWN_FRAMES = [
-    tall_frame(True, TORSO, legs(-1, 2, lift_l=3, lift_r=3), blade_line(12, 17, 30, 16)),
-    tall_frame(True, TORSO, legs(-1, 2, lift_l=3, lift_r=3), blade_line(12, 17, 46, 16)),
+THRUST_DOWN_FRAMES = [
+    tall_frame(True, TORSO, legs(-1, 2, lift_l=3, lift_r=3), lance_line(12, 12, 32, False)),
+    tall_frame(True, TORSO, legs(-1, 2, lift_l=3, lift_r=3), lance_line(12, 14, 47, False)),
 ]
+
+
+def arc_frame(top, torso, leg_rows, pivot, angle, length):
+    """32x48: the player in columns 8 to 23 (in the lower 32 rows, or the upper ones with
+    `top`), a sword from `pivot` at `angle` degrees (0 ahead, 90 up) `length` long. Returns the
+    rows and the blade's hit box relative to the anchor (column 16, the feet)."""
+    import math
+    body = player_frame(torso, leg_rows)
+    empty = ["." * 32] * 16
+    rows = [list("." * 8 + r + "." * 8) for r in body]
+    rows = [list(r) for r in (empty + ["".join(r) for r in rows] if not top else ["".join(r) for r in rows] + empty)]
+    px, py = pivot
+    xs, ys = [], []
+    for i in range(length + 1):
+        x = int(round(px + i * math.cos(math.radians(angle))))
+        y = int(round(py - i * math.sin(math.radians(angle))))
+        if 0 <= x < 32 and 0 <= y < 48:
+            rows[y][x] = 'c' if i < 2 else 'b'
+            if i >= 2:
+                xs.append(x)
+                ys.append(y)
+    anchor_y = 48 if not top else 32
+    box = (min(xs) - 2 - 16, min(ys) - 2 - anchor_y, max(xs) - min(xs) + 5, max(ys) - min(ys) + 5)
+    return ["".join(r) for r in rows], box
+
+
+# The sword's arcs: upwards from ahead over the head to behind; in the air from ahead under the
+# feet to behind. A wind-up frame, then three along the arc, each with its hit box "blade".
+SLASH_UP_ARC = [arc_frame(False, TORSO_ARMS_UP_R, legs(-1, 1), (20, 23), a, 15) for a in (-20, 35, 90, 145)]
+SLASH_DOWN_ARC = [arc_frame(True, TORSO, legs(-1, 2, lift_l=3, lift_r=3), (19, 22), a, 18) for a in (30, -35, -90, -145)]
 
 
 def low_frame(reach):
@@ -351,6 +398,12 @@ def low_frame(reach):
 
 SLASH_LOW_FRAMES = [low_frame(6), low_frame(15)]
 
+# The lance ahead: the shaft at chest height, the tip far out.
+THRUST_AHEAD = [list(r + "." * 16) for r in player_frame(TORSO, legs(-3, 3))]
+for _x in range(10, 32):
+    THRUST_AHEAD[18][_x] = 'b' if _x >= 28 else 'c'
+THRUST_AHEAD = ["".join(r) for r in THRUST_AHEAD]
+
 
 def main():
     out = sys.argv[1]
@@ -364,7 +417,7 @@ def main():
     tall = Image.new("RGBA", (img.width, 112), (0, 0, 0, 0))
     tall.paste(img, (0, 0))
     img = tall
-    for i, frame in enumerate(SLASH_UP_FRAMES + SLASH_DOWN_FRAMES):
+    for i, frame in enumerate(THRUST_UP_FRAMES + THRUST_DOWN_FRAMES):
         for y in range(48):
             for x in range(16):
                 img.putpixel((i * 16 + x, 64 + y), PALETTE[frame[y][x]])
@@ -372,11 +425,25 @@ def main():
         for y in range(32):
             for x in range(32):
                 img.putpixel((64 + i * 32 + x, 64 + y), PALETTE[frame[y][x]])
+    # A fourth row: the sword's arcs (32 x 48 each) and the lance's thrust ahead (32 x 32).
+    taller = Image.new("RGBA", (256, 160), (0, 0, 0, 0))
+    taller.paste(img, (0, 0))
+    img = taller
+    for i, (frame, _) in enumerate(SLASH_UP_ARC + SLASH_DOWN_ARC):
+        for y in range(48):
+            for x in range(32):
+                img.putpixel((i * 32 + x, 112 + y), PALETTE[frame[y][x]])
+    for y in range(32):
+        for x in range(32):
+            img.putpixel((128 + x, 64 + y), PALETTE[THRUST_AHEAD[y][x]])
     img.save(os.path.join(out, "player.png"))
     extra = [(32 + i * 32, 32, 32, 32, 8, 32) for i in range(len(SLASH_FRAMES))]
-    extra += [(i * 16, 64, 16, 48, 8, 48) for i in range(2)]        # 13, 14: up
-    extra += [(32 + i * 16, 64, 16, 48, 8, 32) for i in range(2)]   # 15, 16: down
+    extra += [(i * 16, 64, 16, 48, 8, 48) for i in range(2)]        # 13, 14: the lance up
+    extra += [(32 + i * 16, 64, 16, 48, 8, 32) for i in range(2)]   # 15, 16: the lance down
     extra += [(64 + i * 32, 64, 32, 32, 8, 32) for i in range(2)]   # 17, 18: low
+    extra += [(i * 32, 112, 32, 48, 16, 48, [] if i == 0 else [("hit", "blade") + SLASH_UP_ARC[i][1]]) for i in range(4)]   # 19-22: arc up
+    extra += [(128 + i * 32, 112, 32, 48, 16, 32, [] if i == 0 else [("hit", "blade") + SLASH_DOWN_ARC[i][1]]) for i in range(4)]   # 23-26: arc down
+    extra += [(128, 64, 32, 32, 8, 32)]                               # 27: the lance ahead
     sprite_file(os.path.join(out, "player.bmsprite"), "player.png", len(PLAYER_FRAMES), 8, 16, 32, (8, 32), (-5, -30, 10, 30), [
         ("idle", True, [(0, 40), (1, 40)]),
         ("run", True, [(2, 6), (3, 6), (4, 6), (5, 6)]),
@@ -384,9 +451,12 @@ def main():
         ("fall", False, [(7, 1)]),
         ("climb", True, [(8, 10), (9, 10)]),
         ("slash", False, [(10, 4), (11, 4), (12, 8)]),
-        ("slash_up", False, [(13, 4), (14, 10)]),
-        ("slash_down", False, [(15, 4), (16, 14)]),
+        ("thrust_up", False, [(13, 4), (14, 10)]),
+        ("thrust_down", False, [(15, 4), (16, 14)]),
         ("slash_low", False, [(17, 4), (18, 10)]),
+        ("slash_up", False, [(19, 4), (20, 3), (21, 3), (22, 4)]),
+        ("slash_down", False, [(23, 4), (24, 3), (25, 3), (26, 8)]),
+        ("thrust", False, [(17, 4), (27, 10)]),
     ], extra=extra)
     sheet(BAT_FRAMES, 2, 16, 16).save(os.path.join(out, "bat.png"))
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [

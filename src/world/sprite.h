@@ -17,6 +17,8 @@ typedef struct BmSpriteSheet
   uint16_t nameId;
   uint16_t frameCount, animCount, tileCount;
   const uint8_t *pFrames, *pPieces, *pAnims, *pSteps, *pPalette, *pTiles;
+  const uint8_t *pEnd;   // the chunk's end
+  bool packed;           // the tiles are packed (sprite-format.md); unpacked when loaded
   // Version 2: boxes (NULL for a version 1 chunk: no boxes).
   const uint8_t *pBoxIndex, *pBoxes, *pBoxNames;
   uint16_t boxCount;

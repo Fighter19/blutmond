@@ -84,6 +84,35 @@ record SlipStab {
   hop = 2.0
 }
 
+# Lance
+record Charge {
+  title = "Charge"
+  keys = "Back, Fwd + B"
+  description = "A run forward behind the point."
+  input = #Back_Fwd_Attack
+  cost = 4
+  weapon = Lance
+  frames = 24
+  power = 180
+  reach = 40
+  dash = 5.0
+  anim = #thrust
+}
+
+record SkyThrust {
+  title = "Sky Thrust"
+  keys = "Down, Up + B"
+  description = "A leap with the point up, twice."
+  input = #Down_Up_Attack
+  cost = 5
+  weapon = Lance
+  frames = 30
+  reach = 36
+  hits = 2
+  hop = 5.0
+  anim = #thrust_up
+}
+
 # Great Axe
 record GroundBreaker {
   title = "Ground Breaker"

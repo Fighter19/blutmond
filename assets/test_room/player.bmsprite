@@ -20,6 +20,27 @@
  <frame x="48" y="64" w="16" h="48" ax="8" ay="32"/>
  <frame x="64" y="64" w="32" h="32" ax="8" ay="32"/>
  <frame x="96" y="64" w="32" h="32" ax="8" ay="32"/>
+ <frame x="0" y="112" w="32" h="48" ax="16" ay="48"/>
+ <frame x="32" y="112" w="32" h="48" ax="16" ay="48">
+  <box kind="hit" name="blade" x="4" y="-35" w="14" h="12"/>
+ </frame>
+ <frame x="64" y="112" w="32" h="48" ax="16" ay="48">
+  <box kind="hit" name="blade" x="2" y="-42" w="5" h="18"/>
+ </frame>
+ <frame x="96" y="112" w="32" h="48" ax="16" ay="48">
+  <box kind="hit" name="blade" x="-10" y="-36" w="15" h="13"/>
+ </frame>
+ <frame x="128" y="112" w="32" h="48" ax="16" ay="32"/>
+ <frame x="160" y="112" w="32" h="48" ax="16" ay="32">
+  <box kind="hit" name="blade" x="3" y="-11" w="15" h="13"/>
+ </frame>
+ <frame x="192" y="112" w="32" h="48" ax="16" ay="32">
+  <box kind="hit" name="blade" x="1" y="-10" w="5" h="21"/>
+ </frame>
+ <frame x="224" y="112" w="32" h="48" ax="16" ay="32">
+  <box kind="hit" name="blade" x="-14" y="-11" w="18" h="14"/>
+ </frame>
+ <frame x="128" y="64" w="32" h="32" ax="8" ay="32"/>
  <animation name="idle" loop="1">
   <step frame="0" duration="40"/>
   <step frame="1" duration="40"/>
@@ -45,16 +66,32 @@
   <step frame="11" duration="4"/>
   <step frame="12" duration="8"/>
  </animation>
- <animation name="slash_up" loop="0">
+ <animation name="thrust_up" loop="0">
   <step frame="13" duration="4"/>
   <step frame="14" duration="10"/>
  </animation>
- <animation name="slash_down" loop="0">
+ <animation name="thrust_down" loop="0">
   <step frame="15" duration="4"/>
   <step frame="16" duration="14"/>
  </animation>
  <animation name="slash_low" loop="0">
   <step frame="17" duration="4"/>
   <step frame="18" duration="10"/>
+ </animation>
+ <animation name="slash_up" loop="0">
+  <step frame="19" duration="4"/>
+  <step frame="20" duration="3"/>
+  <step frame="21" duration="3"/>
+  <step frame="22" duration="4"/>
+ </animation>
+ <animation name="slash_down" loop="0">
+  <step frame="23" duration="4"/>
+  <step frame="24" duration="3"/>
+  <step frame="25" duration="3"/>
+  <step frame="26" duration="8"/>
+ </animation>
+ <animation name="thrust" loop="0">
+  <step frame="17" duration="4"/>
+  <step frame="27" duration="10"/>
  </animation>
 </sprite>

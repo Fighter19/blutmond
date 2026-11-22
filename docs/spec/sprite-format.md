@@ -50,7 +50,7 @@ For the GBA profile a sprite becomes one `SPRT` chunk ([pack-format.md](pack-for
 ```
 u16 name (string id)   u16 frames   u16 animations   u16 tiles   u16 pieces   u16 steps
 u32 offset of: frames, pieces, animations, steps, palette, tiles      (from the chunk start)
-u32 offset of: box index, boxes, box names   u16 boxes   u8 box names   u8 0
+u32 offset of: box index, boxes, box names   u16 boxes   u8 box names   u8 flags (bit 0: the tiles are packed)
 
 frame (12 bytes):     u16 first piece, u8 piece count, u8 box count,
                       s8 hitbox x, y, u8 hitbox w, h,
@@ -61,7 +61,9 @@ animation (8 bytes):  u16 name (string id), u16 first step, u16 step count, u8 l
 step (4 bytes):       u16 frame, u16 duration
 palette:              16 × u16 BGR555 (entry 0 is transparent and written as 0)
 tiles:                32 bytes each: 8 rows of 4 bytes, the left pixel of each pair in the low
-                      four bits. The tiles of a piece follow each other row by row.
+                      four bits. The tiles of a piece follow each other row by row. Packed
+                      (flags bit 0): the same bytes as LZ77 below, then a byte of padding if
+                      the length is odd.
 box index:            u16 first box of each frame
 box (6 bytes):        s8 x, y, u8 w, h (relative to the anchor), u8 kind (0 hurt, 1 hit,
                       2 guard), u8 name (index into the box names, 0xFF none)
@@ -104,3 +106,15 @@ using the chunk.
 - 1: first version.
 - 1.1: tile bytes, piece sizes; the run-time rules moved to runtime-core.md.
 - 2: hurt, hit and guard boxes in the file and in `SPRT` (box index, boxes, box names).
+- 2.1: packed tiles (the flags byte, which was 0).
+
+## Packed tiles
+
+The cooker packs a sprite's tiles when that is smaller (4-bit tiles are mostly transparent):
+LZ77 with a window of 512 bytes, so that the runtime unpacks with 512 bytes of history and
+nothing more. Items in groups of 8 behind a flags byte (bit `i` for item `i`, from the lowest):
+0 a byte as it is; 1 a copy, two bytes `(length - 3) << 4 | (distance - 1) >> 8`,
+`(distance - 1) & 255`: `length` 3 to 18 bytes from `distance` 1 to 512 back. It ends where the
+tiles are all there (tiles × 32 bytes). The runtime unpacks a sheet when it loads it, a tile at
+a time into sprite memory; packed data that reads past the chunk, copies from before its start
+or makes more than the tiles is refused. The test level's sprites take 11 KB less.

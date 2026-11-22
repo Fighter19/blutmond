@@ -8,6 +8,9 @@ enum EquipSlot { Head, Body, Accessory }
 // no walking, the speed fades; stopped at once; the speed kept; walking. In the air: steering;
 // the speed kept; no steering, slowed by the air.
 enum GroundMove { Slide, Stop, Keep, Walk }
+// How a WeaponSwing weapon strikes up and (in the air) down: in an arc (a sword: over the head
+// from ahead to behind, under the feet) or straight (a lance: a thrust above, a stab below).
+enum WeaponStyle { Slash, Thrust }
 enum AirMove { Steer, Keep, Drift }
 // The player's stats (first-items.md §1), read with stat(Stat.Attack).
 enum Stat { MaxHealth, MaxMana, Attack, Defence, Luck, AirJumps, Dash, WallSlide, GroundPound }
@@ -45,6 +48,7 @@ struct Weapon is Item {
   StatBlock stats;
   GroundMove ground_move;   // while it swings (and its commands strike)
   AirMove    air_move;
+  WeaponStyle style;
 }
 
 struct Spell is Item {

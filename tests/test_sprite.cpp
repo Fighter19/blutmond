@@ -26,8 +26,8 @@ static void testLoadSaveRoundTrip()
 {
   sprite::Sprite s = sprite::load(s_assets + "/test_room/player.bmsprite");
   TEST_ASSERT(s.name == "player");
-  TEST_ASSERT(s.frames.size() == 19);   // 10 of 16x32, 3 of 32x32 (slash), 4 of 16x48 (up, down), 2 of 32x32 (low)
-  TEST_ASSERT(s.animations.size() == 9);
+  TEST_ASSERT(s.frames.size() == 28);   // 10 of 16x32, 3 of 32x32 (slash), 4 of 16x48 (lance up, down), 2 of 32x32 (low), 8 of 32x48 (arcs), 1 of 32x32 (lance)
+  TEST_ASSERT(s.animations.size() == 12);
   TEST_ASSERT(s.animations[1].name == "run" && s.animations[1].steps.size() == 4);
   TEST_ASSERT(s.frames[0].ax == 8 && s.frames[0].ay == 32);
 
@@ -52,7 +52,7 @@ static void testCook()
   Report report;
   sprite::Cooked c = sprite::cook(s, *profileByName("gba"), report);
   TEST_ASSERT(!report.hasErrors());
-  TEST_ASSERT(c.frames.size() == 19);
+  TEST_ASSERT(c.frames.size() == 28);
   // A 16x32 frame is one tall hardware sprite of 8 tiles.
   TEST_ASSERT(c.frames[0].pieces.size() == 1);
   TEST_ASSERT(c.frames[0].pieces[0].w == 16 && c.frames[0].pieces[0].h == 32);
@@ -96,7 +96,7 @@ static void testRuntime()
   TEST_ASSERT(bmPackOpen(&pack, data.data(), uint32_t(data.size()), true) == BM_PACK_OK);
   BmSpriteSheet sheet;
   TEST_ASSERT(bmSpriteSheetFind(&sheet, &pack, "Player") == BM_SUCCESS);  // case does not matter
-  TEST_ASSERT(sheet.frameCount == 19 && sheet.animCount == 9);
+  TEST_ASSERT(sheet.frameCount == 28 && sheet.animCount == 12);
   BmSpriteSheet bat;
   TEST_ASSERT(bmSpriteSheetFind(&bat, &pack, "bat") == BM_SUCCESS);
   TEST_ASSERT(bmSpriteSheetFind(&bat, &pack, "ghost") == BM_ERROR_NOT_FOUND);
@@ -190,7 +190,7 @@ static void testBoxes()
   TEST_ASSERT(bmPackOpen(&pack, data.data(), uint32_t(data.size()), true) == BM_PACK_OK);
   BmSpriteSheet sheet;
   TEST_ASSERT(bmSpriteSheetFind(&sheet, &pack, "boxed") == BM_SUCCESS);
-  TEST_ASSERT(sheet.boxCount == 17 + 4 + 2 && sheet.boxNameCount == 2);   // 17 frames with the sprite's box, 4 own, 1 own + the sprite's
+  TEST_ASSERT(sheet.boxCount == 20 + 4 + 2 + 6 * 2 && sheet.boxNameCount == 2);   // 20 frames with the sprite's box, 4 own, 1 own + the sprite's, 6 arc frames: their blade + the sprite's
   BmSpriteNamedBox b[8];
   TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 0, false, b, 8) == 1 && b[0].kind == BM_BOX_HURT && b[0].box.x == -5 && b[0].box.h == 28 && b[0].name == 0xFFFF);
   TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 3, false, b, 8) == 4);

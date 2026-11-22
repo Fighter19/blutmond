@@ -27,6 +27,7 @@ struct Fn
   bool stateCode = false;
   const uint8_t *code = nullptr;
   std::string name;
+  std::string file;   // the script it was written in
   std::vector<std::pair<uint16_t, uint16_t>> lines;
 };
 
@@ -81,6 +82,8 @@ static void emitModule(std::ostringstream &o, const NativeSource &src, size_t in
     fn.code = code + size_t(fn.start) * 2;
     size_t clsIndex = src.firstClass + fn.cls;
     std::string cls = clsIndex < module.classes.size() ? identifier(module.classes[clsIndex].name) : "class";
+    // The class's own file: fn.cls counts from this module's first class.
+    fn.file = clsIndex < module.classes.size() ? module.classes[clsIndex].file : std::string();
     fn.name = cls + (fn.stateCode ? "_state" : "_fn") + std::to_string(i);
     if (lineTable)
     {
@@ -135,7 +138,7 @@ static void emitModule(std::ostringstream &o, const NativeSource &src, size_t in
     }
 
     // Absolute, so a debugger finds the script whatever folder it is started in.
-    std::string file = fn.cls < module.classes.size() ? module.classes[fn.cls].file : std::string();
+    std::string file = fn.file;
     if (!file.empty())
     {
       std::error_code ec;

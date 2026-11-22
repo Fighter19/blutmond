@@ -15,9 +15,11 @@
 
 // --- Waves ----------------------------------------------------------------------------------
 
-// In fast memory on the GBA (plain statics are in IWRAM): the mixer reads them per sample.
+// The waves in fast memory on the GBA (plain statics are in IWRAM): the mixer reads them per
+// sample. The noise is played like a sample (those come from the pack, in ROM or EWRAM), so it
+// can be in EWRAM and leave IWRAM to native script code.
 static int8_t s_waves[BM_WAVE_NOISE][WAVE_SAMPLES];
-static int8_t s_noise[NOISE_SAMPLES];
+static int8_t s_noise[NOISE_SAMPLES] BM_EWRAM_BSS;
 static bool s_wavesReady;
 
 // Mixing scratch: one frame of sums, left and right side by side. One engine mixes at a time.

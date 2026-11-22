@@ -5,6 +5,7 @@
 #include "data.h"
 
 #include "script_api.h"
+#include "shared.h"
 
 static uint16_t rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 static uint32_t rd32(const uint8_t *p) { return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24); }
@@ -104,7 +105,7 @@ static struct
   uint32_t packSize, packCrc;
   uint8_t count;
   BmDataTable tables[ALL_TABLES];
-} s_all;
+} s_all BM_EWRAM_BSS;
 
 static void openAll(const BmPack *pPack)
 {

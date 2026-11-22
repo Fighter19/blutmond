@@ -42,7 +42,7 @@ BmResult bmSpriteSheetOpen(BmSpriteSheet *s, const BmPack *pPack, uint32_t chunk
   for (int i = 0; i < 6; i++) at[i] = bmRead32(p + 12 + i * 4);
   if (at[0] + (uint32_t)s->frameCount * FRAME_SIZE > size || at[1] + (uint32_t)pieces * PIECE_SIZE > size ||
       at[2] + (uint32_t)s->animCount * ANIM_SIZE > size || at[3] + (uint32_t)steps * STEP_SIZE > size ||
-      at[4] + 32 > size || at[5] + (uint32_t)s->tileCount * 32 > size)
+      at[4] + 32 > size || at[5] > size)
   {
     return BM_ERROR_INVALID_ARGUMENT;
   }
@@ -52,6 +52,10 @@ BmResult bmSpriteSheetOpen(BmSpriteSheet *s, const BmPack *pPack, uint32_t chunk
   s->pSteps = p + at[3];
   s->pPalette = p + at[4];
   s->pTiles = p + at[5];
+  s->pEnd = p + size;
+  // Version 2's flags (byte 51): bit 0 the tiles are packed; else they must all be there.
+  s->packed = at[0] >= HEADER_SIZE_V2 && size >= HEADER_SIZE_V2 && (p[51] & 1) != 0;
+  if (!s->packed && at[5] + (uint32_t)s->tileCount * 32 > size) return BM_ERROR_INVALID_ARGUMENT;
   // Version 2 (sprite-format.md): its frames start behind a longer header with the boxes.
   if (at[0] >= HEADER_SIZE_V2 && size >= HEADER_SIZE_V2)
   {
@@ -113,12 +117,53 @@ BmResult bmSpriteSheetFind(BmSpriteSheet *s, const BmPack *pPack, const char *pN
   return BM_ERROR_NOT_FOUND;
 }
 
+// Packed tiles (sprite-format.md): unpacked a tile at a time into sprite memory, with the last
+// 512 bytes kept for the copies. Packed data that would read past the chunk, copy from before
+// its start or make too many tiles is refused (what was unpacked so far stays).
+static BmResult unpackTiles(const BmSpriteSheet *s, uint16_t tileBase)
+{
+  uint8_t history[512];
+  uint32_t total = (uint32_t)s->tileCount * 32, made = 0;
+  const uint8_t *p = s->pTiles, *end = s->pEnd;
+  uint32_t tile = tileBase;
+  while (made < total)
+  {
+    if (p >= end) return BM_ERROR_INVALID_ARGUMENT;
+    uint8_t flags = *p++;
+    for (int item = 0; item < 8 && made < total; item++)
+    {
+      if (flags & (1u << item))
+      {
+        if (p + 2 > end) return BM_ERROR_INVALID_ARGUMENT;
+        uint32_t length = (uint32_t)(p[0] >> 4) + 3, distance = ((uint32_t)(p[0] & 15) << 8 | p[1]) + 1;
+        p += 2;
+        if (distance > made || distance > sizeof(history) || made + length > total) return BM_ERROR_INVALID_ARGUMENT;
+        for (uint32_t k = 0; k < length; k++, made++) history[made & 511] = history[(made - distance) & 511];
+      }
+      else
+      {
+        if (p >= end) return BM_ERROR_INVALID_ARGUMENT;
+        history[made & 511] = *p++;
+        made++;
+      }
+      // Each tile as soon as it is whole (32 bytes, 32-aligned: it sits within the history).
+      while (made >= (tile - tileBase + 1) * 32)
+      {
+        BmResult r = bmTilesLoadObj((uint16_t)tile, &history[((tile - tileBase) * 32) & 511], 32);
+        if (r != BM_SUCCESS) return r;
+        tile++;
+      }
+    }
+  }
+  return BM_SUCCESS;
+}
+
 BmResult bmSpriteSheetLoad(BmSpriteSheet *s, uint16_t tileBase, uint8_t bank)
 {
   if ((uint32_t)tileBase + s->tileCount > 1024 || bank > 15) return BM_ERROR_INVALID_ARGUMENT;
   s->tileBase = tileBase;
   s->bank = bank;
-  BmResult r = bmTilesLoadObj(tileBase, s->pTiles, (uint32_t)s->tileCount * 32);
+  BmResult r = s->packed ? unpackTiles(s, tileBase) : bmTilesLoadObj(tileBase, s->pTiles, (uint32_t)s->tileCount * 32);
   if (r != BM_SUCCESS) return r;
   BmColor colours[16];
   for (int i = 0; i < 16; i++) colours[i].color = bmRead16(s->pPalette + i * 2);

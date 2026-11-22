@@ -110,11 +110,16 @@ its script and adds its stats.
 | Chain Whip | 3 | 44 | 7 | 12 | | `WeaponWhip` | a hit box that grows over three frames |
 | Throwing Knives | 2 | | 5 | 8 | | `WeaponThrow` | `spawn` of a projectile actor (`Knife`), at most 2 at a time |
 | Flame Brand | 5 | 18 | 4 | 10 | Fire | `WeaponSwing` | a record copied from Short Sword; element; sends `#Ignite` to what it strikes; +2 `Attack` from its `stats` |
+| Lance | 4 | 30 | 6 | 12 | | `WeaponSwing` | `style = Thrust`: up and down straight thrusts (`thrust_up`, `thrust_down`), ahead `thrust` |
 
 Four scripts and one projectile class for six weapons. `WeaponSwing` is the one in
 attachable-scripts.md §3. It aims by the d-pad held when Attack is pressed: Up strikes above
-the head (`slash_up`), Down sweeps low on the ground (`slash_low`) and stabs below the feet in
-the air (`slash_down`; what it strikes bounces the player up at 4.5 px/frame), else ahead.
+the head, Down sweeps low on the ground (`slash_low`) and strikes below the feet in the air
+(what it strikes bounces the player up at 4.5 px/frame), else ahead. How up and down strike is
+the weapon's `style`: `Slash` (swords) cuts in an arc, `slash_up` from ahead over the head to
+behind and `slash_down` from ahead under the feet to behind, with the hit boxes `blade` drawn
+on those frames (`arm(#blade)`); `Thrust` (the Lance) thrusts straight, a rectangle above or
+below (`aim`, `hit_box`) with `thrust_up` and `thrust_down`.
 While it swings the player cannot walk but keeps their speed, which fades on the ground, and
 steers in the air; a weapon's `ground_move` (Slide, Stop, Keep, Walk) and `air_move` (Steer,
 Keep, Drift) choose otherwise: the Dagger walks, the Great Axe stops and drifts.
