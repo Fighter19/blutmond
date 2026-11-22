@@ -120,7 +120,10 @@ typedef enum BmScriptType {
   X(lock_move,         VOID, 2, ENUM,  ENUM,  VOID,  VOID, 0) \
   X(ui_map,            VOID, 4, INT,   INT,   INT,   INT,  0) \
   X(map_percent,       INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
-  X(map_reveal,        BOOL, 1, NAME,  VOID,  VOID,  VOID, 0)
+  X(map_reveal,        BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(set_damage,        VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(damage_is,         BOOL, 1, ENUM,  VOID,  VOID,  VOID, 0) \
+  X(owner_velocity,    VOID, 2, FIX,   FIX,   VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -166,6 +169,13 @@ typedef enum BmScriptType {
 // player (attachable-scripts.md §3): no walking or jumping for that many frames; an animation
 // of the player's sprite that the engine does not replace until the lock is over (or, without a
 // lock, until it ends); whether a lock is on. Nothing from an object.
+//
+// Filters (attachable-scripts.md §3): the player's attachments get damage_in(amount) in slot
+// order before the player is struck (after defence and resistance), damage_out(amount) before
+// a hit of the player strikes something (before its defence and weakness); set_damage(n) in
+// them changes the amount the next one gets and the strike uses (0 or less: no strike);
+// damage_is(element) tells the element. owner_velocity(vx, vy): an attachment sets the
+// player's speed (a dash).
 //
 // The world map (src/world/map.h, docs/spec/world-format.md): ui_map(x, y, w, h) draws it into
 // w x h cells of the UI layer, centred on the player, whose cell blinks with the game frame (a
@@ -257,7 +267,7 @@ typedef enum BmScriptKind {
 
 // Events the runtime calls. hit(amount): the figure was struck (its health already lowered;
 // an attachment gets it when the player was); struck(amount): a hit of this figure or
-// attachment struck another.
+// attachment struck another; damage_in(amount), damage_out(amount): filters, see set_damage.
 // X(name, type of the parameter (VOID: none), kinds that get it:
 // 1 Actor, 2 Attachment)
 #define BM_SCRIPT_EVENTS(X) \
@@ -273,7 +283,9 @@ typedef enum BmScriptKind {
   X(hit,      INT,  3) \
   X(struck,   INT,  3) \
   X(opened,   VOID, 4) \
-  X(closed,   VOID, 4)
+  X(closed,   VOID, 4) \
+  X(damage_in,  INT, 2) \
+  X(damage_out, INT, 2)
 
 typedef enum BmScriptEvent {
 #define X(name, arg, kinds) BM_SCRIPT_EVENT_##name,
@@ -283,6 +295,7 @@ typedef enum BmScriptEvent {
 } BmScriptEvent;
 
 // Runtime functions only an Actor may call: they act on the object itself. X(name)
+// (owner_velocity, like owner_lock, does nothing from anything but the player's attachments.)
 #define BM_SCRIPT_ACTOR_ONLY(X) \
   X(finish_anim) X(play_anim) X(anim_done) X(player_distance) X(move_toward_player) X(move_toward) \
   X(enter_door) X(hide) X(show) X(face_player) X(touching_player) X(destroy) X(spawn_with) X(floor_y) \

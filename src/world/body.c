@@ -22,6 +22,10 @@ void bmBodyDefaultParams(BmBodyParams *p)
   p->snapDistance = 4;
   p->coyoteFrames = 6;
   p->jumpBufferFrames = 6;
+  p->airJumps = 0;
+  p->wallSlide = false;
+  p->wallSlideSpeed = BM_FIX(1);
+  p->wallJumpPush = BM_FIX(2);
 }
 
 void bmBodyPlace(BmBody *pBody, int32_t x, int32_t y)
@@ -138,6 +142,7 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
 
   if (b->climbing)
   {
+    b->airJumpsLeft = p->airJumps;
     b->vx = 0;
     b->vy = in.dy * p->climbSpeed;
     if (b->jumpBuffer)
@@ -165,6 +170,8 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     else if (wasOnGround) b->vx = approach(b->vx, 0, p->friction);
     else b->vx = approach(b->vx, 0, p->airAccel / 2);
 
+    // Back on the ground (or a ladder, in water): the jumps in the air are there again.
+    if (wasOnGround || b->inWater) b->airJumpsLeft = p->airJumps;
     // Jumping (with coyote time and a jump buffer); down + jump drops through platforms.
     if (b->jumpBuffer && (wasOnGround || b->coyote))
     {
@@ -186,6 +193,26 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
       b->coyote = 0;
       b->jumpBuffer = 0;
     }
+    else if (b->jumpBuffer && b->wallSide != 0 && p->wallSlide)
+    {
+      // Off the wall slid on: up, and pushed away from it.
+      b->vy = -s * p->jumpSpeed;
+      b->vx = -b->wallSide * p->wallJumpPush;
+      b->facing = (int8_t)-b->wallSide;
+      b->jumpCutDone = false;
+      b->jumpBuffer = 0;
+      b->wallSide = 0;
+      events |= BM_BODY_JUMPED | BM_BODY_WALL_JUMPED;
+    }
+    else if (b->jumpBuffer && b->airJumpsLeft != 0)
+    {
+      // A jump in the air (Double Jump), as high as one from the ground.
+      b->vy = -s * p->jumpSpeed;
+      b->airJumpsLeft--;
+      b->jumpCutDone = false;
+      b->jumpBuffer = 0;
+      events |= BM_BODY_JUMPED | BM_BODY_AIR_JUMPED;
+    }
     if (!in.jumpHeld && s * b->vy < 0 && !b->jumpCutDone)
     {
       b->vy = fixMul(b->vy, p->jumpCut);
@@ -197,6 +224,8 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     bm_fix maxFall = b->inWater ? room->waterMaxFallSpeed : room->maxFallSpeed;
     b->vy += s * g;
     if (s * b->vy > maxFall) b->vy = s * maxFall;
+    // Sliding down a wall held against: slowly.
+    if (p->wallSlide && b->wallSide != 0 && s * b->vy > p->wallSlideSpeed) b->vy = s * p->wallSlideSpeed;
   }
   if (b->jumpBuffer) b->jumpBuffer--;
 
@@ -216,6 +245,13 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
   }
   b->x = nx;
   px = BM_FIX_INT(b->x);
+  // A wall slide: in the air, falling (or about to), pushing against a wall.
+  b->wallSide = 0;
+  if (p->wallSlide && !wasOnGround && !b->climbing && !b->inWater && in.dx != 0 && s * b->vy >= 0)
+  {
+    int32_t edge = in.dx > 0 ? px + p->halfWidth : px - p->halfWidth - 1;
+    if (wallAt(c, edge, feet, p, s, false)) b->wallSide = in.dx;
+  }
 
   // --- Vertical movement, floors and ceilings ---
   bm_fix ny = fy + b->vy;

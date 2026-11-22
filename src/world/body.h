@@ -26,6 +26,11 @@ typedef struct BmBodyParams
   bm_fix climbSpeed, gravityScale;
   uint8_t stepHeight, snapDistance; // pixels
   uint8_t coyoteFrames, jumpBufferFrames;
+  // Capabilities (the stats AirJumps and WallSlide of the player, first-items.md §5):
+  uint8_t airJumps;                 // jumps in the air before landing again
+  bool wallSlide;                   // sliding down walls held against, jumping off them
+  bm_fix wallSlideSpeed;            // fastest fall while sliding
+  bm_fix wallJumpPush;              // speed away from the wall of a jump off it
 } BmBodyParams;
 
 /// Defaults from the spec (PlatformerControl).
@@ -46,6 +51,8 @@ enum {
   BM_BODY_DEATH = 1 << 3,    // touched a death material
   BM_BODY_HIT_WALL = 1 << 4,
   BM_BODY_HIT_CEILING = 1 << 5,
+  BM_BODY_AIR_JUMPED = 1 << 6,   // with BM_BODY_JUMPED: a jump in the air
+  BM_BODY_WALL_JUMPED = 1 << 7,  // with BM_BODY_JUMPED: off a wall
 };
 
 typedef struct BmBody
@@ -59,6 +66,8 @@ typedef struct BmBody
   // at the top then. Platforms are stood on from below and passed going down (up + jump drops
   // through them); no ladders, no safe positions while flipped.
   bool flipped;
+  uint8_t airJumpsLeft;        // jumps in the air left until the ground (or a ladder, water)
+  int8_t wallSide;             // sliding on a wall: -1 on the left, 1 on the right, 0 not
 } BmBody;
 
 void bmBodyPlace(BmBody *pBody, int32_t x, int32_t y);

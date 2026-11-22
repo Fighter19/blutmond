@@ -134,7 +134,13 @@ height: for a vflipped cell or a half top, `ly < h`; else `ly >= cell - h`.
 
 State: `x`, `y` (fix, the feet: bottom centre of the box), `vx`, `vy` (fix per frame),
 `onGround`, `climbing`, `inWater`, `jumpCutDone`, `facing` (-1 or 1), `coyote`, `jumpBuffer`,
-`dropThrough` (frames), `safeX`, `safeY` (pixels), `flipped`.
+`dropThrough` (frames), `safeX`, `safeY` (pixels), `flipped`, `airJumpsLeft`, `wallSide`
+(-1, 0, 1).
+
+**Capabilities** (the player's stats, read before each body step; first-items.md §5): `air
+jumps` = the stat AirJumps (number 5), 0 to 255; `wall slide` = the stat WallSlide (number 7)
+above 0. Both 0 / off unless something adds to them, so the steps below are those of a body
+without them.
 
 **Moving while locked** (`lockGround`, `lockAir`, game.h): while `lockTimer` holds the player
 there is no jump, and on the ground by `lockGround`: 0 slide (no direction: the speed fades
@@ -172,6 +178,7 @@ Constants:
 | step height, snap distance | 8, 4 pixels |
 | coyote frames, jump buffer frames | 6, 6 |
 | drop-through frames | 8 |
+| wall slide speed, wall jump push | 1.0, 2.0 |
 
 Gravity and the fastest fall, in air and in water, come from the room (`ROOM` chunk).
 
@@ -196,25 +203,34 @@ start:
    `ladderBelow`) and jump was not pressed): start climbing; if `dy > 0` and `ladderBelow`,
    `dropThrough = 8`. Then, if climbing and neither `onLadder` nor `ladderBelow`: stop
    climbing.
-4. **While climbing:** `vx = 0`, `vy = dy * 1.0`. If `jumpBuffer != 0`: stop climbing,
+4. **While climbing:** `airJumpsLeft = air jumps`, `vx = 0`, `vy = dy * 1.0`. If `jumpBuffer != 0`: stop climbing,
    `jumpBuffer = 0`, `vy = -fixMul(jump speed, 0.75)`, `jumpCutDone = false`, event *jumped*.
    Else if `dx != 0`: stop climbing.
 5. **If not climbing** (also right after step 4 ended it):
    - `target = dx * 2.0`, halved (`/ 2`) in water. With `dx != 0`: `vx = approach(vx, target,
      wasOnGround ? 0.5 : 0.25)`. Without: `approach(vx, 0, 0.5)` on the ground,
      `approach(vx, 0, 0.125)` in the air.
+   - If `wasOnGround` or `inWater`: `airJumpsLeft = air jumps`.
    - If `jumpBuffer != 0` and (`wasOnGround` or `coyote != 0`): if `dy > 0`, `wasOnGround`
      and `findFloor(feet, feet, false)` is none (standing on a jump-through platform only):
      `dropThrough = 8`. Otherwise `vy = -jump speed`, `jumpCutDone = false`, event *jumped*.
      In both cases `onGround = false`, `wasOnGround = false`, `coyote = 0`, `jumpBuffer = 0`.
+     Else if `jumpBuffer != 0`, `wallSide != 0` and wall slide: a jump off the wall: `vy =
+     -jump speed`, `vx = -wallSide * 2.0`, `facing = -wallSide`, `jumpCutDone = false`,
+     `jumpBuffer = 0`, `wallSide = 0`, events *jumped* and *wall jumped*. Else if `jumpBuffer
+     != 0` and `airJumpsLeft != 0`: `vy = -jump speed`, `airJumpsLeft -= 1`, `jumpCutDone =
+     false`, `jumpBuffer = 0`, events *jumped* and *air jumped*.
    - If jump is not held, `vy < 0` and not `jumpCutDone`: `vy = fixMul(vy, 0.5)`,
      `jumpCutDone = true`.
-   - `vy += gravity` (the room's, in water the water's), then `vy = min(vy, fastest fall)`.
+   - `vy += gravity` (the room's, in water the water's), then `vy = min(vy, fastest fall)`;
+     with wall slide and `wallSide != 0` (as the last step left it), `vy = min(vy, 1.0)`.
 6. If `jumpBuffer != 0`: decrement it.
 7. **Sideways.** `nx = x + vx`. If `vx != 0`: `edge = INT(nx) + 5` when moving right,
    `INT(nx) - 6` when moving left. If `wall(edge, feet)`: with `cellX = floorDiv(edge, cell) *
    cell`, `nx = FIX(cellX - 6)` moving right or `FIX(cellX + cell + 6)` moving left; `vx = 0`.
-   `x = nx`, `px = INT(x)`.
+   `x = nx`, `px = INT(x)`. Then `wallSide = 0`, and with wall slide, not `wasOnGround`, not
+   climbing, not in water, `dx != 0` and `vy >= 0`: if `wall(dx > 0 ? px + 6 : px - 7, feet)`
+   (as in the air), `wallSide = dx`.
 8. **Up and down.** `ny = y + vy`.
    - `vy < 0`: `head = INT(ny) - 28`. For the columns `px - 6`, `px`, `px + 5` in this order:
      if `solid(column, head)`: `ny = FIX((floorDiv(head, cell) + 1) * cell + 28)`, `vy = 0`,
@@ -238,7 +254,10 @@ start:
 
 - **Strike(amount, fromX, element, striker)**: nothing if `amount <= 0` or `hurtTimer != 0`.
   `amount -=` the stat Defence (number 3), at least 1; if `element` is 1 to 3 and
-  `resists[element] != 0`, `amount = max(1, amount / 2)`. Then play the
+  `resists[element] != 0`, `amount = max(1, amount / 2)`. Then the player's attachments in
+  slot order get `damage_in(amount)` (each the amount the one before left; `set_damage(n)`
+  changes it, `damage_is(element)` tells the element); if it is 0 or less now, nothing
+  happens (no strike: false). Then play the
   effect `hurt`, `hurts += 1`, `hurtTimer = 60`, `vy = -3.0`, `vx = away * 2.0` with `away =
   -1` if `fromX > x`, 1 if `fromX < x`, else `-facing`; the player's hits end (section 10);
   `health -= min(amount, health)`; `striker` (a figure number of section 10, 0xFF for none) is
@@ -477,11 +496,18 @@ value is dropped and counts as a script error.
 | 90 | `held(name)` | `#Up`, `#Down`, `#Left`, `#Right`, `#Fwd`, `#Back` (by `facing`) or a game button is held now |
 | 91 | `on_ground()` | the player stands |
 | 92 | `bounce(speed)` | the player's `vy = -speed` (`+speed` with gravity flipped), not on the ground |
+| 94 | `ui_map(x, y, w, h)` | the world map into w x h cells of the UI layer ([world-format.md](world-format.md) §4) |
+| 95 | `map_percent()` | explored cells of all, in percent |
+| 96 | `map_reveal(room)` | the room (its id as a name) is revealed; false if it is not on the map |
+| 97 | `set_damage(n)` | in `damage_in` or `damage_out` (section 6, 10): the amount the next filter gets and the strike uses |
+| 98 | `damage_is(element)` | in a filter: the damage is of that element |
+| 99 | `owner_velocity(vx, vy)` | from one of the player's attachments: the player's `vx`, `vy` (fix) are these now; nothing from anything else |
 | 88 | `flip_gravity()` | the player's gravity turns over or back (section 5, "Gravity flipped"): `flipped` toggled, `vy = 0`, not on the ground, no coyote time; true if it now pulls up |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
-(state.md §4): what an attachment adds while it is attached, taken away in its `detached()`,
-not saved. `statEquip` is what the equipped records of structures with the role
+(state.md §4): what an attachment adds while it is attached, not saved. The runtime notes it
+per slot (`attachments.statOf`, `statAdded`: up to 4 stats a slot; a fifth is added but not
+noted) and takes it away again when the slot is emptied, after `detached()`. `statEquip` is what the equipped records of structures with the role
 `stat_source` add ([data-format.md](data-format.md) §6), worked out again after every
 `equip`, a loaded state and a pushed pack. `stat` (28) reads `statBase + statBonus +
 statEquip`.
@@ -571,7 +597,9 @@ the first free; a hit started when all are used is dropped. A room entered fresh
    0`; an object: hidden, `health <= 0`, or invulnerable). Its hurt rectangles are its boxes
    of kind hurt on the frame showing, or its body box (the player's box of section 3, an
    object's box of section 8) if there are none. If any hit rectangle overlaps any of them, it
-   is struck with `amount = max(1, damage)`: the bit of `f` is set; the player gets Strike
+   is struck with `amount = max(1, damage)`: the bit of `f` is set; if the hit is the
+   player's, their attachments in slot order get `damage_out(amount)` (as `damage_in`, section
+   6) and with 0 or less left nothing more happens; the player gets Strike
    (amount, `FIX(INT(source x))`, the hit's element, the source) (section 6); an object takes
    the element rule first: `amount * 3 / 2` if its `affinity` has bit `element` (weak),
    `amount / 2` if it has bit `4 + element` (resists), at least 1, element 0 unchanged; then

@@ -87,6 +87,8 @@ In serialisation order. Count is the array length.
 | `player.jumpBuffer` | u8 |  | snapshot |
 | `player.dropThrough` | u8 |  | snapshot |
 | `player.flipped` | bool |  | snapshot link |
+| `player.airJumpsLeft` | u8 |  | snapshot |
+| `player.wallSide` | s8 |  | snapshot |
 | `player.safeX` | s32 |  | save |
 | `player.safeY` | s32 |  | save |
 | `frame` | u32 |  | snapshot |
@@ -176,6 +178,8 @@ In serialisation order. Count is the array length.
 | `attachments.pc`, `attachments.timer` | u16 | 12 each | snapshot |
 | `attachments.fields` | s32 | 96 | snapshot |
 | `attachments.lifetime` | u16 | 12 | snapshot |
+| `attachments.statOf` | u8 | 48 | snapshot |
+| `attachments.statAdded` | s16 | 48 | snapshot |
 | `hits.source`, `hits.slot` | u8 | 8 each | snapshot |
 | `hits.name` | u16 | 8 | snapshot |
 | `hits.damage` | s16 | 8 | snapshot |
@@ -193,7 +197,7 @@ In serialisation order. Count is the array length.
 | `screens.repeat` | u8 |  | transient |
 
 Sizes with this table: a save game is 655 bytes of payload, a link transfer 501, a snapshot
-2205 (2211 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
+2351 (2357 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
 pushed state hold 3072 bytes. Attachment slots 0 to 7 are the
 player's, 8 to 11 the room's. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).

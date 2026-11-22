@@ -635,7 +635,7 @@ if(BM_PLATFORM STREQUAL "host")
   set_tests_properties(make_wind_room PROPERTIES FIXTURES_SETUP wind_room)
   add_test(NAME cook_test_level_wind
     COMMAND bmcook --profile gba -o ${cooked}/test_level_wind_gba.bmpk
-      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${cooked}/room2_wind.tmx ${BM_TEST_LEVEL_BASE_ASSETS} ${PROJECT_SOURCE_DIR}/tests/scripts/wind.ms
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${cooked}/room2_wind.tmx ${BM_TEST_LEVEL_BASE_ASSETS} ${PROJECT_SOURCE_DIR}/tests/scripts/wind.ms ${PROJECT_SOURCE_DIR}/tests/scripts/capable.ms ${PROJECT_SOURCE_DIR}/tests/scripts/shield.ms
       ${PROJECT_SOURCE_DIR}/tests/scripts/jab.ms)
   set_tests_properties(cook_test_level_wind PROPERTIES FIXTURES_REQUIRED wind_room FIXTURES_SETUP test_level_wind)
   add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk ${cooked}/test_level_wind_gba.bmpk)

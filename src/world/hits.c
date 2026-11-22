@@ -317,6 +317,12 @@ static void strike(BmGame *g, uint8_t k, uint8_t target, int32_t amount)
   BmHits *h = &g->hits;
   uint8_t source = h->source[k], slot = h->slot[k];
   h->struck[k] = (uint16_t)(h->struck[k] | (1u << target));
+  // The player's attachments' filters (a strength spell): nothing left, no strike.
+  if (source == BM_HITS_PLAYER)
+  {
+    amount = bmAttachmentsFilter(g, BM_SCRIPT_EVENT_damage_out, amount, h->element[k]);
+    if (amount <= 0) return;
+  }
   int32_t sx, sy;
   bool flip;
   anchorOf(g, source, &sx, &sy, &flip);

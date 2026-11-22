@@ -21,6 +21,7 @@
 #define BM_ATTACH_ROOM_SLOTS 4     // slots 8 to 11: the room's
 #define BM_ATTACH_ROOM_FIRST BM_ATTACH_PLAYER_SLOTS
 #define BM_ATTACH_SLOTS (BM_ATTACH_PLAYER_SLOTS + BM_ATTACH_ROOM_SLOTS)
+#define BM_ATTACH_STATS 4          // stats one attachment's add_stat is undone for when it goes
 
 // Game buttons: what the keys mean to attachments (press/release get these names).
 #define BM_ATTACH_BUTTONS(X) \
@@ -38,6 +39,10 @@ typedef struct BmAttachments
   uint16_t pc[BM_ATTACH_SLOTS], timer[BM_ATTACH_SLOTS];
   int32_t fields[BM_ATTACH_SLOTS * BM_SCRIPT_MAX_FIELDS];
   uint16_t lifetime[BM_ATTACH_SLOTS];     // frames left; 0: until detached
+  // What add_stat from each slot added (stat + 1, 0 none; the amount), taken away again when
+  // the slot is emptied.
+  uint8_t statOf[BM_ATTACH_SLOTS * BM_ATTACH_STATS];
+  int16_t statAdded[BM_ATTACH_SLOTS * BM_ATTACH_STATS];
   // Derived: the class in the actors' class table, or -1 (not in the pack now: the slot rests).
   int8_t cls[BM_ATTACH_SLOTS];
   uint16_t occupied;                      // a bit per slot with an attachment: nothing to do if 0
@@ -45,6 +50,10 @@ typedef struct BmAttachments
 } BmAttachments;
 
 struct BmGame;
+
+/// The damage `amount` (of `element`) through the filter event `event` (damage_in,
+/// damage_out) of the player's attachments in slot order; set_damage in them changes it.
+int32_t bmAttachmentsFilter(struct BmGame *pGame, uint8_t event, int32_t amount, uint8_t element);
 
 /// Attaches the Attachment class named `className` (string id) in `slot` (0 to 7: the
 /// player's, 8 to 11: the room's), replacing what is there; it gets `attached()` at once.

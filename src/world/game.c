@@ -960,6 +960,9 @@ bool bmGameStrikePlayerWith(BmGame *g, int32_t amount, int32_t fromX, uint8_t el
   amount -= bmInventoryStat(&g->inventory, BM_STAT_DEFENCE);
   if (amount < 1) amount = 1;
   if (element != 0 && element < BM_GAME_ELEMENTS && g->resists[element] != 0) amount = amount / 2 < 1 ? 1 : amount / 2;
+  // The attachments' filters (a shield, Second Wind): nothing left, no strike.
+  amount = bmAttachmentsFilter(g, BM_SCRIPT_EVENT_damage_in, amount, element);
+  if (amount <= 0) return false;
   bmSoundPlayEffect(&g->sound, "hurt");
   g->hurts++;
   g->hurtTimer = BM_HITS_PLAYER_INVULNERABLE;
@@ -1114,6 +1117,10 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   }
   // Heavy armour and the like change the running speed (add_speed).
   BmBodyParams params = g->playerParams;
+  // Capabilities from the stats (abilities, equipment, attachments).
+  int32_t airJumps = bmInventoryStat(&g->inventory, BM_STAT_AIR_JUMPS);
+  params.airJumps = (uint8_t)(airJumps < 0 ? 0 : airJumps > 255 ? 255 : airJumps);
+  params.wallSlide = bmInventoryStat(&g->inventory, BM_STAT_WALL_SLIDE) > 0;
   if (g->speedPercent != 0)
   {
     int32_t percent = 100 + g->speedPercent;
@@ -1252,6 +1259,8 @@ static const BmStateField s_gameFields[] = {
   F(player.jumpBuffer, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(player.dropThrough, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(player.flipped, BM_TYPE_BOOL, BM_STATE_SNAPSHOT | BM_STATE_LINK),
+  F(player.airJumpsLeft, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(player.wallSide, BM_TYPE_S8, BM_STATE_SNAPSHOT),
   F(player.safeX, BM_TYPE_S32, BM_STATE_SAVE),
   F(player.safeY, BM_TYPE_S32, BM_STATE_SAVE),
   F(frame, BM_TYPE_U32, BM_STATE_SNAPSHOT),
@@ -1360,6 +1369,8 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, attachments.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
   BM_STATE_ARRAY(BmGame, attachments.fields, BM_TYPE_S32, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS * BM_SCRIPT_MAX_FIELDS),
   BM_STATE_ARRAY(BmGame, attachments.lifetime, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
+  BM_STATE_ARRAY(BmGame, attachments.statOf, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS * BM_ATTACH_STATS),
+  BM_STATE_ARRAY(BmGame, attachments.statAdded, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS * BM_ATTACH_STATS),
   // Hits in the middle of a swing: a snapshot continues them with the same targets still to come.
   BM_STATE_ARRAY(BmGame, hits.source, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   BM_STATE_ARRAY(BmGame, hits.slot, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),

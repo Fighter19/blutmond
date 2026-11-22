@@ -38,6 +38,12 @@ typedef struct BmInventory
 #define BM_STAT_MAX_MANA 1
 #define BM_STAT_ATTACK 2
 #define BM_STAT_DEFENCE 3
+// Capabilities the body step reads (first-items.md §1 and §5): jumps in the air, sliding down
+// walls. Dash and GroundPound are for the scripts that do them.
+#define BM_STAT_AIR_JUMPS 5
+#define BM_STAT_DASH 6
+#define BM_STAT_WALL_SLIDE 7
+#define BM_STAT_GROUND_POUND 8
 
 /// A stat's value: own plus what attachments and equipment add.
 int32_t bmInventoryStat(const BmInventory *pInv, uint32_t stat);

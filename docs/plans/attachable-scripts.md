@@ -21,7 +21,15 @@ room); messages are open. What an attachment adds with `add_stat` is a bonus it 
 `detached()` (not saved; equipping again after loading adds it again), not yet undone by the
 runtime itself. From section 3 `owner_lock`, `owner_play_anim` and `owner_busy` are built
 (for the player), and equipping a record attaches its script with the record (`equip`, for
-first-items.md step 2). The rest of steps 4 to 8 is open. Milestone M14 in [../PLAN.md](../PLAN.md).
+first-items.md step 2). Step 4 built ([../spec/runtime-core.md](../spec/runtime-core.md) §5,
+§6, §10): the body step reads the stats AirJumps (jumps in the air) and WallSlide (sliding
+down a wall held against, jumping off it); what an attachment's `add_stat` added is taken away
+by the runtime when it is detached (up to 4 stats a slot); the filters `damage_in` and
+`damage_out` are events with `set_damage(n)` and `damage_is(element)` (events take one
+parameter and return nothing), asked of the player's attachments in slot order; the action
+`owner_velocity(vx, vy)` sets the player's speed. Not yet: speed, jump and gravity factors
+(`modify`), `Swim` and `HighJump` as capabilities (HighJump is an attachment with an impulse).
+Messages and the rest of steps 5 to 8 are open. Milestone M14 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

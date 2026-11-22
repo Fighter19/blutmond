@@ -299,7 +299,19 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
       if (args[0] >= 0 && args[0] < BM_INVENTORY_STATS)
       {
         int32_t v = g->inventory.statBonus[args[0]] + args[1];
-        g->inventory.statBonus[args[0]] = (int16_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v);
+        int16_t now = (int16_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v);
+        // Kept per slot, to be taken away again when the attachment goes.
+        BmAttachments *t = &g->attachments;
+        uint8_t *of = &t->statOf[a->currentSlot * BM_ATTACH_STATS];
+        int16_t *added = &t->statAdded[a->currentSlot * BM_ATTACH_STATS];
+        for (int k = 0; k < BM_ATTACH_STATS && a->currentSlot < BM_ATTACH_SLOTS; k++)
+          if (of[k] == args[0] + 1 || of[k] == 0)
+          {
+            of[k] = (uint8_t)(args[0] + 1);
+            added[k] = (int16_t)(added[k] + (now - g->inventory.statBonus[args[0]]));
+            break;
+          }
+        g->inventory.statBonus[args[0]] = now;
       }
       break;
     }
@@ -403,6 +415,18 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     break;
   case BM_SCRIPT_API_ui_clear:
     bmUiClearRect(&g->ui, args[0], args[1], args[2], args[3]);
+    break;
+  case BM_SCRIPT_API_set_damage:
+    g->filterAmount = args[0];
+    break;
+  case BM_SCRIPT_API_damage_is:
+    *result = g->filterElement == (uint8_t)args[0];
+    break;
+  case BM_SCRIPT_API_owner_velocity:
+    // Only the player's attachments move their owner.
+    if (i != BM_ACTORS_OWNER) break;
+    g->player.vx = args[0];
+    g->player.vy = args[1];
     break;
   case BM_SCRIPT_API_ui_map:
     bmMapDraw(g, args[0], args[1], args[2], args[3]);
@@ -1421,6 +1445,21 @@ void bmAttachmentsEvent(BmGame *g, uint8_t slot, BmScriptEvent event, int32_t ar
   if (slot < BM_ATTACH_SLOTS) slotEvent(g, slot, event, arg);
 }
 
+int32_t bmAttachmentsFilter(BmGame *g, uint8_t event, int32_t amount, uint8_t element)
+{
+  BmAttachments *t = &g->attachments;
+  if ((t->occupied & ((1u << BM_ATTACH_PLAYER_SLOTS) - 1)) == 0) return amount;
+  int32_t outer = g->filterAmount;
+  uint8_t outerElement = g->filterElement;
+  g->filterAmount = amount;
+  g->filterElement = element;
+  for (uint8_t s = 0; s < BM_ATTACH_PLAYER_SLOTS; s++) slotEvent(g, s, event, g->filterAmount);
+  amount = g->filterAmount;
+  g->filterAmount = outer;
+  g->filterElement = outerElement;
+  return amount;
+}
+
 void bmAttachmentsPlayerHit(BmGame *g, int32_t amount)
 {
   BmAttachments *t = &g->attachments;
@@ -1594,6 +1633,18 @@ void bmAttachmentsDetach(BmGame *g, uint8_t slot)
   uint32_t key = t->classKey[slot];
   slotEvent(g, slot, BM_SCRIPT_EVENT_detached, 0);
   if (t->classKey[slot] != key) return;   // detached() attached something else here
+  // What its add_stat added goes with it.
+  for (int k = 0; k < BM_ATTACH_STATS; k++)
+  {
+    uint8_t stat = t->statOf[slot * BM_ATTACH_STATS + k];
+    if (stat != 0 && stat <= BM_INVENTORY_STATS)
+    {
+      int32_t v = g->inventory.statBonus[stat - 1] - t->statAdded[slot * BM_ATTACH_STATS + k];
+      g->inventory.statBonus[stat - 1] = (int16_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v);
+    }
+    t->statOf[slot * BM_ATTACH_STATS + k] = 0;
+    t->statAdded[slot * BM_ATTACH_STATS + k] = 0;
+  }
   t->classKey[slot] = 0;
   t->cls[slot] = -1;
   t->occupied &= (uint16_t)~(1u << slot);

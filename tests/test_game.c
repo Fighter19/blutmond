@@ -332,6 +332,86 @@ static void testAnAttachmentMakesThePlayerJumpHigher(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// attachable-scripts.md step 4: capabilities the body step reads from the stats (a jump in the
+// air, sliding down a wall and jumping off it), taken away by the runtime when the attachment
+// that added them goes; the filters damage_in and damage_out; owner_velocity.
+static void testCapabilitiesAndFilters(void)
+{
+  if (s_windData == NULL) return;
+  startWith(s_windData, s_windSize, "test_room_2");
+  bmAttachmentsDetach(&s_game, BM_ATTACH_ROOM_FIRST);   // no wind
+  BmInventory *inv = &s_game.inventory;
+  BmBody *b = &s_game.player;
+  frames(30, 0);
+  // Without: a second press in the air does nothing.
+  frames(1, BM_KEY_A);
+  while (b->vy < 0) frames(1, BM_KEY_A);
+  frames(1, 0);
+  frames(1, BM_KEY_A);
+  TEST_ASSERT(b->vy > 0 && !b->onGround);
+  frames(60, 0);
+  // With Capable: one jump in the air, as high as from the ground, then no more until landing.
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 4, stringId("Capable"), 0));
+  TEST_ASSERT(bmInventoryStat(inv, BM_STAT_AIR_JUMPS) == 1 && bmInventoryStat(inv, BM_STAT_WALL_SLIDE) == 1);
+  frames(2, 0);
+  frames(1, BM_KEY_A);
+  while (b->vy < 0) frames(1, BM_KEY_A);
+  frames(1, 0);
+  frames(1, BM_KEY_A);
+  TEST_ASSERT(b->vy == -s_game.playerParams.jumpSpeed + s_game.physics.gravity && b->airJumpsLeft == 0);
+  while (b->vy < 0) frames(1, BM_KEY_A);
+  frames(1, 0);
+  frames(1, BM_KEY_A);
+  TEST_ASSERT(b->vy > 0);
+  frames(60, 0);
+  TEST_ASSERT(b->onGround && b->airJumpsLeft == 1);
+  // A wall slide: falling against the room's left edge while holding Left, at 1 px a frame.
+  bmBodyPlace(b, 8, 40);
+  b->vy = 0;
+  frames(30, BM_KEY_LEFT);
+  TEST_ASSERT(!b->onGround && b->wallSide == -1 && b->vy == BM_FIX(1));
+  // Off the wall: up and away from it.
+  frames(1, BM_KEY_LEFT | BM_KEY_A);
+  TEST_ASSERT(b->vy < 0 && b->facing == 1 && b->wallSide == 0);
+  frames(80, 0);
+  // Detached: what it added is gone, without a detached() of its own.
+  bmAttachmentsDetach(&s_game, 4);
+  TEST_ASSERT(bmInventoryStat(inv, BM_STAT_AIR_JUMPS) == 0 && bmInventoryStat(inv, BM_STAT_WALL_SLIDE) == 0);
+  bmBodyPlace(b, 8, 40);
+  b->vy = 0;
+  frames(12, BM_KEY_LEFT);
+  TEST_ASSERT(b->wallSide == 0 && b->vy > BM_FIX(1));
+  // (It falls into the door below: the room again.)
+  startWith(s_windData, s_windSize, "test_room_2");
+  bmAttachmentsDetach(&s_game, BM_ATTACH_ROOM_FIRST);
+  frames(30, 0);
+
+  // Filters: Shield halves what strikes the player and stops fire.
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 3, stringId("Shield"), 0));
+  const int32_t *shield = &s_game.attachments.fields[3 * BM_SCRIPT_MAX_FIELDS];   // Filtered, LastIn
+  int32_t before = s_game.health;
+  TEST_ASSERT(bmGameStrikePlayerWith(&s_game, 10, b->x, 0, 0xFF));
+  TEST_ASSERT(s_game.health == before - 5 && shield[0] == 1 && shield[1] == 10);
+  s_game.hurtTimer = 0;
+  TEST_ASSERT(!bmGameStrikePlayerWith(&s_game, 10, b->x, 1, 0xFF));   // fire
+  TEST_ASSERT(s_game.health == before - 5 && shield[0] == 2 && s_game.hurtTimer == 0);
+  // And triples what the player's hits do: Jab (2) strikes the dummy for 6.
+  int dummy = actorOfClass("Dummy");
+  TEST_ASSERT(dummy >= 0 && bmAttachmentsAttach(&s_game, 0, stringId("Jab"), 0));
+  const int32_t *dummyFields = &s_game.actors.fields[dummy * BM_SCRIPT_MAX_FIELDS];   // Hits, LastDamage
+  bmBodyPlace(b, BM_FIX_INT(s_game.actors.x[dummy]) - 14, 160);
+  b->facing = 1;
+  frames(30, 0);
+  frames(2, BM_KEY_B);
+  TEST_ASSERT(dummyFields[0] == 1 && dummyFields[1] == 6);
+  TEST_ASSERT(s_game.attachments.fields[3] == 6);   // Jab's LastAmount: what struck
+  // owner_velocity: Dash (L) sets the player's speed.
+  frames(30, 0);
+  frames(1, BM_KEY_L);
+  TEST_ASSERT(b->vx > BM_FIX(2));
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // The room as an owner (attachable-scripts.md §8): the second room of the wind pack has
 // `attach = Wind` and `Wind.Strength = 1.0`. While the player is there the wind blows them
 // along; leaving detaches it; coming back attaches it again, and its `save` variable counted
@@ -1772,6 +1852,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheItemTables);
   RUN_TEST(testTheRoomsAttachmentsComeAndGoWithTheRoom);
   RUN_TEST(testAHitStrikesOnce);
+  RUN_TEST(testCapabilitiesAndFilters);
   RUN_TEST(testTheSwordDefeatsTheBat);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
