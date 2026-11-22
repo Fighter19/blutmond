@@ -86,5 +86,11 @@ void bmAttachmentsEvent(struct BmGame *pGame, uint8_t slot, BmScriptEvent event,
 /// The player was struck: hit(amount) to each of the player's attachments.
 void bmAttachmentsPlayerHit(struct BmGame *pGame, int32_t amount);
 
+/// Uses an item the player owns (use_item, a quick slot): the script its record's first
+/// `attach` field names is attached for one frame in slot BM_GAME_ITEM_SLOT with its first
+/// record<S> variable set to the record; its attached() does what the item does (and takes it,
+/// first-items.md §6). False if the player has none or the record names no such script.
+bool bmAttachmentsUse(struct BmGame *pGame, uint32_t record);
+
 /// After the pack's scripts were (re)loaded: finds each slot's class again.
 void bmAttachmentsBind(struct BmGame *pGame);

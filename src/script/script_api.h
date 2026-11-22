@@ -62,7 +62,7 @@ typedef enum BmScriptType {
   X(room_detach,       VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(arm,               VOID, 3, NAME,  INT,   ENUM,  VOID, 0) \
   X(disarm,            VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
-  X(hit_box,           VOID, 3, INT,   INT,   INT,   VOID, 0) \
+  X(hit_box,           VOID, 4, INT,   INT,   INT,   ENUM, 0) \
   X(equip,             BOOL, 2, INT,   RECORD, VOID,  VOID, 0) \
   X(owner_lock,        VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(owner_play_anim,   VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
@@ -92,7 +92,19 @@ typedef enum BmScriptType {
   X(say,               VOID, 2, TEXT,  TEXT,  VOID,  VOID, 0) \
   X(dialogue_done,     BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
   X(player_lock,       VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
-  X(player_health,     INT,  0, VOID,  VOID,  VOID,  VOID, 0)
+  X(player_health,     INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(add_resist,        VOID, 2, ENUM,  INT,   VOID,  VOID, 0) \
+  X(set_affinity,      VOID, 2, ENUM,  ENUM,  VOID,  VOID, 0) \
+  X(strike_back,       BOOL, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(add_speed,         VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(mana,              INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(max_mana,          INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(restore_mana,      VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(spend_mana,        BOOL, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(use_item,          BOOL, 1, RECORD, VOID,  VOID,  VOID, 0) \
+  X(return_to_save,    VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(quick_slot,        RECORD, 1, INT,  VOID,  VOID,  VOID, 0) \
+  X(set_quick_slot,    VOID, 2, INT,   RECORD, VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -109,7 +121,7 @@ typedef enum BmScriptType {
 // once. room_attach(slot, #Class), room_detach(slot): the same for the room's 4 slots; the
 // room detaches them when it is left.
 //
-// arm(#box, damage, element), disarm(#box), hit_box(reach, frames, damage): hits
+// arm(#box, damage, element), disarm(#box), hit_box(reach, frames, damage, element): hits
 // (src/world/hits.h, docs/plans/hitboxes.md §3). arm makes the hit boxes of that name on the
 // frames the figure shows live as one hit, until disarm, the figure's animation changing or
 // ending, or the figure being struck; hit_box is a hit without a drawing: a rectangle from the
@@ -141,6 +153,18 @@ typedef enum BmScriptType {
 // bottom if there is none). say(speaker, line): the dialogue box with the speaker's name and the
 // line; dialogue_done() becomes true when the player has pressed A. player_lock(frames): the
 // player cannot walk or jump for that many frames (0 ends it).
+//
+// Elements, mana, items (first-items.md §1, §6, §7): add_resist(element, n) counts what the
+// player wears that resists an element (n -1 takes it off again; a resisted element halves the
+// damage after defence); set_affinity(weak, resists) gives the object a weakness (x 1.5) and a
+// resistance (x 0.5), Element.None for neither; strike_back(amount), from an attachment's
+// hit(): strikes the object that struck the player (false if there is none, as for a hazard);
+// add_speed(percent): added to the player's running speed (-6 for heavy armour). mana(),
+// max_mana(), restore_mana(n), spend_mana(n) (false, and nothing spent, if there is not enough).
+// use_item(record): the item's behaviour attached for a frame in slot 7 (it does what the item
+// does and takes it); false if the player has none. return_to_save(): to the last save point,
+// at the next frame, the menus closed. quick_slot(i), set_quick_slot(i, record): the two quick
+// slots (L and Select use them).
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {
@@ -208,7 +232,8 @@ typedef enum BmScriptEvent {
 // Runtime functions only an Actor may call: they act on the object itself. X(name)
 #define BM_SCRIPT_ACTOR_ONLY(X) \
   X(finish_anim) X(play_anim) X(anim_done) X(player_distance) X(move_toward_player) X(move_toward) \
-  X(enter_door) X(hide) X(show) X(face_player) X(touching_player) X(destroy) X(spawn_with) X(floor_y)
+  X(enter_door) X(hide) X(show) X(face_player) X(touching_player) X(destroy) X(spawn_with) X(floor_y) \
+  X(set_affinity)
 
 // Field flags in the class table: the storage flags of docs/spec/state.md.
 #define BM_SCRIPT_FIELD_SAVE 1

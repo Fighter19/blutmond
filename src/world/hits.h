@@ -58,5 +58,14 @@ void bmHitsDisarm(struct BmGame *pGame, uint8_t source, uint16_t name);
 /// and the rectangles' frames count down.
 void bmHitsFrame(struct BmGame *pGame);
 
+/// Strikes object `index` for `amount` of `element` without a hit (strike_back): its weakness
+/// or resistance (affinity) applies, then health, the blink and hit(amount). False if it cannot
+/// be struck now.
+bool bmHitsStrikeObject(struct BmGame *pGame, uint8_t index, int32_t amount, uint8_t element);
+
+/// The element rule (first-items.md §1): x 1.5 if `affinity` (weak bits 0-3, resists 4-7)
+/// is weak to `element`, x 0.5 if it resists it; rounded down, at least 1.
+int32_t bmHitsElement(int32_t amount, uint8_t affinity, uint8_t element);
+
 /// Hits that are live now (for tests and the status display).
 uint8_t bmHitsLive(const struct BmGame *pGame);

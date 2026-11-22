@@ -33,6 +33,7 @@ typedef struct BmInventory
 // starts MaxHealth, MaxMana, Attack, Defence): the player's health is 30 + MaxHealth, a hit on
 // the player is lowered by Defence.
 #define BM_STAT_MAX_HEALTH 0
+#define BM_STAT_MAX_MANA 1
 #define BM_STAT_ATTACK 2
 #define BM_STAT_DEFENCE 3
 

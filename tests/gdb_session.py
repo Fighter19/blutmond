@@ -75,7 +75,8 @@ def main():
     line = int(line)
 
     # Where the module is loaded, and where the script line is inside it.
-    slot = int(re.search(r"^([0-9a-f]+) \w bm_native_slot$", tool("nm", image_elf), re.M).group(1), 16)
+    found = re.search(r"^([0-9a-f]+) ([0-9a-f]+) \w bm_native_slot$", tool("nm", "-S", image_elf), re.M)
+    slot, slot_size = int(found.group(1), 16), int(found.group(2), 16)
     offsets = [int(m.group(1), 16) for m in re.finditer(r"^%s\s+%d\s+0x([0-9a-f]+)" % (re.escape(script.split("/")[-1]), line),
                                                          tool("readelf", "--debug-dump=decodedline", scripts_elf), re.M)]
     expect("the script line is in the module's debug information", offsets)
@@ -123,7 +124,7 @@ def main():
             seen.append(regs[15])
         expect("the steps passed a call into the runtime", calls >= 1)
         print("     steps went to", " ".join("%08x" % a for a in seen))
-        expect("the steps moved on inside the module", len(set(seen)) == len(seen) and all(slot <= a < slot + 0x2000 for a in seen))
+        expect("the steps moved on inside the module", len(set(seen)) == len(seen) and all(slot <= a < slot + slot_size for a in seen))
         expect("the stack pointer is the program's own", abs(regs[13] - first[13]) < 256)
 
         # Registers and memory can be changed. The unused end of the module's slot is free

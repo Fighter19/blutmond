@@ -249,7 +249,8 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     break;
   }
   case BM_SCRIPT_API_hurt_player:
-    bmGameHurtPlayer(g, args[0]);
+    // As a hazard does (pushed the way the player looks), but known as the striker.
+    bmGameStrikePlayerWith(g, args[0], g->player.x + g->player.facing, 0, (uint8_t)(i + 1));
     break;
   case BM_SCRIPT_API_enter_door:
     a->pendingDoor = (uint8_t)(a->object[i] + 1);
@@ -348,7 +349,7 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     uint8_t slot = i < BM_ACTORS_MAX ? BM_HITS_NO_SLOT : a->currentSlot;
     if (api == BM_SCRIPT_API_arm) bmHitsArm(g, source, slot, (uint16_t)args[0], args[1], (uint8_t)args[2], 0, 0);
     else if (api == BM_SCRIPT_API_disarm) bmHitsDisarm(g, source, (uint16_t)args[0]);
-    else bmHitsArm(g, source, slot, 0xFFFF, args[2], 0, args[0], args[1]);
+    else bmHitsArm(g, source, slot, 0xFFFF, args[2], (uint8_t)(args[3] > 0 && args[3] < BM_GAME_ELEMENTS ? args[3] : 0), args[0], args[1]);
     break;
   }
   case BM_SCRIPT_API_equip:
@@ -455,6 +456,58 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     break;
   case BM_SCRIPT_API_player_health:
     *result = g->health;
+    break;
+  case BM_SCRIPT_API_add_resist:
+    if (args[0] > 0 && args[0] < BM_GAME_ELEMENTS)
+    {
+      int32_t n = g->resists[args[0]] + args[1];
+      g->resists[args[0]] = (uint8_t)(n < 0 ? 0 : n > 255 ? 255 : n);
+    }
+    break;
+  case BM_SCRIPT_API_set_affinity:
+    a->affinity[i] = (uint8_t)((args[0] > 0 && args[0] < 4 ? 1u << args[0] : 0) | (args[1] > 0 && args[1] < 4 ? 16u << args[1] : 0));
+    break;
+  case BM_SCRIPT_API_strike_back:
+  {
+    uint8_t current = a->current, slot = a->currentSlot;
+    *result = g->striker != 0xFF && g->striker != 0 && bmHitsStrikeObject(g, (uint8_t)(g->striker - 1), args[0], 0);
+    a->current = current;
+    a->currentSlot = slot;
+    break;
+  }
+  case BM_SCRIPT_API_add_speed:
+  {
+    int32_t n = g->speedPercent + args[0];
+    g->speedPercent = (int16_t)(n < -90 ? -90 : n > 300 ? 300 : n);
+    break;
+  }
+  case BM_SCRIPT_API_mana:
+    *result = g->mana;
+    break;
+  case BM_SCRIPT_API_max_mana:
+    *result = bmGameMaxMana(g);
+    break;
+  case BM_SCRIPT_API_restore_mana:
+  {
+    int32_t mana = g->mana + (args[0] > 0 ? args[0] : 0), max = bmGameMaxMana(g);
+    g->mana = (int16_t)(mana > max ? max : mana);
+    break;
+  }
+  case BM_SCRIPT_API_spend_mana:
+    *result = args[0] >= 0 && g->mana >= args[0];
+    if (*result) g->mana = (int16_t)(g->mana - args[0]);
+    break;
+  case BM_SCRIPT_API_use_item:
+    *result = bmAttachmentsUse(g, (uint32_t)args[0]);
+    break;
+  case BM_SCRIPT_API_return_to_save:
+    bmGameReturnToSave(g);
+    break;
+  case BM_SCRIPT_API_quick_slot:
+    *result = args[0] >= 0 && args[0] < BM_INVENTORY_QUICK ? (int32_t)g->inventory.quick[args[0]] : 0;
+    break;
+  case BM_SCRIPT_API_set_quick_slot:
+    if (args[0] >= 0 && args[0] < BM_INVENTORY_QUICK) g->inventory.quick[args[0]] = (uint32_t)args[1];
     break;
   case BM_SCRIPT_API_say:
     bmGameSay(g, (uint16_t)args[0], (uint16_t)args[1]);
@@ -948,6 +1001,8 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->hidden[i] = 0;
     a->touching[i] = 0;
     a->health[i] = 0;
+  a->affinity[i] = 0;
+    a->affinity[i] = 0;
     a->team[i] = 0;
     a->invulnerable[i] = 0;
     BmAnimState none = { 0, 0, 0, 0 };
@@ -1048,6 +1103,7 @@ bool bmActorsSpawn(BmGame *g, uint16_t className, int32_t x, int32_t y, uint32_t
   a->facing[i] = 1;
   a->hidden[i] = a->touching[i] = 0;
   a->health[i] = 0;
+  a->affinity[i] = 0;
   a->team[i] = 0;
   a->invulnerable[i] = 0;
   BmAnimState none = { 0, 0, 0, 0 };
@@ -1081,6 +1137,7 @@ void bmActorsDestroy(BmGame *g, uint8_t i)
   a->hidden[i] = 1;
   a->touching[i] = 0;
   a->health[i] = 0;
+  a->affinity[i] = 0;
   for (uint8_t k = 0; k < BM_HITS_MAX; k++)
     if (g->hits.source[k] == 1 + i) bmHitsDisarm(g, (uint8_t)(1 + i), g->hits.name[k]);
 }
@@ -1334,6 +1391,21 @@ bool bmAttachmentsEquip(BmGame *g, uint8_t slot, uint32_t key)
   const char *cls = behaviour != BM_DATA_NONE_ID ? bmPackString(g->pPack, behaviour) : NULL;
   if (cls == NULL || !attachKey(g, slot, hashName(cls), 0, key)) bmAttachmentsDetach(g, slot);
   return true;
+}
+
+bool bmAttachmentsUse(BmGame *g, uint32_t key)
+{
+  if (key == 0 || bmInventoryCount(&g->inventory, key) == 0) return false;
+  BmDataTable table;
+  const uint8_t *record;
+  uint16_t behaviour = bmDataFindRecord(g->pPack, key, &table, &record) ? bmDataRecordBehaviour(&table, record) : BM_DATA_NONE_ID;
+  const char *cls = behaviour != BM_DATA_NONE_ID ? bmPackString(g->pPack, behaviour) : NULL;
+  BmActors *a = &g->actors;
+  uint8_t current = a->current, slot = a->currentSlot;
+  bool used = cls != NULL && attachKey(g, BM_GAME_ITEM_SLOT, hashName(cls), 1, key);
+  a->current = current;
+  a->currentSlot = slot;
+  return used;
 }
 
 void bmAttachmentsEquipAll(BmGame *g)

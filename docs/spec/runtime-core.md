@@ -209,12 +209,29 @@ start:
 
 ## 6. Hurt, respawn, doors, start
 
-- **Strike(amount, fromX)**: nothing if `amount <= 0` or `hurtTimer != 0`. `amount -=` the
-  stat Defence (number 3), at least 1. Then play the
+- **Strike(amount, fromX, element, striker)**: nothing if `amount <= 0` or `hurtTimer != 0`.
+  `amount -=` the stat Defence (number 3), at least 1; if `element` is 1 to 3 and
+  `resists[element] != 0`, `amount = max(1, amount / 2)`. Then play the
   effect `hurt`, `hurts += 1`, `hurtTimer = 60`, `vy = -3.0`, `vx = away * 2.0` with `away =
   -1` if `fromX > x`, 1 if `fromX < x`, else `-facing`; the player's hits end (section 10);
-  `health -= min(amount, health)`; each of the player's attachments in slot order gets
-  `hit(amount)`; then if `health <= 0`: respawn and `health` = the most.
+  `health -= min(amount, health)`; `striker` (a figure number of section 10, 0xFF for none) is
+  the figure striking the player while each of the player's attachments in slot order gets
+  `hit(amount)` (`strike_back`), 0xFF again after; then if `health <= 0`: respawn and `health`
+  = the most. A hit strikes with its element and source; `hurt_player` with element 0 and the
+  calling object; a hazard with neither.
+- **Mana**: starts at the most (20 + the stat MaxMana, number 1); at the start of a frame
+  (after the frame count goes up) `mana += 1` if `frame % 90 == 0` and it is below the most.
+- **Speed**: while `speedPercent != 0` the body step runs with `runSpeed * max(10, 100 +
+  speedPercent) / 100`.
+- **Quick slots**: in a frame without a screen and without dialogue, L pressed while neither R
+  nor Select is held uses `quick[0]`, Select pressed while neither L nor R is held `quick[1]`,
+  as `use_item` does; before the attachments' frame.
+- **Return** (`returnPending`): first thing in the next frame after the frame count and before
+  mana: every screen is closed; if `savedRoom` is not the room, it is entered as through a door
+  (scripted objects anew, `roomChanges += 1`); `place(savedX, savedY)` keeping `facing`;
+  `doorCooldown = 20`; the camera follows. `savedRoom`, `savedX`, `savedY` are the start room
+  and the player's place at the start, and the room and the save point's place whenever a save
+  is written at a save point.
 - **The most health**: 30 + the stat MaxHealth (number 0), at least 1. The stats' numbers are
   a convention with the game's `enum Stat` (first-items.md §1).
 - **Dialogue** (`say(speaker, line)`): `dialogue = 1` and the two string ids are kept; unless a
@@ -366,7 +383,7 @@ value is dropped and counts as a script error.
 | 35 | `room_detach(slot)` | like `detach`, for the room's slot |
 | 36 | `arm(box, damage, element)` | starts a hit of this figure with its hit boxes named `box` (section 10); arming the same name again replaces it with a new hit |
 | 37 | `disarm(box)` | ends this figure's hits with that box name |
-| 38 | `hit_box(reach, frames, damage)` | starts a hit of this figure with a rectangle `reach` (0..255) pixels ahead for `frames` (1..65535) frames |
+| 38 | `hit_box(reach, frames, damage, element)` | starts a hit of this figure with a rectangle `reach` (0..255) pixels ahead for `frames` (1..65535) frames, of that element (1 to 3; others 0) |
 | 39 | `equip(slot, record)` | slot 0 to 7, record 0 empties it: false if the player has none of the record (nothing changes). Else `equipped[slot] = record`; the class its first field of type `attach` names (its table found by the key among all `DTAB` chunks) is attached in the player's slot of the same number, its first variable of type record set to the record before `attached()`; without such a class the slot is emptied |
 | 40 | `owner_lock(frames)` | from a player's attachment: `lockTimer = frames` (0..65535) |
 | 41 | `owner_play_anim(name)` | from a player's attachment: the player's sheet's animation of that name from its start; `animHeld = 2` if `lockTimer != 0`, else 1. Unknown: nothing |
@@ -382,6 +399,14 @@ value is dropped and counts as a script error.
 | 64 | `floor_y()` | `FIX` of the top of the first floor at or below `(INT(x), INT(y) - 1)` (jump-through floors count), the room's height if there is none |
 | 65, 66 | `say(speaker, line)`, `dialogue_done()` | the dialogue box (section 6) |
 | 67 | `player_lock(frames)` | `lockTimer = frames` (0..65535) |
+| 69 | `add_resist(element, n)` | element 1 to 3: `resists[element] += n` (0..255); 0 and others: nothing |
+| 70 | `set_affinity(weak, resists)` | object only: `affinity = (weak in 1..3 ? 1 << weak : 0) \| (resists in 1..3 ? 16 << resists : 0)` |
+| 71 | `strike_back(amount)` | if the figure striking the player now (section 6) is an object that can be struck (section 10): it is struck for `amount` without an element (its affinity applies, `health -=`, 20 frames invulnerable, its hits end, `hit(amount)`); true. Else false |
+| 72 | `add_speed(percent)` | `speedPercent += percent` (-90..300) |
+| 73-76 | `mana()`, `max_mana()`, `restore_mana(n)`, `spend_mana(n)` | the player's mana; the most (20 + stat 1, at least 0); mana += n up to the most; if `n >= 0` and `mana >= n`: mana -= n and true, else false |
+| 77 | `use_item(record)` | false if the player has none of it or its first `attach` field names no Attachment class. Else that class is attached in slot 7 for 1 frame, its first record variable set to the record (it gets `attached()` at once); true |
+| 78 | `return_to_save()` | `returnPending = 1` (section 6, "Return") |
+| 79, 80 | `quick_slot(i)`, `set_quick_slot(i, record)` | `quick[i]` for i 0 to 3 (0 otherwise); set it |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
 (state.md §4): what equipment adds, taken away in its `detached()`, not saved. `stat` (28)
@@ -466,8 +491,10 @@ the first free; a hit started when all are used is dropped. A room entered fresh
    of kind hurt on the frame showing, or its body box (the player's box of section 3, an
    object's box of section 8) if there are none. If any hit rectangle overlaps any of them, it
    is struck with `amount = max(1, damage)`: the bit of `f` is set; the player gets Strike
-   (amount, `FIX(INT(source x))`) (section 6); an object `health -= amount`, 20 frames
-   invulnerable, its hits end, and it gets `hit(amount)`. Then the source hears of it: the
+   (amount, `FIX(INT(source x))`, the hit's element, the source) (section 6); an object takes
+   the element rule first: `amount * 3 / 2` if its `affinity` has bit `element` (weak),
+   `amount / 2` if it has bit `4 + element` (resists), at least 1, element 0 unchanged; then
+   `health -= amount`, 20 frames invulnerable, its hits end, and it gets `hit(amount)`. Then the source hears of it: the
    attachment in the entry's slot, else a source object, gets `struck(amount)`. If the entry
    is no longer the one it was (freed or replaced by those events), stop with it.
 4. A rectangle whose entry is still the same: `frames -= 1`, at 0 it is free.

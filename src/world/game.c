@@ -420,6 +420,8 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   readOptions(g);
   g->actors.seed = 1;
   g->health = (int16_t)bmGameMaxHealth(g);
+  g->mana = (int16_t)bmGameMaxMana(g);
+  g->striker = 0xFF;
   BmResult r = enterRoom(g, (uint32_t)index, true);
   if (r != BM_SUCCESS) return r;
   BmObjectView start;
@@ -433,6 +435,10 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   {
     bmBodyPlace(&g->player, 32, 32);
   }
+  // Until a save point is reached, the Return Feather leads to the start.
+  g->savedRoom = (uint32_t)index;
+  g->savedX = BM_FIX_INT(g->player.x);
+  g->savedY = BM_FIX_INT(g->player.y);
   updateCamera(g);
   updateSprites(g);
   return BM_SUCCESS;
@@ -517,10 +523,51 @@ static void endDialogue(BmGame *g)
 
 bool bmGameStrikePlayer(BmGame *g, int32_t amount, int32_t fromX)
 {
+  return bmGameStrikePlayerWith(g, amount, fromX, 0, 0xFF);
+}
+
+int32_t bmGameMaxMana(const BmGame *g)
+{
+  int32_t max = BM_GAME_PLAYER_MANA + bmInventoryStat(&g->inventory, BM_STAT_MAX_MANA);
+  return max < 0 ? 0 : max > 32767 ? 32767 : max;
+}
+
+void bmGameReturnToSave(BmGame *g)
+{
+  g->returnPending = 1;
+}
+
+// The Return Feather's journey (bmGameReturnToSave), at a frame's start.
+static void returnToSave(BmGame *g)
+{
+  g->returnPending = 0;
+  while (g->screens.count != 0) bmScreensClose(g);
+  if (g->savedRoom != g->roomIndex)
+  {
+    if (enterRoom(g, g->savedRoom, true) != BM_SUCCESS) return;
+    g->roomChanges++;
+  }
+  int8_t facing = g->player.facing;
+  bmBodyPlace(&g->player, g->savedX, g->savedY);
+  g->player.facing = facing;
+  g->doorCooldown = 20;
+  updateCamera(g);
+}
+
+bool bmGameUseQuick(BmGame *g, uint8_t slot)
+{
+  if (slot >= BM_INVENTORY_QUICK || g->inventory.quick[slot] == 0) return false;
+  return bmAttachmentsUse(g, g->inventory.quick[slot]);
+}
+
+bool bmGameStrikePlayerWith(BmGame *g, int32_t amount, int32_t fromX, uint8_t element, uint8_t striker)
+{
   if (amount <= 0 || g->hurtTimer != 0) return false;
-  // The damage rule (first-items.md §1): less the player's defence, at least 1.
+  // The damage rule (first-items.md §1): less the player's defence, at least 1; then halved
+  // if something the player wears resists the element, at least 1.
   amount -= bmInventoryStat(&g->inventory, BM_STAT_DEFENCE);
   if (amount < 1) amount = 1;
+  if (element != 0 && element < BM_GAME_ELEMENTS && g->resists[element] != 0) amount = amount / 2 < 1 ? 1 : amount / 2;
   bmSoundPlayEffect(&g->sound, "hurt");
   g->hurts++;
   g->hurtTimer = BM_HITS_PLAYER_INVULNERABLE;
@@ -531,7 +578,10 @@ bool bmGameStrikePlayer(BmGame *g, int32_t amount, int32_t fromX)
   for (uint8_t k = 0; k < BM_HITS_MAX; k++)
     if (g->hits.source[k] == BM_HITS_PLAYER) bmHitsDisarm(g, BM_HITS_PLAYER, g->hits.name[k]);
   g->health = (int16_t)(g->health - (amount > g->health ? g->health : amount));
+  // Who struck is known to the attachments' hit() (strike_back: the Thorn Band).
+  g->striker = striker;
   bmAttachmentsPlayerHit(g, amount);
+  g->striker = 0xFF;
   if (g->health <= 0)
   {
     respawn(g);
@@ -546,6 +596,9 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   uint16_t previous = g->keysPrevious;
   uint16_t pressed = (uint16_t)(keys & ~previous);
   g->keysPrevious = keys;
+  if (g->returnPending) returnToSave(g);
+  // Mana comes back slowly (first-items.md §1).
+  if (g->frame % BM_GAME_MANA_EVERY == 0 && g->mana < bmGameMaxMana(g)) g->mana++;
 
   BmBodyInput in = {
     .dx = (int8_t)(((keys & BM_KEY_RIGHT) ? 1 : 0) - ((keys & BM_KEY_LEFT) ? 1 : 0)),
@@ -583,6 +636,13 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     pressed = (uint16_t)(pressed & ~BM_KEY_A);
     in.jumpPressed = false;
   }
+  // The quick slots (first-items.md §1): L uses the first, Select the second (not while L or
+  // R is held: L + R + Select is the debug overlay's).
+  if (g->dialogue == 0)
+  {
+    if ((pressed & BM_KEY_L) && !(keys & (BM_KEY_R | BM_KEY_SELECT))) bmGameUseQuick(g, 0);
+    if ((pressed & BM_KEY_SELECT) && !(keys & (BM_KEY_L | BM_KEY_R))) bmGameUseQuick(g, 1);
+  }
   // Attachments first: what they decide this frame moves the player this frame.
   bmAttachmentsFrame(g, keys, previous);
   // A lock (a swing) takes walking and jumping away; set this frame, it already counts.
@@ -592,7 +652,14 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     in.jumpPressed = false;
     g->lockTimer--;
   }
-  uint32_t events = bmBodyStep(&g->player, &g->playerParams, &g->collision, &g->physics, in);
+  // Heavy armour and the like change the running speed (add_speed).
+  BmBodyParams params = g->playerParams;
+  if (g->speedPercent != 0)
+  {
+    int32_t percent = 100 + g->speedPercent;
+    params.runSpeed = (bm_fix)(params.runSpeed * (percent < 10 ? 10 : percent) / 100);
+  }
+  uint32_t events = bmBodyStep(&g->player, &params, &g->collision, &g->physics, in);
   bmAttachmentsBodyEvents(g, events);
   if (g->hurtTimer) g->hurtTimer--;
   if (g->doorCooldown) g->doorCooldown--;
@@ -620,6 +687,9 @@ void bmGameFrame(BmGame *g, uint16_t keys)
       // Points: the area of a 16x32 marker standing on the point.
       if (g->saveCooldown == 0 && g->player.onGround && overlaps(px - hw, py - h, hw * 2, h, o->x - 8, o->y - 32, 16, 32))
       {
+        g->savedRoom = g->roomIndex;
+        g->savedX = o->x;
+        g->savedY = o->y;
         bmGameWriteSaveGame(g);
         g->saveCooldown = 120;
       }
@@ -697,6 +767,13 @@ static const BmStateField s_gameFields[] = {
   F(lockTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(animHeld, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(health, BM_TYPE_S16, BM_STATE_SAVE | BM_STATE_LINK),
+  F(mana, BM_TYPE_S16, BM_STATE_SAVE | BM_STATE_LINK),
+  F(speedPercent, BM_TYPE_S16, BM_STATE_SNAPSHOT),
+  BM_STATE_ARRAY(BmGame, resists, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_GAME_ELEMENTS),
+  F(returnPending, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(savedRoom, BM_TYPE_U32, BM_STATE_SAVE),
+  F(savedX, BM_TYPE_S32, BM_STATE_SAVE),
+  F(savedY, BM_TYPE_S32, BM_STATE_SAVE),
   F(dialogue, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(dialogueSpeaker, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(dialogueLine, BM_TYPE_U16, BM_STATE_SNAPSHOT),
@@ -731,6 +808,7 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.health, BM_TYPE_S32, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.team, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.invulnerable, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.affinity, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.spawned, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.gone, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   F(actors.seed, BM_TYPE_U32, BM_STATE_SNAPSHOT),

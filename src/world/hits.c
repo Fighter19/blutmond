@@ -217,6 +217,31 @@ static uint8_t hitRects(const BmGame *g, uint8_t k, Rect *pOut)
   return 1;
 }
 
+int32_t bmHitsElement(int32_t amount, uint8_t affinity, uint8_t element)
+{
+  if (element == 0 || element > 3) return amount;
+  if (affinity & (1u << element)) amount = amount * 3 / 2;
+  else if (affinity & (16u << element)) amount /= 2;
+  return amount < 1 ? 1 : amount;
+}
+
+// Object i is struck for `amount` (the element applied already).
+static void strikeObject(BmGame *g, uint8_t i, int32_t amount)
+{
+  BmActors *a = &g->actors;
+  a->health[i] -= amount;
+  a->invulnerable[i] = BM_HITS_INVULNERABLE;
+  endHitsOf(g, (uint8_t)(i + 1));
+  bmActorsEvent(g, i, BM_SCRIPT_EVENT_hit, amount);
+}
+
+bool bmHitsStrikeObject(BmGame *g, uint8_t i, int32_t amount, uint8_t element)
+{
+  if (i >= g->actors.count || amount <= 0 || !strikable(g, (uint8_t)(i + 1))) return false;
+  strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], element));
+  return true;
+}
+
 // Figure `target` is struck by hit `k` for `amount`.
 static void strike(BmGame *g, uint8_t k, uint8_t target, int32_t amount)
 {
@@ -228,16 +253,12 @@ static void strike(BmGame *g, uint8_t k, uint8_t target, int32_t amount)
   anchorOf(g, source, &sx, &sy, &flip);
   if (target == BM_HITS_PLAYER)
   {
-    bmGameStrikePlayer(g, amount, BM_FIX(sx));
+    bmGameStrikePlayerWith(g, amount, BM_FIX(sx), h->element[k], source);
   }
   else
   {
-    BmActors *a = &g->actors;
     uint8_t i = (uint8_t)(target - 1);
-    a->health[i] -= amount;
-    a->invulnerable[i] = BM_HITS_INVULNERABLE;
-    endHitsOf(g, target);
-    bmActorsEvent(g, i, BM_SCRIPT_EVENT_hit, amount);
+    strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], h->element[k]));
   }
   // The source hears of it: the attachment that armed the hit, or the object.
   if (slot != BM_HITS_NO_SLOT) bmAttachmentsEvent(g, slot, BM_SCRIPT_EVENT_struck, amount);
@@ -269,7 +290,8 @@ void bmHitsFrame(BmGame *g)
       for (uint8_t a = 0; a < n && !touches; a++)
         for (uint8_t b = 0; b < m && !touches; b++) touches = overlap(&hit[a], &hurt[b]);
       if (!touches) continue;
-      // The damage rule of this step: the hit's damage, at least 1 (no defence yet).
+      // The hit's damage, at least 1; the target's defence (the player's) and its weakness
+      // or resistance to the hit's element follow in strike().
       int32_t amount = h->damage[k] < 1 ? 1 : h->damage[k];
       strike(g, k, f, amount);
       // The events may have ended or replaced this hit.

@@ -85,7 +85,7 @@ __attribute__((used, aligned(4), section(".bm_rom_slot"))) const volatile BmRomP
 #  define BM_SNAPSHOT_FRAME 0
 #endif
 
-#define BM_SNAPSHOT_CAPACITY 2048
+#define BM_SNAPSHOT_CAPACITY 3072
 
 /// Snapshot mailboxes, written and read by tools (tools/bm_mgba_run --poke/--dump).
 typedef struct BmStateMailbox

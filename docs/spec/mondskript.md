@@ -249,7 +249,7 @@ state Returning { begin: disarm(#bite); ... }
 `arm(#box, damage, element)` makes the hit boxes of that name in the figure's sprite
 (sprite-format.md) live as one hit, on whichever frames have them, until `disarm(#box)`, the
 figure's animation changing or ending, or the figure being struck. `hit_box(reach, frames,
-damage)` is a hit without a drawing: a rectangle `reach` pixels ahead of the figure, as high as
+damage, element)` is a hit without a drawing: a rectangle `reach` pixels ahead of the figure, as high as
 its body, for `frames` frames. Once a frame, after all scripts and animations, the hits are
 tested against the figures of other teams ([runtime-core.md](runtime-core.md) §10): a hit
 strikes each figure at most once; a struck figure loses health, cannot be struck again for a
@@ -272,7 +272,7 @@ state Swing { begin:
   owner_lock(Item.startup + Item.recovery);
   owner_play_anim(Item.swing);
   sleep(Item.startup);
-  hit_box(Item.reach, 3, Item.attack + stat(Stat.Attack));
+  hit_box(Item.reach, 3, Item.attack + stat(Stat.Attack), Item.element);
   sleep(Item.recovery);
   gotostate Ready;
 }

@@ -11,7 +11,7 @@ var int LastAmount;
 var int Taken;        // health the player lost while it was attached
 
 event press(name button) {
-  if button == #Attack { hit_box(Reach, 3, Damage); }
+  if button == #Attack { hit_box(Reach, 3, Damage, Element.None); }
 }
 
 event struck(int amount) {

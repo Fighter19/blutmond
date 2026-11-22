@@ -10,4 +10,6 @@ struct Enemy {
   ubyte  patience         = 5;      // seconds of chasing before it gives up anyway
   record<Consumable> drop;          // what it may leave behind when defeated
   ubyte  drop_chance      = 0;      // in percent
+  Element weak;                     // takes x 1.5 from this element (first-items.md §1)
+  Element resists;                  // takes x 0.5 from this one
 }

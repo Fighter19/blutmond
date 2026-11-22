@@ -8,9 +8,11 @@ class Bat extends Actor;
 // be given another kind with the property Kind.
 var(Combat) record<Enemy> Kind = #Bat;
 var int Tired;
+var int Roll;
 
 event spawn() {
   health = Kind.health;
+  set_affinity(Kind.weak, Kind.resists);
 }
 
 // Struck by the player: it flies home, or it is gone once its health is.
@@ -68,8 +70,9 @@ state Defeated {
 begin:
   disarm(#bite);
   hide();
-  // Now and then it leaves something behind.
-  if random(100) < Kind.drop_chance { spawn_with(#Drop, Kind.drop); }
+  // Now and then it leaves something behind: each point of luck adds 2 % (first-items.md §1).
+  Roll = random(100);
+  if Kind.drop_chance > 0 && Roll < Kind.drop_chance + 2 * stat(Stat.Luck) { spawn_with(#Drop, Kind.drop); }
 }
 
 defaultproperties {

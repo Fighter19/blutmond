@@ -17,10 +17,21 @@ And a first boss: Vesper, the moon bat, in a third room (the boss hall), with an
 speaks (`say`), a fight with dives (an armed bite) and fireballs (objects made at run time
 that arm their own hit box), a health bar, and the Iron Helm it drops; defeated it stays so.
 The bat drops a potion half of the time. The autopilot plays all of it, and the picture at
-frame 4100 is the same on the PC and the GBA. Not yet as the plan has it: the roles (`role item, equip(...)`, they come
-with structures.md step 4), the Data tab (structures.md step 5), icons and sounds; the
-scripts the other `behaviour` fields name do not exist yet. Armour names its slot with an enum
-`EquipSlot` instead of a byte. Steps 3 to 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
+frame 4100 is the same on the PC and the GBA. Steps 3 and 4 since then: the element rule
+(weak x 1.5, resists x 0.5; the bat's kind is weak to Holy, enemies name `weak` and `resists`,
+armour's `resists` counts while worn: the Ember Cloak halves fire); `ArmourHeavy` (Chain Mail:
+6 % slower) and `ArmourThorns` (the Thorn Band strikes back for 2 through `strike_back` from
+its `hit()`); mana (20 plus MaxMana, 1 back every 90 frames); consumables used through their
+behaviour (`use_item` attaches it for a frame in slot 7): `UseRestore` for potions and the
+mana vial (nothing taken when nothing would be restored), `UseReturn` for the Return Feather
+(to the last save point, or the start); the quick slots (L and Select), set in the Items page
+with L and R; luck adds 2 % per point to the bat's drop. Not yet as the plan has it: the roles
+(`role item, equip(...)`, they come with structures.md step 4), the Data tab (structures.md
+step 5), icons and sounds, the stat preview of the Blood Ring's trade-off, a "no" sound;
+the Antidote's cure and the Fire Flask wait for steps 6 and 7 (effects, projectiles); the new
+items are not placed in the level yet (step 5, the room with the chests). Weapons strike with
+their element (`hit_box` takes one: the Flame Brand burns, its `#Ignite` waits for step 7). Armour names its slot with an enum
+`EquipSlot` instead of a byte. Steps 5 to 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

@@ -25,7 +25,11 @@
 #define BM_GAME_MAX_OBJECTS 64
 #define BM_GAME_MAX_SHEETS 8
 #define BM_GAME_MAX_OAM 48
-#define BM_GAME_PLAYER_HEALTH 30   // until the stat MaxHealth gives it (first-items.md §1)
+#define BM_GAME_PLAYER_HEALTH 30   // the base the stat MaxHealth adds to (first-items.md §1)
+#define BM_GAME_PLAYER_MANA 20     // the base the stat MaxMana adds to
+#define BM_GAME_MANA_EVERY 90      // frames per point of mana coming back
+#define BM_GAME_ELEMENTS 4         // element values 0 (none) to 3; the game's enum names them
+#define BM_GAME_ITEM_SLOT 7        // the attachment slot an item being used takes (use_item)
 
 /// Animations the engine's player looks for in the sprite called "player".
 enum { BM_PLAYER_ANIM_IDLE, BM_PLAYER_ANIM_RUN, BM_PLAYER_ANIM_JUMP, BM_PLAYER_ANIM_FALL, BM_PLAYER_ANIM_CLIMB, BM_PLAYER_ANIM_COUNT };
@@ -68,6 +72,14 @@ typedef struct BmGame
   uint16_t lockTimer;              // frames the player cannot walk or jump (owner_lock)
   uint8_t animHeld;                // 1: a script's animation plays (owner_play_anim); 2: until the lock ends
   int16_t health;                  // the player's; at 0 they start again at the last safe place
+  int16_t mana;                    // the player's; spent by spells, back 1 every 90 frames
+  int16_t speedPercent;            // added to the player's running speed (add_speed: heavy armour)
+  uint8_t resists[BM_GAME_ELEMENTS];   // per element: what the player wears that resists it
+  uint8_t striker;                 // the figure striking the player right now (hits.h), else 0xFF
+  uint8_t returnPending;           // bmGameReturnToSave asked for: done at the next frame's start
+  // Where the last save point was (the Return Feather goes there).
+  uint32_t savedRoom;
+  int32_t savedX, savedY;
   uint16_t doorCooldown;
   uint32_t deaths, roomChanges, hurts, saves;
   uint16_t saveCooldown;
@@ -117,6 +129,20 @@ void bmGameHurtPlayer(BmGame *pGame, int32_t damage);
 /// hit(amount) to their attachments. At 0 health they start again with all of it. False if
 /// they could not be struck.
 bool bmGameStrikePlayer(BmGame *pGame, int32_t amount, int32_t fromX);
+
+/// The same from figure `striker` (hits.h; 0xFF: none) with an element: the player's
+/// resistance to it halves what is left after defence (at least 1).
+bool bmGameStrikePlayerWith(BmGame *pGame, int32_t amount, int32_t fromX, uint8_t element, uint8_t striker);
+
+/// The player's most mana: 20 plus the stat MaxMana.
+int32_t bmGameMaxMana(const BmGame *pGame);
+
+/// Brings the player to the last save point (the room is entered anew), the menus closed: at
+/// the start of the next frame, so that a menu's script that asked for it finishes first.
+void bmGameReturnToSave(BmGame *pGame);
+
+/// Uses the item on quick slot `slot` (0: L, 1: Select) if the player has one.
+bool bmGameUseQuick(BmGame *pGame, uint8_t slot);
 
 /// Plays the player's animation named `name` (string id) for a script: the engine does not
 /// choose another until the lock is over (or, without a lock, until it has finished).

@@ -164,7 +164,7 @@ static void testTheBatChasesHitsAndGoesHome(void)
   TEST_ASSERT(s_game.actors.y[bat] > y0);
 
   // A save state in the middle of the chase continues exactly the same.
-  static uint8_t snap[2048];
+  static uint8_t snap[3072];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
@@ -308,7 +308,7 @@ static void testAnAttachmentMakesThePlayerJumpHigher(void)
   TEST_ASSERT(t->fields[2 * BM_SCRIPT_MAX_FIELDS + 1] == 1);   // Jumps
   TEST_ASSERT(t->fields[2 * BM_SCRIPT_MAX_FIELDS + 2] == 1);   // Presses: the game button Jump
   // A snapshot taken with it attached brings it back, bound to its class.
-  static uint8_t snap[2048];
+  static uint8_t snap[3072];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
@@ -417,7 +417,7 @@ static void testAHitStrikesOnce(void)
   s_game.player.facing = 1;
   frames(1, BM_KEY_B);
   TEST_ASSERT(bmHitsLive(&s_game) == 1);
-  static uint8_t snap[2048];
+  static uint8_t snap[3072];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
@@ -731,6 +731,104 @@ static void testTheMenus(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// first-items.md steps 3 and 4: the element rule (the Ember Cloak resists fire, the bat is weak
+// to holy), Chain Mail slows the player, the Thorn Band strikes back, mana and its refill,
+// items used through their behaviour scripts (UseRestore only when it helps, UseReturn back to
+// the save point), the quick slots on L and Select, and the Items page putting them there.
+static void testElementsArmourAndConsumables(void)
+{
+  startWith(s_data, s_size, "test_room_2");
+  BmInventory *inv = &s_game.inventory;
+  const uint32_t cloak = keyOf("EmberCloak"), mail = keyOf("ChainMail"), thorns = keyOf("ThornBand");
+  const uint32_t potion = keyOf("Potion"), vial = keyOf("ManaVial"), feather = keyOf("ReturnFeather");
+  frames(2, 0);
+
+  // The element rule itself.
+  TEST_ASSERT(bmHitsElement(4, 1u << 3, 3) == 6 && bmHitsElement(4, 16u << 1, 1) == 2);
+  TEST_ASSERT(bmHitsElement(1, 16u << 1, 1) == 1 && bmHitsElement(5, 1u << 3, 1) == 5 && bmHitsElement(5, 0xFF, 0) == 5);
+  // The bat's kind says it is weak to holy.
+  int bat = actorOfClass("Bat");
+  TEST_ASSERT(bat >= 0 && s_game.actors.affinity[bat] == (1u << 3));
+
+  // The Ember Cloak: defence 2, and fire does half of what is left.
+  bmInventoryGive(inv, cloak, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 3, cloak));
+  TEST_ASSERT(s_game.resists[1] == 1 && bmInventoryStat(inv, BM_STAT_DEFENCE) == 2);
+  int32_t before = s_game.health;
+  TEST_ASSERT(bmGameStrikePlayerWith(&s_game, 8, s_game.player.x, 1, 0xFF));
+  TEST_ASSERT(s_game.health == before - 3);   // (8 - 2) / 2
+  s_game.hurtTimer = 0;
+  before = s_game.health;
+  TEST_ASSERT(bmGameStrikePlayerWith(&s_game, 8, s_game.player.x, 0, 0xFF));
+  TEST_ASSERT(s_game.health == before - 6);
+  s_game.hurtTimer = 0;
+
+  // Chain Mail in its place: the cloak's resistance goes, the player runs 6 % slower.
+  bmInventoryGive(inv, mail, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 3, mail));
+  TEST_ASSERT(s_game.resists[1] == 0 && s_game.speedPercent == -6 && bmInventoryStat(inv, BM_STAT_DEFENCE) == 5);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 3, 0) && s_game.speedPercent == 0 && bmInventoryStat(inv, BM_STAT_DEFENCE) == 0);
+
+  // The Thorn Band: the bat that strikes the player is struck for 2.
+  bmInventoryGive(inv, thorns, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 4, thorns));
+  int32_t batHealth = s_game.actors.health[bat];
+  TEST_ASSERT(batHealth > 2);
+  TEST_ASSERT(bmGameStrikePlayerWith(&s_game, 1, s_game.player.x, 0, (uint8_t)(bat + 1)));
+  TEST_ASSERT(s_game.actors.health[bat] == batHealth - 2);
+  // A hazard has no one to strike back.
+  s_game.hurtTimer = 0;
+  TEST_ASSERT(bmGameStrikePlayerWith(&s_game, 1, s_game.player.x, 0, 0xFF));
+  TEST_ASSERT(s_game.actors.health[bat] == batHealth - 2);
+  s_game.hurtTimer = 0;
+
+  // Mana: full at the start, one back every 90 frames.
+  TEST_ASSERT(s_game.mana == 20 && bmGameMaxMana(&s_game) == 20);
+  s_game.mana = 5;
+  uint32_t frame = s_game.frame;
+  frames((int)(90 - frame % 90), 0);
+  TEST_ASSERT(s_game.mana == 6);
+
+  // Items used through their scripts: the vial restores mana and is used up; a potion at full
+  // health is not taken.
+  bmInventoryGive(inv, vial, 2);
+  bmInventoryGive(inv, potion, 2);
+  TEST_ASSERT(bmAttachmentsUse(&s_game, vial));
+  TEST_ASSERT(s_game.mana == 20 && bmInventoryCount(inv, vial) == 1);
+  s_game.health = (int16_t)bmGameMaxHealth(&s_game);
+  TEST_ASSERT(bmAttachmentsUse(&s_game, potion));
+  TEST_ASSERT(bmInventoryCount(inv, potion) == 2);
+  TEST_ASSERT(!bmAttachmentsUse(&s_game, keyOf("LargePotion")));   // none owned
+  frames(2, 0);
+  TEST_ASSERT(s_game.attachments.classKey[BM_GAME_ITEM_SLOT] == 0);   // gone after its frame
+
+  // Quick slots: L uses the first.
+  s_game.health = 10;
+  inv->quick[0] = potion;
+  press(BM_KEY_L);
+  TEST_ASSERT(s_game.health == 25 && bmInventoryCount(inv, potion) == 1);
+
+  // The Return Feather: back to where the game started (no save point reached yet), in the
+  // first room, from the quick slot on Select.
+  bmInventoryGive(inv, feather, 1);
+  inv->quick[1] = feather;
+  press(BM_KEY_SELECT);
+  frames(1, 0);
+  TEST_ASSERT(bmInventoryCount(inv, feather) == 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);   // it started here
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) == s_game.savedX);
+
+  // The Items page: R puts the chosen item on the second quick slot; it shows mana.
+  inv->quick[0] = inv->quick[1] = 0;
+  press(BM_KEY_START);
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Mana"));
+  press(BM_KEY_R);
+  TEST_ASSERT(inv->quick[1] != 0 && bmInventoryCount(inv, inv->quick[1]) > 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // attachable-scripts.md §6, first-items.md §9: objects made at run time. A Drop spawned with a
 // potion falls to the floor and is taken on touch; its place is used again; a snapshot brings
 // spawned objects back; the 8 places are a limit; leaving the room takes them away.
@@ -749,7 +847,7 @@ static void testADropFallsAndIsTaken(void)
   frames(60, 0);
   TEST_ASSERT(a->y[drop] == BM_FIX(160));   // on the floor
   // A snapshot with it comes back with it.
-  static uint8_t snap[2048];
+  static uint8_t snap[3072];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
@@ -848,6 +946,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheSwordDefeatsTheBat);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
+  RUN_TEST(testElementsArmourAndConsumables);
   RUN_TEST(testADropFallsAndIsTaken);
   RUN_TEST(testTheBossIsDefeated);
   free(s_data);

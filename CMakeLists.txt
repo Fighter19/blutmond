@@ -67,6 +67,10 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/key_items.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/armour_stats.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/armour_heavy.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/armour_thorns.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/use_restore.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/use_return.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/drop.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/moon_bat.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/fireball.ms
@@ -848,7 +852,7 @@ if(BM_PLATFORM STREQUAL "host")
         add_test(NAME gdb_session_script_breakpoint
           COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/gdb_session.py $<TARGET_FILE:bmlink>
             ${BM_GBA_BUILD_DIR}/game_autoplay_native.gba ${BM_GBA_BUILD_DIR}/game_autoplay_native.elf
-            ${BM_GBA_BUILD_DIR}/test_level_native.elf assets/test_room/scripts/bat.ms 24)
+            ${BM_GBA_BUILD_DIR}/test_level_native.elf assets/test_room/scripts/bat.ms 26)
         set_tests_properties(gdb_session_script_breakpoint PROPERTIES TIMEOUT 120)
       endif()
       # GBA to GBA (docs/spec/link-protocol.md section 9), two emulated GBAs joined by a cable.

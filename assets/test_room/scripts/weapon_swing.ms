@@ -38,7 +38,7 @@ begin:
   owner_play_anim(Item.swing);
   play_sound(Item.sfx);
   sleep(Item.startup);
-  hit_box(Item.reach, 3, Item.attack + stat(Stat.Attack));
+  hit_box(Item.reach, 3, Item.attack + stat(Stat.Attack), Item.element);
   sleep(Item.recovery);
   gotostate Ready;
 }
