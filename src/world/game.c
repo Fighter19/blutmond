@@ -4,6 +4,7 @@
  */
 #include "game.h"
 
+#include "data.h"
 #include "text.h"
 
 #include "hal.h"
@@ -427,6 +428,9 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   g->health = (int16_t)bmGameMaxHealth(g);
   g->mana = (int16_t)bmGameMaxMana(g);
   g->striker = 0xFF;
+  g->noticeText = 0xFFFF;
+  g->hudDirty = true;
+  bmDataPrepare(pPack);   // the record tables, checked before the first frame needs them
   BmResult r = enterRoom(g, (uint32_t)index, true);
   if (r != BM_SUCCESS) return r;
   BmObjectView start;
@@ -513,6 +517,7 @@ void bmGameSay(BmGame *g, uint16_t speaker, uint16_t line)
   g->dialogueLine = line;
   if (g->screens.count != 0) return;   // drawn when the menu closes
   bmUiClearRect(&g->ui, 0, 15, 32, 5);
+  g->noticeWidth = 0;   // the box covers the notice's place
   bmUiFrame(&g->ui, 0, 15, 30, 5);
   bmUiLabel(&g->ui, 1, 16, bmText(g->pPack, g->language, speaker));
   bmUiText(&g->ui, 2, 17, 27, 2, line, NULL, 0);
@@ -524,6 +529,133 @@ static void endDialogue(BmGame *g)
 {
   g->dialogue = 0;
   bmUiClearRect(&g->ui, 0, 15, 32, 5);
+  g->noticeDrawn = false;   // a notice still running comes back
+  g->noticeWidth = 0;
+}
+
+// --- HUD and notices ---------------------------------------------------------------------------
+
+// The record's text field `title` (string id), or 0xFFFF.
+static uint16_t titleOf(const BmGame *g, uint32_t key)
+{
+  BmDataTable table;
+  const uint8_t *record;
+  if (key == 0 || !bmDataFindRecord(g->pPack, key, &table, &record)) return 0xFFFF;
+  for (uint16_t f = 0; f < table.fieldCount; f++)
+  {
+    BmDataField field = bmDataTableField(&table, f);
+    const char *name = bmPackString(g->pPack, field.name);
+    if (name != NULL && strcmp(name, "title") == 0) return (uint16_t)bmDataRead(&table, record, field.offset, (BmDataType)field.type);
+  }
+  return 0xFFFF;
+}
+
+void bmGameNotice(BmGame *g, uint32_t key, uint16_t nameId, int32_t count)
+{
+  // Only kept here: finding the record's title takes time, the frame an item comes has its
+  // scripts' work already; hudFrame looks it up later.
+  g->noticeKey = key;
+  g->noticeText = nameId;
+  g->noticeTitled = false;
+  g->noticeCount = (uint8_t)(count < 1 ? 1 : count > 99 ? 99 : count);
+  g->noticeTimer = BM_GAME_NOTICE_FRAMES;
+  g->noticeDrawn = false;
+}
+
+// Characters of a UTF-8 text (cells it takes).
+static int cellsOf(const char *t)
+{
+  int n = 0;
+  for (; t != NULL && *t; t++)
+    if (((uint8_t)*t & 0xC0) != 0x80) n++;
+  return n;
+}
+
+// Once a frame without a screen: the HUD where its numbers changed, the notice while it runs.
+static void hudFrame(BmGame *g)
+{
+  BmUi *ui = &g->ui;
+  if (!ui->ready) return;
+  if (g->hudDirty)
+  {
+    g->hudDirty = false;
+    g->noticeDrawn = false;
+    g->noticeWidth = 0;
+    for (int i = 0; i < 4; i++) g->hudShown[i] = -1;
+  }
+  if (!g->hudHidden)
+  {
+    int16_t now[4] = { g->health, (int16_t)bmGameMaxHealth(g), g->mana, (int16_t)bmGameMaxMana(g) };
+    if (g->hudShown[0] < 0)
+    {
+      bmUiFrame(ui, 0, 0, 13, 4);
+      bmUiLabel(ui, 1, 1, "HP");
+      bmUiLabel(ui, 1, 2, "MP");
+    }
+    if (now[0] != g->hudShown[0] || now[1] != g->hudShown[1])
+    {
+      bmUiGauge(ui, 4, 1, 5, now[0], now[1]);
+      bmUiNumber(ui, 9, 1, now[0], 3);
+    }
+    if (now[2] != g->hudShown[2] || now[3] != g->hudShown[3])
+    {
+      bmUiGauge2(ui, 4, 2, 5, now[2], now[3]);
+      bmUiNumber(ui, 9, 2, now[2], 3);
+    }
+    for (int i = 0; i < 4; i++) g->hudShown[i] = now[i];
+    bmUiShow(ui, true);
+  }
+  // The notice, unless the dialogue box is where it goes.
+  if (g->noticeTimer != 0) g->noticeTimer--;
+  if (g->dialogue != 0) return;
+  if (g->noticeTimer == 0)
+  {
+    if (g->noticeWidth != 0) bmUiClearRect(ui, 0, 17, g->noticeWidth, 3);
+    g->noticeWidth = 0;
+    return;
+  }
+  // Spread over frames on the GBA: not in the frame the item came (its scripts have done
+  // enough), the record's title found in the next, drawn in the one after (new glyphs cost).
+  if (g->noticeDrawn || g->noticeTimer >= BM_GAME_NOTICE_FRAMES - 1) return;
+  if (g->noticeKey != 0)
+  {
+    uint16_t title = titleOf(g, g->noticeKey);
+    g->noticeTitled = title != 0xFFFF;
+    if (title != 0xFFFF) g->noticeText = title;
+    g->noticeKey = 0;
+    return;
+  }
+  bool titleIsName = !g->noticeTitled;
+  const char *text = g->noticeText != 0xFFFF ? bmText(g->pPack, g->language, g->noticeText) : NULL;
+  // A name without a record (give_item(#heart_max_up)) shown tidily: "Heart max up".
+  char tidy[24];
+  if (text != NULL && titleIsName)
+  {
+    int n = 0;
+    for (; text[n] != 0 && n < (int)sizeof(tidy) - 1; n++) tidy[n] = text[n] == '_' ? ' ' : text[n];
+    tidy[n] = 0;
+    if (tidy[0] >= 'a' && tidy[0] <= 'z') tidy[0] = (char)(tidy[0] - 'a' + 'A');
+    text = tidy;
+  }
+  char count[8] = "";
+  if (g->noticeCount > 1)
+  {
+    count[0] = ' ';
+    count[1] = 'x';
+    int n = 2;
+    if (g->noticeCount >= 10) count[n++] = (char)('0' + g->noticeCount / 10);
+    count[n++] = (char)('0' + g->noticeCount % 10);
+    count[n] = 0;
+  }
+  int w = cellsOf(text) + cellsOf(count) + 2;
+  if (w > 30) w = 30;
+  if (g->noticeWidth > w) bmUiClearRect(ui, 0, 17, g->noticeWidth, 3);
+  bmUiFrame(ui, 0, 17, w, 3);
+  int used = text != NULL ? bmUiLabel(ui, 1, 18, text) : 0;
+  bmUiLabel(ui, 1 + used, 18, count);
+  g->noticeWidth = (uint8_t)w;
+  g->noticeDrawn = true;
+  bmUiShow(ui, true);
 }
 
 bool bmGameStrikePlayer(BmGame *g, int32_t amount, int32_t fromX)
@@ -741,6 +873,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   bmHitsFrame(g);
   updateCamera(g);
   updateSprites(g);
+  hudFrame(g);
   bmUiPresent(&g->ui);
 
   // This frame's sound; it plays from the next vertical blank.
@@ -778,6 +911,11 @@ static const BmStateField s_gameFields[] = {
   F(speedPercent, BM_TYPE_S16, BM_STATE_SNAPSHOT),
   BM_STATE_ARRAY(BmGame, resists, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_GAME_ELEMENTS),
   F(returnPending, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(noticeKey, BM_TYPE_U32, BM_STATE_SNAPSHOT),
+  F(noticeTitled, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(noticeText, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(noticeCount, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(noticeTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(savedRoom, BM_TYPE_U32, BM_STATE_SAVE),
   F(savedX, BM_TYPE_S32, BM_STATE_SAVE),
   F(savedY, BM_TYPE_S32, BM_STATE_SAVE),
@@ -882,6 +1020,8 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   // What was on the UI layer is not in the state: the screens and the dialogue draw it again.
   bmUiClear(&g->ui);
   bmUiShow(&g->ui, false);
+  g->hudDirty = true;
+  bmDataPrepare(g->pPack);
   bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
   if (g->dialogue) bmGameSay(g, g->dialogueSpeaker, g->dialogueLine);
   bmScreensRedraw(g);
@@ -915,6 +1055,7 @@ void bmGameSetLanguage(BmGame *g, uint8_t language)
   if (language >= bmTextLanguageCount(g->pPack)) return;
   g->language = language;
   bmUiSetLanguage(&g->ui, language);
+  g->noticeDrawn = false;   // its text in the new language
   uint8_t o[8] = { (uint8_t)OPTIONS_MAGIC, (uint8_t)(OPTIONS_MAGIC >> 8), (uint8_t)(OPTIONS_MAGIC >> 16), (uint8_t)(OPTIONS_MAGIC >> 24), language, 0, 0, 0 };
   bmHalSaveWrite(OPTIONS_OFFSET, o, sizeof(o));
 }

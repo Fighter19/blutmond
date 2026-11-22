@@ -94,15 +94,51 @@ bool bmDataFindTable(const BmPack *pPack, uint16_t structure, BmDataTable *pTabl
   return false;
 }
 
-bool bmDataFindRecord(const BmPack *pPack, uint32_t key, BmDataTable *pTable, const uint8_t **ppRecord)
+// Every table of the pack, opened (and so checked) once: a record is looked up by key often
+// (equipping, a menu's lines, an item's title), and checking a table each time cost the GBA
+// tens of thousands of cycles per lookup.
+#define ALL_TABLES 16
+static struct
 {
-  for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, 0); key != 0 && c >= 0; c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, (uint32_t)c + 1))
+  const uint8_t *pPackData;
+  uint32_t packSize, packCrc;
+  uint8_t count;
+  BmDataTable tables[ALL_TABLES];
+} s_all;
+
+static void openAll(const BmPack *pPack)
+{
+  if (s_all.pPackData == pPack->pData && s_all.pPackData != NULL && s_all.packSize == pPack->size && s_all.packCrc == pPack->header.crc32)
+    return;
+  s_all.pPackData = pPack->pData;
+  s_all.packSize = pPack->size;
+  s_all.packCrc = pPack->header.crc32;
+  s_all.count = 0;
+  for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, 0); c >= 0 && s_all.count < ALL_TABLES; c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, (uint32_t)c + 1))
   {
     uint32_t size = 0;
     const uint8_t *p = bmPackChunkData(pPack, (uint32_t)c, &size);
-    if (p == NULL || !bmDataTableOpen(pTable, p, size)) continue;
-    *ppRecord = bmDataRecord(pTable, key);
-    if (*ppRecord != NULL) return true;
+    if (p != NULL && bmDataTableOpen(&s_all.tables[s_all.count], p, size)) s_all.count++;
+  }
+}
+
+void bmDataPrepare(const BmPack *pPack)
+{
+  openAll(pPack);
+}
+
+bool bmDataFindRecord(const BmPack *pPack, uint32_t key, BmDataTable *pTable, const uint8_t **ppRecord)
+{
+  if (key == 0) return false;
+  openAll(pPack);
+  for (uint8_t t = 0; t < s_all.count; t++)
+  {
+    *ppRecord = bmDataRecord(&s_all.tables[t], key);
+    if (*ppRecord != NULL)
+    {
+      *pTable = s_all.tables[t];
+      return true;
+    }
   }
   return false;
 }

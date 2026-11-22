@@ -98,6 +98,11 @@ In serialisation order. Count is the array length.
 | `speedPercent` | s16 |  | snapshot |
 | `resists` | u8 | 4 | snapshot |
 | `returnPending` | u8 |  | snapshot |
+| `noticeKey` | u32 |  | snapshot |
+| `noticeTitled` | u8 |  | snapshot |
+| `noticeText` | u16 |  | snapshot |
+| `noticeCount` | u8 |  | snapshot |
+| `noticeTimer` | u16 |  | snapshot |
 | `savedRoom` | u32 |  | save |
 | `savedX`, `savedY` | s32 |  | save |
 | `dialogue` | u8 |  | snapshot |
@@ -167,7 +172,7 @@ In serialisation order. Count is the array length.
 | `screens.repeat` | u8 |  | transient |
 
 Sizes with this table: a save game is 583 bytes of payload, a link transfer 428, a snapshot
-2046 (2052 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
+2056 (2062 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
 pushed state hold 3072 bytes. Attachment slots 0 to 7 are the
 player's, 8 to 11 the room's. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).

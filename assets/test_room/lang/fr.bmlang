@@ -70,6 +70,8 @@ language fr "Français"
 
 # Key items
 "Coin" = "Pièce"
+"Heart" = "Cœur"
+"A heart-shaped stone, warm to the touch." = "Une pierre en forme de cœur, tiède au toucher."
 "A gold coin." = "Une pièce d’or."
 "Key" = "Clé"
 "Opens a door somewhere." = "Ouvre une porte quelque part."

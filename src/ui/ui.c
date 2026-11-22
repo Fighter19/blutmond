@@ -13,7 +13,7 @@
 
 // Tiles in character block 2: 0 empty, 1-9 the frame (corners, edges, inside, row by row),
 // 10-18 a gauge cell from empty to full in eighths, from 32 the glyph cache.
-enum { TILE_FRAME = 1, TILE_FILL = TILE_FRAME + 4, TILE_GAUGE = 10 };
+enum { TILE_FRAME = 1, TILE_FILL = TILE_FRAME + 4, TILE_GAUGE = 10, TILE_GAUGE_2 = 19 };
 #define TILE_BYTES 32
 #define FONT_HEADER 12
 #define RANGE_SIZE 8
@@ -40,14 +40,15 @@ static void frameTile(uint8_t out[TILE_BYTES], int p)
     }
 }
 
-// A gauge tile filled `eighths` from the left: a dark outline, fill or empty inside.
-static void gaugeTile(uint8_t out[TILE_BYTES], int eighths)
+// A gauge tile filled `eighths` from the left in colour `fill`: a dark outline, fill or empty
+// inside.
+static void gaugeTile(uint8_t out[TILE_BYTES], int eighths, uint8_t fill)
 {
   for (int y = 0; y < 8; y++)
     for (int x = 0; x < 8; x++)
     {
       uint8_t c = 0;
-      if (y >= 1 && y <= 6) c = (y == 1 || y == 6) ? BM_UI_BORDER_DARK : x < eighths ? BM_UI_GAUGE : BM_UI_GAUGE_EMPTY;
+      if (y >= 1 && y <= 6) c = (y == 1 || y == 6) ? BM_UI_BORDER_DARK : x < eighths ? fill : BM_UI_GAUGE_EMPTY;
       uint8_t *b = &out[y * 4 + x / 2];
       *b = (uint8_t)((x & 1) ? (*b & 0x0F) | (c << 4) : (*b & 0xF0) | c);
     }
@@ -55,12 +56,13 @@ static void gaugeTile(uint8_t out[TILE_BYTES], int eighths)
 
 static void loadFixedTiles(void)
 {
-  static const BmColor palette[8] = {
+  static const BmColor palette[9] = {
     { 0 }, { 0x7FFF }, { (uint16_t)(5 | 5 << 5 | 6 << 10) }, { (uint16_t)(3 | 4 << 5 | 10 << 10) },
     { (uint16_t)(26 | 26 << 5 | 28 << 10) }, { (uint16_t)(8 | 9 << 5 | 14 << 10) },
     { (uint16_t)(28 | 6 << 5 | 6 << 10) }, { (uint16_t)(6 | 2 << 5 | 4 << 10) },
+    { (uint16_t)(6 | 14 << 5 | 30 << 10) },
   };
-  bmPaletteLoadBg(BM_UI_PALETTE_BANK * 16, palette, 8);
+  bmPaletteLoadBg(BM_UI_PALETTE_BANK * 16, palette, 9);
   uint8_t tile[TILE_BYTES];
   memset(tile, 0, sizeof(tile));
   bmTilesLoadBg(BM_UI_CHAR_BLOCK, 0, tile, TILE_BYTES);
@@ -73,8 +75,11 @@ static void loadFixedTiles(void)
   for (int e = 0; e <= 8; e++)
   {
     memset(tile, 0, sizeof(tile));
-    gaugeTile(tile, e);
+    gaugeTile(tile, e, BM_UI_GAUGE);
     bmTilesLoadBg(BM_UI_CHAR_BLOCK, (uint16_t)(TILE_GAUGE + e), tile, TILE_BYTES);
+    memset(tile, 0, sizeof(tile));
+    gaugeTile(tile, e, BM_UI_GAUGE_2);
+    bmTilesLoadBg(BM_UI_CHAR_BLOCK, (uint16_t)(TILE_GAUGE_2 + e), tile, TILE_BYTES);
   }
 }
 
@@ -175,8 +180,10 @@ static uint8_t glyphTileFor(BmUi *ui, uint32_t code, bool onFill)
   // Most characters are where they were last time.
   uint8_t *hint = &ui->glyphHint[(code & 127) | (onFill ? 128 : 0)];
   if (*hint != 0 && ui->glyphCode[*hint - 1] == code && slotOnFill(ui, *hint - 1) == onFill) return (uint8_t)(BM_UI_GLYPH_FIRST + *hint - 1);
+  // The cache fills from slot 0: only the slots used so far can hold it (on the GBA each look
+  // at a slot costs, ui.h).
   int freeSlot = -1;
-  for (int s = 0; s < BM_UI_GLYPH_SLOTS; s++)
+  for (int s = 0; s < ui->glyphUsed; s++)
   {
     if (ui->glyphCode[s] == code && slotOnFill(ui, s) == onFill)
     {
@@ -185,6 +192,7 @@ static uint8_t glyphTileFor(BmUi *ui, uint32_t code, bool onFill)
     }
     if (freeSlot < 0 && ui->glyphCode[s] == 0) freeSlot = s;
   }
+  if (freeSlot < 0 && ui->glyphUsed < BM_UI_GLYPH_SLOTS) freeSlot = ui->glyphUsed++;
   if (freeSlot < 0)
   {
     bool used[BM_UI_GLYPH_SLOTS];
@@ -240,7 +248,7 @@ void bmUiFrame(BmUi *ui, int col, int row, int w, int h)
     }
 }
 
-void bmUiGauge(BmUi *ui, int col, int row, int w, int32_t value, int32_t max)
+static void gauge(BmUi *ui, int col, int row, int w, int32_t value, int32_t max, uint8_t first)
 {
   if (!ui->ready || w < 1) return;
   int32_t eighths = max <= 0 || value <= 0 ? 0 : value >= max ? w * 8 : (int32_t)((int64_t)value * w * 8 / max);
@@ -248,8 +256,18 @@ void bmUiGauge(BmUi *ui, int col, int row, int w, int32_t value, int32_t max)
   for (int x = 0; x < w; x++)
   {
     int32_t e = eighths - x * 8;
-    setCell(ui, col + x, row, (uint8_t)(TILE_GAUGE + (e < 0 ? 0 : e > 8 ? 8 : e)));
+    setCell(ui, col + x, row, (uint8_t)(first + (e < 0 ? 0 : e > 8 ? 8 : e)));
   }
+}
+
+void bmUiGauge(BmUi *ui, int col, int row, int w, int32_t value, int32_t max)
+{
+  gauge(ui, col, row, w, value, max, TILE_GAUGE);
+}
+
+void bmUiGauge2(BmUi *ui, int col, int row, int w, int32_t value, int32_t max)
+{
+  gauge(ui, col, row, w, value, max, TILE_GAUGE_2);
 }
 
 // Whether a cell shows the frame's inside (its fill, or a glyph on it).

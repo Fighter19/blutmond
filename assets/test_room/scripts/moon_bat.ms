@@ -24,13 +24,11 @@ event spawn() {
   }
 }
 
-// The bar at the top: its health and the player's.
+// Its bar at the top right (the player's health is in the HUD at the top left).
 function hud() {
-  ui_frame(2, 0, 26, 4);
-  ui_label(3, 1, "Vesper");
-  ui_gauge(12, 1, 15, health * 100 / Health);
-  ui_label(3, 2, "Health");
-  ui_gauge(12, 2, 15, player_health() * 100 / max_health());
+  ui_frame(14, 0, 16, 3);
+  ui_label(15, 1, "Vesper");
+  ui_gauge(22, 1, 7, health * 100 / Health);
   ui_show(true);
 }
 
@@ -111,7 +109,7 @@ begin:
   disarm(#bite);
   Defeated = true;
   player_lock(400);
-  ui_clear(2, 0, 26, 4);
+  ui_clear(14, 0, 16, 3);
   Shots = 0;
   while Shots < 6 {
     hide();

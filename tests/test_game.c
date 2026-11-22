@@ -231,7 +231,7 @@ static void testTheItemTables(void)
 {
   start();
   static const struct { const char *table; uint16_t records; } tables[] = {
-    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 6 }, { "Armour", 8 }, { "KeyItem", 2 } };
+    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 6 }, { "Armour", 8 }, { "KeyItem", 3 } };
   for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++)
   {
     BmDataTable t;
@@ -716,7 +716,8 @@ static void testTheMenus(void)
   press(BM_KEY_B);
   TEST_ASSERT(uiShows("Kurzschwert") && uiShows("Ausr"));   // Ausrüstung
   press(BM_KEY_B);
-  TEST_ASSERT(s_game.screens.count == 0 && !s_game.ui.shown);
+  // The menus closed: the layer shows only the HUD again.
+  TEST_ASSERT(s_game.screens.count == 0 && s_game.ui.shown && uiShows("HP") && !uiShows("Ausr"));
   bmGameSetLanguage(&s_game, 0);
   TEST_ASSERT(bmStateRead(&block, 1, snap, size) == BM_STATE_OK && bmGameAfterLoad(&s_game) == BM_SUCCESS);
   TEST_ASSERT(s_game.screens.count == 1 && uiShows("Equipment") && uiShows("Short Sword"));
@@ -911,6 +912,16 @@ static void testADropFallsAndIsTaken(void)
   bmBodyPlace(&s_game.player, 300, 160);
   frames(3, 0);
   TEST_ASSERT(bmInventoryCount(&s_game.inventory, potion) == 1 && a->gone[drop] && a->hidden[drop]);
+  // The HUD at the top left (health and mana), and a notice of what was taken at the bottom
+  // left a couple of frames later, gone after two seconds.
+  frames(3, 0);
+  TEST_ASSERT(s_game.ui.shown && uiShows("HP") && uiShows("MP") && uiShows("Potion"));
+  TEST_ASSERT(cellChar(&s_game.ui, 1, 18) == 'P');
+  s_game.health = 7;
+  frames(1, 0);
+  TEST_ASSERT(cellChar(&s_game.ui, 11, 1) == '7' && cellChar(&s_game.ui, 10, 1) != '3');
+  frames(BM_GAME_NOTICE_FRAMES, 0);
+  TEST_ASSERT(!uiShows("Potion") && uiShows("HP"));
   // Its place is taken by the next one; the rest of the 8 fill up, then no more.
   TEST_ASSERT(bmActorsSpawn(&s_game, stringId("Drop"), BM_FIX(100), BM_FIX(100), potion) && a->count == room + 1 && !a->gone[drop]);
   while (a->count < BM_ACTORS_MAX) TEST_ASSERT(bmActorsSpawn(&s_game, stringId("Drop"), BM_FIX(400), BM_FIX(100), potion));
@@ -953,7 +964,8 @@ static void testTheBossIsDefeated(void)
     bmVideoWaitFrame();
     bmGameFrame(&s_game, bmAutopilotKeys(&pilot, &s_game));
   }
-  TEST_ASSERT(s_game.screens.count == 0 && !s_game.ui.shown);
+  // The boss's bar is gone; the HUD stays.
+  TEST_ASSERT(s_game.screens.count == 0 && !uiShows("Vesper") && uiShows("HP"));
   // A save game keeps it defeated (the Iron Helm on, too).
   TEST_ASSERT(bmGameWriteSaveGame(&s_game));
   TEST_ASSERT(bmGameReadSaveGame(&s_game));

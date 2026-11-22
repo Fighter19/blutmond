@@ -517,7 +517,8 @@ instead of its sheet's bank.
 
 **The UI layer** (`src/ui/ui.h`): background 3, character block 2, screen block 25, priority 0,
 background palette bank 15, 30 x 20 cells of 8 x 8. Tiles: 0 empty, 1-9 a frame's pieces, 10-18
-a gauge cell from empty to full in eighths, 32-255 a cache of glyphs (pack-format.md §3.1), each
+a gauge cell from empty to full in eighths (red), 19-27 the same in the second gauge colour
+(blue), 32-255 a cache of glyphs (pack-format.md §3.1), each
 on a transparent ground or on a frame's inside; a glyph is made when it is drawn, a tile no cell
 shows is taken again when the cache is full. Texts are shown in the language chosen. The layer
 is presentation: not in the state. After a state is loaded it is cleared and hidden, the blend
@@ -531,6 +532,21 @@ layer; the new one gets `opened()`. `close_screen()`: the top one gets `closed()
 removed; if one is left, every open screen redraws (`opened()` from the bottom, the layer
 cleared first); if none, the layer is cleared, hidden unless a dialogue is shown, and the blend
 switched off.
+
+**The HUD and notices** (in a game frame without a screen, after the sprites, before the
+layer is presented): unless the debug overlay is shown (it takes the place), a frame of 13 x 4
+cells at (0, 0) with `HP` at (1, 1) and `MP` at (1, 2), gauges of 5 cells at (4, 1) (health of
+the most, red) and (4, 2) (mana of the most, blue) and the numbers in 3 cells at (9, 1) and
+(9, 2), drawn again only where a value changed; the layer is shown. When the layer was cleared
+(a state loaded, the last screen closed, the overlay hidden) all of it is drawn again.
+`give(record, n)` and `give_item(name)` that add something set the **notice**: the record (its
+`title` is looked up later), the name as a fallback, the amount, 120 frames. Each such frame
+counts it down; while the dialogue box is shown nothing more happens. In the frame it was set
+nothing is drawn, in the next the title is looked up, in the one after a frame of `w x 3` cells
+at (0, 17) is drawn with the title (or the name, `_` as spaces and the first letter upper case)
+at (1, 18), followed by ` xN` if more than one came; `w` = its characters + 2, at most 30. At 0
+the cells are cleared. (The steps keep the GBA in its frame: the frame an item comes has its
+scripts' work, a title lookup and new glyphs cost time.)
 
 **A screens' frame**: buttons that changed go to the top screen as `press(name)` or
 `release(name)`, in the order Up, Down, Left, Right, A, B, Start, Select, L, R (names `#Up` ...

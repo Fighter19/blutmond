@@ -55,6 +55,10 @@ bool bmDataTableOpen(BmDataTable *pTable, const uint8_t *pData, uint32_t size);
 /// The table of the structure with this name (string id) in the pack.
 bool bmDataFindTable(const BmPack *pPack, uint16_t structure, BmDataTable *pTable);
 
+/// Opens (and checks) every table of the pack now, so that the first lookup of a record does
+/// not pay for it in the middle of a game frame. bmDataFindRecord does it when the pack changed.
+void bmDataPrepare(const BmPack *pPack);
+
 /// The table that holds the record with this key, and the record (any structure).
 bool bmDataFindRecord(const BmPack *pPack, uint32_t key, BmDataTable *pTable, const uint8_t **ppRecord);
 

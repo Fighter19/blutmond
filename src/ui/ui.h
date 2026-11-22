@@ -35,8 +35,8 @@
 #define BM_UI_GLYPH_SLOTS 224
 
 /// Colours of the UI palette (bank 15): 1 ink, 2 the ink's shadow, 3 a frame's inside, 4 and
-/// 5 its border (light, dark), 6 a gauge's fill, 7 its empty part.
-enum { BM_UI_INK = 1, BM_UI_SHADOW, BM_UI_FILL, BM_UI_BORDER, BM_UI_BORDER_DARK, BM_UI_GAUGE, BM_UI_GAUGE_EMPTY };
+/// 5 its border (light, dark), 6 a gauge's fill, 7 its empty part, 8 the second gauge colour.
+enum { BM_UI_INK = 1, BM_UI_SHADOW, BM_UI_FILL, BM_UI_BORDER, BM_UI_BORDER_DARK, BM_UI_GAUGE, BM_UI_GAUGE_EMPTY, BM_UI_GAUGE_2 };
 
 typedef struct BmUi
 {
@@ -49,6 +49,7 @@ typedef struct BmUi
   uint32_t dirtyRows;         // a bit per map row changed since the last present
   const uint8_t *pFontChunks[BM_UI_FONT_CHUNKS];
   uint16_t glyphCode[BM_UI_GLYPH_SLOTS];  // the code point a cache tile holds; 0: free
+  uint8_t glyphUsed;                      // slots from 0 that were ever filled (the rest are free)
   uint32_t glyphOnFill[BM_UI_GLYPH_SLOTS / 32];   // a bit per tile drawn on a frame's inside
   uint8_t glyphHint[256];                 // by (code & 127) and ground: the slot it was in last + 1
   uint8_t map[32 * BM_UI_ROWS];           // the visible rows of screen block 25: tile numbers
@@ -96,6 +97,9 @@ void bmUiFrame(BmUi *pUi, int col, int row, int w, int h);
 
 /// A gauge of w cells: `value` of `max` filled, in eighths of a cell.
 void bmUiGauge(BmUi *pUi, int col, int row, int w, int32_t value, int32_t max);
+
+/// The same filled with the second gauge colour (blue: mana).
+void bmUiGauge2(BmUi *pUi, int col, int row, int w, int32_t value, int32_t max);
 
 /// UTF-8 text from a cell on; '\n' goes to the next row at `col`. Returns the cells written.
 int bmUiLabel(BmUi *pUi, int col, int row, const char *text);

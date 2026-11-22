@@ -30,6 +30,7 @@
 #define BM_GAME_MANA_EVERY 90      // frames per point of mana coming back
 #define BM_GAME_ELEMENTS 4         // element values 0 (none) to 3; the game's enum names them
 #define BM_GAME_ITEM_SLOT 7        // the attachment slot an item being used takes (use_item)
+#define BM_GAME_NOTICE_FRAMES 120  // how long an obtained item is shown
 
 /// Animations the engine's player looks for in the sprite called "player".
 enum { BM_PLAYER_ANIM_IDLE, BM_PLAYER_ANIM_RUN, BM_PLAYER_ANIM_JUMP, BM_PLAYER_ANIM_FALL, BM_PLAYER_ANIM_CLIMB, BM_PLAYER_ANIM_COUNT };
@@ -77,6 +78,19 @@ typedef struct BmGame
   uint8_t resists[BM_GAME_ELEMENTS];   // per element: what the player wears that resists it
   uint8_t striker;                 // the figure striking the player right now (hits.h), else 0xFF
   uint8_t returnPending;           // bmGameReturnToSave asked for: done at the next frame's start
+  // The HUD (top left: health and mana, while no screen is open) and the notice of an item
+  // obtained (bottom left, for a while). What it shows is drawn from the state; only the
+  // notice's text and time are state.
+  uint32_t noticeKey;              // the record obtained (its title is looked up when drawn)
+  uint16_t noticeText;             // string id of its name if it has no title (0xFFFF: none)
+  uint8_t noticeCount;
+  bool noticeTitled;               // noticeText is the record's title (else a name, tidied)
+  uint16_t noticeTimer;            // frames it is still shown
+  bool hudHidden;                  // the debug overlay covers its place
+  bool hudDirty;                   // the layer was cleared: draw it whole
+  bool noticeDrawn;
+  uint8_t noticeWidth;             // cells of the notice on screen, 0 none
+  int16_t hudShown[4];             // health, its most, mana, its most as last drawn
   // Where the last save point was (the Return Feather goes there).
   uint32_t savedRoom;
   int32_t savedX, savedY;
@@ -140,6 +154,10 @@ int32_t bmGameMaxMana(const BmGame *pGame);
 /// Brings the player to the last save point (the room is entered anew), the menus closed: at
 /// the start of the next frame, so that a menu's script that asked for it finishes first.
 void bmGameReturnToSave(BmGame *pGame);
+
+/// The notice at the bottom left: `count` of the record `key` were obtained (its `title`, or
+/// the string `nameId` if it has none), shown for BM_GAME_NOTICE_FRAMES.
+void bmGameNotice(BmGame *pGame, uint32_t key, uint16_t nameId, int32_t count);
 
 /// Uses the item on quick slot `slot` (0: L, 1: Select) if the player has one.
 bool bmGameUseQuick(BmGame *pGame, uint8_t slot);

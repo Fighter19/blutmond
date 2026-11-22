@@ -11,3 +11,8 @@ record Key {
   title = "Key"
   description = "Opens a door somewhere."
 }
+
+record heart_max_up {
+  title = "Heart"
+  description = "A heart-shaped stone, warm to the touch."
+}

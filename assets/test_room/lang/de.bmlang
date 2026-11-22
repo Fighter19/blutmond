@@ -70,6 +70,8 @@ language de "Deutsch"
 
 # Key items
 "Coin" = "Münze"
+"Heart" = "Herz"
+"A heart-shaped stone, warm to the touch." = "Ein herzförmiger Stein, warm, wenn man ihn hält."
 "A gold coin." = "Eine Goldmünze."
 "Key" = "Schlüssel"
 "Opens a door somewhere." = "Öffnet irgendwo eine Tür."

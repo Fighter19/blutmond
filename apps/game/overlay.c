@@ -25,6 +25,7 @@ static void drawFrame(BmUi *ui)
 void bmOverlayInit(BmGame *g, bool shown)
 {
   s_shown = shown && g->ui.ready;
+  g->hudHidden = s_shown;
   if (!s_shown) return;
   drawFrame(&g->ui);
   bmUiShow(&g->ui, true);
@@ -40,8 +41,14 @@ void bmOverlayFrame(BmGame *g, uint16_t keys, uint32_t lines)
   if ((pressed & BM_KEY_SELECT) && (keys & (BM_KEY_L | BM_KEY_R)) == (BM_KEY_L | BM_KEY_R))
   {
     s_shown = !s_shown;
+    // The overlay takes the HUD's place while it is shown.
+    g->hudHidden = s_shown;
     if (s_shown) drawFrame(ui);
-    else bmUiClearRect(ui, 0, 0, 30, 5);
+    else
+    {
+      bmUiClearRect(ui, 0, 0, 30, 5);
+      g->hudDirty = true;
+    }
     bmUiShow(ui, s_shown || ui->shown);
   }
   if (!s_shown) return;

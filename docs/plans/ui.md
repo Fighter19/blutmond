@@ -1,6 +1,8 @@
 # Plan: menus and UI
 
-Status: step 1 built: windows (two, the OBJ window, outside) and colour effects (alpha,
+Status: the HUD (health and mana at the top left, shown outside menus) and a notice of an item
+obtained (bottom left, two seconds) are built in the runtime ([../spec/runtime-core.md](../spec/runtime-core.md)
+§11), not yet as widgets of a HUD layout (step 5). Step 1 built: windows (two, the OBJ window, outside) and colour effects (alpha,
 brighten, darken, semi-transparent sprites) in the software PPU, three line-table slots on the
 GBA (DMA 0 and 3, an H-blank interrupt), `bmWindow*`, `bmBlendSet` and `bmVideoSetLineTable`
 in `video.h`; the scene `scene_effects` matches between the PC and mGBA
