@@ -79,7 +79,8 @@ EM_JS(void, bmWebGameRun, (const char *path, int mode), {
   if (!g || !document.body.contains(g.box)) {
     const box = document.createElement('div');
     box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:10;background:#202228;border:1px solid #555;' +
-                        'box-shadow:0 4px 16px rgba(0,0,0,.5);font:13px system-ui,sans-serif;color:#ddd;';
+                        'box-shadow:0 4px 16px rgba(0,0,0,.5);font:13px system-ui,sans-serif;color:#ddd;' +
+                        'display:flex;flex-direction:column;width:480px;height:350px;';
     const bar = document.createElement('div');
     bar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 6px 4px 10px;cursor:move;user-select:none;';
     const title = document.createElement('span');
@@ -93,21 +94,44 @@ EM_JS(void, bmWebGameRun, (const char *path, int mode), {
     bar.append(title, close);
     const frame = document.createElement('iframe');
     frame.src = 'game.html?editor';
-    frame.style.cssText = 'display:block;width:480px;height:320px;border:0;';
+    frame.style.cssText = 'display:block;flex:1;width:100%;min-height:0;border:0;';
     frame.allow = 'autoplay; gamepad';
-    box.append(bar, frame);
+    // A grip in the bottom right corner resizes the frame; the game keeps its aspect inside.
+    const grip = document.createElement('div');
+    grip.title = 'Drag to resize';
+    grip.style.cssText = 'position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;z-index:1;' +
+                         'background:linear-gradient(135deg,transparent 50%,#888 50%,#888 60%,transparent 60%,transparent 70%,#888 70%,#888 80%,transparent 80%);';
+    box.append(bar, frame, grip);
     document.body.appendChild(box);
+    // While the pointer is held, the page gets its moves (not the game's frame under it).
+    const anchorTopLeft = () => {
+      const r = box.getBoundingClientRect();
+      box.style.left = r.left + 'px';
+      box.style.top = r.top + 'px';
+      box.style.right = box.style.bottom = 'auto';
+      return r;
+    };
     // Drag the frame by its title bar.
     bar.onpointerdown = (e) => {
       if (e.target === close) return;
-      const r = box.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+      const r = anchorTopLeft(), dx = e.clientX - r.left, dy = e.clientY - r.top;
       bar.setPointerCapture(e.pointerId);
       bar.onpointermove = (m) => {
-        box.style.left = Math.max(0, m.clientX - dx) + 'px';
-        box.style.top = Math.max(0, m.clientY - dy) + 'px';
-        box.style.right = box.style.bottom = 'auto';
+        box.style.left = Math.min(Math.max(0, m.clientX - dx), window.innerWidth - 40) + 'px';
+        box.style.top = Math.min(Math.max(0, m.clientY - dy), window.innerHeight - 24) + 'px';
       };
       bar.onpointerup = () => { bar.onpointermove = null; };
+    };
+    grip.onpointerdown = (e) => {
+      e.preventDefault();
+      const r = anchorTopLeft(), x0 = e.clientX, y0 = e.clientY;
+      const barHeight = bar.getBoundingClientRect().height;
+      grip.setPointerCapture(e.pointerId);
+      grip.onpointermove = (m) => {
+        box.style.width = Math.max(240, Math.min(r.width + m.clientX - x0, window.innerWidth - r.left)) + 'px';
+        box.style.height = Math.max(160 + barHeight, Math.min(r.height + m.clientY - y0, window.innerHeight - r.top)) + 'px';
+      };
+      grip.onpointerup = () => { grip.onpointermove = null; };
     };
     g = window.bmGame = { box: box, frame: frame, ready: false, queue: [] };
     if (!window.bmGameListening) {

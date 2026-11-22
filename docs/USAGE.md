@@ -249,7 +249,8 @@ python3 -m http.server -d build-web      # then open http://localhost:8000/bmedi
   cartridge image. Edits live in the page's memory and are gone when it is closed.
 - **Export** downloads the `.gba` file.
 - **Run** (F6, target PC) plays all rooms in a frame at the bottom right of the editor's page
-  (`game.html?editor`, which can be dragged by its title bar). Click into it to play; click the
+  (`game.html?editor`, which can be dragged by its title bar and resized by the grip in its
+  bottom right corner, down to the GBA's 240×160; the picture keeps its aspect). Click into it to play; click the
   editor to edit. With **Live** on, every cook (a saved script, sprite, song or record, F5)
   is sent to it and applied as a reload of mode `module`: the player stays where they are and
   scripts that did not change keep running. **Stop** or the frame's × ends it. The pack
