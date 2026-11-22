@@ -58,7 +58,8 @@ Options: `--theme classic|light|dark` (also in the View menu, remembered), `--ta
 
 - **Run** (F6) cooks all rooms and plays them on the target next to the button: **PC** (the
   game window) or **GBA (Xboo)** (section 4).
-- **Live**: every cook while something runs (a saved file, F5) is pushed in as a hot reload;
+- **Live**: every cook while something runs (a saved file, F5) is pushed in as a reload (mode
+  `module`);
   the player stays where they are.
 - **Sync** (Off, GBA > PC, PC > GBA): section 6.
 - **Stop** ends the PC game and any sync. The GBA keeps running.
@@ -120,6 +121,7 @@ build/bmlink --xboo /dev/parport0 hello                       # what runs there
 build/bmlink --xboo /dev/parport0 ping 5 stats                # speed and error counters
 build/bmlink --xboo /dev/parport0 push level.bmpk restart     # a new level, from the start
 build/bmlink --xboo /dev/parport0 push level.bmpk hot         # ... keeping the game's state
+build/bmlink --xboo /dev/parport0 push level.bmpk module      # ... and the scripts that did not change
 build/bmlink --xboo /dev/parport0 state-get now.bmst          # the game state into a file
 build/bmlink --xboo /dev/parport0 state-put now.bmst          # and back
 build/bmlink --xboo /dev/parport0 ppu-snapshot vram.bmps      # the video state (11 s)
@@ -142,8 +144,11 @@ With the game running (PC or GBA) and **Live** on in the editor, save a room in 
 sprite, a script or a song: the editor cooks and pushes what changed. Over the cable a
 changed room takes a few seconds; the game does not restart and the player stays in place.
 A script with errors is not pushed; the running game keeps the last version that compiled.
+A changed script is one small chunk (each class has its own module); the objects of other
+classes keep running where they were, and those of the changed class keep their variables
+and start their state's code again.
 
-By hand it is `bmcook` and then `bmlink ... push level.bmpk hot`.
+By hand it is `bmcook` and then `bmlink ... push level.bmpk module`.
 
 ## 6. Sync: one plays, the other plays along
 

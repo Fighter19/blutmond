@@ -1,8 +1,11 @@
 # Plan: attachable scripts
 
-Status: step 1 built: one bytecode module per class, native images with a module per class
-([../spec/mondskript.md](../spec/mondskript.md) §10 and §12); the layout hash of section 4
-comes with step 2. Steps 2 to 8 are open. Milestone M14 in [../PLAN.md](../PLAN.md).
+Status: steps 1 and 2 built: one bytecode module per class, native images with a module per
+class ([../spec/mondskript.md](../spec/mondskript.md) §10 and §12), the reload mode `module`
+([../spec/runtime-abi.md](../spec/runtime-abi.md) §5). The layout hash of section 4 is
+worked out by the runtime from the class table instead of being stored in the module header;
+an object whose module changed restarts its state's code whether or not that code changed.
+Steps 3 to 8 are open. Milestone M14 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

@@ -190,7 +190,7 @@ bool Runner::pushHot(const std::string &packPath)
     {
       if (t == RunTarget::Pc && !game_) continue;
       std::vector<std::string> args = linkArgs(t);
-      args.insert(args.end(), {"push", packPath, "hot"});
+      args.insert(args.end(), {"push", packPath, "module"});
       queue({args, "Hot reload", t == RunTarget::Gba, {}, false});
     }
     return true;
@@ -201,7 +201,7 @@ bool Runner::pushHot(const std::string &packPath)
   // A newer cook replaces pushes still waiting.
   while (!jobs_.empty() && jobs_.back().what == "Hot reload") jobs_.pop_back();
   std::vector<std::string> args = linkArgs(target);
-  args.insert(args.end(), {"push", packPath, "hot"});
+  args.insert(args.end(), {"push", packPath, "module"});
   queue({args, "Hot reload", target == RunTarget::Gba, {}, false});
   return true;
 }

@@ -272,6 +272,7 @@ static bool handleApply(BmLive *l, const BmLinkPacket *p)
   {
   case BM_LIVE_RESTART:
   case BM_LIVE_HOT:
+  case BM_LIVE_MODULE:
     st.result = (uint8_t)applyPack(l, st.transferId, (BmLiveMode)st.mode, room[0] ? room : NULL);
     break;
   case BM_LIVE_STATE:

@@ -522,13 +522,80 @@ static uint32_t loadModules(BmGame *g)
   return hash;
 }
 
+// FNV-1a over the class's variables: names, types, flags. Equal means the values still fit.
+static uint32_t layoutHash(const BmGame *g, const BmVmModule *m, uint16_t cls)
+{
+  uint32_t h = 2166136261u;
+  for (uint8_t f = 0; f < bmVmClassFieldCount(m, cls); f++)
+  {
+    uint16_t nameId;
+    uint8_t type, flags;
+    bmVmClassField(m, cls, f, &nameId, &type, &flags, NULL);
+    h = (h ^ hashName(bmPackString(g->pPack, nameId))) * 16777619u;
+    h = (h ^ type) * 16777619u;
+    h = (h ^ flags) * 16777619u;
+  }
+  return h;
+}
+
+static uint32_t stateHash(const BmGame *g, const BmVmModule *m, uint16_t cls, uint8_t state)
+{
+  return state == 0xFF || state >= bmVmClassStateCount(m, cls) ? 0 : hashName(bmPackString(g->pPack, bmVmStateName(m, cls, state)));
+}
+
+void bmActorsPrepareReload(BmGame *g)
+{
+  BmActors *a = &g->actors;
+  a->keep = a->hasModule;
+  a->keepCount = a->count;
+  for (uint8_t i = 0; a->keep && i < a->count; i++)
+  {
+    uint16_t cls = a->classInModule[a->classIndex[i]];
+    const BmVmModule *m = moduleOf(a, i);
+    a->keepObject[i] = g->objects[a->object[i]].persistentId;
+    a->keepClass[i] = hashName(bmPackString(g->pPack, bmVmClassName(m, cls)));
+    a->keepModule[i] = a->verifiedHash[a->classModule[a->classIndex[i]]];
+    a->keepLayout[i] = layoutHash(g, m, cls);
+    a->keepState[i] = stateHash(g, m, cls, a->state[i]);
+  }
+}
+
+// After a module reload: what of object i (already of its new class) can be kept.
+// Returns false if it has to start anew.
+static bool keepObject(BmGame *g, uint8_t i)
+{
+  BmActors *a = &g->actors;
+  if (i >= a->keepCount) return false;
+  uint16_t cls = a->classInModule[a->classIndex[i]];
+  const BmVmModule *m = moduleOf(a, i);
+  if (g->objects[a->object[i]].persistentId != a->keepObject[i] || hashName(bmPackString(g->pPack, bmVmClassName(m, cls))) != a->keepClass[i])
+    return false;
+  if (a->verifiedHash[a->classModule[a->classIndex[i]]] == a->keepModule[i]) return true;   // the same script
+  if (layoutHash(g, m, cls) != a->keepLayout[i]) return false;
+  // The variables fit; the code changed: the same state (by name) from its start, or the start
+  // state if there is no such state any more.
+  BmVmInstance fresh;
+  bmVmInstanceInit(m, &fresh, cls);
+  uint8_t state = fresh.state;
+  for (uint8_t s = 0; s < bmVmClassStateCount(m, cls); s++)
+    if (a->keepState[i] != 0 && stateHash(g, m, cls, s) == a->keepState[i]) state = s;
+  a->state[i] = state;
+  a->wait[i] = BM_VM_RUNNING;
+  a->pc[i] = 0;
+  a->timer[i] = 0;
+  return true;
+}
+
 void bmActorsEnterRoom(BmGame *g, bool fresh)
 {
   BmActors *a = &g->actors;
   a->pendingDoor = 0;
   uint32_t hash = loadModules(g);
-  // State made with other scripts does not fit these: start the objects anew.
-  if (hash != a->moduleHash) fresh = true;
+  // State made with other scripts does not fit these: start the objects anew - unless single
+  // modules are being reloaded (bmActorsPrepareReload): then each object is looked at.
+  bool perObject = a->keep && !fresh && hash != a->moduleHash;
+  a->keep = false;
+  if (hash != a->moduleHash && !perObject) fresh = true;
   a->moduleHash = hash;
   if (!a->hasModule)
   {
@@ -549,17 +616,19 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->homeY[n] = BM_FIX(v->y + v->h);
     uint16_t spriteId = bmVmClassSprite(&a->modules[a->classModule[cls]], a->classInModule[cls]);
     a->sheet[n] = sheetNamed(g, spriteId != BM_VM_NONE ? bmPackString(g->pPack, spriteId) : v->className);
-    if (!fresh && (n >= a->count || a->classIndex[n] != (uint16_t)cls)) fresh = true;  // not the room the state was made in
+    if (perObject) a->classIndex[n] = (uint16_t)cls;   // the class table was made anew
+    if (!fresh && !perObject && (n >= a->count || a->classIndex[n] != (uint16_t)cls)) fresh = true;  // not the room the state was made in
     if (fresh) a->classIndex[n] = (uint16_t)cls;
     n++;
   }
   if (!fresh && n != a->count) fresh = true;
   a->count = n;
-  if (!fresh) return;
+  if (!fresh && !perObject) return;
 
   BmVmHost host = hostOf(g);
   for (uint8_t i = 0; i < n; i++)
   {
+    if (!fresh && keepObject(g, i)) continue;
     BmVmInstance inst;
     bmVmInstanceInit(moduleOf(a, i), &inst, a->classInModule[a->classIndex[i]]);
     a->x[i] = a->homeX[i];

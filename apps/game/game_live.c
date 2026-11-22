@@ -37,6 +37,8 @@ static bool usePack(void *pContext, const BmPack *pPack, BmLiveMode mode, const 
     return false;
   }
   // Hot: state kept, the current room (found again by its id) reloaded around the player.
+  // Module: the same, and scripted objects whose class did not change keep running.
+  if (mode == BM_LIVE_MODULE) bmActorsPrepareReload(g);
   char room[64];
   const char *current = bmGameRoomId(g);
   strncpy(room, current != NULL ? current : "", sizeof(room) - 1);

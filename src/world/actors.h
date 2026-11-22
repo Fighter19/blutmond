@@ -37,6 +37,12 @@ typedef struct BmActors
   uint8_t classCount;
   uint8_t classModule[BM_ACTORS_CLASSES];        // which module a class is in
   uint8_t classInModule[BM_ACTORS_CLASSES];      // its index there
+  // A reload of single modules (bmActorsPrepareReload): what each object was before, by
+  // hashes of names, since string ids change from pack to pack.
+  bool keep;
+  uint8_t keepCount;
+  uint16_t keepObject[BM_ACTORS_MAX];  // the object's persistent id
+  uint32_t keepClass[BM_ACTORS_MAX], keepModule[BM_ACTORS_MAX], keepLayout[BM_ACTORS_MAX], keepState[BM_ACTORS_MAX];
   uint8_t object[BM_ACTORS_MAX];       // index into the game's objects
   int8_t sheet[BM_ACTORS_MAX];         // sprite sheet, or -1
   int32_t homeX[BM_ACTORS_MAX], homeY[BM_ACTORS_MAX];
@@ -64,6 +70,13 @@ typedef struct BmActors
 
 /// The module of an actor's class and the class's index in it (for tests and tools).
 const BmVmModule *bmActorsModule(const BmActors *pActors, uint8_t actor, uint16_t *pClassInModule);
+
+/// Before a pack whose scripts may differ in single classes is put in place (reload mode
+/// `module`): notes each object's class, module, variables and state, so that the next
+/// bmActorsEnterRoom keeps every object whose module did not change, keeps the variables of
+/// one whose class still has the same variables (its state's code starts over), and starts
+/// only the others anew.
+void bmActorsPrepareReload(struct BmGame *pGame);
 
 /// Called when a room was entered. `fresh`: objects start anew (a room change or a restart);
 /// otherwise the state was just loaded and only what is derived is rebuilt - unless the scripts

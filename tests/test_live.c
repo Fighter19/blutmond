@@ -220,7 +220,7 @@ static void testFailedTransferLeavesTheGameAlone(void)
   TEST_ASSERT(bmLiveMasterApply(&m, 3, BM_LIVE_HOT, NULL, &st));
   TEST_ASSERT(st.result == BM_LIVE_ERROR_TRANSFER);
   TEST_ASSERT(s_pack.pData == s_level);
-  TEST_ASSERT(bmLiveMasterApply(&m, 0, BM_LIVE_MODULE, NULL, &st));
+  TEST_ASSERT(bmLiveMasterApply(&m, 0, BM_LIVE_HOT_MIGRATE, NULL, &st));
   TEST_ASSERT(st.result == BM_LIVE_ERROR_UNSUPPORTED);
   bmLinkMasterFree(&m);
 }
@@ -286,6 +286,72 @@ static void testScriptsArePushedLive(void)
   bmLinkMasterFree(&m);
 }
 
+static int actorOfClass(const char *name)
+{
+  const BmActors *a = &s_game.actors;
+  for (uint8_t i = 0; i < a->count; i++)
+  {
+    uint16_t cls = 0;
+    const BmVmModule *m = bmActorsModule(a, i, &cls);
+    const char *n = m != NULL ? bmPackString(&s_pack, bmVmClassName(m, cls)) : NULL;
+    if (n != NULL && strcmp(n, name) == 0) return i;
+  }
+  return -1;
+}
+
+// Reload mode `module` (attachable-scripts.md §4): the changed door script is swapped while
+// the bat is in the middle of a sleep; the bat goes on exactly where it was, the door keeps its
+// variables and runs the new code, and only the door's module (and the strings) travel.
+static void testModuleReloadKeepsTheOtherScripts(void)
+{
+  if (s_scripts == NULL) return;
+  BmLinkMaster m;
+  start(&m);
+  // The second room has the bat and a door; the player next to the bat makes it chase, which
+  // it does in steps of sleep(60).
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "test_room_2") == BM_SUCCESS);
+  BmActors *a = &s_game.actors;
+  int bat = actorOfClass("Bat"), door = actorOfClass("Door");
+  TEST_ASSERT(bat >= 0 && door >= 0);
+  if (bat < 0 || door < 0) return;
+  s_game.player.x = a->x[bat];
+  s_game.player.y = a->y[bat] + BM_FIX(40);
+  for (int i = 0; i < 2000 && !(a->wait[bat] == BM_VM_SLEEPING && a->timer[bat] > 20); i++) frame();
+  TEST_ASSERT(a->wait[bat] == BM_VM_SLEEPING);
+  s_paused = true;
+  uint8_t state = a->state[bat], wait = a->wait[bat];
+  uint16_t pc = a->pc[bat], timer = a->timer[bat];
+  int32_t fields[BM_SCRIPT_MAX_FIELDS], doorFields[BM_SCRIPT_MAX_FIELDS];
+  memcpy(fields, &a->fields[bat * BM_SCRIPT_MAX_FIELDS], sizeof(fields));
+  memcpy(doorFields, &a->fields[door * BM_SCRIPT_MAX_FIELDS], sizeof(doorFields));
+  int32_t x = a->x[bat], y = a->y[bat];
+  uint32_t hashBefore = a->moduleHash;
+
+  BmLiveRemote remote;
+  TEST_ASSERT(bmLiveMasterHello(&m, &remote));
+  BmLivePushStats st;
+  TEST_ASSERT(bmLiveMasterPushPack(&m, s_scripts, s_scriptsSize, 78, &remote, &st));
+  BmLiveStatus status;
+  TEST_ASSERT(bmLiveMasterApply(&m, 78, BM_LIVE_MODULE, NULL, &status));
+  TEST_ASSERT(status.result == BM_LIVE_OK);
+  printf("    %u chunks sent (%u bytes)\n", (unsigned)st.chunksSent, (unsigned)st.bytesSent);
+  TEST_ASSERT(st.chunksSent <= 2);
+  TEST_ASSERT(a->moduleHash != hashBefore);
+  // The bat: exactly as it was.
+  TEST_ASSERT(actorOfClass("Bat") == bat && actorOfClass("Door") == door);
+  TEST_ASSERT(a->state[bat] == state && a->wait[bat] == wait && a->pc[bat] == pc && a->timer[bat] == timer);
+  TEST_ASSERT(memcmp(fields, &a->fields[bat * BM_SCRIPT_MAX_FIELDS], sizeof(fields)) == 0 && a->x[bat] == x && a->y[bat] == y);
+  // The door: the same variables, the new code.
+  TEST_ASSERT(memcmp(doorFields, &a->fields[door * BM_SCRIPT_MAX_FIELDS], sizeof(doorFields)) == 0);
+  // The bat sleeps on from where it was: one frame later its timer is one less.
+  s_paused = false;
+  frame();
+  TEST_ASSERT(a->timer[bat] == timer - 1 && a->pc[bat] == pc);
+  for (int i = 0; i < 300; i++) frame();
+  TEST_ASSERT(bm_script_errors == 0);
+  bmLinkMasterFree(&m);
+}
+
 static void testPpuSnapshot(void)
 {
   BmLinkMaster m;
@@ -323,6 +389,7 @@ int main(int argc, char **argv)
   RUN_TEST(testPushWithBitErrors);
   RUN_TEST(testPpuSnapshot);
   RUN_TEST(testScriptsArePushedLive);
+  RUN_TEST(testModuleReloadKeepsTheOtherScripts);
   free(s_level);
   free(s_variant);
   return TEST_RESULT();

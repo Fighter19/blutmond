@@ -31,7 +31,7 @@ Most of this document is the design. Built so far (`src/link/live.h`,
 Not built: the API table of section 1 (scripts call the runtime by the numbers in
 [runtime-core.md](runtime-core.md) §8; the module's header says how many it knows), handles
 (section 2; objects are referred to by their index in the room), the residency table
-(section 4; a room change loads the whole room anew, palette and tiles included), the watchdog, the modes `hot_migrate` and `module`, and storage back
+(section 4; a room change loads the whole room anew, palette and tiles included), the watchdog, the mode `hot_migrate`, and storage back
 ends (section 7; a pack is always one block of memory).
 
 The runtime is loaded once (multiboot or cartridge). Content (packs, script modules, state)
@@ -133,11 +133,12 @@ restart. It is only applied after all data for it has arrived and been checked (
 | `restart` | changed chunks | state arena reset to defaults; start at the given room and `PlayerStart` (or save point) |
 | `hot` | changed chunks; schema hash unchanged | state kept; the current room is reloaded around the player |
 | `hot_migrate` | changed chunks + migration table | state converted with the table (see [state.md](state.md)), then like `hot` |
-| `module` | one script module | module replaced in its slot; entities whose current state code changed restart that state at its beginning |
+| `module` | changed chunks (usually one script module and the strings) | like `hot`, but scripted objects are looked at one by one: an object whose class's module did not change keeps everything; one whose module changed but whose variables are the same (names, types, flags) keeps its variables and starts the code of its state (found by name, else the start state) from the beginning; any other starts anew |
 | `state` | state arena or part of it | the given state is loaded, the room is reloaded |
 
 Version 0.2 implements `restart`, `hot` (the current room is found again by its ID in the new
-pack) and `state`; `hot_migrate` and `module` answer "mode not supported".
+pack; scripted objects start anew if any script changed), `module` and `state`;
+`hot_migrate` answers "mode not supported". The editor pushes with `module`.
 
 ## 6. Native modules
 

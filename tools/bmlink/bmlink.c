@@ -29,7 +29,8 @@
 //   reset                 pull the reset wire (with --reset xboo)
 //   hello                 what the runtime runs and has
 //   ping [count]          round trips, prints the rate
-//   push <pack> [hot|restart[:room]]   send what changed and apply it (default hot)
+//   push <pack> [hot|module|restart[:room]]   send what changed and apply it (default hot; module:
+//                                     scripted objects whose class did not change keep running)
 //   state-get <file> [save|link|snapshot]
 //   state-put <file>      load a state (reload mode "state")
 //   run <frames>          mGBA: let the game run
@@ -487,6 +488,7 @@ int main(int argc, char **argv)
       BmLiveMode mode = BM_LIVE_HOT;
       const char *room = NULL;
       if (i + 1 < argc && strcmp(argv[i + 1], "hot") == 0) i++;
+      else if (i + 1 < argc && strcmp(argv[i + 1], "module") == 0) { mode = BM_LIVE_MODULE; i++; }
       else if (i + 1 < argc && strncmp(argv[i + 1], "restart", 7) == 0)
       {
         mode = BM_LIVE_RESTART;
@@ -506,7 +508,7 @@ int main(int argc, char **argv)
       if (!ok) { failed = 1; break; }
       printf("push %s: %u chunks sent (%u bytes), %u already there, %.2f s; %s: %s, frame %u, room %u, player %d,%d\n", a1,
              (unsigned)st.chunksSent, (unsigned)st.bytesSent, (unsigned)st.chunksResident, now() - t0,
-             mode == BM_LIVE_HOT ? "hot" : "restart", resultName(status.result), (unsigned)status.frame,
+             mode == BM_LIVE_HOT ? "hot" : mode == BM_LIVE_MODULE ? "module" : "restart", resultName(status.result), (unsigned)status.frame,
              (unsigned)status.roomIndex, status.x, status.y);
       if (status.result != BM_LIVE_OK) failed = 1;
       haveRemote = bmLiveMasterHello(&m, &remote);
