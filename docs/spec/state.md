@@ -191,7 +191,7 @@ In serialisation order. Count is the array length.
 | `screens.repeat` | u8 |  | transient |
 
 Sizes with this table: a save game is 583 bytes of payload, a link transfer 429, a snapshot
-2132 (2138 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
+2133 (2139 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
 pushed state hold 3072 bytes. Attachment slots 0 to 7 are the
 player's, 8 to 11 the room's. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).
