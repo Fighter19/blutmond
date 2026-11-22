@@ -900,7 +900,7 @@ dependencies and an order that works.
   conveyors for the GBA and DS Castlevania games),
   [Sonic Physics Guide](https://info.sonicretro.org/Sonic_Physics_Guide) (height arrays and
   angles per tile), [Data Crystal: Super Metroid](https://datacrystal.tcrf.net/wiki/Super_Metroid)
-- Xboo cable and parallel port driver: xcomms by David Murphy (WinterMute), as
+- Xboo cable and parallel port driver: xcomms by Dave Murphy (WinterMute), as
   [Fighter19/xcomms, branch `parport`](https://github.com/Fighter19/xcomms/tree/parport)
   (`source/parport.cxx`, `source/xboo.cxx`, `include/xcomms_cmd.h`, `docs/xcomms.html`)
 - Raspberry Pi / RP2040 link projects: [afska/gba-remote-play](https://github.com/afska/gba-remote-play),

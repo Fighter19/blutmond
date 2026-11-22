@@ -25,7 +25,7 @@ const char *credits()
          "gbadev.net documentation: flash cartridges (\"Bootleg Carts\")\n"
          "\n"
          "LINK CABLE\n"
-         "xcomms by David Murphy (WinterMute), and its branch parport (Fighter19/xcomms): the Xboo "
+         "xcomms by Dave Murphy (WinterMute), and its branch parport (Fighter19/xcomms): the Xboo "
          "cable on the parallel port, multiboot and reset\n"
          "gba-remote-play (afska), gba-multiboot-pico (loopj), gba-link-connection (rodri042) and "
          "the pinout notes by AlexApps99: link projects with a Raspberry Pi and an RP2040\n"
