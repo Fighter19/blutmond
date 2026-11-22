@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="moon_bat.png">
+ <hitbox x="-12" y="-16" w="24" h="16"/>
+ <box kind="hit" name="bite" x="-6" y="-8" w="12" h="8"/>
+ <frame x="0" y="0" w="32" h="32" ax="16" ay="24"/>
+ <frame x="32" y="0" w="32" h="32" ax="16" ay="24"/>
+ <frame x="64" y="0" w="32" h="32" ax="16" ay="24"/>
+ <animation name="idle" loop="1">
+  <step frame="0" duration="6"/>
+  <step frame="1" duration="6"/>
+ </animation>
+ <animation name="dive" loop="1">
+  <step frame="2" duration="4"/>
+ </animation>
+</sprite>

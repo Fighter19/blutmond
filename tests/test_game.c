@@ -728,6 +728,45 @@ static void testTheMenus(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// attachable-scripts.md §6, first-items.md §9: objects made at run time. A Drop spawned with a
+// potion falls to the floor and is taken on touch; its place is used again; a snapshot brings
+// spawned objects back; the 8 places are a limit; leaving the room takes them away.
+static void testADropFallsAndIsTaken(void)
+{
+  startWith(s_data, s_size, "test_room_2");
+  BmActors *a = &s_game.actors;
+  const uint32_t potion = keyOf("Potion");
+  uint8_t room = a->count;
+  TEST_ASSERT(a->roomCount == room);
+  TEST_ASSERT(!bmActorsSpawn(&s_game, stringId("Nothing"), BM_FIX(300), BM_FIX(100), 0));
+  TEST_ASSERT(bmActorsSpawn(&s_game, stringId("Drop"), BM_FIX(300), BM_FIX(100), potion));
+  int drop = room;
+  TEST_ASSERT(a->count == room + 1 && a->spawned[drop] && a->object[drop] == 0xFF && a->sheet[drop] >= 0);
+  TEST_ASSERT((uint32_t)a->fields[drop * BM_SCRIPT_MAX_FIELDS] == potion);
+  frames(60, 0);
+  TEST_ASSERT(a->y[drop] == BM_FIX(160));   // on the floor
+  // A snapshot with it comes back with it.
+  static uint8_t snap[2048];
+  BmStateBlock block = bmGameStateBlock(&s_game);
+  uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
+  TEST_ASSERT(size > 0);
+  TEST_ASSERT(bmStateRead(&block, 1, snap, size) == BM_STATE_OK && bmGameAfterLoad(&s_game) == BM_SUCCESS);
+  TEST_ASSERT(a->count == room + 1 && a->spawned[drop] && !a->gone[drop] && a->object[drop] == 0xFF);
+  // Touched: the player has it, it is gone.
+  bmBodyPlace(&s_game.player, 300, 160);
+  frames(3, 0);
+  TEST_ASSERT(bmInventoryCount(&s_game.inventory, potion) == 1 && a->gone[drop] && a->hidden[drop]);
+  // Its place is taken by the next one; the rest of the 8 fill up, then no more.
+  TEST_ASSERT(bmActorsSpawn(&s_game, stringId("Drop"), BM_FIX(100), BM_FIX(100), potion) && a->count == room + 1 && !a->gone[drop]);
+  while (a->count < BM_ACTORS_MAX) TEST_ASSERT(bmActorsSpawn(&s_game, stringId("Drop"), BM_FIX(400), BM_FIX(100), potion));
+  TEST_ASSERT(!bmActorsSpawn(&s_game, stringId("Drop"), BM_FIX(400), BM_FIX(100), potion));
+  // Through the west door and back: the room's objects only.
+  bmBodyPlace(&s_game.player, 8, 160);
+  frames(2, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0 && a->spawned[0] == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 static uint8_t *readFile(const char *path, uint32_t *pSize)
 {
   FILE *f = fopen(path, "rb");
@@ -765,6 +804,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheSwordDefeatsTheBat);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
+  RUN_TEST(testADropFallsAndIsTaken);
   free(s_data);
   free(s_windData);
   return TEST_RESULT();

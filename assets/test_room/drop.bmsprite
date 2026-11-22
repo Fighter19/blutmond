@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="drop.png">
+ <hitbox x="-5" y="-9" w="10" h="9"/>
+ <frame x="0" y="0" w="16" h="16" ax="8" ay="13"/>
+ <frame x="16" y="0" w="16" h="16" ax="8" ay="13"/>
+ <animation name="idle" loop="1">
+  <step frame="0" duration="20"/>
+  <step frame="1" duration="20"/>
+ </animation>
+</sprite>

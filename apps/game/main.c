@@ -139,6 +139,12 @@ static BmPack s_pack;
 static BmGame s_game BM_EWRAM_BSS;
 static BmAutopilot s_pilot;
 
+#ifdef BM_NATIVE_SLOT_BYTES
+// Room for a pack's native code (src/script/native.c): the images that run it have one.
+uint32_t bm_native_slot[BM_NATIVE_SLOT_BYTES / 4];
+uint32_t bm_native_slot_bytes = BM_NATIVE_SLOT_BYTES;   // not const: a weak constant can be folded away
+#endif
+
 #ifdef BM_LIVE_CONTENT_SMALL
 #  undef BM_LIVE_CONTENT_SIZE
 #  define BM_LIVE_CONTENT_SIZE (40 * 1024)   // the native-script multiboot image (CMakeLists.txt)

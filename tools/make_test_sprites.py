@@ -28,6 +28,13 @@ PALETTE = {
     'a': (255, 231, 99, 255),   # bat eyes
     'b': (214, 222, 239, 255),  # blade
     'c': (156, 107, 41, 255),   # hilt
+    'd': (90, 24, 48, 255),     # moon bat body
+    'e': (52, 16, 40, 255),     # moon bat wings
+    'f': (255, 64, 48, 255),    # moon bat eyes, fire's heart
+    'g': (255, 160, 32, 255),   # fire
+    'h': (255, 240, 140, 255),  # fire's core, glint
+    'i': (140, 96, 56, 255),    # bag
+    'j': (196, 150, 90, 255),   # bag, light
 }
 
 HEAD = [
@@ -124,6 +131,42 @@ BAT_FRAMES = [
 ]
 
 
+# The moon bat (the boss): the bat drawn twice as large in its own colours, with a third frame
+# for the dive (wings folded).
+def doubled(frame, colours):
+    out = []
+    for row in frame:
+        r = "".join(colours.get(c, c) * 2 for c in row)
+        out += [r, r]
+    return out
+
+
+MOON = {'8': 'd', '9': 'e', 'a': 'f'}
+MOON_FRAMES = [doubled(BAT_FRAMES[0], MOON), doubled(BAT_FRAMES[1], MOON), [r.ljust(32, '.')[:32] for r in [
+    "................................", "................................", "................................",
+    "................................", "..............dddd..............", "............dddddddd............",
+    "...........dddddddddd...........", "..........eedddddddddee..........", ".........eeedfddddfddeee.........",
+    "........eeeedfddddfdddeeee......".ljust(32, '.')[:32], "........eeeedddddddddeeee.......".ljust(32, '.')[:32],
+    ".........eeeddddddddeeee........".ljust(32, '.')[:32], "..........eeeddddddeeee.........".ljust(32, '.')[:32],
+    "...........eeeddddeeee..........", "............eeddddee............", ".............dddddd.............",
+    "..............dddd..............", "..............d..d..............", "..............d..d..............",
+] + ["." * 32] * 13]]
+
+FIREBALL_FRAMES = [
+    ["..ff....", ".fggf...", "fghhgf..", "fghhggf.", ".fgggf..", "..ff....", "........", "........"],
+    ["...ff...", "..fggf..", ".fghhgf.", ".fghhgf.", "..fggf..", "...ff...", "........", "........"],
+]
+
+BAG_FRAMES = [
+    ["................", "................", "................", "................", "......hh........",
+     ".....i..i.......", "......ii........", ".....iiii.......", "....ijjjii......", "...ijjjjiii.....",
+     "...ijjjiiii.....", "...iiiiiiii.....", "....iiiiii......", "................", "................", "................"],
+    ["................", "................", "................", ".......h........", "......h.h.......",
+     ".....i.hi.......", "......ii........", ".....iiii.......", "....ijjjii......", "...ijjjjiii.....",
+     "...ijjjiiii.....", "...iiiiiiii.....", "....iiiiii......", "................", "................", "................"],
+]
+
+
 def sheet(frames, columns, w, h):
     rows = (len(frames) + columns - 1) // columns
     img = Image.new("RGBA", (columns * w, rows * h), (0, 0, 0, 0))
@@ -178,6 +221,21 @@ def main():
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [
         ("idle", True, [(0, 8), (1, 8)]),
     ], boxes=[("hit", "bite", -3, -4, 6, 4)])
+    for f in MOON_FRAMES:
+        assert len(f) == 32 and all(len(r) == 32 for r in f), f
+    sheet(MOON_FRAMES, 3, 32, 32).save(os.path.join(out, "moon_bat.png"))
+    sprite_file(os.path.join(out, "moon_bat.bmsprite"), "moon_bat.png", len(MOON_FRAMES), 3, 32, 32, (16, 24), (-12, -16, 24, 16), [
+        ("idle", True, [(0, 6), (1, 6)]),
+        ("dive", True, [(2, 4)]),
+    ], boxes=[("hit", "bite", -6, -8, 12, 8)])
+    sheet(FIREBALL_FRAMES, 2, 8, 8).save(os.path.join(out, "fireball.png"))
+    sprite_file(os.path.join(out, "fireball.bmsprite"), "fireball.png", len(FIREBALL_FRAMES), 2, 8, 8, (3, 6), (-3, -6, 6, 6), [
+        ("idle", True, [(0, 4), (1, 4)]),
+    ], boxes=[("hit", "core", -3, -6, 6, 6)])
+    sheet(BAG_FRAMES, 2, 16, 16).save(os.path.join(out, "drop.png"))
+    sprite_file(os.path.join(out, "drop.bmsprite"), "drop.png", len(BAG_FRAMES), 2, 16, 16, (8, 13), (-5, -9, 10, 9), [
+        ("idle", True, [(0, 20), (1, 20)]),
+    ])
 
 
 if __name__ == "__main__":

@@ -8,4 +8,6 @@ struct Enemy {
   ushort wake_distance    = 56;     // pixels: comes after the player when they are this near
   ushort give_up_distance = 120;    // pixels: flies home when they are this far away
   ubyte  patience         = 5;      // seconds of chasing before it gives up anyway
+  record<Consumable> drop;          // what it may leave behind when defeated
+  ubyte  drop_chance      = 0;      // in percent
 }

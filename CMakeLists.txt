@@ -57,17 +57,19 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/items.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/weapons.bmdata
-  ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata
-  ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/consumables.bmdata
-  ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata
-  ${PROJECT_SOURCE_DIR}/assets/test_room/data/key_items.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong)
 set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS})
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/key_items.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/armour_stats.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/drop.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/drop.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/start_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/equipment_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/items_menu.ms
@@ -248,6 +250,10 @@ if(BM_PLATFORM STREQUAL "gba")
     foreach(target ${BM_GBA_TARGETS})
       add_dependencies(${target} test_level_pack)
       target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/apps/game)
+      if(variant STREQUAL "game_autoplay_native" OR (variant STREQUAL "game" AND NOT target MATCHES "_mb$"))
+        # These run native code (mondskript.md §12): 12 KB of IWRAM for it.
+        target_compile_definitions(${target} PRIVATE BM_NATIVE_SLOT_BYTES=12288)
+      endif()
       if(variant STREQUAL "game_autoplay_native")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_NATIVE_PACK}\"")
         if(target MATCHES "_mb$")

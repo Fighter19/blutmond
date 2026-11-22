@@ -7,18 +7,22 @@
 #include <stddef.h>
 #include <string.h>
 
-// The slot is ordinary zero-initialised data: on the GBA that is IWRAM, the fast memory.
+// The slot is ordinary zero-initialised data: on the GBA that is IWRAM, the fast memory. Its
+// size is the program's choice: one that runs native code defines bm_native_slot and
+// bm_native_slot_bytes (BM_NATIVE_SLOT_BYTES in apps/game/main.c); every other program gets
+// these, which hold nothing, and keeps its fast memory. Not static: a debugger loads the
+// module's symbols at this address.
 #if BM_NATIVE_TARGET != BM_NATIVE_TARGET_NONE
-#define SLOT_SIZE 8192
+__attribute__((weak)) uint32_t bm_native_slot[4];
+__attribute__((weak)) uint32_t bm_native_slot_bytes = sizeof(uint32_t) * 4;
 #else
-#define SLOT_SIZE 16   // nothing can be loaded on this machine
+uint32_t bm_native_slot[4];   // nothing can be loaded on this machine
+uint32_t bm_native_slot_bytes = sizeof(uint32_t) * 4;
 #endif
-// Not static: a debugger loads the module's symbols at this address.
-uint32_t bm_native_slot[SLOT_SIZE / 4];
 
 void *bmVmNativeSlot(uint32_t *pSize)
 {
-  if (pSize != NULL) *pSize = sizeof(bm_native_slot);
+  if (pSize != NULL) *pSize = bm_native_slot_bytes;
   return bm_native_slot;
 }
 

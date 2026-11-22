@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="fireball.png">
+ <hitbox x="-3" y="-6" w="6" h="6"/>
+ <box kind="hit" name="core" x="-3" y="-6" w="6" h="6"/>
+ <frame x="0" y="0" w="8" h="8" ax="3" ay="6"/>
+ <frame x="8" y="0" w="8" h="8" ax="3" ay="6"/>
+ <animation name="idle" loop="1">
+  <step frame="0" duration="4"/>
+  <step frame="1" duration="4"/>
+ </animation>
+</sprite>

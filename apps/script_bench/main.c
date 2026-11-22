@@ -16,6 +16,10 @@
 #include "video.h"
 #include "vm.h"
 
+// Room for the benchmark's native code (src/script/native.c).
+uint32_t bm_native_slot[8192 / 4];
+uint32_t bm_native_slot_bytes = sizeof(bm_native_slot);
+
 extern const uint8_t bm_embedded_pack[];
 extern const uint8_t bm_embedded_pack_end[];
 

@@ -518,7 +518,7 @@ interprets a module that has none (a script pushed since the pack was cooked).
 **Loading** (`src/script/native.h`). When a pack's bytecode modules are opened, the runtime
 looks for a `MODN` chunk for its machine, checks it in the pack (sizes, every address inside
 the image, every module and every entry a relocated address inside it), copies the image into
-its slot (8 KB of IWRAM on the GBA) and adds the slot's address to every listed word. Each
+its slot (12 KB of IWRAM on the GBA) and adds the slot's address to every listed word. Each
 bytecode module then takes the native module made from it (the CRC); from then on `bmVmEvent` and `bmVmStep` call the entry of a
 function instead of interpreting it. A chunk that is refused counts as a script error; the
 scripts then run interpreted. A new pack without native code (a live push) switches back to

@@ -68,6 +68,8 @@ state Defeated {
 begin:
   disarm(#bite);
   hide();
+  // Now and then it leaves something behind.
+  if random(100) < Kind.drop_chance { spawn_with(#Drop, Kind.drop); }
 }
 
 defaultproperties {

@@ -5,6 +5,8 @@ record Bat {
   damage = 1
   speed = 0.75
   wake_distance = 64
+  drop = Potion
+  drop_chance = 50
 }
 
 # A faster bat that hits harder. Set Kind = FastBat on a bat in Tiled to use it.
