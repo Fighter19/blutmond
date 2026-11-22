@@ -33,6 +33,7 @@
 #include "platform/sdl3/ui_sdl3.h"
 #include "animation_panel.h"
 #include "code_edit.h"
+#include "credits.h"
 #include "dialogs.h"
 #include "graphics_view.h"
 #include "palette_panel.h"
@@ -833,8 +834,8 @@ struct Editor
     ui.actions().add({"view.collision", "Collision", "", "C", "", [this] { overview->showCollision = !overview->showCollision; }, nullptr, nullptr});
     ui.actions().add({"view.objects", "Objects", "", "O", "", [this] { overview->showObjects = !overview->showObjects; }, nullptr, nullptr});
     ui.actions().add({"help.version", "Version", "", "", "", [this] {
-      openMessage(app.ui(), "Version", std::string("Blutmond editor\n\nCommit: ") + bm_build_commit + (bm_build_changed ? " (with changes not committed)" : "") +
-                                     "\nBuilt: " + bm_build_date);
+      openVersion(app.ui(), std::string("Blutmond editor\n\nCommit: ") + bm_build_commit + (bm_build_changed ? " (with changes not committed)" : "") +
+                                "\nBuilt: " + bm_build_date, credits());
     }, nullptr, nullptr});
     ui.actions().add({"view.grid", "Grid", "", "G", "", [this] { overview->showGrid = !overview->showGrid; }, nullptr, nullptr});
 

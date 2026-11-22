@@ -365,7 +365,7 @@ if(BM_PLATFORM STREQUAL "host")
       endforeach()
     endif()
     add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
-      editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
+      editor/dialogs.cpp editor/credits.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
       editor/code_edit.cpp editor/script_panel.cpp editor/sound_panel.cpp ${CMAKE_BINARY_DIR}/generated/build_version.c)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
     # The commit and build date for Help > Version: looked at in every build, rewritten when the

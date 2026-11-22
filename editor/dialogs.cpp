@@ -185,6 +185,34 @@ void openMessage(Context &ui, const std::string &title, const std::string &text)
   ui.openPopup(std::move(window), {}, PopupPlacement::Center, true);
 }
 
+void openVersion(Context &ui, const std::string &text, const std::string &credits)
+{
+  auto window = makeWindow("Version", 480);
+  auto *box = window->addChild(std::make_unique<VBox>());
+  auto *label = static_cast<Label *>(box->addChild(std::make_unique<Label>()));
+  label->text = text;
+  label->wrap = true;
+  auto *heading = static_cast<Label *>(box->addChild(std::make_unique<Label>()));
+  heading->text = "Credits";
+  auto scroll = std::make_unique<ScrollContainer>();
+  scroll->customMinSize = {0, 240};
+  scroll->sizeFlagsH = SizeFlags::Fill | SizeFlags::Expand;
+  auto *inner = scroll->addChild(std::make_unique<Label>());
+  auto *list = static_cast<Label *>(inner);
+  list->text = credits;
+  list->wrap = true;
+  list->sizeFlagsH = SizeFlags::Fill | SizeFlags::Expand;
+  box->addChild(std::move(scroll));
+  auto buttons = std::make_unique<HBox>();
+  buttons->addChild(std::make_unique<Control>())->sizeFlagsH = SizeFlags::Fill | SizeFlags::Expand;
+  auto *close = static_cast<Button *>(buttons->addChild(std::make_unique<Button>("Close")));
+  box->addChild(std::move(buttons));
+  Window *w = window.get();
+  Context *ctx = &ui;
+  close->clicked.connect([ctx, w] { ctx->closePopup(w); });
+  ui.openPopup(std::move(window), {}, PopupPlacement::Center, true);
+}
+
 void openConfirm(Context &ui, const std::string &title, const std::string &text, const std::string &okLabel, std::function<void()> onOk)
 {
   auto window = makeWindow(title, 460);

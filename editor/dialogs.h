@@ -34,6 +34,9 @@ void openConfirm(ose::ui::Context &ui, const std::string &title, const std::stri
 /// A window with text and a Close button.
 void openMessage(ose::ui::Context &ui, const std::string &title, const std::string &text);
 
+/// Help > Version: `text` on top, then `credits` in a box that scrolls.
+void openVersion(ose::ui::Context &ui, const std::string &text, const std::string &credits);
+
 /// Delivers results of system file dialogs; call once per frame on the UI thread.
 void pollFileDialogs();
 
