@@ -1,0 +1,12 @@
+# Speakers (structure Speaker in dialogue.ms).
+table Speaker
+
+record Hero {
+  name = "You"
+  portrait = "hero_face"
+}
+
+record Vesper {
+  name = "Vesper"
+  portrait = "vesper_face"
+}

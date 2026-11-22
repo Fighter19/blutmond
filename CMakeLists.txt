@@ -71,6 +71,11 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/armour_thorns.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/use_restore.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/use_return.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/dialogue.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/speakers.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/lines.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/test_room/hero_face.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/vesper_face.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/drop.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/moon_bat.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/fireball.ms

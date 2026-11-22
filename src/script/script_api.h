@@ -105,7 +105,9 @@ typedef enum BmScriptType {
   X(return_to_save,    VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
   X(quick_slot,        RECORD, 1, INT,  VOID,  VOID,  VOID, 0) \
   X(set_quick_slot,    VOID, 2, INT,   RECORD, VOID,  VOID, 0) \
-  X(set_knockback,     VOID, 1, INT,   VOID,  VOID,  VOID, 0)
+  X(set_knockback,     VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(say_line,          VOID, 1, RECORD, VOID,  VOID,  VOID, 0) \
+  X(say_as,            VOID, 2, RECORD, TEXT,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -167,6 +169,10 @@ typedef enum BmScriptType {
 // at the next frame, the menus closed. quick_slot(i), set_quick_slot(i, record): the two quick
 // slots (L and Select use them). set_knockback(percent): how much of a hit's push the object
 // takes (100 at its start, 0 for one that does not budge: a boss, a dummy).
+//
+// say_line(record): the dialogue box with a Line record: its `speaker` (a record whose `name`
+// and `portrait` are shown) and what it `says`. say_as(speaker, text): the same with a line
+// written in the script. The portrait is a sprite of the pack, at the box's left.
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {

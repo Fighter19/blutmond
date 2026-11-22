@@ -35,6 +35,9 @@ PALETTE = {
     'h': (255, 240, 140, 255),  # fire's core, glint
     'i': (140, 96, 56, 255),    # bag
     'j': (196, 150, 90, 255),   # bag, light
+    'k': (222, 160, 120, 255),  # skin, shade
+    'l': (120, 20, 36, 255),    # hair, shade
+    'm': (130, 10, 24, 255),    # coat, shade
 }
 
 HEAD = [
@@ -167,6 +170,59 @@ BAG_FRAMES = [
 ]
 
 
+def face(kind):
+    """A 32 x 32 portrait for the dialogue box: 'hero' (the player's red hair and coat) or
+    'vesper' (the moon bat's face, ears and eyes). Drawn from shapes, row by row."""
+    rows = [['.'] * 32 for _ in range(32)]
+
+    def put(x, y, c):
+        if 0 <= x < 32 and 0 <= y < 32:
+            rows[y][x] = c
+
+    def ellipse(cx, cy, rx, ry, c):
+        for y in range(32):
+            for x in range(32):
+                if ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1.0:
+                    put(x, y, c)
+
+    if kind == 'hero':
+        ellipse(15.5, 34, 14, 9, '4')          # shoulders, the coat
+        ellipse(15.5, 36, 9, 7, 'm')
+        for y in range(25, 29):                # neck
+            for x in range(13, 19):
+                put(x, y, 'k')
+        ellipse(15.5, 26.5, 4, 2, '5')         # collar
+        ellipse(15.5, 15, 8, 10, '3')          # face
+        ellipse(15.5, 7, 10, 6, '2')           # hair on top
+        for y in range(7, 20):                 # hair at the sides
+            put(6, y, '2'); put(7, y, '2'); put(24, y, '2'); put(25, y, '2')
+            if y > 12:
+                put(8, y, 'l'); put(23, y, 'l')
+        for x in range(9, 23):                 # the fringe
+            put(x, 9 + (x % 3 == 0), '2')
+        for x in (12, 13, 18, 19):             # eyes
+            put(x, 15, '7'); put(x, 14, '7' if x in (12, 19) else '5')
+        for x in range(14, 18):                # mouth
+            put(x, 20, 'k')
+        put(15, 21, 'k'); put(16, 21, 'k')
+    else:
+        for i in range(10):                    # ears
+            for x in range(4 + i // 2, 11 - i // 3):
+                put(x, 3 + i, 'e')
+                put(31 - x, 3 + i, 'e')
+        ellipse(15.5, 18, 12, 11, 'd')         # head
+        ellipse(15.5, 30, 15, 6, 'e')          # wings folded below
+        ellipse(10, 15, 3, 2, 'f')             # eyes
+        ellipse(21, 15, 3, 2, 'f')
+        put(10, 15, 'h'); put(21, 15, 'h')
+        for x in range(11, 21):                # mouth
+            put(x, 23, 'e')
+        for y in (24, 25):                     # fangs
+            put(12, y, 'b'); put(19, y, 'b')
+        put(12, 26, 'b'); put(19, 26, 'b')
+    return ["".join(r) for r in rows]
+
+
 def sheet(frames, columns, w, h):
     rows = (len(frames) + columns - 1) // columns
     img = Image.new("RGBA", (columns * w, rows * h), (0, 0, 0, 0))
@@ -232,6 +288,13 @@ def main():
     sprite_file(os.path.join(out, "fireball.bmsprite"), "fireball.png", len(FIREBALL_FRAMES), 2, 8, 8, (3, 6), (-3, -6, 6, 6), [
         ("idle", True, [(0, 4), (1, 4)]),
     ], boxes=[("hit", "core", -3, -6, 6, 6)])
+    # Portraits for the dialogue box (records of Speaker, data/speakers.bmdata): the anchor is
+    # their top left corner.
+    for kind in ("hero", "vesper"):
+        sheet([face(kind)], 1, 32, 32).save(os.path.join(out, kind + "_face.png"))
+        sprite_file(os.path.join(out, kind + "_face.bmsprite"), kind + "_face.png", 1, 1, 32, 32, (0, 0), (0, 0, 32, 32), [
+            ("neutral", True, [(0, 60)]),
+        ])
     sheet(BAG_FRAMES, 2, 16, 16).save(os.path.join(out, "drop.png"))
     sprite_file(os.path.join(out, "drop.bmsprite"), "drop.png", len(BAG_FRAMES), 2, 16, 16, (8, 13), (-5, -9, 10, 9), [
         ("idle", True, [(0, 20), (1, 20)]),

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="vesper_face.png">
+ <hitbox x="0" y="0" w="32" h="32"/>
+ <frame x="0" y="0" w="32" h="32" ax="0" ay="0"/>
+ <animation name="neutral" loop="1">
+  <step frame="0" duration="60"/>
+ </animation>
+</sprite>

@@ -288,12 +288,28 @@ static void animatePlayer(BmGame *g)
   if (advance) bmAnimTick(&g->sheets[g->playerSheet], &g->playerAnim);
 }
 
+// The sprite sheet named by string id `name`, or -1.
+static int8_t sheetNamed(const BmGame *g, uint16_t name)
+{
+  for (uint8_t s = 0; s < g->sheetCount; s++)
+    if (g->sheets[s].nameId == name) return (int8_t)s;
+  return -1;
+}
+
 static void updateSprites(BmGame *g)
 {
   int32_t camX = g->room.cameraX, camY = g->room.cameraY;
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
   bool blink = g->hurtTimer && (g->hurtTimer & 4);
   uint8_t next = 0;
+  // The speaker's portrait in the dialogue box, first: in front of everything.
+  if (g->dialogue != 0 && g->screens.count == 0 && g->dialoguePortrait != 0xFFFF)
+  {
+    int8_t s = sheetNamed(g, g->dialoguePortrait);
+    if (s >= 0)
+      next = (uint8_t)(next + bmSpriteSheetDraw(&g->sheets[s], bmAnimFrameAt(&g->sheets[s], 0, g->frame), BM_GAME_PORTRAIT_X,
+                                                BM_GAME_PORTRAIT_Y, false, 0, next, 4));
+  }
   if (g->playerSheet >= 0)
   {
     const BmSpriteSheet *s = &g->sheets[g->playerSheet];
@@ -512,16 +528,51 @@ int32_t bmGameMaxHealth(const BmGame *g)
 
 void bmGameSay(BmGame *g, uint16_t speaker, uint16_t line)
 {
+  bmGameSayWith(g, speaker, line, 0xFFFF);
+}
+
+bool bmGameRecordField(const BmGame *g, uint32_t key, const char *name, int32_t *pValue)
+{
+  BmDataTable table;
+  const uint8_t *record;
+  if (key == 0 || !bmDataFindRecord(g->pPack, key, &table, &record)) return false;
+  for (uint16_t f = 0; f < table.fieldCount; f++)
+  {
+    BmDataField field = bmDataTableField(&table, f);
+    const char *n = bmPackString(g->pPack, field.name);
+    if (n == NULL || strcmp(n, name) != 0) continue;
+    *pValue = bmDataRead(&table, record, field.offset, (BmDataType)field.type);
+    return true;
+  }
+  return false;
+}
+
+void bmGameSayWith(BmGame *g, uint16_t speaker, uint16_t line, uint16_t portrait)
+{
   g->dialogue = 1;
   g->dialogueSpeaker = speaker;
   g->dialogueLine = line;
+  g->dialoguePortrait = portrait;
   if (g->screens.count != 0) return;   // drawn when the menu closes
   bmUiClearRect(&g->ui, 0, 15, 32, 5);
   g->noticeWidth = 0;   // the box covers the notice's place
   bmUiFrame(&g->ui, 0, 15, 30, 5);
-  bmUiLabel(&g->ui, 1, 16, bmText(g->pPack, g->language, speaker));
-  bmUiText(&g->ui, 2, 17, 27, 2, line, NULL, 0);
+  // With a portrait (a sprite, drawn by updateSprites over the box's left end) the name and
+  // the line move right of it.
+  int x = portrait != 0xFFFF && sheetNamed(g, portrait) >= 0 ? BM_GAME_PORTRAIT_CELLS : 0;
+  bmUiLabel(&g->ui, 1 + x, 16, bmText(g->pPack, g->language, speaker));
+  bmUiText(&g->ui, 2 + x, 17, 27 - x, 2, line, NULL, 0);
   bmUiShow(&g->ui, true);
+}
+
+void bmGameSayLine(BmGame *g, uint32_t line)
+{
+  int32_t speaker = 0, says = 0xFFFF, name = 0xFFFF, portrait = 0xFFFF;
+  bmGameRecordField(g, line, "speaker", &speaker);
+  bmGameRecordField(g, line, "says", &says);
+  bmGameRecordField(g, (uint32_t)speaker, "name", &name);
+  bmGameRecordField(g, (uint32_t)speaker, "portrait", &portrait);
+  bmGameSayWith(g, (uint16_t)name, (uint16_t)says, (uint16_t)portrait);
 }
 
 // A pressed: the dialogue box goes.
@@ -922,6 +973,7 @@ static const BmStateField s_gameFields[] = {
   F(dialogue, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(dialogueSpeaker, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(dialogueLine, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(dialoguePortrait, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(doorCooldown, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(saveCooldown, BM_TYPE_U16, BM_STATE_TRANSIENT),
   F(deaths, BM_TYPE_U32, BM_STATE_SAVE),
@@ -1023,7 +1075,7 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   g->hudDirty = true;
   bmDataPrepare(g->pPack);
   bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
-  if (g->dialogue) bmGameSay(g, g->dialogueSpeaker, g->dialogueLine);
+  if (g->dialogue) bmGameSayWith(g, g->dialogueSpeaker, g->dialogueLine, g->dialoguePortrait);
   bmScreensRedraw(g);
   updateCamera(g);
   updateSprites(g);

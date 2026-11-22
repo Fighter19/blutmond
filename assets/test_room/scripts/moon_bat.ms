@@ -51,9 +51,12 @@ begin:
   play_anim(#idle);
   face_player();
   while !move_toward(x, 96.0, 0.75) { sleep(1); }
-  say("Vesper", "Who wakes me under the blood moon?");
+  // The lines are records (data/lines.bmdata), with the speakers' portraits.
+  say_line(#VesperWakes);
   wait_until(dialogue_done());
-  say("Vesper", "Stay, then. You will not leave.");
+  say_line(#HeroAnswers);
+  wait_until(dialogue_done());
+  say_line(#VesperStays);
   wait_until(dialogue_done());
   player_lock(0);
   health = Health;
@@ -120,7 +123,7 @@ begin:
   }
   hide();
   spawn_with(#Drop, #IronHelm);
-  say("Vesper", "The moon... is setting...");
+  say_line(#VesperFades);
   wait_until(dialogue_done());
   player_lock(0);
   gotostate Gone;

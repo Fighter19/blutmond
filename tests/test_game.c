@@ -942,7 +942,7 @@ static void testTheBossIsDefeated(void)
   start();
   BmAutopilot pilot = {0};
   const uint32_t helm = keyOf("IronHelm");
-  int frame = 0, hall = -1, dialogues = 0;
+  int frame = 0, hall = -1, dialogues = 0, portraits = 0;
   uint16_t lastLine = 0xFFFF;
   for (; frame < 6000 && s_game.inventory.equipped[2] != helm; frame++)
   {
@@ -950,12 +950,20 @@ static void testTheBossIsDefeated(void)
     bmGameFrame(&s_game, bmAutopilotKeys(&pilot, &s_game));
     if (hall < 0 && strcmp(bmGameRoomId(&s_game), "boss_hall") == 0) hall = frame;
     // A line follows another in the same frame A is pressed: count the lines, not the boxes.
-    if (s_game.dialogue && s_game.dialogueLine != lastLine) dialogues++;
+    if (s_game.dialogue && s_game.dialogueLine != lastLine)
+    {
+      dialogues++;
+      // Each line has its speaker's portrait (a sprite in front of the box's left end), the
+      // name right of it.
+      uint8_t first = cellChar(&s_game.ui, 6, 16);
+      if (s_game.dialoguePortrait != 0xFFFF && (first == 'V' || first == 'Y')) portraits++;
+    }
     if (s_game.dialogue) lastLine = s_game.dialogueLine;
   }
   printf("    boss hall at frame %d, helm on at frame %d, %d lines said, deaths %u, hurts %u\n", hall, frame, dialogues,
          (unsigned)s_game.deaths, (unsigned)s_game.hurts);
-  TEST_ASSERT(hall > 0 && s_game.inventory.equipped[2] == helm && dialogues == 3);
+  // Vesper, the hero's answer, Vesper again, and her last words when defeated.
+  TEST_ASSERT(hall > 0 && s_game.inventory.equipped[2] == helm && dialogues == 4 && portraits == 4);
   TEST_ASSERT(bmInventoryStat(&s_game.inventory, BM_STAT_DEFENCE) == 3);
   int boss = actorOfClass("MoonBat");
   TEST_ASSERT(boss >= 0 && s_game.actors.hidden[boss] && strcmp(stateOf(boss), "Gone") == 0);

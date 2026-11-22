@@ -517,6 +517,17 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_say:
     bmGameSay(g, (uint16_t)args[0], (uint16_t)args[1]);
     break;
+  case BM_SCRIPT_API_say_line:
+    bmGameSayLine(g, (uint32_t)args[0]);
+    break;
+  case BM_SCRIPT_API_say_as:
+  {
+    int32_t name = 0xFFFF, portrait = 0xFFFF;
+    bmGameRecordField(g, (uint32_t)args[0], "name", &name);
+    bmGameRecordField(g, (uint32_t)args[0], "portrait", &portrait);
+    bmGameSayWith(g, (uint16_t)name, (uint16_t)args[1], (uint16_t)portrait);
+    break;
+  }
   case BM_SCRIPT_API_dialogue_done:
     *result = g->dialogue == 0;
     break;
@@ -1621,7 +1632,7 @@ void bmScreensClose(BmGame *g)
     g->hudDirty = true;   // the HUD and a notice come back
     bmUiShow(&g->ui, g->dialogue != 0);
     darkenRoom(false);
-    if (g->dialogue) bmGameSay(g, g->dialogueSpeaker, g->dialogueLine);   // the box comes back
+    if (g->dialogue) bmGameSayWith(g, g->dialogueSpeaker, g->dialogueLine, g->dialoguePortrait);   // the box comes back
   }
   else bmScreensRedraw(g);   // the one below shows again
 }

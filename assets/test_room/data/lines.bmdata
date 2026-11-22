@@ -1,0 +1,22 @@
+# Lines of dialogue (structure Line in dialogue.ms). The moon bat's, in the boss hall.
+table Line
+
+record VesperWakes {
+  speaker = Vesper
+  says = "Who wakes me under the blood moon?"
+}
+
+record HeroAnswers {
+  speaker = Hero
+  says = "I came for the key the moon keeps."
+}
+
+record VesperStays {
+  speaker = Vesper
+  says = "Stay, then. You will not leave."
+}
+
+record VesperFades {
+  speaker = Vesper
+  says = "The moon... is setting..."
+}

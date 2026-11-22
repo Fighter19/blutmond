@@ -31,6 +31,9 @@
 #define BM_GAME_ELEMENTS 4         // element values 0 (none) to 3; the game's enum names them
 #define BM_GAME_ITEM_SLOT 7        // the attachment slot an item being used takes (use_item)
 #define BM_GAME_NOTICE_FRAMES 120  // how long an obtained item is shown
+#define BM_GAME_PORTRAIT_X 8       // where a speaker's portrait (32 x 32) is, in the dialogue box
+#define BM_GAME_PORTRAIT_Y 124
+#define BM_GAME_PORTRAIT_CELLS 5   // the name and the line start this many cells further right
 
 /// Animations the engine's player looks for in the sprite called "player".
 enum { BM_PLAYER_ANIM_IDLE, BM_PLAYER_ANIM_RUN, BM_PLAYER_ANIM_JUMP, BM_PLAYER_ANIM_FALL, BM_PLAYER_ANIM_CLIMB, BM_PLAYER_ANIM_COUNT };
@@ -123,6 +126,7 @@ typedef struct BmGame
   // The dialogue box (say): shown until A is pressed.
   uint8_t dialogue;
   uint16_t dialogueSpeaker, dialogueLine;   // string ids
+  uint16_t dialoguePortrait;                // the speaker's sprite (its name's string id), 0xFFFF none
   // The UI layer (src/ui/ui.h): menus, dialogue, the HUD, the debug overlay. What it shows is
   // presentation, not game state.
   BmUi ui;
@@ -134,6 +138,19 @@ typedef struct BmGame
   BmSound sound;
   const uint8_t *pSoundFrom;
 } BmGame;
+
+/// The dialogue box (say, the bottom five rows of the UI layer; until A is pressed): the
+/// speaker's name and a line of up to two rows (string ids, in the language chosen), and the
+/// speaker's portrait, a sprite of the pack by its name's string id (0xFFFF: none), at the box's left.
+void bmGameSay(BmGame *pGame, uint16_t speaker, uint16_t line);
+void bmGameSayWith(BmGame *pGame, uint16_t speaker, uint16_t line, uint16_t portrait);
+
+/// say_line: a record with the fields `speaker` (a record with `name` and `portrait`) and
+/// `says` (docs/plans/dialogue.md §2: speakers and lines as records).
+void bmGameSayLine(BmGame *pGame, uint32_t line);
+
+/// A field of a record (of whichever table) by the field's name; false if there is none.
+bool bmGameRecordField(const BmGame *pGame, uint32_t key, const char *name, int32_t *pValue);
 
 /// Hurts the player as a hazard does (unless still blinking from the last hit).
 void bmGameHurtPlayer(BmGame *pGame, int32_t damage);
@@ -194,10 +211,6 @@ BmResult bmGameAfterLoad(BmGame *pGame);
 
 /// The player's most health: 30 + the stat MaxHealth (inventory.h).
 int32_t bmGameMaxHealth(const BmGame *pGame);
-
-/// Shows the dialogue box (the bottom five rows of the UI layer) with a speaker's name and a line
-/// of up to two rows (string ids, shown in the language chosen). It stays until A is pressed.
-void bmGameSay(BmGame *pGame, uint16_t speaker, uint16_t line);
 
 /// Shows texts in `language` from now on and keeps it as an option in the save memory.
 void bmGameSetLanguage(BmGame *pGame, uint8_t language);
