@@ -94,8 +94,15 @@ typedef struct BmStateMailbox
   uint32_t size;
   uint8_t data[BM_SNAPSHOT_CAPACITY];
 } BmStateMailbox;
-BmStateMailbox bm_state_inbox BM_EWRAM_BSS;
-BmStateMailbox bm_state_outbox BM_EWRAM_BSS;
+#if defined(BM_GBA_MULTIBOOT) && !defined(BM_NATIVE_SLOT_BYTES)
+// A multiboot image without native code keeps them in IWRAM (ordinary .bss), which has room to
+// spare; EWRAM holds the program, the embedded pack and the content pool around it.
+#  define BM_MAILBOX_SECTION
+#else
+#  define BM_MAILBOX_SECTION BM_EWRAM_BSS
+#endif
+BmStateMailbox bm_state_inbox BM_MAILBOX_SECTION;
+BmStateMailbox bm_state_outbox BM_MAILBOX_SECTION;
 
 #ifdef BM_PLATFORM_HOST
 static const char *s_loadPath, *s_snapshotPath;
@@ -219,7 +226,7 @@ static bool loadSnapshot(const uint8_t *pData, uint32_t size)
 /// Checksum of the game state as it is now, for comparing two devices.
 static uint32_t stateCrc(void)
 {
-  static uint8_t buffer[BM_SNAPSHOT_CAPACITY] BM_EWRAM_BSS;
+  static uint8_t buffer[BM_SNAPSHOT_CAPACITY] BM_MAILBOX_SECTION;
   BmStateBlock blocks[2];
   // Only the game itself (the first block): the autopilot's own state is not played along.
   stateBlocks(blocks);

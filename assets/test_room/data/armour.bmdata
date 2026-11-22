@@ -64,3 +64,18 @@ record ThornBand {
   slot = Accessory
   behaviour = ArmourThorns
 }
+
+# Charms: accessories that give a command (data/commands.bmdata) whatever the weapon.
+record CrimsonCharm {
+  title = "Crimson Charm"
+  description = "Up, Down + R: absorb blood."
+  price = 220
+  slot = Accessory
+}
+
+record MoonCharm {
+  title = "Moon Charm"
+  description = "Down, Up + A: flip gravity."
+  price = 260
+  slot = Accessory
+}

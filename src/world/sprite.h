@@ -73,6 +73,11 @@ uint8_t bmSpriteSheetDraw(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x
 uint8_t bmSpriteSheetDrawBank(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x, int32_t y, bool hflip, uint8_t priority,
                               uint8_t bank, uint8_t firstOam, uint8_t maxOam);
 
+/// The same, and upside down with `vflip`: mirrored about the anchor's line (what was above
+/// it is below).
+uint8_t bmSpriteSheetDrawFlipped(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x, int32_t y, bool hflip, bool vflip,
+                                 uint8_t priority, uint8_t bank, uint8_t firstOam, uint8_t maxOam);
+
 /// Draws frame `frame` sheared and scaled about its anchor at (x, y): a point (u, v) of the
 /// frame from the anchor appears at (x + u * xs / 256, y + (u * ys + v * vs) / 256). The pieces
 /// are affine sprites (double size: each may grow to twice its size) sharing the matrix

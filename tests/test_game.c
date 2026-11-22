@@ -232,7 +232,7 @@ static void testTheItemTables(void)
 {
   start();
   static const struct { const char *table; uint16_t records; } tables[] = {
-    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 7 }, { "Armour", 8 }, { "KeyItem", 3 } };
+    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 7 }, { "Armour", 10 }, { "KeyItem", 3 }, { "Command", 5 } };
   for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++)
   {
     BmDataTable t;
@@ -707,6 +707,11 @@ static void testTheMenus(void)
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
   printf("    snapshot in a menu: %u bytes\n", (unsigned)size);
+  // Commands: the special moves of the weapon in hand (the Short Sword's Lunge) and its input.
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Lunge") && uiShows("Down, Down-Fwd, Fwd + B") && !uiShows("Flurry"));
+  press(BM_KEY_B);
   // System: German. Every open menu shows itself again in it.
   press(BM_KEY_DOWN);
   press(BM_KEY_A);
@@ -992,6 +997,111 @@ static void testTheDebugLobby(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// Commands (commands.h): directions then a button do the special move of the weapon in hand,
+// or of a charm worn; the button does not also swing. Too slow, or the wrong weapon: nothing.
+static void inputs(const uint16_t *keys, int n)
+{
+  for (int i = 0; i < n; i++) frames(1, keys[i]);
+}
+
+static void testCommands(void)
+{
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_lobby") == BM_SUCCESS);
+  frames(3, 0);
+  BmInventory *inv = &s_game.inventory;
+  const BmAttachments *t = &s_game.attachments;
+  const uint32_t sword = keyOf("ShortSword"), dagger = keyOf("Dagger");
+  bmInventoryGive(inv, sword, 1);
+  bmInventoryGive(inv, dagger, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, sword));
+  const int32_t *swing = &t->fields[0];   // WeaponSwing: Item, Swings, Strikes
+  bmBodyPlace(&s_game.player, 140, 160);   // between the first two doors, clear of both
+  frames(10, 0);
+  s_game.mana = 20;
+  // Down, Down-Fwd, Fwd + B: the Short Sword's Lunge, 4 mana, a dash forward; no swing.
+  const uint16_t lunge[] = { BM_KEY_DOWN, BM_KEY_DOWN | BM_KEY_RIGHT, BM_KEY_RIGHT, BM_KEY_RIGHT | BM_KEY_B };
+  inputs(lunge, 4);
+  TEST_ASSERT(s_game.cmdLast == keyOf("Lunge") && s_game.cmdDone == 1 && s_game.mana == 16);
+  TEST_ASSERT(t->classKey[BM_GAME_COMMAND_SLOT] == keyOf("CommandLunge") && swing[1] == 0 && s_game.player.vx > BM_FIX(2.0));
+  frames(40, 0);
+  // Facing left it is mirrored: Down, Down-Back(left), Left.
+  const uint16_t lungeLeft[] = { BM_KEY_DOWN, BM_KEY_DOWN | BM_KEY_LEFT, BM_KEY_LEFT, BM_KEY_LEFT | BM_KEY_B };
+  inputs(lungeLeft, 4);
+  TEST_ASSERT(s_game.cmdDone == 2 && s_game.player.vx < -BM_FIX(2.0));
+  frames(40, 0);
+  // Too slow (Down held, then the rest): the button swings as usual.
+  frames(40, BM_KEY_DOWN);
+  frames(1, BM_KEY_DOWN | BM_KEY_RIGHT);
+  frames(1, BM_KEY_RIGHT);
+  frames(1, BM_KEY_RIGHT | BM_KEY_B);
+  TEST_ASSERT(s_game.cmdDone == 2 && swing[1] == 1);
+  frames(40, 0);
+  // The Dagger has another list: Fwd, Fwd + B; the sword's Lunge is not in it.
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, dagger));
+  inputs(lunge, 4);
+  TEST_ASSERT(s_game.cmdDone == 2);
+  frames(40, 0);
+  const uint16_t flurry[] = { BM_KEY_RIGHT, 0, BM_KEY_RIGHT | BM_KEY_B };
+  inputs(flurry, 3);
+  TEST_ASSERT(s_game.cmdLast == keyOf("Flurry") && s_game.cmdDone == 3);
+  frames(40, 0);
+
+  // The Moon Charm, worn, gives Gravity Flip whatever the weapon: Down, Up + A. The player
+  // falls up and stands under the top of the room (its edge), upside down.
+  const uint32_t moon = keyOf("MoonCharm");
+  bmInventoryGive(inv, moon, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 4, moon));
+  bmBodyPlace(&s_game.player, 140, 160);   // between two arches: nothing over the way
+  frames(10, 0);
+  s_game.mana = 20;
+  const uint16_t flip[] = { BM_KEY_DOWN, BM_KEY_UP, BM_KEY_UP | BM_KEY_A };
+  inputs(flip, 3);
+  TEST_ASSERT(s_game.cmdLast == keyOf("GravityFlip") && s_game.player.flipped);
+  frames(60, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "debug_lobby") == 0);
+  TEST_ASSERT(s_game.player.onGround && BM_FIX_INT(s_game.player.y) - s_game.playerParams.height == 0);
+  // Walking on the ceiling, and jumping down from it.
+  int32_t x = BM_FIX_INT(s_game.player.x);
+  frames(10, BM_KEY_RIGHT);
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) > x + 10 && BM_FIX_INT(s_game.player.x) < 170 && s_game.player.onGround);
+  frames(1, BM_KEY_A);
+  frames(3, BM_KEY_A);
+  TEST_ASSERT(!s_game.player.onGround && s_game.player.vy > 0);
+  frames(60, 0);
+  TEST_ASSERT(s_game.player.onGround && s_game.player.flipped);
+  // Again: back on the floor.
+  inputs(flip, 3);
+  frames(60, 0);
+  TEST_ASSERT(!s_game.player.flipped && s_game.player.onGround && BM_FIX_INT(s_game.player.y) == 160);
+  // Without the mana it is the button's own (a jump).
+  s_game.mana = 1;
+  uint16_t done = s_game.cmdDone;
+  inputs(flip, 3);
+  TEST_ASSERT(s_game.cmdDone == done && !s_game.player.flipped);
+  frames(60, 0);
+
+  // The Crimson Charm: Up, Down + R draws blood from what is around and heals the player.
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "test_room_2") == BM_SUCCESS);
+  frames(3, 0);
+  const uint32_t crimson = keyOf("CrimsonCharm");
+  bmInventoryGive(inv, crimson, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 4, crimson));
+  int dummy = actorOfClass("Dummy");
+  TEST_ASSERT(dummy >= 0);
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[dummy]) + 20, 160);   // behind the player: all around
+  s_game.player.facing = 1;
+  frames(10, 0);
+  s_game.health = 10;
+  s_game.mana = 20;
+  const uint16_t absorb[] = { BM_KEY_UP, BM_KEY_DOWN, BM_KEY_DOWN | BM_KEY_R };
+  inputs(absorb, 3);
+  TEST_ASSERT(s_game.cmdLast == keyOf("BloodAbsorb") && s_game.mana == 14);
+  frames(90, 0);
+  printf("    blood absorb: health 10 -> %d\n", (int)s_game.health);
+  TEST_ASSERT(s_game.health == 18);   // four pulses of 2 from the dummy
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // Doors with a panel open as the player comes near (drawn as affine sprites, sheared).
 static void testDoorPanelsOpenNearby(void)
 {
@@ -1150,6 +1260,7 @@ int main(int argc, char **argv)
   RUN_TEST(testADropFallsAndIsTaken);
   RUN_TEST(testTheDebugLobby);
   RUN_TEST(testDoorPanelsOpenNearby);
+  RUN_TEST(testCommands);
   RUN_TEST(testALineAppearsLetterByLetter);
   RUN_TEST(testTheBossIsDefeated);
   free(s_data);

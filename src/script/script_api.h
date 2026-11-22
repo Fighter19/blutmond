@@ -111,7 +111,8 @@ typedef enum BmScriptType {
   X(fade_music,        VOID, 2, INT,   INT,   VOID,  VOID, 0) \
   X(music_intensity,   VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(teleport,          BOOL, 3, NAME,  INT,   INT,   VOID, 0) \
-  X(screen_effect,     VOID, 3, NAME,  INT,   INT,   VOID, 0)
+  X(screen_effect,     VOID, 3, NAME,  INT,   INT,   VOID, 0) \
+  X(flip_gravity,      BOOL, 0, VOID,  VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -132,8 +133,11 @@ typedef enum BmScriptType {
 // (src/world/hits.h, docs/plans/hitboxes.md §3). arm makes the hit boxes of that name on the
 // frames the figure shows live as one hit, until disarm, the figure's animation changing or
 // ending, or the figure being struck; hit_box is a hit without a drawing: a rectangle from the
-// figure's anchor `reach` pixels ahead, as high as its body, for `frames` frames. From an
-// attachment the figure is the player.
+// figure's anchor `reach` pixels ahead (a negative reach: that far on both sides), as high as
+// its body, for `frames` frames. From an attachment the figure is the player.
+//
+// flip_gravity(): the player's gravity turns over (standing on ceilings, src/world/body.h) or
+// back; true if it now pulls up.
 //
 // equip(slot, record): puts a record the player owns into equipment slot 0 to 7 (0: empties
 // it); the script its first `attach` field names is attached in the player's attachment slot of

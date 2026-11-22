@@ -96,6 +96,13 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/equipment_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/items_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/system_menu.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/screens/commands_menu.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/commands.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/command_lunge.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/command_flurry.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/command_absorb.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/command_gravity.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/gift.ms
   ${PROJECT_SOURCE_DIR}/assets/engine/font_latin.bmfont
   ${PROJECT_SOURCE_DIR}/assets/test_room/lang/de.bmlang
   ${PROJECT_SOURCE_DIR}/assets/test_room/lang/fr.bmlang)

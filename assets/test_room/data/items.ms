@@ -71,3 +71,17 @@ struct Armour is Item {
 
 struct KeyItem is Item {
 }
+
+// A special move (src/world/commands.h): directions, then a button. It belongs to a weapon, or
+// to a charm that gives it whatever the weapon. Its behaviour is attached for `frames`.
+struct Command {
+  text           title;
+  text           keys;          // the input as the Commands page shows it
+  text           description;
+  name           input;         // Down_DownFwd_Fwd_Attack
+  int            cost;          // mana
+  record<Weapon> weapon;
+  record<Armour> charm;
+  attach         behaviour;
+  int            frames = 30;
+}

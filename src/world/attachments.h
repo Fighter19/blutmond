@@ -60,6 +60,10 @@ bool bmAttachmentsEquip(struct BmGame *pGame, uint8_t slot, uint32_t key);
 /// Attaches again what is equipped (after a save game was read: attachments are not in it).
 void bmAttachmentsEquipAll(struct BmGame *pGame);
 
+/// Attaches the class named `className` (string id) in `slot` for `lifetime` frames (0: until
+/// detached) with its first record<S> variable set to `record` (a command, commands.h).
+bool bmAttachmentsAttachRecord(struct BmGame *pGame, uint8_t slot, uint16_t className, uint16_t lifetime, uint32_t record);
+
 /// Detaches what is in `slot` (it gets `detached()` first).
 void bmAttachmentsDetach(struct BmGame *pGame, uint8_t slot);
 

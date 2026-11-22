@@ -1,0 +1,51 @@
+# Commands: special moves (src/world/commands.h). A weapon's work while it is equipped; a
+# charm's while the charm is, with any weapon.
+table Command
+
+record Lunge {
+  title = "Lunge"
+  keys = "Down, Down-Fwd, Fwd + B"
+  description = "A dash forward, blade first: twice the weapon's strength."
+  input = #Down_DownFwd_Fwd_Attack
+  cost = 4
+  weapon = ShortSword
+  behaviour = CommandLunge
+  frames = 24
+}
+
+record FlameLunge : Lunge {
+  weapon = FlameBrand
+}
+
+record Flurry {
+  title = "Flurry"
+  keys = "Fwd, Fwd + B"
+  description = "Three quick stabs."
+  input = #Fwd_Fwd_Attack
+  cost = 2
+  weapon = Dagger
+  behaviour = CommandFlurry
+  frames = 30
+}
+
+record BloodAbsorb {
+  title = "Blood Absorb"
+  keys = "Up, Down + R"
+  description = "Draws blood from all around and heals with it."
+  input = #Up_Down_Spell
+  cost = 6
+  charm = CrimsonCharm
+  behaviour = CommandAbsorb
+  frames = 80
+}
+
+record GravityFlip {
+  title = "Gravity Flip"
+  keys = "Down, Up + A"
+  description = "Up becomes down: walk on the ceiling. Again to turn it back."
+  input = #Down_Up_Jump
+  cost = 3
+  charm = MoonCharm
+  behaviour = CommandGravity
+  frames = 2
+}

@@ -65,30 +65,53 @@ static int32_t findFloor(const BmBody *b, const BmBodyParams *p, const BmCollisi
   return best;
 }
 
-// Wall check for a column: from just above step height up to the head.
-static bool wallAt(const BmCollision *c, int32_t x, int32_t feet, const BmBodyParams *p)
+// Flipped: the lowest ceiling over the feet (now on top) for the two sensors, scanning from
+// yFrom up to yTo (yTo <= yFrom): the y just below the first solid pixel, or INT32_MIN.
+static int32_t findCeiling(const BmBody *b, const BmBodyParams *p, const BmCollision *c, int32_t yFrom, int32_t yTo)
 {
-  int32_t top = feet - p->height;
-  for (int32_t y = feet - p->stepHeight - 1; y > top; y -= 7)
+  int32_t x = BM_FIX_INT(b->x);
+  int32_t best = INT32_MIN;
+  int32_t columns[2] = { x - p->halfWidth + 1, x + p->halfWidth - 2 };
+  for (int i = 0; i < 2; i++)
   {
-    if (bmCollisionSolidSides(c, x, y)) return true;
+    for (int32_t y = yFrom - 1; y >= yTo - 1; y--)
+    {
+      if (!bmCollisionSolidSides(c, columns[i], y)) continue;
+      if (y + 1 > best) best = y + 1;
+      break;
+    }
   }
-  return bmCollisionSolidSides(c, x, top + 1);
+  return best;
+}
+
+// Wall check for a column: from just past step height to the head (s: 1, or -1 flipped).
+static bool wallAt(const BmCollision *c, int32_t x, int32_t feet, const BmBodyParams *p, int32_t s)
+{
+  for (int32_t k = p->stepHeight + 1; k < p->height; k += 7)
+  {
+    if (bmCollisionSolidSides(c, x, feet - s * k)) return true;
+  }
+  return bmCollisionSolidSides(c, x, feet - s * (p->height - 1));
 }
 
 uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, const BmRoomPhysics *room, BmBodyInput in)
 {
   uint32_t events = 0;
   int32_t cs = c->cellSize;
-  int32_t px = BM_FIX_INT(b->x), feet = BM_FIX_INT(b->y);
+  // s: which way is up (1 as usual, -1 with gravity flipped); fy: the feet (the box's top when
+  // flipped), what this works with; b->y is set from it at the end.
+  int32_t s = b->flipped ? -1 : 1;
+  bm_fix fy = b->flipped ? b->y - (bm_fix)p->height * 256 : b->y;
+  int32_t px = BM_FIX_INT(b->x), feet = BM_FIX_INT(fy);
   bool wasOnGround = b->onGround;
 
   // Surroundings
-  int32_t centerY = feet - p->height / 2;
+  int32_t centerY = feet - s * p->height / 2;
   b->inWater = bmCollisionMaterial(c, px, centerY) == BM_MATERIAL_WATER;
-  bool onLadder = bmCollisionMaterial(c, px, centerY) == BM_MATERIAL_LADDER ||
-                  bmCollisionMaterial(c, px, feet - 1) == BM_MATERIAL_LADDER;
-  bool ladderBelow = bmCollisionMaterial(c, px, feet + 1) == BM_MATERIAL_LADDER;
+  bool onLadder = !b->flipped && (bmCollisionMaterial(c, px, centerY) == BM_MATERIAL_LADDER ||
+                                  bmCollisionMaterial(c, px, feet - 1) == BM_MATERIAL_LADDER);
+  bool ladderBelow = !b->flipped && bmCollisionMaterial(c, px, feet + 1) == BM_MATERIAL_LADDER;
+  if (b->flipped) b->climbing = false;
 
   if (in.dx) b->facing = in.dx;
   if (in.jumpPressed) b->jumpBuffer = p->jumpBufferFrames;
@@ -136,14 +159,14 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     // Jumping (with coyote time and a jump buffer); down + jump drops through platforms.
     if (b->jumpBuffer && (wasOnGround || b->coyote))
     {
-      bool onJumpThroughOnly = wasOnGround && findFloor(b, p, c, feet, feet, false) == INT32_MAX;
+      bool onJumpThroughOnly = !b->flipped && wasOnGround && findFloor(b, p, c, feet, feet, false) == INT32_MAX;
       if (in.dy > 0 && onJumpThroughOnly)
       {
         b->dropThrough = 8;
       }
       else
       {
-        b->vy = -p->jumpSpeed;
+        b->vy = -s * p->jumpSpeed;
         b->jumpCutDone = false;
         events |= BM_BODY_JUMPED;
       }
@@ -152,7 +175,7 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
       b->coyote = 0;
       b->jumpBuffer = 0;
     }
-    if (!in.jumpHeld && b->vy < 0 && !b->jumpCutDone)
+    if (!in.jumpHeld && s * b->vy < 0 && !b->jumpCutDone)
     {
       b->vy = fixMul(b->vy, p->jumpCut);
       b->jumpCutDone = true;
@@ -161,8 +184,8 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     // Gravity
     bm_fix g = fixMul(b->inWater ? room->waterGravity : room->gravity, p->gravityScale);
     bm_fix maxFall = b->inWater ? room->waterMaxFallSpeed : room->maxFallSpeed;
-    b->vy += g;
-    if (b->vy > maxFall) b->vy = maxFall;
+    b->vy += s * g;
+    if (s * b->vy > maxFall) b->vy = s * maxFall;
   }
   if (b->jumpBuffer) b->jumpBuffer--;
 
@@ -172,7 +195,7 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
   {
     int32_t nPx = BM_FIX_INT(nx);
     int32_t edge = b->vx > 0 ? nPx + p->halfWidth - 1 : nPx - p->halfWidth;
-    if (wallAt(c, edge, feet, p))
+    if (wallAt(c, edge, feet, p, s))
     {
       int32_t cellX = floorDiv(edge, cs) * cs;
       nx = b->vx > 0 ? (bm_fix)(cellX - p->halfWidth) * 256 : (bm_fix)(cellX + cs + p->halfWidth) * 256;
@@ -184,8 +207,46 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
   px = BM_FIX_INT(b->x);
 
   // --- Vertical movement, floors and ceilings ---
-  bm_fix ny = b->y + b->vy;
-  if (b->vy < 0)
+  bm_fix ny = fy + b->vy;
+  if (b->flipped)
+  {
+    // Mirrored: rising is moving down, the "floor" is a ceiling (solid from below).
+    if (b->vy > 0)
+    {
+      int32_t head = BM_FIX_INT(ny) + p->height - 1;
+      int32_t columns[3] = { px - p->halfWidth + 1, px, px + p->halfWidth - 2 };
+      for (int i = 0; i < 3; i++)
+      {
+        if (bmCollisionSolidSides(c, columns[i], head))
+        {
+          ny = (bm_fix)(floorDiv(head, cs) * cs - p->height) * 256;
+          b->vy = 0;
+          events |= BM_BODY_HIT_CEILING;
+          break;
+        }
+      }
+      b->onGround = false;
+    }
+    else
+    {
+      int32_t newFeet = BM_FIX_INT(ny);
+      int32_t from = wasOnGround ? feet + p->stepHeight : feet;
+      int32_t to = newFeet - (wasOnGround ? p->snapDistance : 0);
+      int32_t ceiling = findCeiling(b, p, c, from, to);
+      if (ceiling != INT32_MIN)
+      {
+        ny = (bm_fix)ceiling * 256;
+        b->vy = 0;
+        if (!wasOnGround) events |= BM_BODY_LANDED;
+        b->onGround = true;
+      }
+      else
+      {
+        b->onGround = false;
+      }
+    }
+  }
+  else if (b->vy < 0)
   {
     int32_t head = BM_FIX_INT(ny) - p->height;
     int32_t columns[3] = { px - p->halfWidth + 1, px, px + p->halfWidth - 2 };
@@ -228,18 +289,18 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
       b->onGround = false;
     }
   }
-  b->y = ny;
-  feet = BM_FIX_INT(b->y);
+  b->y = b->flipped ? ny + (bm_fix)p->height * 256 : ny;
+  feet = BM_FIX_INT(ny);
 
   if (b->onGround) b->coyote = p->coyoteFrames;
   else if (b->coyote) b->coyote--;
 
   // Materials touched (feet and body centre)
-  uint8_t mFeet = bmCollisionMaterial(c, px, feet - 1);
-  uint8_t mBody = bmCollisionMaterial(c, px, feet - p->height / 2);
+  uint8_t mFeet = bmCollisionMaterial(c, px, b->flipped ? feet : feet - 1);
+  uint8_t mBody = bmCollisionMaterial(c, px, feet - s * p->height / 2);
   if (mFeet == BM_MATERIAL_DAMAGE || mBody == BM_MATERIAL_DAMAGE) events |= BM_BODY_DAMAGE;
   if (mFeet == BM_MATERIAL_DEATH || mBody == BM_MATERIAL_DEATH) events |= BM_BODY_DEATH;
-  if (b->onGround && mFeet == BM_MATERIAL_NORMAL && bmCollisionMaterial(c, px, feet) == BM_MATERIAL_NORMAL)
+  if (!b->flipped && b->onGround && mFeet == BM_MATERIAL_NORMAL && bmCollisionMaterial(c, px, feet) == BM_MATERIAL_NORMAL)
   {
     b->safeX = px;
     b->safeY = feet;

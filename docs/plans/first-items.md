@@ -179,6 +179,20 @@ Attachments in the free slots, with a lifetime:
 | `BurnEffect` | `#Ignite` | on enemies: 1 damage every 20 frames for 100 frames |
 | `FreezeEffect` | `#Freeze` | on enemies: no `tick` of the owner's own script while it lasts (the runtime skips a frozen owner), a blue palette |
 
+## 8b. Commands
+
+Special moves (runtime-core.md §13): records of the structure `Command` (data/items.ms), each
+an input (`#Down_DownFwd_Fwd_Attack`), a mana cost and a behaviour, belonging to a weapon or to
+a charm (an accessory) that gives it whatever the weapon. The Start menu's Commands page lists
+the ones the player has now with their keys.
+
+| Command | Of | Input | MP | What |
+|---|---|---|---|---|
+| Lunge | Short Sword, Flame Brand | Down, Down-Fwd, Fwd + B | 4 | a dash forward, blade first, for twice the weapon's attack |
+| Flurry | Dagger | Fwd, Fwd + B | 2 | three stabs, 8 frames apart |
+| Blood Absorb | Crimson Charm | Up, Down + R | 6 | four pulses, 20 frames apart, strike 2 within 40 px on both sides; what is struck heals as much |
+| Gravity Flip | Moon Charm | Down, Up + A | 3 | the player walks on ceilings, or back |
+
 ## 9. What the test level gets
 
 - A **training dummy** with endless health that shows the last damage as a number

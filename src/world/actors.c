@@ -509,6 +509,13 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_return_to_save:
     bmGameReturnToSave(g);
     break;
+  case BM_SCRIPT_API_flip_gravity:
+    g->player.flipped = !g->player.flipped;
+    g->player.vy = 0;
+    g->player.onGround = false;
+    g->player.coyote = 0;
+    *result = g->player.flipped;
+    break;
   case BM_SCRIPT_API_quick_slot:
     *result = args[0] >= 0 && args[0] < BM_INVENTORY_QUICK ? (int32_t)g->inventory.quick[args[0]] : 0;
     break;
@@ -1427,6 +1434,18 @@ static bool attachKey(BmGame *g, uint8_t slot, uint32_t key, uint16_t lifetime, 
   storeSlot(t, slot, &inst);
   slotEvent(g, slot, BM_SCRIPT_EVENT_attached, 0);
   return true;
+}
+
+bool bmAttachmentsAttachRecord(BmGame *g, uint8_t slot, uint16_t className, uint16_t lifetime, uint32_t record)
+{
+  const char *cls = className != BM_DATA_NONE_ID ? bmPackString(g->pPack, className) : NULL;
+  if (cls == NULL) return false;
+  BmActors *a = &g->actors;
+  uint8_t current = a->current, currentSlot = a->currentSlot;
+  bool done = attachKey(g, slot, hashName(cls), lifetime, record);
+  a->current = current;
+  a->currentSlot = currentSlot;
+  return done;
 }
 
 bool bmAttachmentsAttach(BmGame *g, uint8_t slot, uint16_t className, uint16_t lifetime)

@@ -30,6 +30,7 @@
 #define BM_GAME_MANA_EVERY 90      // frames per point of mana coming back
 #define BM_GAME_ELEMENTS 4         // element values 0 (none) to 3; the game's enum names them
 #define BM_GAME_ITEM_SLOT 7        // the attachment slot an item being used takes (use_item)
+#define BM_GAME_COMMAND_SLOT 6     // the attachment slot a command's behaviour takes (commands.h)
 #define BM_GAME_NOTICE_FRAMES 120  // how long an obtained item is shown
 #define BM_GAME_MUSIC_FADE 120     // frames the music takes to fade away in a room with music "none"
 #define BM_GAME_PORTRAIT_X 8       // where a speaker's portrait (32 x 32) is, in the dialogue box
@@ -82,6 +83,12 @@ typedef struct BmGame
   uint8_t resists[BM_GAME_ELEMENTS];   // per element: what the player wears that resists it
   uint8_t striker;                 // the figure striking the player right now (hits.h), else 0xFF
   uint8_t returnPending;           // bmGameReturnToSave asked for: done at the next frame's start
+  // Commands (commands.h): the directions as they changed (numpad), when (frame, low 16 bits).
+  uint8_t cmdDirs[8];
+  uint16_t cmdTimes[8];
+  uint8_t cmdHead, cmdCount;
+  uint32_t cmdLast;                // the last command done, and how many were
+  uint16_t cmdDone;
   // Screen effects and the teleport (effects.h).
   uint8_t fxKind;
   int16_t fxA, fxB;

@@ -130,7 +130,16 @@ height: for a vflipped cell or a half top, `ly < h`; else `ly >= cell - h`.
 
 State: `x`, `y` (fix, the feet: bottom centre of the box), `vx`, `vy` (fix per frame),
 `onGround`, `climbing`, `inWater`, `jumpCutDone`, `facing` (-1 or 1), `coyote`, `jumpBuffer`,
-`dropThrough` (frames), `safeX`, `safeY` (pixels).
+`dropThrough` (frames), `safeX`, `safeY` (pixels), `flipped`.
+
+**Gravity flipped** (`flipped`, `flip_gravity`): gravity pulls up. The box stays `[y - height,
+y]`, but the feet are its top: everything below is mirrored (jumping goes down, the gravity and
+the fastest fall point up, a "floor" is the underside of anything solid from below, found
+pixel by pixel from the feet up to where they get to; the head's check is at the box's bottom;
+walls are checked from step height below the feet). No ladders, no jump-through platforms, no
+dropping through, and no safe position is noted. Placing the body (a door, a teleport, a
+respawn) ends it; so does leaving the room above its top by 64 (a respawn). The sprite is drawn
+upside down with its anchor at the box's top.
 
 Constants:
 
@@ -400,7 +409,7 @@ value is dropped and counts as a script error.
 | 35 | `room_detach(slot)` | like `detach`, for the room's slot |
 | 36 | `arm(box, damage, element)` | starts a hit of this figure with its hit boxes named `box` (section 10); arming the same name again replaces it with a new hit |
 | 37 | `disarm(box)` | ends this figure's hits with that box name |
-| 38 | `hit_box(reach, frames, damage, element)` | starts a hit of this figure with a rectangle `reach` (0..255) pixels ahead for `frames` (1..65535) frames, of that element (1 to 3; others 0) |
+| 38 | `hit_box(reach, frames, damage, element)` | starts a hit of this figure with a rectangle `reach` (0..255) pixels ahead for `frames` (1..65535) frames, of that element (1 to 3; others 0); a negative `reach` (to -255): that far on both sides |
 | 39 | `equip(slot, record)` | slot 0 to 7, record 0 empties it: false if the player has none of the record (nothing changes). Else `equipped[slot] = record`; the class its first field of type `attach` names (its table found by the key among all `DTAB` chunks) is attached in the player's slot of the same number, its first variable of type record set to the record before `attached()`; without such a class the slot is emptied |
 | 40 | `owner_lock(frames)` | from a player's attachment: `lockTimer = frames` (0..65535) |
 | 41 | `owner_play_anim(name)` | from a player's attachment: the player's sheet's animation of that name from its start; `animHeld = 2` if `lockTimer != 0`, else 1. Unknown: nothing |
@@ -430,6 +439,7 @@ value is dropped and counts as a script error.
 | 85 | `music_intensity(level)` | the sound engine's intensity (0..15): which layers of the music are heard |
 | 86 | `teleport(room, x, y)` | a teleport (section 12) to the room of that id (`#here`: this one) at `x`, `y`; false if there is no such room or a teleport is under way |
 | 87 | `screen_effect(name, a, b)` | the room's effect now (section 12): `#none`, `#wave`, `#spotlight`, `#pulse`, `#gradient`; `a`, `b` 0 for the defaults |
+| 88 | `flip_gravity()` | the player's gravity turns over or back (section 5, "Gravity flipped"): `flipped` toggled, `vy = 0`, not on the ground, no coyote time; true if it now pulls up |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
 (state.md §4): what equipment adds, taken away in its `detached()`, not saved. `stat` (28)
@@ -630,7 +640,38 @@ the ground are found when the room's sprites are bound.
 it and the player has none (the menu does not open then). The test level's mirror teleports to
 the debug lobby.
 
-## 13. What is not specified here
+## 13. Commands
+
+`src/world/commands.h`. A record of the structure named `Command` is a special move: its fields
+`input` (name), `cost` (int, mana), `weapon` and `charm` (records), `behaviour` (attach),
+`frames` (int), found by name. It is the player's while `equipped[0]` is its `weapon`, or while
+its `charm` is equipped in slot 1 to 7.
+
+**History** (in a game frame, before the attachments, also during dialogue): the d-pad's
+direction as on a numpad (5 none, 6 right, 8 up, 3 down-right) is compared with the newest in
+`cmdDirs`; if it differs it is added with `cmdTimes = frame & 0xFFFF` (a ring of 8:
+`cmdHead`, `cmdCount` up to 8).
+
+**Input**: `_`-separated tokens, the last a game button (`Attack`, `Jump`, `Dash`, `Spell`,
+`Use`, attachments.h), the others directions: `Up` 8, `Down` 2, `Fwd` 6, `Back` 4, `UpFwd` 9,
+`UpBack` 7, `DownFwd` 3, `DownBack` 1; with `facing < 0` they are mirrored (6 and 4 swap, and so
+on). At least one direction, at most 8.
+
+**Matching**, for a game button newly pressed while there is no dialogue, no lock, no teleport,
+at least one direction in the history and the newest at most 10 frames old: going from the
+newest entry back, each entry must be at most 10 frames older than the press (until the last
+direction is found), then at most 12 older than the entry that matched the direction after
+it; an entry equal to the direction wanted matches it and the next older direction is wanted;
+others are passed over. All found: the input matches. Among the player's commands whose input
+matches for this button, the one with most directions (the first of equals in table order).
+
+**Doing it**: if `cost > mana`, nothing (the button does what it does). Else its `behaviour`
+is attached in slot `BM_GAME_COMMAND_SLOT` (6) for `frames` frames (at least 1), its first
+record variable the command; `mana -= cost`, `cmdLast` = its key, `cmdDone += 1`; the button is
+not pressed for the attachments this frame (the weapon does not swing). The table and its
+fields are found when a room is loaded.
+
+## 14. What is not specified here
 
 Sound ([sound-format.md](sound-format.md)), the script interpreter
 ([mondskript.md](mondskript.md)), the link ([link-protocol.md](link-protocol.md)) and the

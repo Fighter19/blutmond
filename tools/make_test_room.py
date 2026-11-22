@@ -512,7 +512,11 @@ def write_debug_lobby(path):
         main_layer[5][tx - 1] = gid("stone2")
         main_layer[5][tx] = gid("stone")
     objects = [("CameraZone", "room", 0, 0, w * T, h * T, False, []),
-               ("Teleporter", "home", 520, 160, 0, 0, True, [("Room", "test_room"), ("X", "40"), ("Y", "160")])]
+               ("Teleporter", "home", 520, 160, 0, 0, True, [("Room", "test_room"), ("X", "40"), ("Y", "160")]),
+               # To try the commands (data/commands.bmdata): a dagger and the two charms.
+               ("WeaponStand", "dagger", 152, 160, 0, 0, True, [("Gives", "Dagger")]),
+               ("Gift", "crimson", 264, 160, 0, 0, True, [("Gives", "CrimsonCharm")]),
+               ("Gift", "moon", 376, 160, 0, 0, True, [("Gives", "MoonCharm")])]
     for room, _, _, x in DEBUG_ROOMS:
         objects.append(("Door", "to_" + room, x - 16, 112, 32, 48, False, [("target_room", room), ("target_door", "exit_west"), ("direction", "north"), ("panel", "door_panel")]))
     write_small_room(path, "debug_lobby", "debug", w, h, main_layer, objects, props=[("title", "Debug lobby")])

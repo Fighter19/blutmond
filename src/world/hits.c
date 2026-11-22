@@ -171,7 +171,7 @@ bool bmHitsArm(BmGame *g, uint8_t source, uint8_t slot, uint16_t name, int32_t d
   h->element[k] = element;
   h->anim[k] = st.anim;
   h->frames[k] = (uint16_t)(frames < 1 ? 1 : frames > 0xFFFF ? 0xFFFF : frames);
-  h->reach[k] = (int16_t)(reach < 0 ? 0 : reach > 255 ? 255 : reach);
+  h->reach[k] = (int16_t)(reach < -255 ? -255 : reach > 255 ? 255 : reach);   // < 0: both sides
   return true;
 }
 
@@ -213,7 +213,8 @@ static uint8_t hitRects(const BmGame *g, uint8_t k, Rect *pOut)
   bool flip;
   anchorOf(g, f, &x, &y, &flip);
   Rect body = bodyOf(g, f);
-  pOut[0] = (Rect){ flip ? x - h->reach[k] : x, body.y, h->reach[k], body.h };
+  int32_t reach = h->reach[k];
+  pOut[0] = reach < 0 ? (Rect){ x + reach, body.y, -2 * reach, body.h } : (Rect){ flip ? x - reach : x, body.y, reach, body.h };
   return 1;
 }
 

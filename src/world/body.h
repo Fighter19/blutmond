@@ -54,6 +54,9 @@ typedef struct BmBody
   int8_t facing;               // -1 left, 1 right
   uint8_t coyote, jumpBuffer, dropThrough;
   int32_t safeX, safeY;        // last position standing on normal ground (respawn)
+  // Gravity pulls up: the body stands on ceilings. Its box stays [y - height, y]; its feet are
+  // at the top then. No ladders, no jump-through platforms, no safe positions while flipped.
+  bool flipped;
 } BmBody;
 
 void bmBodyPlace(BmBody *pBody, int32_t x, int32_t y);

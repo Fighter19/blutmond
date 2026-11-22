@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="36" height="12" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="7">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="36" height="12" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="10">
  <properties>
   <property name="music" value="castle" />
   <property name="room_id" value="debug_lobby" />
@@ -81,7 +81,25 @@
     <property name="Y" value="160" />
    </properties>
   </object>
-  <object id="3" name="to_debug_wave" type="Door" x="80" y="112" width="32" height="48">
+  <object id="3" name="dagger" type="WeaponStand" x="152" y="160">
+   <point />
+   <properties>
+    <property name="Gives" value="Dagger" />
+   </properties>
+  </object>
+  <object id="4" name="crimson" type="Gift" x="264" y="160">
+   <point />
+   <properties>
+    <property name="Gives" value="CrimsonCharm" />
+   </properties>
+  </object>
+  <object id="5" name="moon" type="Gift" x="376" y="160">
+   <point />
+   <properties>
+    <property name="Gives" value="MoonCharm" />
+   </properties>
+  </object>
+  <object id="6" name="to_debug_wave" type="Door" x="80" y="112" width="32" height="48">
    <properties>
     <property name="target_room" value="debug_wave" />
     <property name="target_door" value="exit_west" />
@@ -89,7 +107,7 @@
     <property name="panel" value="door_panel" />
    </properties>
   </object>
-  <object id="4" name="to_debug_spotlight" type="Door" x="192" y="112" width="32" height="48">
+  <object id="7" name="to_debug_spotlight" type="Door" x="192" y="112" width="32" height="48">
    <properties>
     <property name="target_room" value="debug_spotlight" />
     <property name="target_door" value="exit_west" />
@@ -97,7 +115,7 @@
     <property name="panel" value="door_panel" />
    </properties>
   </object>
-  <object id="5" name="to_debug_pulse" type="Door" x="304" y="112" width="32" height="48">
+  <object id="8" name="to_debug_pulse" type="Door" x="304" y="112" width="32" height="48">
    <properties>
     <property name="target_room" value="debug_pulse" />
     <property name="target_door" value="exit_west" />
@@ -105,7 +123,7 @@
     <property name="panel" value="door_panel" />
    </properties>
   </object>
-  <object id="6" name="to_debug_gradient" type="Door" x="416" y="112" width="32" height="48">
+  <object id="9" name="to_debug_gradient" type="Door" x="416" y="112" width="32" height="48">
    <properties>
     <property name="target_room" value="debug_gradient" />
     <property name="target_door" value="exit_west" />

@@ -20,8 +20,8 @@
 
 #define BM_ACTORS_MAX 8
 #define BM_ACTORS_STORE 16
-#define BM_ACTORS_MODULES 24   // script modules in a pack (one per class)
-#define BM_ACTORS_CLASSES 32   // classes in all of them
+#define BM_ACTORS_MODULES 40   // script modules in a pack (one per class)
+#define BM_ACTORS_CLASSES 48   // classes in all of them
 #define BM_ACTORS_OWNER 0xFF   // `current` while an attachment of the player runs
 #define BM_ACTORS_ROOM 0xFE    // `current` while an attachment of the room runs
 #define BM_ACTORS_SCREEN 0xFD  // `current` while a screen runs (currentSlot: its place on the stack)

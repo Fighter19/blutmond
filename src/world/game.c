@@ -5,6 +5,7 @@
 #include "game.h"
 
 #include "data.h"
+#include "commands.h"
 #include "effects.h"
 #include "text.h"
 
@@ -332,15 +333,18 @@ static void updateSprites(BmGame *g)
   if (g->playerSheet >= 0)
   {
     const BmSpriteSheet *s = &g->sheets[g->playerSheet];
+    // Upside down with gravity flipped: the feet at the top of the body's box.
+    bool up = g->player.flipped;
     if (!blink)
-      next = (uint8_t)(next + bmSpriteSheetDraw(s, bmAnimFrame(s, &g->playerAnim), px - camX, py - camY, g->player.facing < 0, 1, next, 8));
+      next = (uint8_t)(next + bmSpriteSheetDrawFlipped(s, bmAnimFrame(s, &g->playerAnim), px - camX, (up ? py - g->playerParams.height : py) - camY,
+                                                       g->player.facing < 0, up, 1, s->bank, next, 8));
   }
   else
   {
     BmSprite s = {
       .x = (int16_t)(px - 8 - camX), .y = (int16_t)(py - 32 - camY),
       .shape = BM_SPRITE_TALL, .size = 2, .tile = g->builtinTile, .paletteBank = 14, .priority = 1,
-      .hflip = g->player.facing < 0, .visible = !blink,
+      .hflip = g->player.facing < 0, .vflip = g->player.flipped, .visible = !blink,
     };
     bmSpriteSet(next++, &s);
   }
@@ -466,6 +470,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
     }
   }
   loadSprites(g);
+  bmCommandsPrepare(g);
   bmActorsEnterRoom(g, fresh);
   if (fresh) bmAttachmentsEnterRoom(g);
   enterRoomSound(g);
@@ -944,8 +949,10 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     if ((pressed & BM_KEY_L) && !(keys & (BM_KEY_R | BM_KEY_SELECT))) bmGameUseQuick(g, 0);
     if ((pressed & BM_KEY_SELECT) && !(keys & (BM_KEY_L | BM_KEY_R))) bmGameUseQuick(g, 1);
   }
+  // A command (commands.h) takes its button: the attachments do not see it pressed.
+  uint16_t taken = g->dialogue == 0 ? bmCommandsFrame(g, keys, previous) : 0;
   // Attachments first: what they decide this frame moves the player this frame.
-  bmAttachmentsFrame(g, keys, previous);
+  bmAttachmentsFrame(g, keys, (uint16_t)(previous | taken));
   // A lock (a swing) takes walking and jumping away; set this frame, it already counts.
   if (g->lockTimer != 0)
   {
@@ -1027,7 +1034,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     }
   }
   // Falling out of the bottom without a kill zone.
-  if (BM_FIX_INT(g->player.y) > g->room.heightPx + 64)
+  if (BM_FIX_INT(g->player.y) > g->room.heightPx + 64 || (g->player.flipped && BM_FIX_INT(g->player.y) < -64))
   {
     respawn(g);
   }
@@ -1064,6 +1071,7 @@ static const BmStateField s_gameFields[] = {
   F(player.coyote, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(player.jumpBuffer, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(player.dropThrough, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(player.flipped, BM_TYPE_BOOL, BM_STATE_SNAPSHOT | BM_STATE_LINK),
   F(player.safeX, BM_TYPE_S32, BM_STATE_SAVE),
   F(player.safeY, BM_TYPE_S32, BM_STATE_SAVE),
   F(frame, BM_TYPE_U32, BM_STATE_SNAPSHOT),
@@ -1076,6 +1084,12 @@ static const BmStateField s_gameFields[] = {
   F(speedPercent, BM_TYPE_S16, BM_STATE_SNAPSHOT),
   BM_STATE_ARRAY(BmGame, resists, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_GAME_ELEMENTS),
   F(returnPending, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  BM_STATE_ARRAY(BmGame, cmdDirs, BM_TYPE_U8, BM_STATE_SNAPSHOT, 8),
+  BM_STATE_ARRAY(BmGame, cmdTimes, BM_TYPE_U16, BM_STATE_SNAPSHOT, 8),
+  F(cmdHead, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(cmdCount, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(cmdLast, BM_TYPE_U32, BM_STATE_SNAPSHOT),
+  F(cmdDone, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(fxKind, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(fxA, BM_TYPE_S16, BM_STATE_SNAPSHOT),
   F(fxB, BM_TYPE_S16, BM_STATE_SNAPSHOT),
