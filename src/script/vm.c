@@ -290,6 +290,7 @@ bool bmVmModuleVerify(BmVmModule *m, const char **ppError)
 
 // In IWRAM on the GBA with the function checks it inlines: a module's code is verified the
 // first time it runs (or in spare time), and from fast memory that is several times quicker.
+// It is the first thing to move out when IWRAM runs out (gba-backend.md §3 says how).
 BM_IWRAM_CODE bool bmVmModuleVerifySome(BmVmModule *m, uint32_t *pWords, const char **ppError)
 {
   const char *dummy;

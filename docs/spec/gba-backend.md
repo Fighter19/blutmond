@@ -79,7 +79,15 @@ were loaded; zero `.bss` and `.sbss`; call `main`.
 
 **Functions in IWRAM** are compiled as ARM code and optimised for speed whatever the rest of
 the build does (`BM_IWRAM_CODE`): the serial handler and what it calls, the sound mixer, the
-script interpreter's loop, the wait loops of the serial master.
+script interpreter's loop, the wait loops of the serial master, the script verifier
+(`bmVmModuleVerifySome`, about 2 KB).
+
+IWRAM is nearly full: the cartridge game leaves about 360 bytes between `.bss` and the
+stacks (the image with native scripts about 540). **When room is needed, the verifier is the
+first to leave:** drop its `BM_IWRAM_CODE` (it then runs from ROM, or EWRAM on multiboot,
+several times slower; it only checks scripts in the frame's spare time and at room entry)
+and lower `BM_SPARE_WORDS_PER_LINE` in `apps/game/main.c` until the autoplay runs lag no more
+than before (`bm_game_stats` lag, the `game_render_*` tests).
 
 ## 4. Interrupts, video, sound, input, save
 
