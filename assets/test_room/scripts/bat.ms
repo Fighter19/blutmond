@@ -17,6 +17,7 @@ event spawn() {
 
 // Struck by the player: it flies home, or it is gone once its health is.
 event hit(int amount) {
+  play_sound(Kind.hit_sound);   // its kind's own
   if health <= 0 { gotostate Defeated; }
   else { gotostate Returning; }
 }

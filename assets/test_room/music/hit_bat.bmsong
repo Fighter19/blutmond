@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="12" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="squeak" wave="pulse12" attack="0" decay="4" sustain="0" release="1" volume="120" pan="0"/>
+ <track name="squeak" instrument="squeak">
+  <note t="0" key="86" len="2" vel="110"/>
+  <note t="2" key="91" len="2" vel="110"/>
+  <note t="4" key="84" len="3" vel="90"/>
+ </track>
+</song>

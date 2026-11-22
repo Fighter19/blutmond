@@ -93,6 +93,7 @@ def main():
     ], [("buzz", "buzz", [(0, 52, 6, 120), (6, 47, 6, 120), (12, 43, 10, 120)]), ("hiss", "hiss", [(0, 60, 10, 110)])])
     vesper(out)
     voices(out)
+    hits_and_fanfare(out)
 
     # A teleport (the wave, effects.h): a shimmer rising and falling over a second.
     shimmer = [(i * 3, 72 + (i * 5) % 24 if i < 10 else 96 - (i * 5) % 24, 4, 70) for i in range(20)]
@@ -145,6 +146,47 @@ def vesper(out):
         'name="arp" wave="pulse12" attack="0" decay="5" sustain="40" release="2" volume="75" pan="26" layer="3"',
     ], [("drone", "drone", drone), ("choir", "choir", choir), ("bass", "bass", bass), ("kick", "kick", kicks),
         ("lead", "lead", lead), ("hat", "hat", hats), ("arp", "arp", arp)])
+
+
+def hits_and_fanfare(out):
+    """What an enemy sounds like when struck (each its own), the pickup of an item, and the
+    fanfare for a defeated boss."""
+    effect = 'loop="-1" effect="1" echo="0" echo-feedback="0"'
+    # The bat: a short squeak, up and down.
+    song(os.path.join(out, "hit_bat.bmsong"), 'bpm="150" length="12" ' + effect, [
+        'name="squeak" wave="pulse12" attack="0" decay="4" sustain="0" release="1" volume="120" pan="0"',
+    ], [("squeak", "squeak", [(0, 86, 2, 110), (2, 91, 2, 110), (4, 84, 3, 90)])])
+    # The moon bat: a heavy, low thud with a rasp.
+    song(os.path.join(out, "hit_moon.bmsong"), 'bpm="150" length="24" ' + effect, [
+        'name="thud" wave="saw" attack="0" decay="12" sustain="0" release="4" volume="190" pan="0"',
+        'name="rasp" wave="noise" attack="0" decay="6" sustain="0" release="2" volume="120" pan="0"',
+    ], [("thud", "thud", [(0, 40, 8, 120), (4, 35, 10, 120)]), ("rasp", "rasp", [(0, 50, 6, 100)])])
+    # The training dummy: a dry knock of wood (one voice: it is struck often).
+    song(os.path.join(out, "hit_dummy.bmsong"), 'bpm="150" length="10" ' + effect, [
+        'name="knock" wave="triangle" attack="0" decay="2" sustain="0" release="1" volume="200" pan="0"',
+    ], [("knock", "knock", [(0, 67, 2, 120), (2, 60, 2, 100)])])
+    # An item picked up: a bright rising arpeggio.
+    song(os.path.join(out, "pickup.bmsong"), 'bpm="150" length="24" ' + effect, [
+        'name="chime" wave="pulse25" attack="0" decay="6" sustain="40" release="4" volume="120" pan="0"',
+    ], [("chime", "chime", [(0, 72, 3, 100), (3, 76, 3, 100), (6, 79, 3, 100), (9, 84, 10, 110)])])
+    # A boss defeated: a fanfare in C, once (about three seconds).
+    trumpet, horn, bass, drum = [], [], [], []
+    line = [(0, 67, 6), (6, 67, 6), (12, 67, 6), (18, 72, 30), (48, 67, 12), (60, 72, 12), (72, 76, 12),
+            (84, 79, 36), (120, 76, 12), (132, 79, 12), (144, 84, 48)]
+    for t, key, length in line:
+        trumpet.append((t, key, length - 1, 115))
+    for t, key, length in [(18, 64, 30), (48, 64, 24), (72, 67, 48), (120, 67, 24), (144, 76, 48)]:
+        horn.append((t, key, length - 1, 85))
+    for t, key, length in [(0, 48, 18), (18, 48, 30), (48, 43, 24), (72, 48, 48), (120, 43, 24), (144, 36, 48)]:
+        bass.append((t, key, length - 1, 110))
+    for t in (0, 6, 12, 18, 48, 72, 120, 144):
+        drum.append((t, 60, 4, 110))
+    song(os.path.join(out, "fanfare.bmsong"), 'bpm="120" length="200" loop="-1" effect="0" echo="100" echo-feedback="50"', [
+        'name="trumpet" wave="pulse25" attack="1" decay="10" sustain="170" release="8" volume="160" pan="-8"',
+        'name="horn" wave="pulse50" attack="2" decay="12" sustain="140" release="10" volume="110" pan="12"',
+        'name="bass" wave="triangle" attack="0" decay="6" sustain="200" release="6" volume="200" pan="0"',
+        'name="drum" wave="noise" attack="0" decay="5" sustain="0" release="2" volume="130" pan="0"',
+    ], [("trumpet", "trumpet", trumpet), ("horn", "horn", horn), ("bass", "bass", bass), ("drum", "drum", drum)])
 
 
 def voices(out):

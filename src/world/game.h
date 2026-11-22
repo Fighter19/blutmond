@@ -92,6 +92,7 @@ typedef struct BmGame
   uint8_t returnPending;           // bmGameReturnToSave asked for: done at the next frame's start
   // How the player moves while a lock holds them (lock_move; BmLockGround, BmLockAir).
   uint8_t lockGround, lockAir;
+  uint8_t pickupSound;             // an item was obtained: the sound "pickup" at the next frame's start
   // A door with a panel being walked through (effects.h): its object + 1 (0 none) and the
   // frames so far; the door just come through, closing behind the player, and frames left.
   uint8_t doorSeq, doorTimer, doorArrive, doorArriveTimer;

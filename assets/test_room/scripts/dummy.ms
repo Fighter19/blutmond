@@ -13,6 +13,7 @@ event spawn() {
 }
 
 event hit(int amount) {
+  play_sound(#hit_dummy);
   Hits += 1;
   LastDamage = amount;
   health = 999;

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="120" length="200" loop="-1" effect="0" echo="100" echo-feedback="50">
+ <instrument name="trumpet" wave="pulse25" attack="1" decay="10" sustain="170" release="8" volume="160" pan="-8"/>
+ <instrument name="horn" wave="pulse50" attack="2" decay="12" sustain="140" release="10" volume="110" pan="12"/>
+ <instrument name="bass" wave="triangle" attack="0" decay="6" sustain="200" release="6" volume="200" pan="0"/>
+ <instrument name="drum" wave="noise" attack="0" decay="5" sustain="0" release="2" volume="130" pan="0"/>
+ <track name="trumpet" instrument="trumpet">
+  <note t="0" key="67" len="5" vel="115"/>
+  <note t="6" key="67" len="5" vel="115"/>
+  <note t="12" key="67" len="5" vel="115"/>
+  <note t="18" key="72" len="29" vel="115"/>
+  <note t="48" key="67" len="11" vel="115"/>
+  <note t="60" key="72" len="11" vel="115"/>
+  <note t="72" key="76" len="11" vel="115"/>
+  <note t="84" key="79" len="35" vel="115"/>
+  <note t="120" key="76" len="11" vel="115"/>
+  <note t="132" key="79" len="11" vel="115"/>
+  <note t="144" key="84" len="47" vel="115"/>
+ </track>
+ <track name="horn" instrument="horn">
+  <note t="18" key="64" len="29" vel="85"/>
+  <note t="48" key="64" len="23" vel="85"/>
+  <note t="72" key="67" len="47" vel="85"/>
+  <note t="120" key="67" len="23" vel="85"/>
+  <note t="144" key="76" len="47" vel="85"/>
+ </track>
+ <track name="bass" instrument="bass">
+  <note t="0" key="48" len="17" vel="110"/>
+  <note t="18" key="48" len="29" vel="110"/>
+  <note t="48" key="43" len="23" vel="110"/>
+  <note t="72" key="48" len="47" vel="110"/>
+  <note t="120" key="43" len="23" vel="110"/>
+  <note t="144" key="36" len="47" vel="110"/>
+ </track>
+ <track name="drum" instrument="drum">
+  <note t="0" key="60" len="4" vel="110"/>
+  <note t="6" key="60" len="4" vel="110"/>
+  <note t="12" key="60" len="4" vel="110"/>
+  <note t="18" key="60" len="4" vel="110"/>
+  <note t="48" key="60" len="4" vel="110"/>
+  <note t="72" key="60" len="4" vel="110"/>
+  <note t="120" key="60" len="4" vel="110"/>
+  <note t="144" key="60" len="4" vel="110"/>
+ </track>
+</song>

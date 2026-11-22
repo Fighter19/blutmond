@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="10" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="knock" wave="triangle" attack="0" decay="2" sustain="0" release="1" volume="200" pan="0"/>
+ <track name="knock" instrument="knock">
+  <note t="0" key="67" len="2" vel="120"/>
+  <note t="2" key="60" len="2" vel="100"/>
+ </track>
+</song>

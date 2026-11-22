@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="24" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="chime" wave="pulse25" attack="0" decay="6" sustain="40" release="4" volume="120" pan="0"/>
+ <track name="chime" instrument="chime">
+  <note t="0" key="72" len="3" vel="100"/>
+  <note t="3" key="76" len="3" vel="100"/>
+  <note t="6" key="79" len="3" vel="100"/>
+  <note t="9" key="84" len="10" vel="110"/>
+ </track>
+</song>

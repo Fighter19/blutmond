@@ -1262,6 +1262,62 @@ static void testAimedSwings(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// Sounds: each enemy struck sounds its own (the bat's comes from its kind's record), and an item
+// obtained has the pickup sound.
+static const char *effectPlaying(void)
+{
+  const BmSoundPlayer *p = &s_game.sound.players[1];
+  return p->playing ? bmPackString(&s_pack, p->nameId) : "";
+}
+
+static void testHitAndPickupSounds(void)
+{
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "test_room_2") == BM_SUCCESS);
+  frames(2, 0);
+  const uint32_t sword = keyOf("ShortSword");
+  bmInventoryGive(&s_game.inventory, sword, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, sword));
+  int bat = actorOfClass("Bat"), dummy = actorOfClass("Dummy");
+  TEST_ASSERT(bat >= 0 && dummy >= 0);
+  // The bat: struck at head height ahead.
+  bool batSound = false;
+  s_game.actors.health[bat] = 10;
+  bmBodyPlace(&s_game.player, 200, 160);
+  frames(2, 0);
+  s_game.player.facing = 1;
+  for (int f = 0; f < 10; f++)
+  {
+    s_game.actors.x[bat] = BM_FIX(212);
+    s_game.actors.y[bat] = BM_FIX(138);
+    frames(1, f == 0 ? BM_KEY_B : 0);
+    batSound |= strcmp(effectPlaying(), "hit_bat") == 0;
+  }
+  TEST_ASSERT(batSound && s_game.actors.health[bat] < 10);
+  // The dummy: its knock.
+  bool dummySound = false;
+  frames(30, 0);
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[dummy]) - 14, 160);
+  frames(30, 0);
+  s_game.player.facing = 1;
+  for (int f = 0; f < 10; f++)
+  {
+    frames(1, f == 0 ? BM_KEY_B : 0);
+    dummySound |= strcmp(effectPlaying(), "hit_dummy") == 0;
+  }
+  TEST_ASSERT(dummySound);
+  // An item obtained: the pickup sound (here a drop's).
+  frames(30, 0);
+  TEST_ASSERT(bmActorsSpawn(&s_game, stringId("Drop"), s_game.player.x, s_game.player.y - BM_FIX(8), keyOf("Potion")));
+  bool pickup = false;
+  for (int f = 0; f < 20 && !pickup; f++)
+  {
+    frames(1, 0);
+    pickup = strcmp(effectPlaying(), "pickup") == 0;
+  }
+  TEST_ASSERT(pickup && bmInventoryCount(&s_game.inventory, keyOf("Potion")) >= 1);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // While an attack holds the player (owner_lock), the controls do not move them but their speed
 // is not cut off: on the ground it fades with friction, in the air the player steers, facing
 // the way the swing goes. A weapon's record chooses otherwise (ground_move, air_move: the
@@ -1422,6 +1478,7 @@ static void testTheBossIsDefeated(void)
   BmAutopilot pilot = {0};
   const uint32_t helm = keyOf("IronHelm");
   int frame = 0, hall = -1, dialogues = 0, portraits = 0, voices = 0, fadedAt = -1, droneAt = -1, fightAt = -1, enragedAt = -1;
+  int moonHits = 0, fanfareAt = -1;
   uint16_t lastLine = 0xFFFF;
   for (; frame < 6000 && s_game.inventory.equipped[2] != helm; frame++)
   {
@@ -1444,6 +1501,10 @@ static void testTheBossIsDefeated(void)
     const BmSound *snd = &s_game.sound;
     const char *song = snd->players[0].playing ? bmPackString(&s_pack, snd->players[0].nameId) : NULL;
     if (hall >= 0 && fadedAt < 0 && song == NULL) fadedAt = frame;
+    // Struck, the moon bat sounds its own; defeated, the fanfare plays.
+    const char *effect = snd->players[1].playing ? bmPackString(&s_pack, snd->players[1].nameId) : NULL;
+    if (effect != NULL && strcmp(effect, "hit_moon") == 0) moonHits++;   // frames it is heard
+    if (fanfareAt < 0 && song != NULL && strcmp(song, "fanfare") == 0) fanfareAt = frame;
     if (song != NULL && strcmp(song, "vesper") == 0)
     {
       if (droneAt < 0 && snd->intensity == 0) droneAt = frame;
@@ -1457,8 +1518,11 @@ static void testTheBossIsDefeated(void)
   TEST_ASSERT(hall > 0 && s_game.inventory.equipped[2] == helm && dialogues == 4 && portraits == 4);
   printf("    music: castle gone at %d, drone at %d, fight at %d, enraged at %d; %d frames with a voice\n", fadedAt, droneAt, fightAt, enragedAt, voices);
   TEST_ASSERT(hall < fadedAt && fadedAt < droneAt && droneAt < fightAt && fightAt < enragedAt && voices > 10);
-  // Defeated: its song faded away.
-  TEST_ASSERT(!s_game.sound.players[0].playing);
+  // Defeated: its song faded away, and the fanfare played (once: it does not loop).
+  printf("    moon bat's hit sound heard in %d frames, fanfare at %d\n", moonHits, fanfareAt);
+  TEST_ASSERT(moonHits > 0 && fanfareAt > enragedAt);
+  const char *after = s_game.sound.players[0].playing ? bmPackString(&s_pack, s_game.sound.players[0].nameId) : NULL;
+  TEST_ASSERT(after == NULL || strcmp(after, "fanfare") == 0);
   TEST_ASSERT(bmInventoryStat(&s_game.inventory, BM_STAT_DEFENCE) == 3);
   int boss = actorOfClass("MoonBat");
   TEST_ASSERT(boss >= 0 && s_game.actors.hidden[boss] && strcmp(stateOf(boss), "Gone") == 0);
@@ -1523,6 +1587,7 @@ int main(int argc, char **argv)
   RUN_TEST(testCommands);
   RUN_TEST(testEveryWeaponHasCommands);
   RUN_TEST(testAttacksAndMovement);
+  RUN_TEST(testHitAndPickupSounds);
   RUN_TEST(testAimedSwings);
   RUN_TEST(testALineAppearsLetterByLetter);
   RUN_TEST(testTheBossIsDefeated);

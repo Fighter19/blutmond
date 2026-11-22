@@ -910,6 +910,12 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   uint16_t pressed = (uint16_t)(keys & ~previous);
   g->keysPrevious = keys;
   if (g->returnPending) returnToSave(g);
+  // An item obtained last frame: its sound now (the frame it came had the item's work already).
+  if (g->pickupSound)
+  {
+    g->pickupSound = 0;
+    bmSoundPlayEffect(&g->sound, "pickup");
+  }
   bmEffectsFrame(g);
   // Walking through a door: the buttons are not the game's meanwhile, A, B or Start skips it.
   bool doorSkip = false;
@@ -1176,6 +1182,7 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, resists, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_GAME_ELEMENTS),
   F(returnPending, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(lockGround, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(pickupSound, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(lockAir, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(doorSeq, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(doorTimer, BM_TYPE_U8, BM_STATE_SNAPSHOT),

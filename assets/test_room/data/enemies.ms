@@ -12,4 +12,5 @@ struct Enemy {
   ubyte  drop_chance      = 0;      // in percent
   Element weak;                     // takes x 1.5 from this element (first-items.md §1)
   Element resists;                  // takes x 0.5 from this one
+  sound  hit_sound;                 // played when the player strikes it
 }

@@ -612,7 +612,9 @@ cells at (0, 0) with `HP` at (1, 1) and `MP` at (1, 2), gauges of 5 cells at (4,
 the most, red) and (4, 2) (mana of the most, blue) and the numbers in 3 cells at (9, 1) and
 (9, 2), drawn again only where a value changed; the layer is shown. When the layer was cleared
 (a state loaded, the last screen closed, the overlay hidden) all of it is drawn again.
-`give(record, n)` and `give_item(name)` that add something set the **notice**: the record (its
+`give(record, n)` and `give_item(name)` that add something set `pickupSound`: at the start of
+the next frame (after `returnPending`) the effect `pickup` plays, if the pack has it.
+They also set the **notice**: the record (its
 `title` is looked up later), the name as a fallback, the amount, 120 frames. Each such frame
 counts it down; while the dialogue box is shown nothing more happens. In the frame it was set
 nothing is drawn, in the next the title is looked up, in the one after a frame of `w x 3` cells

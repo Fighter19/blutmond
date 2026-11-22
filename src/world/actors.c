@@ -284,7 +284,11 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     uint32_t h = hashName(bmPackString(g->pPack, (uint16_t)args[0]));
     bool has = bmInventoryCount(&g->inventory, h) != 0;
     if (api == BM_SCRIPT_API_has_item) *result = has;
-    else if (!has && bmInventoryGive(&g->inventory, h, 1) > 0) bmGameNotice(g, h, (uint16_t)args[0], 1);
+    else if (!has && bmInventoryGive(&g->inventory, h, 1) > 0)
+    {
+      bmGameNotice(g, h, (uint16_t)args[0], 1);
+      g->pickupSound = 1;   // the pickup sound, next frame (game.c)
+    }
     break;
   }
   case BM_SCRIPT_API_add_stat:
@@ -307,7 +311,11 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_stat:
     bmInventoryScriptCall(&g->inventory, api, args, result);
     // What the player obtains is shown at the bottom left.
-    if (api == BM_SCRIPT_API_give && *result > 0) bmGameNotice(g, (uint32_t)args[0], 0xFFFF, *result);
+    if (api == BM_SCRIPT_API_give && *result > 0)
+    {
+      bmGameNotice(g, (uint32_t)args[0], 0xFFFF, *result);
+      g->pickupSound = 1;
+    }
     break;
   case BM_SCRIPT_API_attach:
   case BM_SCRIPT_API_attach_for:

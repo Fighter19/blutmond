@@ -83,6 +83,11 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/voice_hero.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/voice_vesper.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/teleport.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/hit_bat.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/hit_moon.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/hit_dummy.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/pickup.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/fanfare.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/use_debug_mirror.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/teleporter.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/drop.ms
@@ -886,7 +891,7 @@ if(BM_PLATFORM STREQUAL "host")
         add_test(NAME gdb_session_script_breakpoint
           COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/gdb_session.py $<TARGET_FILE:bmlink>
             ${BM_GBA_BUILD_DIR}/game_autoplay_native.gba ${BM_GBA_BUILD_DIR}/game_autoplay_native.elf
-            ${BM_GBA_BUILD_DIR}/test_level_native.elf assets/test_room/scripts/bat.ms 26)
+            ${BM_GBA_BUILD_DIR}/test_level_native.elf assets/test_room/scripts/bat.ms 27)
         set_tests_properties(gdb_session_script_breakpoint PROPERTIES TIMEOUT 120)
       endif()
       # GBA to GBA (docs/spec/link-protocol.md section 9), two emulated GBAs joined by a cable.

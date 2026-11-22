@@ -55,6 +55,10 @@ for each screen effect, and a teleporter at the east end back to the first room.
 starts in that room (`--room debug_lobby`), `--debug-item` puts the mirror in the bag at the
 start.
 
+Sounds: each enemy struck sounds its own (an `Enemy` record's `hit_sound`: the bats squeak; the
+moon bat and the training dummy name theirs in their scripts), an item picked up chimes (the
+effect `pickup`, played by the engine), and the defeated boss gets a fanfare.
+
 Every weapon has a list of **commands** (directions, then a button, like Down,
 Down-Fwd, Fwd + B for the Short Sword's Lunge), and a charm worn gives its commands with any
 weapon (the Crimson Charm absorbs blood, the Moon Charm flips gravity). While attacking the player cannot walk, but a run's speed fades rather than stopping, and in the air the player steers; each weapon's record says otherwise if wanted (`ground_move`, `air_move` in the Data tab). Up + B strikes above, Down + B sweeps low, and in the air stabs downwards (bouncing off what it hits). Start, Commands lists

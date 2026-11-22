@@ -8,6 +8,7 @@ record Bat {
   drop = Potion
   drop_chance = 50
   weak = Holy
+  hit_sound = "hit_bat"
 }
 
 # A faster bat that hits harder. Set Kind = FastBat on a bat in Tiled to use it.

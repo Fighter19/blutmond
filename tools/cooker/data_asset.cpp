@@ -273,6 +273,8 @@ public:
       Record &base = records_[it->second];
       if (base.table != r.table) throw DataError{r.line, "'" + r.base + "' is a " + base.table + ", not a " + r.table};
       build(base);
+      // A base that failed has no bytes: copying them would leave this one without room.
+      if (base.bytes.empty()) throw DataError{r.line, "'" + r.base + "', which it starts as a copy of, has errors"};
       r.bytes = base.bytes;
     }
     else r.bytes = s->defaults;

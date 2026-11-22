@@ -400,6 +400,14 @@ static void testDataErrors()
   TEST_ASSERT(err("table Weapon\nrecord A { title = \"open }").find("closing quote") != std::string::npos);
   TEST_ASSERT(err("table Weapon\nrecord A { attack = 1").find("no closing '}'") != std::string::npos);
   TEST_ASSERT(err("table Stats\nrecord A { }", "table Weapon\nrecord B { upgrade = A }").find("is a Stats, not a Weapon") != std::string::npos);
+  // A copy of a record with errors is an error too (it once crashed the cooker: no bytes to copy).
+  {
+    Cooked c;
+    cookPack(c, {structures}, {write("e.bmdata", "table Weapon\nrecord A { attack = \"x\" }\nrecord B : A { attack = 2 }")});
+    bool copyError = false;
+    for (const ReportEntry &e : c.report.entries) copyError |= e.message.find("which it starts as a copy of, has errors") != std::string::npos;
+    TEST_ASSERT(copyError);
+  }
 }
 
 int main(int argc, char **argv)

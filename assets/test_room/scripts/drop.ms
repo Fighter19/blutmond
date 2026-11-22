@@ -17,8 +17,7 @@ event tick() {
 }
 
 event touch() {
-  give(Gives, 1);
-  play_sound(#jump);
+  give(Gives, 1);   // with the pickup sound
   destroy();
 }
 

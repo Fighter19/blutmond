@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="24" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="thud" wave="saw" attack="0" decay="12" sustain="0" release="4" volume="190" pan="0"/>
+ <instrument name="rasp" wave="noise" attack="0" decay="6" sustain="0" release="2" volume="120" pan="0"/>
+ <track name="thud" instrument="thud">
+  <note t="0" key="40" len="8" vel="120"/>
+  <note t="4" key="35" len="10" vel="120"/>
+ </track>
+ <track name="rasp" instrument="rasp">
+  <note t="0" key="50" len="6" vel="100"/>
+ </track>
+</song>

@@ -33,6 +33,7 @@ function hud() {
 }
 
 event hit(int amount) {
+  play_sound(#hit_moon);
   if health <= 0 { gotostate Dying; }
   else if health <= Health / 2 {
     // Enraged: faster, and the frantic arpeggio joins the music.
@@ -134,6 +135,7 @@ begin:
     Shots += 1;
   }
   hide();
+  play_music(#fanfare);   // once (the song does not loop), over the silence the fight left
   spawn_with(#Drop, #IronHelm);
   say_line(#VesperFades);
   wait_until(dialogue_done());
