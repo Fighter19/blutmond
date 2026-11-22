@@ -10,7 +10,10 @@ Step 3 built: `Attachment` classes on the player
 `HighJump` attachment that makes jumps go higher. Where step 3 differs from sections 3 and 9:
 8 slots, all the player's, no attachments on actors yet; the game buttons' mapping is fixed;
 attachments keep no `save` variables; `impulse` (section 7) came early, for the test;
-`jumped()` and `landed()` arrive after the body step. Steps 4 to 8 are open. Milestone M14 in [../PLAN.md](../PLAN.md).
+`jumped()` and `landed()` arrive after the body step. The room as an owner (section 8) is
+built too: the map properties `attach` and `Class.variable`, 4 room slots, `room_attach` and
+`room_detach`, `save` variables per room; instead of an event `entered_room()` they get
+`attached()`, which happens on every entry. The rest of steps 4 to 8 is open. Milestone M14 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 
@@ -367,7 +370,7 @@ Room-wide scripting without an object to hang it on: the room itself owns attach
   entered again; a room's `save` variables keep what has to last (a lever pulled, a boss
   beaten), keyed by the room and the slot.
 - They get `tick()` and state code every frame after the player's attachments and before
-  the room's objects, and `entered_room()` once; game buttons and the player's events
+  the room's objects (and `attached()` on every entry); game buttons and the player's events
   (`jumped`, `landed`, ...) are not theirs. Reading `x`, `y` gives the camera's position.
 - What they are for: weather and wind, timed events, a boss arena that locks its doors
   while the fight lasts, music cues, a puzzle that watches several levers (through

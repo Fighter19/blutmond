@@ -648,6 +648,17 @@ Bytes objectsChunk(const tmx::Map &map, StringTable &strings, Report &report, ui
     for (const tmx::Object &o : g.objects) objects.push_back(&o);
   }
 
+  // The room's own scripts (attachable-scripts.md §8, "The room as an owner"): the map's
+  // properties `attach` and `Class.variable` go into one more object of the class "@room".
+  tmx::Object roomObject;
+  roomObject.type = "@room";
+  roomObject.id = 0;
+  for (const auto &[key, value] : map.properties)
+    if (key == "attach" || (key.find('.') != std::string::npos && key.find('.') > 0)) roomObject.properties[key] = value;
+  if (roomObject.properties.count("attach")) objects.push_back(&roomObject);
+  else if (!roomObject.properties.empty())
+    report.warning("room-scripts", map.path, "properties for the room's attachments, but no 'attach' property");
+
   int starts = 0;
   Bytes entries, props;
   uint32_t propsBase = 4 + 20 * uint32_t(objects.size());

@@ -206,14 +206,26 @@ every other file of the same module.
 
 ### Attachments
 
-A class that `extends Attachment` is not placed in rooms: it is attached to the player at run
-time in one of 8 slots ([../plans/attachable-scripts.md](../plans/attachable-scripts.md), the
-runtime in `src/world/attachments.h`). Every frame, before the player's body step and in
+A class that `extends Attachment` is not placed in rooms as an object: it is attached at run
+time to the player, in one of 8 slots, or to the room, in one of 4
+([../plans/attachable-scripts.md](../plans/attachable-scripts.md), the runtime in
+`src/world/attachments.h`). Every frame, before the player's body step and in
 slot order, each attachment gets `press`/`release` for the game buttons that changed (`#Jump`
 A, `#Attack` B, `#Dash` L, `#Spell` R, `#Use` Select), then `tick()`, then its state code runs;
 after the body step it gets `jumped()` and `landed()`. `attach(slot, #Class)` (replacing what
 is there; `attached()` runs at once), `attach_for(slot, #Class, frames)` and `detach(slot)`
 (`detached()` first) can be called by any script; `impulse(vx, vy)` adds to the player's speed.
+
+**The room's attachments** come from the room's property `attach = Wind, Rain`
+([room-format.md](room-format.md) §1): when the room is entered they are attached in its
+slots in that order (`attached()`), with their `var(Category)` variables set from the
+room's properties `Wind.Strength = 2`; when it is left they get `detached()` while it is still
+there. Each frame, after the player's body step and before the room's objects, they get
+`tick()` and their state code runs; game buttons and `jumped`/`landed` are not theirs. `x`
+and `y` read the camera's position. Their `save` variables are kept for the room and the
+slot (as an object's are), so a lever pulled or a fight won stays so. `room_attach(slot,
+#Class)` and `room_detach(slot)` work on the room's slots from any script. A state loaded in
+a room brings the room's attachments as they were.
 
 The compiler refuses in an attachment what acts on a room's own object (`hide`, `show`,
 `play_anim`, `finish_anim`, `anim_done`, `face_player`, `player_distance`, `touching_player`,
@@ -221,7 +233,7 @@ The compiler refuses in an attachment what acts on a room's own object (`hide`, 
 variables `home_x`, `home_y`; `x`, `y` and `facing` read the player's and cannot be written.
 The runtime ignores such calls from a module made by hand. An attachment's class is kept by
 the hash of its name; its state is in the snapshot (state.md). Not yet: attachments on actors,
-`save` variables of attachments, attachments from the inventory.
+`save` variables of the player's attachments, attachments from the inventory.
 
 ### Structures
 
@@ -483,4 +495,4 @@ for now), per-class modules loaded on room changes.
   functions 22 to 24; the inventory functions 25 to 29.
 - 0.7: one bytecode module per class; native images of version 2 with a module per class.
 - 0.8: module version 2: nine events, class kinds, events with a parameter; `extends
-  Attachment`; runtime functions 30 to 33.
+  Attachment`; runtime functions 30 to 33; the room's attachments, runtime functions 34, 35.

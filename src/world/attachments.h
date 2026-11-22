@@ -5,16 +5,22 @@
 #pragma once
 
 // Attachments (docs/plans/attachable-scripts.md §3): small scripts of classes that extend
-// `Attachment`, attached to the player at run time in numbered slots. Each is an interpreter
+// `Attachment`, attached at run time in numbered slots to the player or to the room (§8, "The
+// room as an owner"). Each is an interpreter
 // instance like a room's scripted object; its class is kept by the hash of its name, so it
 // survives a module being exchanged. The game runs them every frame before the player's body
 // step, in slot order: game buttons that changed (press, release), tick, state code; after
-// the body step, what happened to the player (jumped, landed).
+// the body step, what happened to the player (jumped, landed). The room's attachments come
+// after the body step and before the room's objects: tick and state code. They are attached
+// from the room's property `attach` when the room is entered, and detached when it is left.
 
 #include "shared.h"
 #include "script_api.h"
 
-#define BM_ATTACH_SLOTS 8
+#define BM_ATTACH_PLAYER_SLOTS 8   // slots 0 to 7: the player's
+#define BM_ATTACH_ROOM_SLOTS 4     // slots 8 to 11: the room's
+#define BM_ATTACH_ROOM_FIRST BM_ATTACH_PLAYER_SLOTS
+#define BM_ATTACH_SLOTS (BM_ATTACH_PLAYER_SLOTS + BM_ATTACH_ROOM_SLOTS)
 
 // Game buttons: what the keys mean to attachments (press/release get these names).
 #define BM_ATTACH_BUTTONS(X) \
@@ -34,15 +40,15 @@ typedef struct BmAttachments
   uint16_t lifetime[BM_ATTACH_SLOTS];     // frames left; 0: until detached
   // Derived: the class in the actors' class table, or -1 (not in the pack now: the slot rests).
   int8_t cls[BM_ATTACH_SLOTS];
-  uint8_t occupied;                       // a bit per slot with an attachment: nothing to do if 0
+  uint16_t occupied;                      // a bit per slot with an attachment: nothing to do if 0
   uint16_t buttonName[8];                 // string ids of the game buttons' names
 } BmAttachments;
 
 struct BmGame;
 
-/// Attaches the Attachment class named `className` (string id) in `slot`, replacing what is
-/// there; it gets `attached()` at once. `lifetime` frames (0: until detached). False if there
-/// is no such class or slot.
+/// Attaches the Attachment class named `className` (string id) in `slot` (0 to 7: the
+/// player's, 8 to 11: the room's), replacing what is there; it gets `attached()` at once.
+/// `lifetime` frames (0: until detached). False if there is no such class or slot.
 bool bmAttachmentsAttach(struct BmGame *pGame, uint8_t slot, uint16_t className, uint16_t lifetime);
 
 /// Detaches what is in `slot` (it gets `detached()` first).
@@ -54,6 +60,16 @@ void bmAttachmentsFrame(struct BmGame *pGame, uint16_t keys, uint16_t previousKe
 
 /// After the player's body step: jumped(), landed() (BM_BODY_* events).
 void bmAttachmentsBodyEvents(struct BmGame *pGame, uint32_t bodyEvents);
+
+/// The room's attachments, once a frame before the room's objects: tick, state code, lifetimes.
+void bmAttachmentsRoomFrame(struct BmGame *pGame);
+
+/// Before the room is left (still loaded): detaches the room's attachments.
+void bmAttachmentsLeaveRoom(struct BmGame *pGame);
+
+/// After a room was entered anew (its objects are read): attaches what its `attach` property
+/// names, sets their variables from its `Class.variable` properties and kept `save` values.
+void bmAttachmentsEnterRoom(struct BmGame *pGame);
 
 /// After the pack's scripts were (re)loaded: finds each slot's class again.
 void bmAttachmentsBind(struct BmGame *pGame);

@@ -12,19 +12,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-static uint8_t *s_data;
-static uint32_t s_size;
+static uint8_t *s_data, *s_windData;
+static uint32_t s_size, s_windSize;
 static BmPack s_pack;
 static BmGame s_game;
 
-static void start(void)
+static void startWith(uint8_t *data, uint32_t size, const char *room)
 {
   bmHalHostReset();
   BmDeviceHandle device = NULL;
   bmCreateDevice(bmGetPhysicalDevice(), &device);
   g_defaultDevice = device;
-  bmPackOpen(&s_pack, s_data, s_size, true);
-  bmGameStart(&s_game, &s_pack, NULL);
+  bmPackOpen(&s_pack, data, size, true);
+  bmGameStart(&s_game, &s_pack, room);
+}
+
+static void start(void)
+{
+  startWith(s_data, s_size, NULL);
 }
 
 static void frames(int n, uint16_t keys)
@@ -274,21 +279,65 @@ static void testAnAttachmentMakesThePlayerJumpHigher(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// The room as an owner (attachable-scripts.md §8): the second room of the wind pack has
+// `attach = Wind` and `Wind.Strength = 1.0`. While the player is there the wind blows them
+// along; leaving detaches it; coming back attaches it again, and its `save` variable counted
+// both visits.
+static void testTheRoomsAttachmentsComeAndGoWithTheRoom(void)
+{
+  if (s_windData == NULL) return;
+  startWith(s_windData, s_windSize, "test_room_2");
+  BmAttachments *t = &s_game.attachments;
+  const uint8_t slot = BM_ATTACH_ROOM_FIRST;
+  int32_t *fields = &t->fields[slot * BM_SCRIPT_MAX_FIELDS];
+  TEST_ASSERT(t->classKey[slot] != 0 && t->cls[slot] >= 0);
+  TEST_ASSERT(fields[0] == BM_FIX(1) && fields[1] == 1);   // Strength from the room, Visits
+  frames(20, 0);
+  int32_t x0 = s_game.player.x;
+  frames(30, 0);
+  printf("    blown %d px in 30 frames\n", (int)BM_FIX_INT(s_game.player.x - x0));
+  TEST_ASSERT(s_game.player.x > x0 + BM_FIX(8));
+  TEST_ASSERT(fields[2] >= 50);   // Ticks
+  // Through the west door: the wind stays behind.
+  bmBodyPlace(&s_game.player, 8, 160);
+  frames(2, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0);
+  TEST_ASSERT(t->classKey[slot] == 0 && (t->occupied >> BM_ATTACH_ROOM_FIRST) == 0);
+  // Back through the east door: attached again, the visits counted on.
+  frames(60, 0);
+  bmBodyPlace(&s_game.player, 990, 80);
+  frames(30, BM_KEY_RIGHT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
+  TEST_ASSERT(t->classKey[slot] != 0 && fields[1] == 2 && fields[0] == BM_FIX(1));
+  // A script's room_attach and room_detach work on the same slots: here by hand.
+  bmAttachmentsDetach(&s_game, slot);
+  TEST_ASSERT(t->classKey[slot] == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+static uint8_t *readFile(const char *path, uint32_t *pSize)
+{
+  FILE *f = fopen(path, "rb");
+  if (!f) { perror(path); return NULL; }
+  fseek(f, 0, SEEK_END);
+  *pSize = (uint32_t)ftell(f);
+  fseek(f, 0, SEEK_SET);
+  uint8_t *data = malloc(*pSize);
+  if (fread(data, 1, *pSize, f) != *pSize) { fclose(f); free(data); return NULL; }
+  fclose(f);
+  return data;
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
   {
-    fprintf(stderr, "usage: test_game <pack>\n");
+    fprintf(stderr, "usage: test_game <pack> [pack with wind]\n");
     return 2;
   }
-  FILE *f = fopen(argv[1], "rb");
-  if (!f) { perror(argv[1]); return 1; }
-  fseek(f, 0, SEEK_END);
-  s_size = (uint32_t)ftell(f);
-  fseek(f, 0, SEEK_SET);
-  s_data = malloc(s_size);
-  if (fread(s_data, 1, s_size, f) != s_size) return 1;
-  fclose(f);
+  s_data = readFile(argv[1], &s_size);
+  if (s_data == NULL) return 1;
+  if (argc > 2) s_windData = readFile(argv[2], &s_windSize);
 
   RUN_TEST(testAutopilotPlaysThroughTheLevel);
   RUN_TEST(testFallingIntoAPitRespawnsOnSafeGround);
@@ -297,6 +346,8 @@ int main(int argc, char **argv)
   RUN_TEST(testTheBatChasesHitsAndGoesHome);
   RUN_TEST(testAPickupStaysTaken);
   RUN_TEST(testAnAttachmentMakesThePlayerJumpHigher);
+  RUN_TEST(testTheRoomsAttachmentsComeAndGoWithTheRoom);
   free(s_data);
+  free(s_windData);
   return TEST_RESULT();
 }

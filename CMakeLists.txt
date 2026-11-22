@@ -518,8 +518,17 @@ if(BM_PLATFORM STREQUAL "host")
   target_link_libraries(test_game PRIVATE blutmond)
   target_include_directories(test_game PRIVATE apps/game)
   target_compile_options(test_game PRIVATE ${BM_WARNINGS})
-  add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk)
-  set_tests_properties(test_game PROPERTIES FIXTURES_REQUIRED test_level_pack)
+  # The room as an owner of attachments: the second room with `attach = Wind`.
+  add_test(NAME make_wind_room
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/set_room_properties.py
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${cooked}/room2_wind.tmx "attach=Wind" "Wind.Strength=1.0")
+  set_tests_properties(make_wind_room PROPERTIES FIXTURES_SETUP wind_room)
+  add_test(NAME cook_test_level_wind
+    COMMAND bmcook --profile gba -o ${cooked}/test_level_wind_gba.bmpk
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${cooked}/room2_wind.tmx ${BM_TEST_LEVEL_ASSETS} ${PROJECT_SOURCE_DIR}/tests/scripts/wind.ms)
+  set_tests_properties(cook_test_level_wind PROPERTIES FIXTURES_REQUIRED wind_room FIXTURES_SETUP test_level_wind)
+  add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk ${cooked}/test_level_wind_gba.bmpk)
+  set_tests_properties(test_game PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_wind")
   # Live reload: a variant of the level with one background tile changed.
   add_test(NAME make_room_variant
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/make_room_variant.py
@@ -650,12 +659,13 @@ if(BM_PLATFORM STREQUAL "host")
         # On the GBA too: no deaths, one room change, the same sound as on the host (checksum
         # over every sample mixed), and few frames missed. From ROM: at most 4 (2 while the new
         # room is loaded). The multiboot image runs everything from slow RAM (it is for
-        # development): there the room load takes 3, the save point 1, and with music playing a
-        # busy frame can go over once more, so 6 are allowed.
+        # development): there the room load takes 3, the save point 1, the snapshot these images
+        # write at game frame 300 for the state tests 2 (it is over 1.5 KB, written field by
+        # field), and with music playing a busy frame can go over once more, so 7 are allowed.
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         set(lag 4)
         if(image STREQUAL "game_autoplay_mb")
-          set(lag 6)
+          set(lag 7)
         endif()
         add_test(NAME game_render_${image}
           COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 1300 --until ${elf}:bm_game_stats+24=1000
@@ -705,7 +715,7 @@ if(BM_PLATFORM STREQUAL "host")
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         set(lag 4)
         if(image STREQUAL "game_autoplay_native_mb")
-          set(lag 6)
+          set(lag 7)   # as game_autoplay_mb above
         endif()
         add_test(NAME native_render_${image}
           COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 1300 --until ${elf}:bm_game_stats+24=1000

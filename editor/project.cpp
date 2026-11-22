@@ -230,7 +230,7 @@ void Project::analyse()
       m.w = bmRead16(o + 8);
       m.h = bmRead16(o + 10);
       m.name = stringAt(pack, bmRead16(o + 12));
-      objects_.push_back(m);
+      if (m.type != "@room") objects_.push_back(m);   // the room's own scripts: not a marker
     }
   }
 

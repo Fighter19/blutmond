@@ -23,6 +23,7 @@
 #define BM_ACTORS_MODULES 24   // script modules in a pack (one per class)
 #define BM_ACTORS_CLASSES 32   // classes in all of them
 #define BM_ACTORS_OWNER 0xFF   // `current` while an attachment of the player runs
+#define BM_ACTORS_ROOM 0xFE    // `current` while an attachment of the room runs
 
 struct BmGame;
 
@@ -49,6 +50,7 @@ typedef struct BmActors
   int32_t homeX[BM_ACTORS_MAX], homeY[BM_ACTORS_MAX];
   uint8_t pendingDoor;                 // object index + 1 of a door to go through after the frame
   uint8_t current;                     // the actor whose script is running
+  uint8_t currentSlot;                 // while an attachment runs: its slot
 
   // State.
   uint32_t moduleHash;                 // the modules the state below belongs to

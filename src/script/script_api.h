@@ -57,7 +57,9 @@ typedef enum BmScriptType {
   X(attach,             BOOL, 2, INT,  NAME, VOID, 0) \
   X(attach_for,         BOOL, 3, INT,  NAME, INT,  0) \
   X(detach,             VOID, 1, INT,  VOID, VOID, 0) \
-  X(impulse,            VOID, 2, FIX,  FIX,  VOID, 0)
+  X(impulse,            VOID, 2, FIX,  FIX,  VOID, 0) \
+  X(room_attach,        BOOL, 2, INT,  NAME, VOID, 0) \
+  X(room_detach,        VOID, 1, INT,  VOID, VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -71,7 +73,8 @@ typedef enum BmScriptType {
 // attach(slot, #Class), attach_for(slot, #Class, frames), detach(slot): the player's
 // attachment slots (src/world/attachments.h); attach replaces what is in the slot and is false
 // if there is no Attachment class of that name. impulse(vx, vy): added to the player's speed
-// once.
+// once. room_attach(slot, #Class), room_detach(slot): the same for the room's 4 slots; the
+// room detaches them when it is left.
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {

@@ -364,6 +364,9 @@ static void enterRoomSound(BmGame *g)
 
 static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
 {
+  // The room being left takes its attachments with it (they get detached() while it is
+  // still there). A state just loaded (not fresh) brings its own.
+  if (fresh) bmAttachmentsLeaveRoom(g);
   BmResult r = bmRoomOpen(&g->room, g->pPack, index);
   if (r != BM_SUCCESS) return r;
   g->roomIndex = index;
@@ -377,6 +380,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   readObjects(g);
   loadSprites(g);
   bmActorsEnterRoom(g, fresh);
+  if (fresh) bmAttachmentsEnterRoom(g);
   enterRoomSound(g);
   return bmRoomShow(&g->room, 0, 0);
 }
@@ -525,7 +529,9 @@ void bmGameFrame(BmGame *g, uint16_t keys)
       break;
     }
   }
-  // Scripted objects; a door one of them opened is gone through after all had their turn.
+  // The room's attachments, then its scripted objects; a door one of them opened is gone
+  // through after all had their turn.
+  bmAttachmentsRoomFrame(g);
   bmActorsFrame(g);
   if (g->actors.pendingDoor != 0)
   {

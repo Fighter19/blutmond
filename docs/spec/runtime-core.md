@@ -324,6 +324,8 @@ value is dropped and counts as a script error.
 | 31 | `attach_for(slot, class, frames)` | the same, detached by itself after that many frames (at the end of a frame's work) |
 | 32 | `detach(slot)` | `detached()`, then the slot is empty |
 | 33 | `impulse(vx, vy)` | added to the player's speed once (fix) |
+| 34 | `room_attach(slot, class)` | like `attach`, in the room's slot 0 to 3; the room detaches it when it is left |
+| 35 | `room_detach(slot)` | like `detach`, for the room's slot |
 
 `dist(a, b) = max(|a|, |b|) + min(|a|, |b|) / 2`.
 

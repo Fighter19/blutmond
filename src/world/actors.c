@@ -129,6 +129,13 @@ static bool touchesPlayer(const BmGame *g, uint8_t i)
   return px - hw < x + w && x < px + hw && py - ph < y + h && y < py;
 }
 
+// The key of a `save` variable of the room's attachment in `slot`: like an object's, with
+// 0xFFF0 + the room's slot number in place of the object's id.
+static uint32_t roomSlotKey(const BmGame *g, uint8_t slot, uint16_t field)
+{
+  return ((g->roomIndex & 0xFF) << 24) | ((uint32_t)(0xFFF0u + slot - BM_ATTACH_ROOM_FIRST) << 8) | (field & 0xFF);
+}
+
 static uint32_t storeKey(const BmGame *g, uint8_t i, uint16_t field)
 {
   return ((g->roomIndex & 0xFF) << 24) | ((uint32_t)g->objects[g->actors.object[i]].persistentId << 8) | (field & 0xFF);
@@ -271,19 +278,34 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_attach_for:
   {
     uint16_t lifetime = api == BM_SCRIPT_API_attach_for ? (uint16_t)(args[2] < 1 ? 1 : args[2] > 0xFFFF ? 0xFFFF : args[2]) : 0;
-    uint8_t current = a->current;
-    *result = args[0] >= 0 && args[0] < BM_ATTACH_SLOTS && bmAttachmentsAttach(g, (uint8_t)args[0], (uint16_t)args[1], lifetime);
+    uint8_t current = a->current, slot = a->currentSlot;
+    *result = args[0] >= 0 && args[0] < BM_ATTACH_PLAYER_SLOTS && bmAttachmentsAttach(g, (uint8_t)args[0], (uint16_t)args[1], lifetime);
     a->current = current;
+    a->currentSlot = slot;
     break;
   }
   case BM_SCRIPT_API_detach:
-    if (args[0] >= 0 && args[0] < BM_ATTACH_SLOTS)
+  case BM_SCRIPT_API_room_detach:
+  {
+    int32_t first = api == BM_SCRIPT_API_detach ? 0 : BM_ATTACH_ROOM_FIRST;
+    int32_t count = api == BM_SCRIPT_API_detach ? BM_ATTACH_PLAYER_SLOTS : BM_ATTACH_ROOM_SLOTS;
+    if (args[0] >= 0 && args[0] < count)
     {
-      uint8_t current = a->current;
-      bmAttachmentsDetach(g, (uint8_t)args[0]);
+      uint8_t current = a->current, slot = a->currentSlot;
+      bmAttachmentsDetach(g, (uint8_t)(first + args[0]));
       a->current = current;
+      a->currentSlot = slot;
     }
     break;
+  }
+  case BM_SCRIPT_API_room_attach:
+  {
+    uint8_t current = a->current, slot = a->currentSlot;
+    *result = args[0] >= 0 && args[0] < BM_ATTACH_ROOM_SLOTS && bmAttachmentsAttach(g, (uint8_t)(BM_ATTACH_ROOM_FIRST + args[0]), (uint16_t)args[1], 0);
+    a->current = current;
+    a->currentSlot = slot;
+    break;
+  }
   case BM_SCRIPT_API_impulse:
     g->player.vx += args[0];
     g->player.vy += args[1];
@@ -310,6 +332,14 @@ static int32_t hostGetVar(void *pContext, BmVmInstance *inst, uint16_t var)
   BmGame *g = pContext;
   BmActors *a = &g->actors;
   uint8_t i = a->current;
+  if (i == BM_ACTORS_ROOM)
+  {
+    // The room's attachments read the camera's position.
+    if (var == BM_SCRIPT_VAR_x) return BM_FIX(g->room.cameraX);
+    if (var == BM_SCRIPT_VAR_y) return BM_FIX(g->room.cameraY);
+    if (var == BM_SCRIPT_VAR_facing) return 1;
+    return 0;
+  }
   if (i >= BM_ACTORS_MAX)
   {
     // An attachment reads its owner's: the player's.
@@ -351,10 +381,23 @@ static void hostFieldChanged(void *pContext, BmVmInstance *inst, uint16_t field)
   BmGame *g = pContext;
   BmActors *a = &g->actors;
   uint8_t flags = 0;
-  if (a->current >= BM_ACTORS_MAX) return;   // attachments keep no `save` variables yet
-  bmVmClassField(moduleOf(a, a->current), inst->classIndex, (uint8_t)field, NULL, NULL, &flags, NULL);
-  if (!(flags & BM_SCRIPT_FIELD_SAVE)) return;
-  uint32_t key = storeKey(g, a->current, field);
+  uint32_t key;
+  if (a->current == BM_ACTORS_ROOM)
+  {
+    // The room's attachments keep `save` variables by room, slot and field.
+    int8_t c = g->attachments.cls[a->currentSlot];
+    if (c < 0) return;
+    bmVmClassField(&a->modules[a->classModule[(uint8_t)c]], inst->classIndex, (uint8_t)field, NULL, NULL, &flags, NULL);
+    if (!(flags & BM_SCRIPT_FIELD_SAVE)) return;
+    key = roomSlotKey(g, a->currentSlot, field);
+  }
+  else
+  {
+    if (a->current >= BM_ACTORS_MAX) return;   // the player's attachments keep no `save` variables yet
+    bmVmClassField(moduleOf(a, a->current), inst->classIndex, (uint8_t)field, NULL, NULL, &flags, NULL);
+    if (!(flags & BM_SCRIPT_FIELD_SAVE)) return;
+    key = storeKey(g, a->current, field);
+  }
   for (uint8_t k = 0; k < a->storeCount; k++)
   {
     if (a->storeKey[k] == key)
@@ -816,6 +859,11 @@ static void storeSlot(BmAttachments *t, uint8_t slot, const BmVmInstance *inst)
   memcpy(&t->fields[slot * BM_SCRIPT_MAX_FIELDS], inst->fields, sizeof(inst->fields));
 }
 
+static uint8_t ownerOf(uint8_t slot)
+{
+  return slot < BM_ATTACH_ROOM_FIRST ? BM_ACTORS_OWNER : BM_ACTORS_ROOM;
+}
+
 // Runs an event of the attachment in `slot`, if there is one with a class.
 static void slotEvent(BmGame *g, uint8_t slot, BmScriptEvent event, int32_t arg)
 {
@@ -827,12 +875,37 @@ static void slotEvent(BmGame *g, uint8_t slot, BmScriptEvent event, int32_t arg)
   BmVmHost host = hostOf(g);
   BmVmInstance inst;
   loadSlot(t, slot, a->classInModule[c], &inst);
-  uint8_t current = a->current;
-  a->current = BM_ACTORS_OWNER;
+  uint8_t current = a->current, currentSlot = a->currentSlot;
+  a->current = ownerOf(slot);
+  a->currentSlot = slot;
   bmVmEventWith(m, &host, &inst, event, arg);
   a->current = current;
+  a->currentSlot = currentSlot;
   // The event may have detached or replaced this very attachment.
   if (t->classKey[slot] != 0 && t->cls[slot] == (int8_t)c) storeSlot(t, slot, &inst);
+}
+
+// tick(), state code and the lifetime of the attachment in `slot`.
+static void slotFrame(BmGame *g, uint8_t slot)
+{
+  BmActors *a = &g->actors;
+  BmAttachments *t = &g->attachments;
+  slotEvent(g, slot, BM_SCRIPT_EVENT_tick, 0);
+  if (t->classKey[slot] == 0 || t->cls[slot] < 0) return;
+  uint8_t c = (uint8_t)t->cls[slot];
+  BmVmHost host = hostOf(g);
+  BmVmInstance inst;
+  loadSlot(t, slot, a->classInModule[c], &inst);
+  a->current = ownerOf(slot);
+  a->currentSlot = slot;
+  bmVmStep(&a->modules[a->classModule[c]], &host, &inst);
+  if (t->classKey[slot] != 0 && t->cls[slot] == (int8_t)c) storeSlot(t, slot, &inst);
+  // A lifetime ends after the frame's work.
+  if (t->lifetime[slot] != 0 && --t->lifetime[slot] == 0)
+  {
+    t->lifetime[slot] = 1;   // detached() still sees it attached
+    bmAttachmentsDetach(g, slot);
+  }
 }
 
 void bmAttachmentsBind(BmGame *g)
@@ -842,7 +915,7 @@ void bmAttachmentsBind(BmGame *g)
   for (uint8_t s = 0; s < BM_ATTACH_SLOTS; s++)
   {
     t->cls[s] = t->classKey[s] != 0 ? attachmentClass(g, t->classKey[s]) : -1;
-    if (t->classKey[s] != 0) t->occupied |= (uint8_t)(1u << s);
+    if (t->classKey[s] != 0) t->occupied |= (uint16_t)(1u << s);
   }
 }
 
@@ -858,24 +931,73 @@ static void findButtonNames(BmGame *g)
   for (uint8_t b = 0; b < sizeof(names) / sizeof(names[0]); b++) t->buttonName[b] = findString(g->pPack, names[b]);
 }
 
-bool bmAttachmentsAttach(BmGame *g, uint8_t slot, uint16_t className, uint16_t lifetime)
+// The room's own object (class "@room", written by the cooker from the map's properties).
+static const BmObjectView *roomObject(const BmGame *g)
+{
+  for (uint16_t o = 0; o < g->objectCount; o++)
+    if (strcmp(g->objects[o].className, "@room") == 0) return &g->objects[o];
+  return NULL;
+}
+
+// A room attachment's variables: the room's `Class.variable` properties for its var(Category)
+// variables, then what its `save` variables kept.
+static void applyRoomValues(BmGame *g, uint8_t slot, uint8_t c, BmVmInstance *inst)
+{
+  BmActors *a = &g->actors;
+  const BmVmModule *m = &a->modules[a->classModule[c]];
+  const char *cls = bmPackString(g->pPack, bmVmClassName(m, a->classInModule[c]));
+  const BmObjectView *o = roomObject(g);
+  size_t clsLen = cls != NULL ? strlen(cls) : 0;
+  for (uint8_t f = 0; f < bmVmClassFieldCount(m, a->classInModule[c]); f++)
+  {
+    uint16_t nameId;
+    uint8_t type, flags;
+    bmVmClassField(m, a->classInModule[c], f, &nameId, &type, &flags, NULL);
+    const char *name = bmPackString(g->pPack, nameId);
+    for (uint16_t p = 0; o != NULL && cls != NULL && name != NULL && (flags & BM_SCRIPT_FIELD_EDITABLE) && p < o->propertyCount; p++)
+    {
+      const char *key = bmPackString(g->pPack, bmRead16(o->pProperties + p * 4));
+      if (key == NULL || strncmp(key, cls, clsLen) != 0 || key[clsLen] != '.' || strcmp(key + clsLen + 1, name) != 0) continue;
+      uint16_t valueId = bmRead16(o->pProperties + p * 4 + 2);
+      const char *value = bmPackString(g->pPack, valueId);
+      if (value == NULL) break;
+      if (type == BM_SCRIPT_NAME || type == BM_SCRIPT_TEXT) inst->fields[f] = valueId;
+      else if (type == BM_SCRIPT_RECORD) inst->fields[f] = (int32_t)hashName(value);
+      else if (type == BM_SCRIPT_BOOL) inst->fields[f] = strcmp(value, "true") == 0 || strcmp(value, "1") == 0;
+      else inst->fields[f] = parseNumber(value, type == BM_SCRIPT_FIX);
+      break;
+    }
+  }
+  for (uint8_t k = 0; k < a->storeCount; k++)
+  {
+    uint8_t field = (uint8_t)a->storeKey[k];
+    if ((a->storeKey[k] & ~0xFFu) == (roomSlotKey(g, slot, 0) & ~0xFFu) && field < BM_SCRIPT_MAX_FIELDS) inst->fields[field] = a->storeValue[k];
+  }
+}
+
+static bool attachKey(BmGame *g, uint8_t slot, uint32_t key, uint16_t lifetime)
 {
   BmActors *a = &g->actors;
   BmAttachments *t = &g->attachments;
   if (slot >= BM_ATTACH_SLOTS) return false;
-  uint32_t key = hashName(bmPackString(g->pPack, className));
   int8_t c = attachmentClass(g, key);
   if (c < 0) return false;
   bmAttachmentsDetach(g, slot);
   BmVmInstance inst;
   bmVmInstanceInit(&a->modules[a->classModule[(uint8_t)c]], &inst, a->classInModule[(uint8_t)c]);
+  if (slot >= BM_ATTACH_ROOM_FIRST) applyRoomValues(g, slot, (uint8_t)c, &inst);
   t->classKey[slot] = key;
   t->cls[slot] = c;
-  t->occupied |= (uint8_t)(1u << slot);
+  t->occupied |= (uint16_t)(1u << slot);
   t->lifetime[slot] = lifetime;
   storeSlot(t, slot, &inst);
   slotEvent(g, slot, BM_SCRIPT_EVENT_attached, 0);
   return true;
+}
+
+bool bmAttachmentsAttach(BmGame *g, uint8_t slot, uint16_t className, uint16_t lifetime)
+{
+  return attachKey(g, slot, hashName(bmPackString(g->pPack, className)), lifetime);
 }
 
 void bmAttachmentsDetach(BmGame *g, uint8_t slot)
@@ -887,7 +1009,7 @@ void bmAttachmentsDetach(BmGame *g, uint8_t slot)
   if (t->classKey[slot] != key) return;   // detached() attached something else here
   t->classKey[slot] = 0;
   t->cls[slot] = -1;
-  t->occupied &= (uint8_t)~(1u << slot);
+  t->occupied &= (uint16_t)~(1u << slot);
   t->state[slot] = t->wait[slot] = 0;
   t->pc[slot] = t->timer[slot] = t->lifetime[slot] = 0;
   memset(&t->fields[slot * BM_SCRIPT_MAX_FIELDS], 0, sizeof(int32_t) * BM_SCRIPT_MAX_FIELDS);
@@ -895,37 +1017,22 @@ void bmAttachmentsDetach(BmGame *g, uint8_t slot)
 
 void bmAttachmentsFrame(BmGame *g, uint16_t keys, uint16_t previousKeys)
 {
-  BmActors *a = &g->actors;
   BmAttachments *t = &g->attachments;
-  if (t->occupied == 0) return;
+  if ((t->occupied & ((1u << BM_ATTACH_PLAYER_SLOTS) - 1)) == 0) return;
   static const uint16_t buttonKeys[] = {
 #define X(name, key) key,
     BM_ATTACH_BUTTONS(X)
 #undef X
   };
   uint16_t changed = (uint16_t)(keys ^ previousKeys);
-  BmVmHost host = hostOf(g);
   uint32_t started = bmHalCycles();
-  for (uint8_t s = 0; s < BM_ATTACH_SLOTS; s++)
+  for (uint8_t s = 0; s < BM_ATTACH_PLAYER_SLOTS; s++)
   {
     if (t->classKey[s] == 0 || t->cls[s] < 0) continue;
     for (uint8_t b = 0; b < sizeof(buttonKeys) / sizeof(buttonKeys[0]); b++)
       if ((changed & buttonKeys[b]) && t->buttonName[b] != BM_VM_NONE)
         slotEvent(g, s, (keys & buttonKeys[b]) ? BM_SCRIPT_EVENT_press : BM_SCRIPT_EVENT_release, t->buttonName[b]);
-    slotEvent(g, s, BM_SCRIPT_EVENT_tick, 0);
-    if (t->classKey[s] == 0 || t->cls[s] < 0) continue;
-    uint8_t c = (uint8_t)t->cls[s];
-    BmVmInstance inst;
-    loadSlot(t, s, a->classInModule[c], &inst);
-    a->current = BM_ACTORS_OWNER;
-    bmVmStep(&a->modules[a->classModule[c]], &host, &inst);
-    if (t->classKey[s] != 0 && t->cls[s] == (int8_t)c) storeSlot(t, s, &inst);
-    // A lifetime ends after the frame's work.
-    if (t->lifetime[s] != 0 && --t->lifetime[s] == 0)
-    {
-      t->lifetime[s] = 1;   // detached() still sees it attached
-      bmAttachmentsDetach(g, s);
-    }
+    slotFrame(g, s);
   }
   bm_script_cycles += bmHalCycles() - started;
 }
@@ -933,11 +1040,51 @@ void bmAttachmentsFrame(BmGame *g, uint16_t keys, uint16_t previousKeys)
 void bmAttachmentsBodyEvents(BmGame *g, uint32_t bodyEvents)
 {
   BmAttachments *t = &g->attachments;
-  if (t->occupied == 0 || (bodyEvents & (BM_BODY_JUMPED | BM_BODY_LANDED)) == 0) return;
-  for (uint8_t s = 0; s < BM_ATTACH_SLOTS; s++)
+  if ((t->occupied & ((1u << BM_ATTACH_PLAYER_SLOTS) - 1)) == 0 || (bodyEvents & (BM_BODY_JUMPED | BM_BODY_LANDED)) == 0) return;
+  for (uint8_t s = 0; s < BM_ATTACH_PLAYER_SLOTS; s++)
   {
     if (t->classKey[s] == 0) continue;
     if (bodyEvents & BM_BODY_JUMPED) slotEvent(g, s, BM_SCRIPT_EVENT_jumped, 0);
     if (bodyEvents & BM_BODY_LANDED) slotEvent(g, s, BM_SCRIPT_EVENT_landed, 0);
+  }
+}
+
+void bmAttachmentsRoomFrame(BmGame *g)
+{
+  BmAttachments *t = &g->attachments;
+  if ((t->occupied >> BM_ATTACH_ROOM_FIRST) == 0) return;
+  uint32_t started = bmHalCycles();
+  for (uint8_t s = BM_ATTACH_ROOM_FIRST; s < BM_ATTACH_SLOTS; s++)
+    if (t->classKey[s] != 0 && t->cls[s] >= 0) slotFrame(g, s);
+  bm_script_cycles += bmHalCycles() - started;
+}
+
+void bmAttachmentsLeaveRoom(BmGame *g)
+{
+  for (uint8_t s = BM_ATTACH_ROOM_FIRST; s < BM_ATTACH_SLOTS; s++) bmAttachmentsDetach(g, s);
+}
+
+void bmAttachmentsEnterRoom(BmGame *g)
+{
+  const BmObjectView *o = roomObject(g);
+  if (o == NULL) return;
+  const char *list = bmGameObjectProperty(g, o, "attach");
+  // "Wind, Rain": names separated by commas, in the room's slots in this order.
+  uint8_t slot = BM_ATTACH_ROOM_FIRST;
+  for (const char *p = list; p != NULL && *p != 0 && slot < BM_ATTACH_SLOTS;)
+  {
+    while (*p == ' ' || *p == ',') p++;
+    const char *end = p;
+    while (*end != 0 && *end != ',') end++;
+    const char *last = end;
+    while (last > p && last[-1] == ' ') last--;
+    if (last > p)
+    {
+      uint32_t h = 2166136261u;
+      for (const char *q = p; q < last; q++) h = (h ^ (uint8_t)*q) * 16777619u;
+      if (attachKey(g, slot, h, 0)) slot++;
+      else bm_script_errors++;   // not an Attachment class of this pack
+    }
+    p = end;
   }
 }
