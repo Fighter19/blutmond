@@ -227,7 +227,8 @@ build/bm_mgba_pair build-gba/game_send.gba build-gba/bootstrap_mb.gba --frames 1
 ## 10. In the browser
 
 The editor and the PC game also build for the browser with Emscripten (WebGL 1). The pages
-are published on GitHub Pages by `.github/workflows/pages.yml`.
+are published on GitHub Pages by `.github/workflows/pages.yml` on every push to `develop`, the
+branch development happens on.
 
 ```
 cmake -S . -B build-gba -G Ninja -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-gba.cmake -DCMAKE_BUILD_TYPE=MinSizeRel
