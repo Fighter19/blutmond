@@ -50,6 +50,10 @@
 
 #ifdef BM_PLATFORM_HOST
 #  include "hal_host.h"
+#  ifdef __EMSCRIPTEN__
+#    include <emscripten.h>
+#    include "web_editor.h"
+#  endif
 #  include "host_link.h"
 #  ifdef BM_GAME_WINDOW
 #    include "host_window.h"
@@ -445,6 +449,38 @@ static void writeSaveFile(void)
   memcpy(s_saveWritten, bmHalHostSaveMemory(), BM_HAL_SAVE_SIZE);
 }
 
+#  ifdef __EMSCRIPTEN__
+// Run from the editor in the browser (web_editor.h): the pack the game plays came from the
+// editor, and the editor sends newer ones.
+static bool s_fromEditor;
+static uint8_t *s_editorPack;
+
+// At a frame boundary: a pack the editor sent is put in place, from the start (mode 0) or as a
+// reload that keeps the game going and the scripts that did not change (mode 3).
+static void takeEditorPack(void)
+{
+  uint32_t size = 0;
+  int mode = 0;
+  uint8_t *data = bmWebTakePack(&size, &mode);
+  if (data == NULL) return;
+  BmPack pack;
+  BmLiveHooks hooks = bmGameLiveHooks(&s_gameLive);
+  if (bmPackOpen(&pack, data, size, true) == BM_PACK_OK &&
+      hooks.usePack(hooks.pContext, &pack, mode == 0 ? BM_LIVE_RESTART : BM_LIVE_MODULE, NULL))
+  {
+    free(s_editorPack);   // the game no longer reads the old one
+    s_editorPack = data;
+    printf("game: pack from the editor, %u bytes, %s\n", (unsigned)size, mode == 0 ? "from the start" : "reloaded");
+    if (mode == 0) memset(&s_pilot, 0, sizeof(s_pilot));
+  }
+  else
+  {
+    fprintf(stderr, "game: the pack from the editor was not used\n");
+    free(data);
+  }
+}
+#  endif
+
 #  ifdef BM_GAME_WINDOW
 static bool windowFrame(void)
 {
@@ -454,6 +490,9 @@ static bool windowFrame(void)
   if (!bmWindowFrame(pixels, &keys)) return false;
   bmHalHostSetKeys(keys);
   if (bm_game_stats.frames % 60 == 0) writeSaveFile();
+#    ifdef __EMSCRIPTEN__
+  if (s_fromEditor) takeEditorPack();
+#    endif
   return true;
 }
 #  endif
@@ -508,6 +547,8 @@ int main(int argc, char **argv)
   if (!window) window = !headless && !framesGiven && !trace && out == NULL;
 #  ifdef __EMSCRIPTEN__
   listen = false;  // a page has no sockets to listen on; the save game lives as long as the page
+  s_fromEditor = bmWebFromEditor();
+  if (s_fromEditor) save = false;
 #  endif
 #  ifdef BM_GAME_DEFAULT_PACK
   if (packPath == NULL) packPath = BM_GAME_DEFAULT_PACK;
@@ -542,14 +583,31 @@ int main(int argc, char **argv)
   bool headlessLink = !window && listenGiven;
   if (headlessLink) bmHostLinkListen((uint16_t)port);
   if (s_waitForMirror || s_untilFrame != 0) frames = 0;
-  FILE *f = fopen(packPath, "rb");
-  if (f == NULL) { perror(packPath); return 1; }
-  fseek(f, 0, SEEK_END);
-  long size = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  uint8_t *data = malloc((size_t)size);
-  if (fread(data, 1, (size_t)size, f) != (size_t)size) { fclose(f); return 1; }
-  fclose(f);
+  uint8_t *data = NULL;
+  long size = 0;
+#  ifdef __EMSCRIPTEN__
+  if (s_fromEditor)
+  {
+    // The first pack comes from the editor.
+    bmWebListen();
+    uint32_t editorSize = 0;
+    int mode = 0;
+    while ((data = bmWebTakePack(&editorSize, &mode)) == NULL) emscripten_sleep(20);
+    size = (long)editorSize;
+    s_editorPack = data;
+  }
+#  endif
+  if (data == NULL)
+  {
+    FILE *f = fopen(packPath, "rb");
+    if (f == NULL) { perror(packPath); return 1; }
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    data = malloc((size_t)size);
+    if (fread(data, 1, (size_t)size, f) != (size_t)size) { fclose(f); return 1; }
+    fclose(f);
+  }
 
   int result;
   if (trace)
@@ -611,6 +669,9 @@ int main(int argc, char **argv)
            (int)BM_FIX_INT(s_game.player.x), (int)BM_FIX_INT(s_game.player.y), (unsigned)s_game.deaths,
            (unsigned)s_game.hurts, (unsigned)s_game.roomChanges, frames, (unsigned)bm_game_stats.items);
   }
+#  ifdef __EMSCRIPTEN__
+  if (s_fromEditor) data = s_editorPack;   // the first pack may have been replaced (and freed) since
+#  endif
   free(data);
   return result;
 }

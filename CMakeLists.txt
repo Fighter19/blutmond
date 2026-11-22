@@ -392,7 +392,10 @@ if(BM_PLATFORM STREQUAL "host")
     # The game in the browser plays the test level, packed into the page's file system.
     target_compile_definitions(game PRIVATE "BM_GAME_DEFAULT_PACK=\"/blutmond/test_level.bmpk\"")
     set_target_properties(game PROPERTIES SUFFIX ".html")
+    # Run from the editor in the browser it takes its packs from the editor (web_editor.h).
+    target_sources(game PRIVATE apps/game/web_editor.c)
     target_link_options(game PRIVATE -sMAX_WEBGL_VERSION=1 -sMIN_WEBGL_VERSION=1 -sALLOW_MEMORY_GROWTH=1 -sASYNCIFY
+      -sEXPORTED_FUNCTIONS=_main,_malloc,_free
       "--shell-file=${PROJECT_SOURCE_DIR}/web/shell.html" "--preload-file=${BM_GAME_LEVEL_PACK}@/blutmond/test_level.bmpk")
     set_property(TARGET game APPEND PROPERTY LINK_DEPENDS ${PROJECT_SOURCE_DIR}/web/shell.html ${BM_GAME_LEVEL_PACK})
   else()

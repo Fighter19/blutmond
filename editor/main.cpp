@@ -69,6 +69,73 @@ EM_JS(void, bmDownloadFile, (const char *path, const char *name), {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
+
+// Run in the browser: the game (game.html?editor) in a frame in the corner of this page; the
+// pack is sent with postMessage once the game says it is ready. mode 0: start from the
+// beginning, 3: reload keeping the game going (BmLiveMode).
+EM_JS(void, bmWebGameRun, (const char *path, int mode), {
+  const data = FS.readFile(UTF8ToString(path));
+  let g = window.bmGame;
+  if (!g || !document.body.contains(g.box)) {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:10;background:#202228;border:1px solid #555;' +
+                        'box-shadow:0 4px 16px rgba(0,0,0,.5);font:13px system-ui,sans-serif;color:#ddd;';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 6px 4px 10px;cursor:move;user-select:none;';
+    const title = document.createElement('span');
+    title.textContent = 'Game - click into it to play';
+    title.style.flex = '1';
+    const close = document.createElement('button');
+    close.textContent = '×';
+    close.title = 'Stop';
+    close.style.cssText = 'border:0;background:none;color:inherit;font-size:16px;cursor:pointer;';
+    close.onclick = () => box.remove();
+    bar.append(title, close);
+    const frame = document.createElement('iframe');
+    frame.src = 'game.html?editor';
+    frame.style.cssText = 'display:block;width:480px;height:320px;border:0;';
+    frame.allow = 'autoplay; gamepad';
+    box.append(bar, frame);
+    document.body.appendChild(box);
+    // Drag the frame by its title bar.
+    bar.onpointerdown = (e) => {
+      if (e.target === close) return;
+      const r = box.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+      bar.setPointerCapture(e.pointerId);
+      bar.onpointermove = (m) => {
+        box.style.left = Math.max(0, m.clientX - dx) + 'px';
+        box.style.top = Math.max(0, m.clientY - dy) + 'px';
+        box.style.right = box.style.bottom = 'auto';
+      };
+      bar.onpointerup = () => { bar.onpointermove = null; };
+    };
+    g = window.bmGame = { box: box, frame: frame, ready: false, queue: [] };
+    if (!window.bmGameListening) {
+      window.bmGameListening = true;
+      window.addEventListener('message', (e) => {
+        const game = window.bmGame;
+        if (!game || e.source !== game.frame.contentWindow || !e.data || e.data.type !== 'blutmond-ready') return;
+        game.ready = true;
+        for (const m of game.queue) game.frame.contentWindow.postMessage(m, '*');
+        game.queue = [];
+        game.frame.focus();
+      });
+    }
+    mode = 0;   // a new game starts from the beginning
+  }
+  const message = { type: 'blutmond-pack', data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength), mode: mode };
+  if (g.ready) g.frame.contentWindow.postMessage(message, '*');
+  else g.queue.push(message);
+});
+
+EM_JS(int, bmWebGameOpen, (void), {
+  return window.bmGame && document.body.contains(window.bmGame.box) ? 1 : 0;
+});
+
+EM_JS(void, bmWebGameStop, (void), {
+  if (window.bmGame) window.bmGame.box.remove();
+  window.bmGame = null;
+});
 #endif
 
 using namespace ose::ui;
@@ -538,15 +605,41 @@ struct Editor
   {
     std::string path;
     if (!cookLevel(path)) return;
+#ifdef __EMSCRIPTEN__
+    // In the browser the game runs in a frame of this page; a GBA cannot be reached from here.
+    if (t == RunTarget::Gba)
+    {
+      runLine("Run on the GBA needs the desktop editor (the browser cannot reach the Xboo cable)", true);
+      return;
+    }
+    bmWebGameRun(path.c_str(), 0);
+    runLine("the game runs in the frame at the bottom right: click into it to play" + std::string(live ? "; saved changes are sent to it" : ""), false);
+#else
     runner.run(t, path);
+#endif
+  }
+
+  // Whether a game runs that Live pushes go to.
+  bool gameRunning()
+  {
+#ifdef __EMSCRIPTEN__
+    return bmWebGameOpen() != 0;
+#else
+    return runner.active();
+#endif
   }
 
   // After a cook asked for by the user or a changed file: into the running game.
   void pushLive()
   {
-    if (!live || !runner.active()) return;
+    if (!live || !gameRunning()) return;
     std::string path;
-    if (cookLevel(path)) runner.pushHot(path);
+    if (!cookLevel(path)) return;
+#ifdef __EMSCRIPTEN__
+    bmWebGameRun(path.c_str(), 3);
+#else
+    runner.pushHot(path);
+#endif
   }
 
   // The state map (docs/spec/state.md section 4): every field of the engine's game state with
@@ -675,7 +768,14 @@ struct Editor
     ui.actions().add({"run.start", "Run", "play", "F6", "Play all rooms on the chosen target", [this] { startRun(target); }, nullptr, nullptr});
     ui.actions().add({"run.pc", "Run on the PC", "play", "", "", [this] { startRun(RunTarget::Pc); }, nullptr, nullptr});
     ui.actions().add({"run.gba", "Run on the GBA (Xboo)", "gamepad", "F7", "", [this] { startRun(RunTarget::Gba); }, nullptr, nullptr});
-    ui.actions().add({"run.stop", "Stop", "stop", "Shift+F6", "", [this] { runner.stop(); }, [this] { return runner.active(); }, nullptr});
+    ui.actions().add({"run.stop", "Stop", "stop", "Shift+F6", "",
+                      [this] {
+                        runner.stop();
+#ifdef __EMSCRIPTEN__
+                        bmWebGameStop();
+#endif
+                      },
+                      [this] { return gameRunning(); }, nullptr});
     ui.actions().add({"sync.off", "Sync off", "unlink", "", "", [this] { setSync(SyncMode::Off); }, nullptr, [this] { return runner.sync() == SyncMode::Off; }});
     ui.actions().add({"sync.gba_pc", "Sync: the PC plays along with the GBA", "link", "", "", [this] { setSync(SyncMode::GbaToPc); }, nullptr,
                       [this] { return runner.sync() == SyncMode::GbaToPc; }});
@@ -859,7 +959,11 @@ struct Editor
       followTimer = 0;
       capture();
     }
+#ifdef __EMSCRIPTEN__
+    runState->text = gameRunning() ? std::string("Running in this page") + (live ? " (live)" : "") : std::string("Not running");
+#else
     runState->text = runner.busy() ? runner.state() : runner.state() + (runner.active() && live ? " (live)" : "");
+#endif
   }
 };
 

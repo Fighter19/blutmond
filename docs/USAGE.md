@@ -248,8 +248,14 @@ python3 -m http.server -d build-web      # then open http://localhost:8000/bmedi
 - The editor opens the test project, which is packed into the page together with the game's
   cartridge image. Edits live in the page's memory and are gone when it is closed.
 - **Export** downloads the `.gba` file.
-- **Run** and **Sync** need the desktop editor: a page cannot start programs or reach the
-  Xboo cable. File dialogs are not there either; paths are typed into the form.
-- The game plays the test level. It cannot listen for the live link, and its save game lasts
-  as long as the page.
+- **Run** (F6, target PC) plays all rooms in a frame at the bottom right of the editor's page
+  (`game.html?editor`, which can be dragged by its title bar). Click into it to play; click the
+  editor to edit. With **Live** on, every cook (a saved script, sprite, song or record, F5)
+  is sent to it and applied as a reload of mode `module`: the player stays where they are and
+  scripts that did not change keep running. **Stop** or the frame's × ends it. The pack
+  travels by `postMessage` (`apps/game/web_editor.h`), not over the live link.
+- Running on the GBA and **Sync** need the desktop editor: a page cannot start programs or
+  reach the Xboo cable. File dialogs are not there either; paths are typed into the form.
+- The game page on its own plays the test level. It cannot listen for the live link, and its
+  save game lasts as long as the page.
 
