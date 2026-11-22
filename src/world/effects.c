@@ -119,9 +119,8 @@ int32_t bmEffectsWaveAt(const BmGame *g, int32_t y)
   return amp * (isin((uint32_t)(y * 4 + (int32_t)g->frame * speed)) + 64) / 128;
 }
 
-// Depth in the oblique view: a pixel of depth is drawn 0.4 px right and 0.4 px up.
+// Depth in the view: a pixel of depth is drawn 0.4 px wide.
 #define DEPTH_X 102
-#define DEPTH_Y 102
 // Doors: shut from this far (px between the player and the door), open from DOOR_OPEN.
 #define DOOR_SHUT 64
 #define DOOR_OPEN 16
@@ -174,11 +173,11 @@ uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
       hx = o->x;
     }
     int32_t c = isin((uint32_t)(angle + 64)), sn = isin((uint32_t)angle);
-    // A point u along the panel: x = u (cos a + 0.4 sin a), y = -u 0.4 sin a; times the scale.
-    int32_t xs = (c * 256 + sn * DEPTH_X) / 64 * scale / 256;
-    int32_t ys = -(sn * DEPTH_Y / 64) * scale / 256;
-    int32_t sx = hx - g->room.cameraX, sy = o->y + o->h - g->room.cameraY;
-    uint8_t n = bmSpriteSheetDrawSheared(s, bmAnimFrameAt(s, 0, g->frame), sx, sy, xs, ys, scale, matrix, 1,
+    // A point u along the panel: x = u cos a, and for a door in a side wall, whose depth shows,
+    // + u 0.4 sin a; times the scale. Only scaled in x: the bottom stays on the ground.
+    int32_t xs = (c * 256 + (side != 0 ? sn * DEPTH_X : 0)) / 64 * scale / 256;
+    int32_t sx = hx - g->room.cameraX, sy = g->objectDoorGround[i] - g->room.cameraY;
+    uint8_t n = bmSpriteSheetDrawSheared(s, bmAnimFrameAt(s, 0, g->frame), sx, sy, xs, 0, scale, matrix, 1,
                                          (uint8_t)(firstOam + used), (uint8_t)(maxOam - used));
     if (n != 0) matrix++;
     used = (uint8_t)(used + n);

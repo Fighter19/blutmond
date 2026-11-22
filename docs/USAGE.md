@@ -56,7 +56,7 @@ starts in that room (`--room debug_lobby`), `--debug-item` puts the mirror in th
 start.
 
 Doors with a `panel` property (a sprite) swing open in a 3D look as the player walks up to
-them: an affine sprite, scaled and sheared about its hinge. All doors of the test level have
+them: an affine sprite, scaled horizontally about its hinge, standing on the ground. All doors of the test level have
 one (`door_panel`).
 
 Without a window (for tests and scripts): `--frames N`, `--headless`, `--autoplay`,

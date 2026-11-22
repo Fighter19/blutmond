@@ -1002,6 +1002,7 @@ static void testDoorPanelsOpenNearby(void)
     if (s_game.objects[i].name != NULL && strcmp(s_game.objects[i].name, "to_debug_wave") == 0) door = i;
   TEST_ASSERT(door >= 0 && s_game.objectSheet[door] >= 0);   // its `panel`, door_panel
   const BmObjectView *o = &s_game.objects[door];
+  TEST_ASSERT(s_game.objectDoorGround[door] == 160);   // the lobby's floor (row 10)
   int32_t y = o->y + o->h - 1;
   bmBodyPlace(&s_game.player, o->x - 80, y);
   TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)door) == 0);

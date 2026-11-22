@@ -164,7 +164,7 @@ spotlight via windows, "mode 7" floor) are generators that fill this table. The 
 also edit the table directly as curves.
 
 Affine effects on single objects: door panels (`panel` on a `Door`) turn about their hinge
-with a matrix of scale in X and shear in Y per frame, from the player's distance
+with a matrix that scales them in X per frame (the bottom stays on the ground), from the player's distance
 ([spec/runtime-core.md](spec/runtime-core.md) §12).
 
 ### Running it on each target

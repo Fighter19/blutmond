@@ -607,21 +607,22 @@ in place of the room's effect: the wave at 8 px times the phase (0 at the ends, 
 
 **Doors** (`bmEffectsDrawDoors`): a `Door` with the property `panel` (a sprite's name, its
 anchor the hinge at the bottom left, its hitbox the panel's size, frame 0's) is drawn as a
-panel turning about a vertical hinge, in an oblique view: a pixel of depth is drawn 0.4 px
-right and 0.4 px up (102/256 each). How open it is, `open` 0..256, follows the player's
-distance `d` (px from the player's x to the door's rectangle, 0 inside): 256 within 16, 0 from
-64 on, in between `(64 - d) * 256 / 48`; 0 if the player's feet are above the door's top or
-more than 16 below its bottom. The panel's angle `a` from the screen's x axis (256 to a turn):
-`direction` east `64 - open * 56 / 256` (closed along the depth in the side wall, open swung
-out to the right), west `64 + open * 56 / 256`, else `open * 52 / 256` (closed facing the
-screen, open turned away into the depth). A point `u` along the panel and `v` up it is drawn
-at `hinge + (u (cos a + 0.4 sin a), -u 0.4 sin a + v)`, all times `scale` = the door's height /
-the panel's: a scale in x and a shear in y, which an affine sprite's matrix does. The hinge is
-at the door's bottom, at its left for north doors and `closed width` (`panel width * scale *
-0.4`) left of its right edge for east and west. Each door's pieces share a matrix (the doors in
-object order, matrices from 0), double size, priority 1. Doors more than 64 px off screen are
-skipped. The panel's sprite is the `panel` property's (bound when the room's sprites are); the
-direction is read then too.
+panel turning about a vertical hinge, only scaled in x, so that it keeps standing on the
+ground. How open it is, `open` 0..256, follows the player's distance `d` (px from the player's
+x to the door's rectangle, 0 inside): 256 within 16, 0 from 64 on, in between
+`(64 - d) * 256 / 48`; 0 if the player's feet are above the door's top or more than 16 below its
+bottom. The panel's angle `a` from the screen's x axis (256 to a turn): `direction` east
+`64 - open * 56 / 256` (closed along the depth in the side wall, open swung out to the right),
+west `64 + open * 56 / 256`, else `open * 52 / 256` (closed facing the screen, open turned away).
+A point `u` along the panel and `v` up it is drawn at `(hinge x + u * xs, ground + v * scale)`
+with `scale` = the door's height / the panel's and `xs = scale * cos a`, for east and west
+`scale * (cos a + 0.4 sin a)` (a side wall's depth shows 0.4 wide, 102/256): the scale of an
+affine sprite's matrix. The ground is the floor under the door's middle, searched from its top
+to 32 px below its bottom (platforms count), else its bottom. The hinge is at its left for north
+doors and `closed width` (`panel width * scale * 0.4`) left of its right edge for east and west.
+Each door's pieces share a matrix (the doors in object order, matrices from 0), double size,
+priority 1. Doors more than 64 px off screen are skipped. The panel's sprite, the direction and
+the ground are found when the room's sprites are bound.
 
 **Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has
 it and the player has none (the menu does not open then). The test level's mirror teleports to

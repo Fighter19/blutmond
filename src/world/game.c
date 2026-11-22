@@ -166,6 +166,13 @@ static void bindObjectSprites(BmGame *g)
     const char *panel = g->objects[i].kind == BM_OBJECT_DOOR ? bmGameObjectProperty(g, &g->objects[i], "panel") : NULL;
     const char *dir = panel != NULL ? bmGameObjectProperty(g, &g->objects[i], "direction") : NULL;
     g->objectDoorSide[i] = (uint8_t)(dir == NULL ? 0 : strcmp(dir, "east") == 0 ? 1 : strcmp(dir, "west") == 0 ? 2 : 0);
+    if (panel != NULL)
+    {
+      // The floor under the door's middle (from its top to 32 px below it), else its bottom.
+      const BmObjectView *o = &g->objects[i];
+      int32_t ground = bmCollisionFloor(&g->collision, o->x + o->w / 2, o->y, o->y + o->h + 32, true);
+      g->objectDoorGround[i] = (int16_t)(ground != INT32_MAX ? ground : o->y + o->h);
+    }
     for (uint8_t k = 0; panel != NULL && k < g->sheetCount; k++)
     {
       const char *name = bmPackString(g->pPack, g->sheets[k].nameId);
