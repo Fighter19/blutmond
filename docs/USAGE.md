@@ -74,8 +74,9 @@ Options: `--theme classic|light|dark` (also in the View menu, remembered), `--ta
   described in the [README](../README.md).
 - The window can have any size: the dividers between the project panel, the tabs, the side
   panels and Report/Messages can be dragged; side panels keep their width when the window
-  grows; toolbars wrap onto a second row when they do not fit. Below about 1050 x 750 pixels
-  the editor scrolls instead of cutting panels off.
+  grows; toolbars wrap onto a second row when they do not fit; tall side panels scroll. The
+  menu, the toolbar and the status bar always stay in view; in a window narrower than about
+  1000 pixels the area between them scrolls sideways instead of cutting panels off.
 
 Messages from the tools appear in the Messages list at the bottom. A job that has to wait for
 another one says so there.

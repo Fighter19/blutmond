@@ -167,7 +167,7 @@ using namespace bm::editor;
 
 namespace {
 
-const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scroll anchors="full" horizontal="1" vertical="1"><VBox separation="0">
+const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox anchors="full" separation="0">
   <MenuBar>
     <Menu title="File">
       <Item action="project.open"/><Item action="project.save_as"/>
@@ -201,7 +201,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
     <CheckBox id="grid" text="Grid"/>
     <Label id="camera" text="Camera 0,0" clip-text="1"/>
   </Flow></PanelContainer>
-  <HSplit expand="1" fixed="300">
+  <Scroll expand="1" horizontal="1" vertical="1"><HSplit fixed="300">
     <PanelContainer min-width="160"><TabContainer>
       <VBox title="Project">
         <Label id="project_name" bold="1" clip-text="1"/>
@@ -215,7 +215,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
           <Button text="Delete" action="asset.delete"/>
           <Button text="Rescan" action="project.refresh"/>
         </Flow>
-        <Scroll min-size="0 120"><ItemList id="asset_info"/></Scroll>
+        <Scroll min-size="0 60"><ItemList id="asset_info"/></Scroll>
       </VBox>
       <VBox title="State">
         <Label id="state_totals" text="" clip-text="1"/>
@@ -266,7 +266,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
             <Label id="anim_info" text="" expand="1" clip-text="1"/>
           </HBox></PanelContainer>
           <HSplit expand="1" fixed="340">
-            <PanelContainer min-width="220"><VBox>
+            <PanelContainer min-width="220"><Scroll><VBox>
               <Label text="Sheet: click a frame" bold="1"/>
               <Scroll expand="1"><SheetView id="anim_sheet"/></Scroll>
               <HBox>
@@ -286,7 +286,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
                 <Label text="Hitbox X"/><SpinBox id="anim_hx" expand="1"/><Label text="Y"/><SpinBox id="anim_hy" expand="1"/>
                 <Label text="W"/><SpinBox id="anim_hw" expand="1"/><Label text="H"/><SpinBox id="anim_hh" expand="1"/>
               </HBox>
-            </VBox></PanelContainer>
+            </VBox></Scroll></PanelContainer>
             <HSplit fixed-end="300">
             <VBox expand="1">
               <HBox>
@@ -297,7 +297,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
               <AnimPreview id="anim_preview" expand="1"/>
               <Label id="anim_cost" text="" wrap="1"/>
             </VBox>
-            <PanelContainer min-width="200"><VBox>
+            <PanelContainer min-width="200"><Scroll><VBox>
               <Label text="Animations" bold="1"/>
               <Scroll min-size="0 150"><ItemList id="anim_list"/></Scroll>
               <HBox>
@@ -314,7 +314,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
                 <Button id="anim_step_up" text="Up"/>
                 <Button id="anim_step_down" text="Down"/>
               </Flow>
-            </VBox></PanelContainer>
+            </VBox></Scroll></PanelContainer>
             </HSplit>
           </HSplit>
         </VBox>
@@ -333,12 +333,12 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
                 <Scroll min-size="0 64"><ItemList id="script_problems"/></Scroll>
               </VBox></PanelContainer>
             </VBox>
-            <PanelContainer min-width="200"><VBox>
+            <PanelContainer min-width="200"><Scroll><VBox>
               <Label text="Class" bold="1"/>
               <Scroll expand="1" min-size="0 120"><ItemList id="script_outline"/></Scroll>
               <Label text="What scripts can use" bold="1"/>
               <Scroll expand="1" min-size="0 120"><ItemList id="script_reference"/></Scroll>
-            </VBox></PanelContainer>
+            </VBox></Scroll></PanelContainer>
           </HSplit>
         </VBox>
         <VBox title="Sound" separation="0">
@@ -356,7 +356,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
             <Label id="snd_info" text="" clip-text="1"/>
           </Flow></PanelContainer>
           <HSplit expand="1" fixed="270">
-            <PanelContainer min-width="200"><VBox>
+            <PanelContainer min-width="200"><Scroll><VBox>
               <Label text="Tracks" bold="1"/>
               <Scroll min-size="0 110"><ItemList id="snd_tracks"/></Scroll>
               <HBox><Button id="snd_track_add" text="Add track"/><Button id="snd_track_remove" text="Remove"/></HBox>
@@ -378,7 +378,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
               <Label id="snd_voices" text="" clip-text="1"/><ProgressBar id="snd_voices_bar"/>
               <Label id="snd_cpu" text="" clip-text="1"/><ProgressBar id="snd_cpu_bar"/>
               <Label id="snd_size" text="" clip-text="1"/><ProgressBar id="snd_size_bar"/>
-            </VBox></PanelContainer>
+            </VBox></Scroll></PanelContainer>
             <VBox expand="1">
               <PianoRoll id="snd_roll" expand="1"/>
               <PanelContainer><Flow>
@@ -433,9 +433,9 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><Scrol
         </VBox></PanelContainer>
       </HSplit>
     </VSplit>
-  </HSplit>
+  </HSplit></Scroll>
   <PanelContainer theme-type="StatusBar"><HBox><Label id="status" text="Ready" expand="1" clip-text="1"/><Label id="run_state" text="Not running"/></HBox></PanelContainer>
-</VBox></Scroll></Panel>)XML";
+</VBox></Panel>)XML";
 
 // The editor's themes by name; anything else gives the classic one.
 std::shared_ptr<Theme> makeTheme(const std::string &name)
