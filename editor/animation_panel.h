@@ -89,7 +89,10 @@ private:
   void edited();           // an edit was made: save soon
   void save();
   void slice();
-  std::vector<sprite::NamedBox> *boxList();   // the frame's own boxes, or the sprite's
+  std::vector<sprite::NamedBox> *boxList();   // where Add puts a box: the frame's, or the sprite's
+  /// The box of the list's entry `i`: one of the frame's own, or one of the sprite's (also
+  /// listed for a frame that has no box of that kind itself: it is the frame's too).
+  sprite::NamedBox *listedBox(int i);
   void fillBoxes();
   void boxEdited();
   int currentAnim() const;
@@ -98,6 +101,12 @@ private:
   ose::ui::Renderer *renderer_ = nullptr;
   std::vector<std::string> paths_;
   sprite::Sprite sprite_;
+  struct ListedBox
+  {
+    bool sprites;       // in sprite_.boxes, else in the frame's boxes
+    size_t index;
+  };
+  std::vector<ListedBox> listed_;   // the boxes list's entries
   sprite::Cooked cooked_;
   bool loaded_ = false, updating_ = false, dirty_ = false, playing_ = true;
   float saveTimer_ = 0, playTime_ = 0;

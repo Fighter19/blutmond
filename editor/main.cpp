@@ -297,7 +297,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
                 <Label text="W"/><SpinBox id="anim_hw" expand="1"/><Label text="H"/><SpinBox id="anim_hh" expand="1"/>
               </HBox>
               <Label text="Boxes: green hurt, red hit, blue guard" bold="1"/>
-              <CheckBox id="anim_box_sprite" text="The sprite's boxes (frames without their own)"/>
+              <CheckBox id="anim_box_sprite" text="Only the sprite's boxes (for frames without their own)"/>
               <Scroll min-size="0 70"><ItemList id="anim_boxes"/></Scroll>
               <HBox>
                 <OptionButton id="anim_box_kind" items="Hurt;Hit;Guard" expand="1"/>

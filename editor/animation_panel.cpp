@@ -200,10 +200,7 @@ void AnimationPanel::bind(Control &root, Renderer &renderer)
   number(hitbox_[2], 0, 255, [box](int v) { box()->w = v; });
   number(hitbox_[3], 0, 255, [box](int v) { box()->h = v; });
   // Boxes (hitboxes.md §2): of the frame shown, or the sprite's.
-  auto selectedBox = [this]() -> sprite::NamedBox * {
-    std::vector<sprite::NamedBox> *list = boxList();
-    return list && boxes_->selected >= 0 && size_t(boxes_->selected) < list->size() ? &(*list)[size_t(boxes_->selected)] : nullptr;
-  };
+  auto selectedBox = [this]() -> sprite::NamedBox * { return listedBox(boxes_->selected); };
   for (int i = 0; i < 4; i++)
   {
     box_[i]->minValue = i < 2 ? -128 : 0;
@@ -244,14 +241,16 @@ void AnimationPanel::bind(Control &root, Renderer &renderer)
     b.box = sprite_.hitbox.w > 0 ? sprite_.hitbox : sprite::Box{-8, -16, 16, 16};
     if (b.kind == sprite::BoxKind::Hit) b.box = {6, -18, 16, 6};   // in front of the figure
     list->push_back(b);
+    // Selected (in the frame's list its own boxes come first).
     boxes_->selected = int(list->size()) - 1;
     boxEdited();
   });
   root.findAs<Button>("anim_box_delete")->clicked.connect([this] {
-    std::vector<sprite::NamedBox> *list = boxList();
-    if (!list || boxes_->selected < 0 || size_t(boxes_->selected) >= list->size()) return;
-    list->erase(list->begin() + boxes_->selected);
-    boxes_->selected = std::min(boxes_->selected, int(list->size()) - 1);
+    if (listedBox(boxes_->selected) == nullptr) return;
+    ListedBox e = listed_[size_t(boxes_->selected)];
+    std::vector<sprite::NamedBox> &list = e.sprites ? sprite_.boxes : currentFrame()->boxes;
+    list.erase(list.begin() + long(e.index));
+    boxes_->selected = std::min(boxes_->selected, int(listed_.size()) - 2);
     boxEdited();
   });
   root.findAs<CheckBox>("anim_show_boxes")->toggled.connect([this](bool on) { preview_->showBoxes = on; });
@@ -658,19 +657,47 @@ std::vector<sprite::NamedBox> *AnimationPanel::boxList()
   return f ? &f->boxes : nullptr;
 }
 
+sprite::NamedBox *AnimationPanel::listedBox(int i)
+{
+  if (!loaded_ || i < 0 || size_t(i) >= listed_.size()) return nullptr;
+  const ListedBox &e = listed_[size_t(i)];
+  if (e.sprites) return e.index < sprite_.boxes.size() ? &sprite_.boxes[e.index] : nullptr;
+  sprite::Frame *f = currentFrame();
+  return f && e.index < f->boxes.size() ? &f->boxes[e.index] : nullptr;
+}
+
 void AnimationPanel::fillBoxes()
 {
   if (!boxes_) return;
   updating_ = true;
   boxes_->items.clear();
-  std::vector<sprite::NamedBox> *list = boxList();
-  if (list)
-    for (const sprite::NamedBox &b : *list)
-      boxes_->items.push_back({std::string(sprite::boxKindName(b.kind)) + (b.name.empty() ? "" : " " + b.name) + "  " + std::to_string(b.box.x) + "," +
-                                   std::to_string(b.box.y) + "  " + std::to_string(b.box.w) + "x" + std::to_string(b.box.h),
-                               b.kind == sprite::BoxKind::Hit ? "crosshairs" : b.kind == sprite::BoxKind::Guard ? "lock" : "square-o", {}, {}, {}, {}});
+  listed_.clear();
+  // The sprite's boxes; or the frame's: its own, then the sprite's of the kinds it has none of
+  // (they are what the frame has, as the game sees it; editing one changes the sprite's).
+  sprite::Frame *f = loaded_ ? currentFrame() : nullptr;
+  if (loaded_ && boxSprite_->pressed)
+    for (size_t i = 0; i < sprite_.boxes.size(); i++) listed_.push_back({true, i});
+  else if (f)
+  {
+    for (size_t i = 0; i < f->boxes.size(); i++) listed_.push_back({false, i});
+    for (size_t i = 0; i < sprite_.boxes.size(); i++)
+    {
+      sprite::BoxKind kind = sprite_.boxes[i].kind;
+      bool own = std::any_of(f->boxes.begin(), f->boxes.end(), [&](const sprite::NamedBox &b) { return b.kind == kind; });
+      if (!own) listed_.push_back({true, i});
+    }
+  }
+  for (const ListedBox &e : listed_)
+  {
+    const sprite::NamedBox &b = e.sprites ? sprite_.boxes[e.index] : f->boxes[e.index];
+    boxes_->items.push_back({std::string(sprite::boxKindName(b.kind)) + (b.name.empty() ? "" : " " + b.name) + "  " + std::to_string(b.box.x) + "," +
+                                 std::to_string(b.box.y) + "  " + std::to_string(b.box.w) + "x" + std::to_string(b.box.h) +
+                                 (e.sprites && !boxSprite_->pressed ? "  (the sprite's)" : ""),
+                             b.kind == sprite::BoxKind::Hit ? "crosshairs" : b.kind == sprite::BoxKind::Guard ? "lock" : "square-o", {}, {}, {},
+                             {}});
+  }
   if (boxes_->selected >= int(boxes_->items.size())) boxes_->selected = int(boxes_->items.size()) - 1;
-  const sprite::NamedBox *b = list && boxes_->selected >= 0 ? &(*list)[size_t(boxes_->selected)] : nullptr;
+  const sprite::NamedBox *b = listedBox(boxes_->selected);
   if (b)
   {
     box_[0]->setValue(b->box.x, false);
@@ -682,7 +709,7 @@ void AnimationPanel::fillBoxes()
   }
   // The preview marks the box being edited (when the frame shown has it).
   preview_->selectedBox = -1;
-  if (b && !boxSprite_->pressed && preview_->cooked && size_t(preview_->frame) < preview_->cooked->frames.size())
+  if (b && preview_->cooked && size_t(preview_->frame) < preview_->cooked->frames.size())
   {
     const auto &shown = preview_->cooked->frames[size_t(preview_->frame)].boxes;
     for (size_t i = 0; i < shown.size(); i++)
