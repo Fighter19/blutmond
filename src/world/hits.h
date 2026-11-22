@@ -26,6 +26,10 @@
 #define BM_HITS_PLAYER_TEAM 1
 #define BM_HITS_PLAYER_INVULNERABLE 60
 #define BM_HITS_INVULNERABLE 20
+#define BM_HITS_FLASH_FRAMES 8          // a struck object shows the flash bank this long
+#define BM_HITS_FLASH_BANK 13           // sprite palette bank: every colour white
+#define BM_HITS_KNOCK BM_FIX(2)         // a struck object's push, pixels per frame at first
+#define BM_HITS_KNOCK_SLOWING (BM_FIX(1) / 4)   // taken off the push every frame
 
 typedef struct BmHits
 {
@@ -58,10 +62,14 @@ void bmHitsDisarm(struct BmGame *pGame, uint8_t source, uint16_t name);
 /// and the rectangles' frames count down.
 void bmHitsFrame(struct BmGame *pGame);
 
-/// Strikes object `index` for `amount` of `element` without a hit (strike_back): its weakness
-/// or resistance (affinity) applies, then health, the blink and hit(amount). False if it cannot
-/// be struck now.
-bool bmHitsStrikeObject(struct BmGame *pGame, uint8_t index, int32_t amount, uint8_t element);
+/// Strikes object `index` for `amount` of `element` from room x `fromX` (fix) without a hit
+/// (strike_back): its weakness or resistance (affinity) applies, then health, the push away
+/// from `fromX`, the flash and hit(amount). False if it cannot be struck now.
+bool bmHitsStrikeObject(struct BmGame *pGame, uint8_t index, int32_t amount, uint8_t element, int32_t fromX);
+
+/// Once a frame after the scripts: struck objects move with their push, which slows down and
+/// stops at a wall.
+void bmHitsKnockFrame(struct BmGame *pGame);
 
 /// The element rule (first-items.md §1): x 1.5 if `affinity` (weak bits 0-3, resists 4-7)
 /// is weak to `element`, x 0.5 if it resists it; rounded down, at least 1.

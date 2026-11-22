@@ -225,21 +225,51 @@ int32_t bmHitsElement(int32_t amount, uint8_t affinity, uint8_t element)
   return amount < 1 ? 1 : amount;
 }
 
-// Object i is struck for `amount` (the element applied already).
-static void strikeObject(BmGame *g, uint8_t i, int32_t amount)
+// Object i is struck for `amount` (the element applied already) from room x `fromX` (fix): it
+// is pushed away from there (as much as it is not steady), blinks and hears of it.
+static void strikeObject(BmGame *g, uint8_t i, int32_t amount, int32_t fromX)
 {
   BmActors *a = &g->actors;
   a->health[i] -= amount;
   a->invulnerable[i] = BM_HITS_INVULNERABLE;
+  int32_t push = (int32_t)BM_HITS_KNOCK * (100 - (a->steady[i] > 100 ? 100 : a->steady[i])) / 100;
+  a->knock[i] = a->x[i] < fromX ? -push : push;
   endHitsOf(g, (uint8_t)(i + 1));
   bmActorsEvent(g, i, BM_SCRIPT_EVENT_hit, amount);
 }
 
-bool bmHitsStrikeObject(BmGame *g, uint8_t i, int32_t amount, uint8_t element)
+bool bmHitsStrikeObject(BmGame *g, uint8_t i, int32_t amount, uint8_t element, int32_t fromX)
 {
   if (i >= g->actors.count || amount <= 0 || !strikable(g, (uint8_t)(i + 1))) return false;
-  strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], element));
+  strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], element), fromX);
   return true;
+}
+
+void bmHitsKnockFrame(BmGame *g)
+{
+  BmActors *a = &g->actors;
+  for (uint8_t i = 0; a->hasModule && i < a->count; i++)
+  {
+    int32_t k = a->knock[i];
+    if (k == 0) continue;
+    if (a->gone[i] || a->hidden[i])
+    {
+      a->knock[i] = 0;
+      continue;
+    }
+    // A wall ahead (at the object's side, a little above its anchor) stops the push.
+    int32_t x = a->x[i] + k;
+    int32_t side = BM_FIX_INT(x) + (k > 0 ? 6 : -6), y = BM_FIX_INT(a->y[i]);
+    if (bmCollisionSolidSides(&g->collision, side, y - 4) || bmCollisionSolidSides(&g->collision, side, y - 12))
+    {
+      a->knock[i] = 0;
+      continue;
+    }
+    a->x[i] = x;
+    // Slower every frame, until it stands.
+    if (k > 0) a->knock[i] = k > BM_HITS_KNOCK_SLOWING ? k - BM_HITS_KNOCK_SLOWING : 0;
+    else a->knock[i] = k < -BM_HITS_KNOCK_SLOWING ? k + BM_HITS_KNOCK_SLOWING : 0;
+  }
 }
 
 // Figure `target` is struck by hit `k` for `amount`.
@@ -258,7 +288,7 @@ static void strike(BmGame *g, uint8_t k, uint8_t target, int32_t amount)
   else
   {
     uint8_t i = (uint8_t)(target - 1);
-    strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], h->element[k]));
+    strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], h->element[k]), BM_FIX(sx));
   }
   // The source hears of it: the attachment that armed the hit, or the object.
   if (slot != BM_HITS_NO_SLOT) bmAttachmentsEvent(g, slot, BM_SCRIPT_EVENT_struck, amount);

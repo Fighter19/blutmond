@@ -9,6 +9,7 @@ var int LastDamage;
 
 event spawn() {
   health = 999;
+  set_knockback(0);   // it stands where it was put
 }
 
 event hit(int amount) {

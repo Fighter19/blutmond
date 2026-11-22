@@ -17,6 +17,7 @@ var int Shots;
 const int Health = 24;
 
 event spawn() {
+  set_knockback(0);   // a boss does not budge; it still flashes when struck
   if Defeated {
     hide();
     gotostate Gone;

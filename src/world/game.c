@@ -233,6 +233,11 @@ static void loadSprites(BmGame *g)
   }
   bmTilesLoadObj((uint16_t)(g->builtinTile + 8), box, sizeof(box));
 
+  // Bank 13: a struck object's flash, every colour white (hits.h).
+  BmColor flash[16];
+  for (int c = 0; c < 16; c++) flash[c] = bmColorRGB(31, 31, 31);
+  bmPaletteLoadObj(BM_HITS_FLASH_BANK * 16, flash, 16);
+
   // Banks 14 and 15: the built-in figure and the placeholder frame.
   BmColor pal[32];
   memset(pal, 0, sizeof(pal));
@@ -713,6 +718,8 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   // through after all had their turn.
   bmAttachmentsRoomFrame(g);
   bmActorsFrame(g);
+  // Objects struck earlier are pushed on (after their scripts moved them).
+  bmHitsKnockFrame(g);
   if (g->actors.pendingDoor != 0)
   {
     uint16_t index = (uint16_t)(g->actors.pendingDoor - 1);
@@ -809,6 +816,8 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.team, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.invulnerable, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.affinity, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.knock, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.steady, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.spawned, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.gone, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   F(actors.seed, BM_TYPE_U32, BM_STATE_SNAPSHOT),

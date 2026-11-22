@@ -191,6 +191,12 @@ uint16_t bmAnimFrameAt(const BmSpriteSheet *s, uint8_t anim, uint32_t time)
 uint8_t bmSpriteSheetDraw(const BmSpriteSheet *s, uint16_t frame, int32_t x, int32_t y, bool hflip, uint8_t priority,
                           uint8_t firstOam, uint8_t maxOam)
 {
+  return bmSpriteSheetDrawBank(s, frame, x, y, hflip, priority, s->bank, firstOam, maxOam);
+}
+
+uint8_t bmSpriteSheetDrawBank(const BmSpriteSheet *s, uint16_t frame, int32_t x, int32_t y, bool hflip, uint8_t priority,
+                              uint8_t bank, uint8_t firstOam, uint8_t maxOam)
+{
   if (frame >= s->frameCount) return 0;
   static const uint8_t widths[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
   static const uint8_t heights[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
@@ -208,7 +214,7 @@ uint8_t bmSpriteSheetDraw(const BmSpriteSheet *s, uint16_t frame, int32_t x, int
     if (sx <= -w || sx >= BM_HAL_SCREEN_WIDTH || sy <= -h || sy >= BM_HAL_SCREEN_HEIGHT) continue;
     BmSprite sprite = {
       .x = (int16_t)sx, .y = (int16_t)sy, .shape = (BmSpriteShape)shape, .size = size,
-      .tile = (uint16_t)(s->tileBase + bmRead16(pc + 4)), .paletteBank = s->bank, .priority = priority,
+      .tile = (uint16_t)(s->tileBase + bmRead16(pc + 4)), .paletteBank = bank, .priority = priority,
       .hflip = hflip, .visible = true,
     };
     bmSpriteSet((uint8_t)(firstOam + used), &sprite);

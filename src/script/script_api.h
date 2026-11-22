@@ -104,7 +104,8 @@ typedef enum BmScriptType {
   X(use_item,          BOOL, 1, RECORD, VOID,  VOID,  VOID, 0) \
   X(return_to_save,    VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
   X(quick_slot,        RECORD, 1, INT,  VOID,  VOID,  VOID, 0) \
-  X(set_quick_slot,    VOID, 2, INT,   RECORD, VOID,  VOID, 0)
+  X(set_quick_slot,    VOID, 2, INT,   RECORD, VOID,  VOID, 0) \
+  X(set_knockback,     VOID, 1, INT,   VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -164,7 +165,8 @@ typedef enum BmScriptType {
 // use_item(record): the item's behaviour attached for a frame in slot 7 (it does what the item
 // does and takes it); false if the player has none. return_to_save(): to the last save point,
 // at the next frame, the menus closed. quick_slot(i), set_quick_slot(i, record): the two quick
-// slots (L and Select use them).
+// slots (L and Select use them). set_knockback(percent): how much of a hit's push the object
+// takes (100 at its start, 0 for one that does not budge: a boss, a dummy).
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {
@@ -233,7 +235,7 @@ typedef enum BmScriptEvent {
 #define BM_SCRIPT_ACTOR_ONLY(X) \
   X(finish_anim) X(play_anim) X(anim_done) X(player_distance) X(move_toward_player) X(move_toward) \
   X(enter_door) X(hide) X(show) X(face_player) X(touching_player) X(destroy) X(spawn_with) X(floor_y) \
-  X(set_affinity)
+  X(set_affinity) X(set_knockback)
 
 // Field flags in the class table: the storage flags of docs/spec/state.md.
 #define BM_SCRIPT_FIELD_SAVE 1

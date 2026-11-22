@@ -69,6 +69,10 @@ uint16_t bmAnimFrameAt(const BmSpriteSheet *pSheet, uint8_t anim, uint32_t time)
 uint8_t bmSpriteSheetDraw(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x, int32_t y, bool hflip, uint8_t priority,
                           uint8_t firstOam, uint8_t maxOam);
 
+/// The same with the sprites' palette bank given instead of the sheet's own (a hit flash).
+uint8_t bmSpriteSheetDrawBank(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x, int32_t y, bool hflip, uint8_t priority,
+                              uint8_t bank, uint8_t firstOam, uint8_t maxOam);
+
 /// The frame's hitbox relative to the anchor (mirrored with `hflip`).
 BmSpriteBox bmSpriteSheetHitbox(const BmSpriteSheet *pSheet, uint16_t frame, bool hflip);
 

@@ -407,6 +407,7 @@ value is dropped and counts as a script error.
 | 77 | `use_item(record)` | false if the player has none of it or its first `attach` field names no Attachment class. Else that class is attached in slot 7 for 1 frame, its first record variable set to the record (it gets `attached()` at once); true |
 | 78 | `return_to_save()` | `returnPending = 1` (section 6, "Return") |
 | 79, 80 | `quick_slot(i)`, `set_quick_slot(i, record)` | `quick[i]` for i 0 to 3 (0 otherwise); set it |
+| 81 | `set_knockback(percent)` | object only: `steady = 100 - percent` (percent clamped to 0..100) |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
 (state.md §4): what equipment adds, taken away in its `detached()`, not saved. `stat` (28)
@@ -494,12 +495,23 @@ the first free; a hit started when all are used is dropped. A room entered fresh
    (amount, `FIX(INT(source x))`, the hit's element, the source) (section 6); an object takes
    the element rule first: `amount * 3 / 2` if its `affinity` has bit `element` (weak),
    `amount / 2` if it has bit `4 + element` (resists), at least 1, element 0 unchanged; then
-   `health -= amount`, 20 frames invulnerable, its hits end, and it gets `hit(amount)`. Then the source hears of it: the
+   `health -= amount`, 20 frames invulnerable, `knock = ±2.0 * (100 - steady) / 100` away
+   from the source's `FIX(INT(x))` (+ if the object's `x` is not less), its hits end, and it
+   gets `hit(amount)`. Then the source hears of it: the
    attachment in the entry's slot, else a source object, gets `struck(amount)`. If the entry
    is no longer the one it was (freed or replaced by those events), stop with it.
 4. A rectangle whose entry is still the same: `frames -= 1`, at 0 it is free.
 
 Then every object's invulnerability goes down by 1 if not 0.
+
+**The push** (`knock`), once a frame right after the scripted objects' frame (section 3): for
+each object with `knock != 0`: if it is gone or hidden, `knock = 0`; else if the collision is
+solid for sides at `(INT(x + knock) ± 6, INT(y) - 4)` or `(…, INT(y) - 12)` (+ when pushed
+right), `knock = 0`; else `x += knock` and `knock` moves 0.25 towards 0 (to 0 at most).
+
+**The flash**: an object with a sheet whose `invulnerable > 12` (the first 8 frames after it
+was struck) is drawn with sprite palette bank 13, whose 16 colours are all white (31, 31, 31),
+instead of its sheet's bank.
 
 ## 11. Screens and the UI layer
 

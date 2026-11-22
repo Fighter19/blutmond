@@ -726,12 +726,12 @@ if(BM_PLATFORM STREQUAL "host")
         # is picked up and equipped, 2 for the snapshot written at frame 300, 2 while the new room
         # is loaded). The multiboot image runs everything from slow RAM (it is for
         # development): there the room load takes 3, the save point 1, the snapshot these images
-        # write at game frame 300 for the state tests 2 (it is over 1.5 KB, written field by
-        # field), and with music playing a busy frame can go over once more, so 7 are allowed.
+        # write at game frame 300 for the state tests 3 (it is over 2 KB, written field by
+        # field), and with music playing a busy frame can go over once more, so 8 are allowed.
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         set(lag 5)
         if(image STREQUAL "game_autoplay_mb")
-          set(lag 7)
+          set(lag 8)
         endif()
         add_test(NAME game_render_${image}
           COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 1300 --until ${elf}:bm_game_stats+24=1000

@@ -4,6 +4,7 @@
 #include "device.h"
 #include "game.h"
 #include "hal_host.h"
+#include "hits.h"
 #include "physical_device.h"
 #include "text.h"
 #include "ui.h"
@@ -731,6 +732,59 @@ static void testTheMenus(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// How many sprites use palette bank `bank` (the hit flash).
+static int spritesInBank(uint8_t bank)
+{
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  int n = 0;
+  for (int i = 0; i < 128; i++)
+  {
+    uint16_t attr0 = ppu->oam[i * 4], attr2 = ppu->oam[i * 4 + 2];
+    if ((attr0 & 0x0300) == 0x0200) continue;   // hidden
+    if ((attr2 >> 12) == bank) n++;
+  }
+  return n;
+}
+
+// A struck object is pushed away from the one who struck it, slower each frame until it stands
+// (a wall stops it sooner), and is drawn in the white flash bank for its first frames; one that
+// does not budge (set_knockback(0): the dummy, the boss) only flashes.
+static void testKnockbackAndFlash(void)
+{
+  startWith(s_data, s_size, "test_room_2");
+  frames(2, 0);
+  int bat = actorOfClass("Bat");
+  TEST_ASSERT(bat >= 0);
+  BmActors *a = &s_game.actors;
+  TEST_ASSERT(spritesInBank(BM_HITS_FLASH_BANK) == 0);
+  int32_t x = a->x[bat];
+  // Struck from its left: pushed right.
+  TEST_ASSERT(bmHitsStrikeObject(&s_game, (uint8_t)bat, 1, 0, a->x[bat] - BM_FIX(10)));
+  TEST_ASSERT(a->knock[bat] == BM_HITS_KNOCK);
+  // Sprites reach video memory at the start of the frame after they were set.
+  frames(2, 0);
+  TEST_ASSERT(spritesInBank(BM_HITS_FLASH_BANK) > 0);
+  frames(BM_HITS_FLASH_FRAMES + 1, 0);
+  TEST_ASSERT(spritesInBank(BM_HITS_FLASH_BANK) == 0);
+  frames(10, 0);
+  TEST_ASSERT(a->knock[bat] == 0);
+  // 2 + 1.75 + ... + 0.25 pixels, as far as the bat's own flying home allows.
+  printf("    pushed %d pixels\n", (int)BM_FIX_INT(a->x[bat] - x));
+  TEST_ASSERT(a->x[bat] != x);
+
+  // The dummy (in the same room) stands firm, but flashes.
+  int dummy = actorOfClass("Dummy");
+  TEST_ASSERT(dummy >= 0);
+  x = a->x[dummy];
+  TEST_ASSERT(bmHitsStrikeObject(&s_game, (uint8_t)dummy, 1, 0, a->x[dummy] - BM_FIX(10)));
+  TEST_ASSERT(a->knock[dummy] == 0);
+  frames(2, 0);
+  TEST_ASSERT(spritesInBank(BM_HITS_FLASH_BANK) > 0 || a->sheet[dummy] < 0);
+  frames(12, 0);
+  TEST_ASSERT(a->x[dummy] == x);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // first-items.md steps 3 and 4: the element rule (the Ember Cloak resists fire, the bat is weak
 // to holy), Chain Mail slows the player, the Thorn Band strikes back, mana and its refill,
 // items used through their behaviour scripts (UseRestore only when it helps, UseReturn back to
@@ -947,6 +1001,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
   RUN_TEST(testElementsArmourAndConsumables);
+  RUN_TEST(testKnockbackAndFlash);
   RUN_TEST(testADropFallsAndIsTaken);
   RUN_TEST(testTheBossIsDefeated);
   free(s_data);

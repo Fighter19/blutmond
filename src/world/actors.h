@@ -70,6 +70,8 @@ typedef struct BmActors
   uint8_t team[BM_ACTORS_MAX];         // 0: enemies
   uint8_t invulnerable[BM_ACTORS_MAX]; // frames until it can be struck again
   uint8_t affinity[BM_ACTORS_MAX];     // elements it is weak to (bits 0-3) and resists (4-7)
+  int32_t knock[BM_ACTORS_MAX];        // fix: pixels per frame it is pushed by the last hit
+  uint8_t steady[BM_ACTORS_MAX];       // percent of a push it does not take (set_knockback)
   uint8_t spawned[BM_ACTORS_MAX];      // made at run time (spawn): no room object, gone with the room
   uint8_t gone[BM_ACTORS_MAX];         // destroyed: the place can be taken by the next spawn
   uint32_t seed;

@@ -464,13 +464,16 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
       g->resists[args[0]] = (uint8_t)(n < 0 ? 0 : n > 255 ? 255 : n);
     }
     break;
+  case BM_SCRIPT_API_set_knockback:
+    a->steady[i] = (uint8_t)(100 - (args[0] < 0 ? 0 : args[0] > 100 ? 100 : args[0]));
+    break;
   case BM_SCRIPT_API_set_affinity:
     a->affinity[i] = (uint8_t)((args[0] > 0 && args[0] < 4 ? 1u << args[0] : 0) | (args[1] > 0 && args[1] < 4 ? 16u << args[1] : 0));
     break;
   case BM_SCRIPT_API_strike_back:
   {
     uint8_t current = a->current, slot = a->currentSlot;
-    *result = g->striker != 0xFF && g->striker != 0 && bmHitsStrikeObject(g, (uint8_t)(g->striker - 1), args[0], 0);
+    *result = g->striker != 0xFF && g->striker != 0 && bmHitsStrikeObject(g, (uint8_t)(g->striker - 1), args[0], 0, g->player.x);
     a->current = current;
     a->currentSlot = slot;
     break;
@@ -1002,7 +1005,13 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->touching[i] = 0;
     a->health[i] = 0;
   a->affinity[i] = 0;
+  a->knock[i] = 0;
+  a->steady[i] = 0;
     a->affinity[i] = 0;
+  a->knock[i] = 0;
+  a->steady[i] = 0;
+    a->knock[i] = 0;
+    a->steady[i] = 0;
     a->team[i] = 0;
     a->invulnerable[i] = 0;
     BmAnimState none = { 0, 0, 0, 0 };
@@ -1072,8 +1081,11 @@ uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
     }
     const BmSpriteSheet *s = &g->sheets[a->sheet[i]];
     BmAnimState st = animOf(a, i);
-    used = (uint8_t)(used + bmSpriteSheetDraw(s, bmAnimFrame(s, &st), BM_FIX_INT(a->x[i]) - g->room.cameraX, BM_FIX_INT(a->y[i]) - g->room.cameraY,
-                                              a->facing[i] < 0, 1, (uint8_t)(firstOam + used), (uint8_t)(maxOam - used)));
+    // Just struck: drawn in the flash bank (hits.h).
+    bool flash = a->invulnerable[i] > BM_HITS_INVULNERABLE - BM_HITS_FLASH_FRAMES;
+    used = (uint8_t)(used + bmSpriteSheetDrawBank(s, bmAnimFrame(s, &st), BM_FIX_INT(a->x[i]) - g->room.cameraX, BM_FIX_INT(a->y[i]) - g->room.cameraY,
+                                                  a->facing[i] < 0, 1, flash ? BM_HITS_FLASH_BANK : s->bank, (uint8_t)(firstOam + used),
+                                                  (uint8_t)(maxOam - used)));
   }
   return used;
 }
@@ -1104,6 +1116,8 @@ bool bmActorsSpawn(BmGame *g, uint16_t className, int32_t x, int32_t y, uint32_t
   a->hidden[i] = a->touching[i] = 0;
   a->health[i] = 0;
   a->affinity[i] = 0;
+  a->knock[i] = 0;
+  a->steady[i] = 0;
   a->team[i] = 0;
   a->invulnerable[i] = 0;
   BmAnimState none = { 0, 0, 0, 0 };
@@ -1138,6 +1152,8 @@ void bmActorsDestroy(BmGame *g, uint8_t i)
   a->touching[i] = 0;
   a->health[i] = 0;
   a->affinity[i] = 0;
+  a->knock[i] = 0;
+  a->steady[i] = 0;
   for (uint8_t k = 0; k < BM_HITS_MAX; k++)
     if (g->hits.source[k] == 1 + i) bmHitsDisarm(g, (uint8_t)(1 + i), g->hits.name[k]);
 }
