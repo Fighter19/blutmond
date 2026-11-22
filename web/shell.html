@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="bm-version" content="@BM_VERSION@">
 <title>Blutmond</title>
 <style>
   html, body { margin: 0; height: 100%; background: #1d1f24; color: #d8d8d8; font: 15px system-ui, sans-serif; overflow: hidden; }
@@ -14,8 +15,14 @@
 <div id="status">Loading…</div>
 <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
 <script>
+  // The site's version: the commit, in the meta tag bm-version, filled in when the site is
+  // published (pages.yml). Every file the page loads gets it as ?v=..., so a browser holding an
+  // older copy fetches the new one.
+  var BM_VERSION = document.querySelector('meta[name="bm-version"]').content;
+  if (BM_VERSION.charAt(0) === '@') BM_VERSION = '';
   var statusEl = document.getElementById('status');
   var Module = {
+    locateFile: function (path) { return BM_VERSION ? path + '?v=' + BM_VERSION : path; },
     canvas: document.getElementById('canvas'),
     setStatus: function (text) { statusEl.textContent = text || ''; statusEl.style.display = text ? 'flex' : 'none'; },
     monitorRunDependencies: function (left) { if (!left) Module.setStatus(''); },

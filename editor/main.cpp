@@ -93,7 +93,7 @@ EM_JS(void, bmWebGameRun, (const char *path, int mode), {
     close.onclick = () => box.remove();
     bar.append(title, close);
     const frame = document.createElement('iframe');
-    frame.src = 'game.html?editor';
+    frame.src = 'game.html?editor' + (window.BM_VERSION ? '&v=' + window.BM_VERSION : '');
     frame.style.cssText = 'display:block;flex:1;width:100%;min-height:0;border:0;';
     frame.allow = 'autoplay; gamepad';
     // A grip in the bottom right corner resizes the frame; the game keeps its aspect inside.

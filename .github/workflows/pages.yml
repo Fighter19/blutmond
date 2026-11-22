@@ -52,6 +52,14 @@ jobs:
           cp web/index.html site/
           cp build-web/bmeditor.{html,js,wasm,data} build-web/game.{html,js,wasm,data} site/
           cp build-gba/game.gba site/game.gba
+          # GitHub Pages lets browsers keep files for 10 minutes and has no way to change that.
+          # So every file is asked for with the commit as ?v=...: the pages' scripts, what they
+          # load (wasm, data: through locateFile in web/shell.html), the game in the editor's
+          # frame, and the links on the start page. A new site is then never mixed with old files.
+          v=${GITHUB_SHA::12}
+          sed -i "s/@BM_VERSION@/$v/; s/src=\(\"\?\)\(bmeditor\|game\)\.js/src=\1\2.js?v=$v/" site/bmeditor.html site/game.html
+          sed -i "s/href=\"\(bmeditor\.html\|game\.html\|game\.gba\)\"/href=\"\1?v=$v\"/g" site/index.html
+          grep -q "js?v=$v" site/game.html && grep -q "js?v=$v" site/bmeditor.html && ! grep -q @BM_VERSION@ site/game.html site/bmeditor.html
           touch site/.nojekyll
 
       - name: Publish on gh-pages
