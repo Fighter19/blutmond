@@ -41,6 +41,10 @@ Keys: arrows to move, X or Space is A (jump), Z is B, A and S are L and R, Retur
 Backspace is Select, F11 full screen, Escape ends. Gamepads work. The window keeps a save game
 in a file and listens for the link on `127.0.0.1:7414`.
 
+Start opens the menu: the player's status, Equipment, Items and System (the language: English,
+German, French). The test level's third room, behind a step at the east end of the second, is
+the boss hall.
+
 Holding L and R and pressing Select shows or hides the debug overlay (room, game frame,
 position, health, and on the GBA how much of the frame the game took); `--overlay` shows it
 from the start.

@@ -15,8 +15,11 @@ built too: the map properties `attach` and `Class.variable`, 4 room slots, `room
 `room_detach`, `save` variables per room; instead of an event `entered_room()` they get
 `attached()`, which happens on every entry. Of step 5, hit boxes, health and `hit`/`struck`
 are built ([hitboxes.md](hitboxes.md) step 2): `health` and `team` are variables of every
-object, the player's health is a value of the engine (30) until stats give it; `spawn` and
-messages are open. From section 3 `owner_lock`, `owner_play_anim` and `owner_busy` are built
+object, the player's most health is 30 plus the stat MaxHealth; objects made at run time are
+built (`spawn`, `spawn_with`, `destroy`; at most 8 objects in a room, not 16; gone with the
+room); messages are open. What an attachment adds with `add_stat` is a bonus it takes away in
+`detached()` (not saved; equipping again after loading adds it again), not yet undone by the
+runtime itself. From section 3 `owner_lock`, `owner_play_anim` and `owner_busy` are built
 (for the player), and equipping a record attaches its script with the record (`equip`, for
 first-items.md step 2). The rest of steps 4 to 8 is open. Milestone M14 in [../PLAN.md](../PLAN.md).
 

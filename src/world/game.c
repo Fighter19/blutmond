@@ -501,10 +501,10 @@ void bmGameSay(BmGame *g, uint16_t speaker, uint16_t line)
   g->dialogueSpeaker = speaker;
   g->dialogueLine = line;
   if (g->screens.count != 0) return;   // drawn when the menu closes
-  bmUiClearRect(&g->ui, 0, 14, 32, 6);
-  bmUiFrame(&g->ui, 0, 14, 30, 6);
-  bmUiLabel(&g->ui, 1, 15, bmText(g->pPack, g->language, speaker));
-  bmUiText(&g->ui, 2, 16, 27, 3, line, NULL, 0);
+  bmUiClearRect(&g->ui, 0, 15, 32, 5);
+  bmUiFrame(&g->ui, 0, 15, 30, 5);
+  bmUiLabel(&g->ui, 1, 16, bmText(g->pPack, g->language, speaker));
+  bmUiText(&g->ui, 2, 17, 27, 2, line, NULL, 0);
   bmUiShow(&g->ui, true);
 }
 
@@ -512,7 +512,7 @@ void bmGameSay(BmGame *g, uint16_t speaker, uint16_t line)
 static void endDialogue(BmGame *g)
 {
   g->dialogue = 0;
-  bmUiClearRect(&g->ui, 0, 14, 32, 6);
+  bmUiClearRect(&g->ui, 0, 15, 32, 5);
 }
 
 bool bmGameStrikePlayer(BmGame *g, int32_t amount, int32_t fromX)

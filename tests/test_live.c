@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CONTENT_SIZE (64 * 1024)
+#define CONTENT_SIZE (96 * 1024)   // as a cartridge image (apps/game/main.c)
 #define WORDS_PER_FRAME 128   // about 30 KB/s at 60 frames per second
 
 static uint8_t *s_level, *s_variant, *s_scripts;

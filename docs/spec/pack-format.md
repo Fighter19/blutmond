@@ -309,6 +309,14 @@ a language through its string id: the entry with that id, else the main language
 The language chosen is an option, kept in the save memory apart from the save game
 (runtime-core.md §6).
 
+**Other scripts (Japanese).** Nothing in the format is Latin-only: a `ja.bmlang` with UTF-8
+text works as it is, and the cooker reports, per language, the characters no font of the pack
+has. What Japanese still needs: a font with kana and the kanji used (another `.bmfont` of the
+font, ranges U+3040-U+30FF and the kanji), glyphs larger than 8 x 8 for kanji to be legible (the
+file takes 8 x 16 cells; the runtime draws 8 x 8 only so far, a 16 x 16 glyph would be four
+cache tiles), at most 224 different characters on one screen (the glyph cache), and line
+breaks between any two characters rather than at spaces.
+
 ## 4. Compression
 
 | Value | Method | Notes |

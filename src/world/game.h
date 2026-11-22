@@ -151,8 +151,8 @@ BmResult bmGameAfterLoad(BmGame *pGame);
 /// The player's most health: 30 + the stat MaxHealth (inventory.h).
 int32_t bmGameMaxHealth(const BmGame *pGame);
 
-/// Shows the dialogue box (the bottom six rows of the UI layer) with a speaker's name and a line
-/// (string ids, shown in the language chosen). It stays until A is pressed.
+/// Shows the dialogue box (the bottom five rows of the UI layer) with a speaker's name and a line
+/// of up to two rows (string ids, shown in the language chosen). It stays until A is pressed.
 void bmGameSay(BmGame *pGame, uint16_t speaker, uint16_t line);
 
 /// Shows texts in `language` from now on and keeps it as an option in the save memory.

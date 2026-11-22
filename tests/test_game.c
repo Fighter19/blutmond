@@ -502,10 +502,13 @@ static void testTheSwordDefeatsTheBat(void)
   TEST_ASSERT(s_game.actors.hidden[bat] && s_game.actors.health[bat] <= 0 && strcmp(stateOf(bat), "Defeated") == 0);
   TEST_ASSERT(swing[2] == 3);   // the dummy once, the bat twice
 
-  // The Dagger from its stand replaces the sword in the weapon slot: same script, its numbers.
+  // The Dagger from its stand goes into the inventory (a weapon is equipped already); put in the
+  // weapon slot it replaces the sword: same script, its numbers.
   frames(40, 0);
   bmBodyPlace(&s_game.player, 400, 160);
   frames(5, 0);
+  TEST_ASSERT(bmInventoryCount(&s_game.inventory, dagger) == 1 && s_game.inventory.equipped[0] == sword);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, dagger));
   TEST_ASSERT(s_game.inventory.equipped[0] == dagger && (uint32_t)swing[0] == dagger && swing[1] == 0);
   TEST_ASSERT(bmInventoryCount(&s_game.inventory, sword) == 1);
   bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[dummy]) - 10, 160);
@@ -767,6 +770,47 @@ static void testADropFallsAndIsTaken(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// The first boss (first-items.md, ui.md, the user's request): the autopilot plays from the start
+// through both rooms into the boss hall, presses A through the moon bat's words, defeats it,
+// takes the Iron Helm it leaves and puts it on in the Equipment menu. The moon bat stays
+// defeated: its `save` variable is in the save game.
+static void testTheBossIsDefeated(void)
+{
+  start();
+  BmAutopilot pilot = {0};
+  const uint32_t helm = keyOf("IronHelm");
+  int frame = 0, hall = -1, dialogues = 0;
+  uint16_t lastLine = 0xFFFF;
+  for (; frame < 6000 && s_game.inventory.equipped[2] != helm; frame++)
+  {
+    bmVideoWaitFrame();
+    bmGameFrame(&s_game, bmAutopilotKeys(&pilot, &s_game));
+    if (hall < 0 && strcmp(bmGameRoomId(&s_game), "boss_hall") == 0) hall = frame;
+    // A line follows another in the same frame A is pressed: count the lines, not the boxes.
+    if (s_game.dialogue && s_game.dialogueLine != lastLine) dialogues++;
+    if (s_game.dialogue) lastLine = s_game.dialogueLine;
+  }
+  printf("    boss hall at frame %d, helm on at frame %d, %d lines said, deaths %u, hurts %u\n", hall, frame, dialogues,
+         (unsigned)s_game.deaths, (unsigned)s_game.hurts);
+  TEST_ASSERT(hall > 0 && s_game.inventory.equipped[2] == helm && dialogues == 3);
+  TEST_ASSERT(bmInventoryStat(&s_game.inventory, BM_STAT_DEFENCE) == 3);
+  int boss = actorOfClass("MoonBat");
+  TEST_ASSERT(boss >= 0 && s_game.actors.hidden[boss] && strcmp(stateOf(boss), "Gone") == 0);
+  for (int i = 0; i < 40; i++)   // the autopilot closes the menus
+  {
+    bmVideoWaitFrame();
+    bmGameFrame(&s_game, bmAutopilotKeys(&pilot, &s_game));
+  }
+  TEST_ASSERT(s_game.screens.count == 0 && !s_game.ui.shown);
+  // A save game keeps it defeated (the Iron Helm on, too).
+  TEST_ASSERT(bmGameWriteSaveGame(&s_game));
+  TEST_ASSERT(bmGameReadSaveGame(&s_game));
+  boss = actorOfClass("MoonBat");
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "boss_hall") == 0 && s_game.actors.hidden[boss] && strcmp(stateOf(boss), "Gone") == 0);
+  TEST_ASSERT(s_game.inventory.equipped[2] == helm && bmInventoryStat(&s_game.inventory, BM_STAT_DEFENCE) == 3);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 static uint8_t *readFile(const char *path, uint32_t *pSize)
 {
   FILE *f = fopen(path, "rb");
@@ -805,6 +849,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
   RUN_TEST(testADropFallsAndIsTaken);
+  RUN_TEST(testTheBossIsDefeated);
   free(s_data);
   free(s_windData);
   return TEST_RESULT();

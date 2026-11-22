@@ -41,7 +41,10 @@ L 512.
 
 `bmGameFrame(keys)`, in this order:
 
-1. `frame += 1`. `pressed = keys & ~keysPrevious`; `keysPrevious = keys`.
+1. `frame += 1`. `pressed = keys & ~keysPrevious`; `keysPrevious = keys`. If no screen is open,
+   Start is pressed and no dialogue is shown: open the Screen class named `StartMenu`, if
+   there is one (that press is no press for it). If a screen is open: the screens' frame
+   (section 11), the UI layer, sprites and sound, and nothing else: the room stands still.
 2. Player input: `dx = Right - Left`, `dy = Down - Up` (each 0 or 1), jump pressed = A in
    `pressed`, jump held = A in `keys`.
 3. The player's attachments (`press`/`release`, `tick`, state code). If `lockTimer != 0`:
@@ -206,14 +209,22 @@ start:
 
 ## 6. Hurt, respawn, doors, start
 
-- **Strike(amount, fromX)**: nothing if `amount <= 0` or `hurtTimer != 0`. Else play the
+- **Strike(amount, fromX)**: nothing if `amount <= 0` or `hurtTimer != 0`. `amount -=` the
+  stat Defence (number 3), at least 1. Then play the
   effect `hurt`, `hurts += 1`, `hurtTimer = 60`, `vy = -3.0`, `vx = away * 2.0` with `away =
   -1` if `fromX > x`, 1 if `fromX < x`, else `-facing`; the player's hits end (section 10);
   `health -= min(amount, health)`; each of the player's attachments in slot order gets
-  `hit(amount)`; then if `health <= 0`: respawn and `health = 30`.
+  `hit(amount)`; then if `health <= 0`: respawn and `health` = the most.
+- **The most health**: 30 + the stat MaxHealth (number 0), at least 1. The stats' numbers are
+  a convention with the game's `enum Stat` (first-items.md §1).
+- **Dialogue** (`say(speaker, line)`): `dialogue = 1` and the two string ids are kept; unless a
+  screen is open, the UI layer's rows 15 to 19 are cleared, a frame of 30 x 5 cells is drawn
+  there, the speaker's text at (1, 16) and the line wrapped into 27 x 2 cells at (2, 17), and
+  the layer is shown. A pressed in a frame while `dialogue != 0` (step 3 of section 3): the rows
+  are cleared, `dialogue = 0`, and that A is no jump.
 - **Hurt(damage)** (hazards, `hurt_player`): Strike(damage, `x + facing`), so the push is
   backwards.
-- **Health** starts at 30 (until the stat `MaxHealth` gives it) and is kept in the save game.
+- **Health** starts at the most and is kept in the save game.
 - **Respawn**: `place(safeX, safeY)` keeping `facing`; `deaths += 1`; `hurtTimer = 60`.
 - **Going through a door**: the door's property `target_room` names a room id. If there is no
   such room, nothing happens. Otherwise enter that room with the scripted objects starting
@@ -292,7 +303,17 @@ variables to the class's defaults; then object properties named like a variable 
 `save` variables; position to `home`, `facing = 1`, visible, animation 0 from its start; then
 the event `spawn`.
 
-**Each frame**, for each object in order: the event `tick`; the event `touch` if it touches
+**Objects made at run time.** `spawn(class, x, y)`: the Actor class with that name; the place
+is a destroyed one after the room's objects (not the object whose script is running), else the
+next one, at most 8 in all; else false. The new one starts as a fresh object of the room would,
+at `(x, y)` with `home` there, sheet from its class, no room object (it has no `save`
+variables and no properties); `spawn_with(class, record)` does that at the caller's anchor and
+sets the first variable of type record to the record. Then the event `spawn`. `destroy()`: the
+object is gone (hidden, no events, no state code, no hits). The state keeps for each object
+whether it was made at run time and whether it is gone; a state loaded in the room brings them
+back after the room's objects; entering a room drops them.
+
+**Each frame**, for each object in order (skipping those gone): the event `tick`; the event `touch` if it touches
 the player now and did not in the frame before; one step of its state code. After all
 objects: one animation tick for each object that has a sheet.
 
@@ -350,6 +371,21 @@ value is dropped and counts as a script error.
 | 40 | `owner_lock(frames)` | from a player's attachment: `lockTimer = frames` (0..65535) |
 | 41 | `owner_play_anim(name)` | from a player's attachment: the player's sheet's animation of that name from its start; `animHeld = 2` if `lockTimer != 0`, else 1. Unknown: nothing |
 | 42 | `owner_busy()` | from a player's attachment: `lockTimer != 0` |
+| 43-49 | `ui_frame(x, y, w, h)`, `ui_label(x, y, text)`, `ui_number(x, y, value, digits)`, `ui_text(x, y, w, text)`, `ui_gauge(x, y, w, percent)`, `ui_clear(x, y, w, h)`, `ui_show(on)` | the UI layer (section 11): a frame, a text in the language shown, a right-aligned number, a text wrapped down to the last row, a gauge, empty cells, the layer on or off |
+| 50, 51 | `open_screen(class)`, `close_screen()` | section 11 |
+| 52-55 | `language()`, `set_language(i)`, `language_count()`, `language_name(i)` | the language texts are shown in (an option, section 6); setting it redraws every open screen; a name is a string id |
+| 56 | `equipped(slot)` | the record in equipment slot 0 to 7, 0 if none |
+| 57, 58 | `record_text(record, name)`, `record_int(record, name)` | the field of that name in the record's table, whichever structure (data-format.md §4); 0xFFFF / 0 if there is none |
+| 59, 60, 68 | `heal(n)`, `max_health()`, `player_health()` | health += n up to the most; the most (30 + stat 0); the player's health |
+| 61, 62 | `spawn(class, x, y)`, `spawn_with(class, record)` | section 8, "Objects made at run time" |
+| 63 | `destroy()` | the object is gone (section 8) |
+| 64 | `floor_y()` | `FIX` of the top of the first floor at or below `(INT(x), INT(y) - 1)` (jump-through floors count), the room's height if there is none |
+| 65, 66 | `say(speaker, line)`, `dialogue_done()` | the dialogue box (section 6) |
+| 67 | `player_lock(frames)` | `lockTimer = frames` (0..65535) |
+
+`add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
+(state.md §4): what equipment adds, taken away in its `detached()`, not saved. `stat` (28)
+reads `statBase + statBonus`.
 
 `arm`, `disarm` and `hit_box` from one of the player's attachments act for the player and
 remember the slot; from a room's attachment they do nothing.
@@ -438,7 +474,33 @@ the first free; a hit started when all are used is dropped. A room entered fresh
 
 Then every object's invulnerability goes down by 1 if not 0.
 
-## 11. What is not specified here
+## 11. Screens and the UI layer
+
+**The UI layer** (`src/ui/ui.h`): background 3, character block 2, screen block 25, priority 0,
+background palette bank 15, 30 x 20 cells of 8 x 8. Tiles: 0 empty, 1-9 a frame's pieces, 10-18
+a gauge cell from empty to full in eighths, 32-255 a cache of glyphs (pack-format.md §3.1), each
+on a transparent ground or on a frame's inside; a glyph is made when it is drawn, a tile no cell
+shows is taken again when the cache is full. Texts are shown in the language chosen. The layer
+is presentation: not in the state. After a state is loaded it is cleared and hidden, the blend
+switched off, the dialogue box drawn again if `dialogue != 0`, and the screens redraw.
+
+**Screens** (classes that extend `Screen`): a stack of at most 4 (`count`, per place class key,
+interpreter state, 8 variables; snapshot). `open_screen(name)`: the Screen class with that name
+(by the FNV-1a of its name) on top, fresh, false if there is none or the stack is full; the
+first one darkens the room (BLDCNT: darken BG0-2, sprites and the backdrop, BLDY 9) and shows the
+layer; the new one gets `opened()`. `close_screen()`: the top one gets `closed()`, then is
+removed; if one is left, every open screen redraws (`opened()` from the bottom, the layer
+cleared first); if none, the layer is cleared, hidden unless a dialogue is shown, and the blend
+switched off.
+
+**A screens' frame**: buttons that changed go to the top screen as `press(name)` or
+`release(name)`, in the order Up, Down, Left, Right, A, B, Start, Select, L, R (names `#Up` ...
+`#R`); a direction held with no direction newly pressed counts `repeat` up and is pressed again
+at 15 and every 5 after (else `repeat = 0`). Then each screen from the bottom gets `tick()` and
+one step of its state code. Variables a screen reads (`x`, `y`, `facing`, `health`, `team`) are
+the player's; it writes none.
+
+## 12. What is not specified here
 
 Sound ([sound-format.md](sound-format.md)), the script interpreter
 ([mondskript.md](mondskript.md)), the link ([link-protocol.md](link-protocol.md)) and the

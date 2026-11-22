@@ -1,6 +1,12 @@
 # Plan: dialogue and cutscenes
 
-Status: plan, nothing built. Milestone M19 in [../PLAN.md](../PLAN.md).
+Status: a first part built: `say(speaker, line)` shows a box with a name and a line until A
+(`dialogue_done()`), `player_lock(frames)`; the boss's intro uses them. Languages (step 4)
+are built differently from section 4: a translation file per language keyed by the original
+text, not by line ids; text is UTF-8 on the device (decoded per character), so fonts of other
+scripts can be added in parts; the cooker reports characters no font has; the language is an
+option in the save memory ([../spec/pack-format.md](../spec/pack-format.md) §3.2). Everything
+else is open. Milestone M19 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

@@ -50,6 +50,7 @@ typedef struct BmUi
   const uint8_t *pFontChunks[BM_UI_FONT_CHUNKS];
   uint16_t glyphCode[BM_UI_GLYPH_SLOTS];  // the code point a cache tile holds; 0: free
   uint32_t glyphOnFill[BM_UI_GLYPH_SLOTS / 32];   // a bit per tile drawn on a frame's inside
+  uint8_t glyphHint[256];                 // by (code & 127) and ground: the slot it was in last + 1
   uint8_t map[32 * BM_UI_ROWS];           // the visible rows of screen block 25: tile numbers
 } BmUi;
 

@@ -13,8 +13,12 @@ bat's bite is an armed box now, the test level has a training dummy, and a `Jab`
 time, not 16; the struck list is a bit per figure (every figure, not 6); `hit_box(reach,
 frames, damage)` is a rectangle ahead of the figure over its body's height (a script call
 takes at most 3 arguments), not one placed by numbers; events carry only the amount, not the
-target or the element; the damage rule is `max(1, damage)`, without defence or elements; the
-player's hurt timer is their invulnerability, also against hazards. Steps 3 to 5 are open. Milestone M17 in [../PLAN.md](../PLAN.md). Fills in what
+target or the element; the damage rule is `max(1, damage)` for objects and `max(1, damage -
+Defence)` for the player, without elements; the
+player's hurt timer is their invulnerability, also against hazards. A first projectile (the
+moon bat's fireball) is an object made at run time that moves itself and arms its own hit box:
+not yet the engine movement, wall event, team inheritance and stretched test of step 4.
+Steps 3 to 5 are open. Milestone M17 in [../PLAN.md](../PLAN.md). Fills in what
 [attachable-scripts.md](attachable-scripts.md) §6 only names ("hit boxes"), and is what the
 weapons and spells of [first-items.md](first-items.md) hit with.
 

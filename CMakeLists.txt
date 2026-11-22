@@ -61,7 +61,7 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong)
-set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS})
+set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/boss_hall.tmx)
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata
@@ -69,6 +69,10 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/key_items.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/armour_stats.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/drop.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/moon_bat.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/fireball.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/moon_bat.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/fireball.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/drop.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/start_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/equipment_menu.ms
@@ -441,9 +445,8 @@ if(BM_PLATFORM STREQUAL "host")
   endif()
   set(BM_GAME_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
   add_custom_command(OUTPUT ${BM_GAME_LEVEL_PACK}
-    COMMAND bmcook --profile gba -o ${BM_GAME_LEVEL_PACK}
-      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS bmcook ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
+    COMMAND bmcook --profile gba -o ${BM_GAME_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS bmcook ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level for the game")
   add_custom_target(game_level_pack ALL DEPENDS ${BM_GAME_LEVEL_PACK})
@@ -755,6 +758,26 @@ if(BM_PLATFORM STREQUAL "host")
         set_tests_properties(game_matches_${image} PROPERTIES FIXTURES_REQUIRED "game_host;game_${image}")
       endforeach()
 
+      # The whole test level at game frame 4100: the autopilot has fought the bat, gone through
+      # the second room into the boss hall, pressed A through the moon bat's words, defeated it,
+      # taken the Iron Helm it left and put it on in the Equipment menu (it does not dodge: it may
+      # die in the fight and start again in the hall). The GBA shows the same picture as the PC,
+      # with no script error and two room changes. Frames missed on
+      # the GBA: the 5 of game_autoplay above, 2 entering the hall, 2 for the first words, about
+      # 5 in the menus (interpreted scripts drawing them), so at most 16.
+      add_test(NAME boss_host
+        COMMAND game ${cooked}/test_level_gba.bmpk --autoplay --frames 4100 ${out}/boss_host.ppm)
+      set_tests_properties(boss_host PROPERTIES FIXTURES_REQUIRED test_level_pack FIXTURES_SETUP boss_host)
+      set(elf ${BM_GBA_BUILD_DIR}/game_autoplay.elf)
+      add_test(NAME boss_gba
+        COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/game_autoplay.gba --frames 4700 --until ${elf}:bm_game_stats+24=4100
+          --ppm ${out}/boss_gba.ppm --print ${elf}:bm_game_stats+8 --check ${elf}:bm_game_stats+12=2
+          --check ${elf}:bm_game_stats+56=0 --check "${elf}:bm_game_stats+4<=16")
+      set_tests_properties(boss_gba PROPERTIES FIXTURES_SETUP boss_gba)
+      add_test(NAME boss_matches
+        COMMAND ${compare} ${out}/boss_host.ppm ${out}/boss_gba.ppm --diff ${out}/boss_diff.ppm)
+      set_tests_properties(boss_matches PROPERTIES FIXTURES_REQUIRED "boss_host;boss_gba")
+
       # The debug overlay (the UI layer's first user) at game frame 1000: the same on the GBA as
       # on the PC, but for the frame time, which only the GBA measures (its digits are left out).
       add_test(NAME overlay_host
@@ -832,7 +855,7 @@ if(BM_PLATFORM STREQUAL "host")
       add_test(NAME native_live_push_interprets
         COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game_autoplay_native.gba --errors 2000 2000 run 30 hello
           push ${cooked}/test_level_variant_gba.bmpk hot run 1300
-          check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+8=0 check ${elf}:bm_game_stats+12=1 check ${elf}:bm_game_stats+56=0 stats)
+          check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+8=0 check ${elf}:bm_game_stats+12=2 check ${elf}:bm_game_stats+56=0 stats)
       set_tests_properties(native_live_push_interprets PROPERTIES FIXTURES_REQUIRED test_level_variant)
       # The debugger (docs/spec/link-protocol.md section 8): a session in GDB's remote protocol
       # against the game in mGBA: stop, a breakpoint on a script line found through the native
@@ -922,9 +945,12 @@ if(BM_PLATFORM STREQUAL "host")
       foreach(image game_autoplay game_autoplay_mb)
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         # A multiboot image takes the base of the level (it has room for no more).
+        # The full level leads into the boss hall within the run (two room changes), the base not.
         set(level test_level)
+        set(rooms 2)
         if(image STREQUAL "game_autoplay_mb")
           set(level test_level_base)
+          set(rooms 1)
         endif()
         add_test(NAME live_mgba_bit_errors_${image}
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/${image}.gba --errors 2000 2000 run 30 hello
@@ -932,7 +958,7 @@ if(BM_PLATFORM STREQUAL "host")
             state-get ${out}/live_${image}.bmst run 30 state-put ${out}/live_${image}.bmst
             push ${cooked}/${level}_gba.bmpk restart:test_room
             push ${cooked}/${level}_variant_gba.bmpk hot run 1200
-            check ${elf}:bm_game_stats+28=4 check ${elf}:bm_game_stats+8=0 check ${elf}:bm_game_stats+12=1 stats)
+            check ${elf}:bm_game_stats+28=4 check ${elf}:bm_game_stats+8=0 check ${elf}:bm_game_stats+12=${rooms} stats)
         set_tests_properties(live_mgba_bit_errors_${image} PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_variant;test_level_base_pack;test_level_base_variant")
       endforeach()
 

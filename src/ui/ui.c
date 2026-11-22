@@ -172,10 +172,17 @@ static bool slotOnFill(const BmUi *ui, int s)
 // the cache is full, tiles no cell shows any more are freed first. 0 if nothing helps.
 static uint8_t glyphTileFor(BmUi *ui, uint32_t code, bool onFill)
 {
+  // Most characters are where they were last time.
+  uint8_t *hint = &ui->glyphHint[(code & 127) | (onFill ? 128 : 0)];
+  if (*hint != 0 && ui->glyphCode[*hint - 1] == code && slotOnFill(ui, *hint - 1) == onFill) return (uint8_t)(BM_UI_GLYPH_FIRST + *hint - 1);
   int freeSlot = -1;
   for (int s = 0; s < BM_UI_GLYPH_SLOTS; s++)
   {
-    if (ui->glyphCode[s] == code && slotOnFill(ui, s) == onFill) return (uint8_t)(BM_UI_GLYPH_FIRST + s);
+    if (ui->glyphCode[s] == code && slotOnFill(ui, s) == onFill)
+    {
+      *hint = (uint8_t)(s + 1);
+      return (uint8_t)(BM_UI_GLYPH_FIRST + s);
+    }
     if (freeSlot < 0 && ui->glyphCode[s] == 0) freeSlot = s;
   }
   if (freeSlot < 0)
@@ -198,6 +205,7 @@ static uint8_t glyphTileFor(BmUi *ui, uint32_t code, bool onFill)
   ui->glyphCode[freeSlot] = (uint16_t)code;
   if (onFill) ui->glyphOnFill[freeSlot / 32] |= 1u << (freeSlot % 32);
   else ui->glyphOnFill[freeSlot / 32] &= ~(1u << (freeSlot % 32));
+  *hint = (uint8_t)(freeSlot + 1);
   return (uint8_t)(BM_UI_GLYPH_FIRST + freeSlot);
 }
 

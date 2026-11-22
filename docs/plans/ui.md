@@ -10,11 +10,23 @@ when there is one. Step 2 built: the font asset (`.bmfont`, `FONT`,
 [../spec/pack-format.md](../spec/pack-format.md) §3.1) and the engine's font, the UI layer
 (`src/ui/ui.h`: background 3, character block 2, screen block 25, palette bank 15; frames,
 labels, numbers, text with placeholders `{0}`-`{7}` wrapped at spaces), and the debug overlay
-in the game (L + R + Select, `--overlay`); the same picture on the PC and in mGBA. Where it
-differs from sections 2 and 3: the font chunk is 1 bit per pixel and the runtime draws the
+in the game (L + R + Select, `--overlay`); the same picture on the PC and in mGBA. Steps 3 and
+4 built in part ([../spec/runtime-core.md](../spec/runtime-core.md) §11,
+[../spec/mondskript.md](../spec/mondskript.md) "Screens"): `Screen` classes on a stack of 4 that
+pause and darken the room, buttons with repeat, `opened()`/`closed()`, the `ui_*` calls; the
+test level's Start menu (status), Equipment (slots, what fits, the change in attack and defence),
+Items (potions) and System (the language). Glyphs are made when drawn (a cache of 224 tiles),
+fonts come in parts by code point, and texts are shown in the language chosen (French and
+German in the test level). Where steps 3 and 4 differ: no layouts as data (`.bmui`, `UISC`) and
+no widgets of their own: a screen draws with calls in its script; lists are loops over records
+in the script, not bound to the inventory by the runtime; no full-screen backdrops; the menus
+are the test project's scripts (they name its structures), not engine assets; the game frame
+counter goes on while a screen is open (the room does not), so recorded input stays one frame
+per frame; menus cost the GBA a frame now and then (interpreted scripts drawing them). Steps
+5 and 6 are open. Where step 2 differs from sections 2 and 3: the font chunk is 1 bit per pixel and the runtime draws the
 shadow (the test level's pack has to fit the 48 KB a multiboot GBA gives a pushed pack, and
 had less than a kilobyte to spare); the UI keeps its map as one byte per cell for the 20
-visible rows; no canvas, no darkening behind frames yet. Steps 3 to 6 are open. Milestone M13
+visible rows; no canvas, no darkening behind single frames (an open screen darkens the whole room). Milestone M13
 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies

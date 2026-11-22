@@ -91,7 +91,8 @@ typedef enum BmScriptType {
   X(floor_y,           FIX,  0, VOID,  VOID,  VOID,  VOID, 0) \
   X(say,               VOID, 2, TEXT,  TEXT,  VOID,  VOID, 0) \
   X(dialogue_done,     BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
-  X(player_lock,       VOID, 1, INT,   VOID,  VOID,  VOID, 0)
+  X(player_lock,       VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(player_health,     INT,  0, VOID,  VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -131,7 +132,7 @@ typedef enum BmScriptType {
 // language_name(i): the texts' language (an option, text.h). equipped(slot): the record in an
 // equipment slot (0: none); record_text(record, #field), record_int(record, #field): a field of
 // a record of any structure, by name (a text's string id; 0 if there is no such field). heal(n),
-// max_health(): the player's health.
+// max_health(), player_health(): the player's health.
 //
 // Objects made at run time (attachable-scripts.md §6): spawn(#Class, x, y) an Actor class at a
 // place, spawn_with(#Class, record) at the object's own anchor with the new one's first

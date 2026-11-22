@@ -88,3 +88,8 @@ language fr "Français"
 "Accessory" = "Bijou"
 "Nothing" = "Rien"
 "Language" = "Langue"
+
+# The moon bat (Vesper keeps her name)
+"Who wakes me under the blood moon?" = "Qui me réveille sous la lune de sang ?"
+"Stay, then. You will not leave." = "Reste donc. Tu ne repartiras pas."
+"The moon... is setting..." = "La lune... se couche..."

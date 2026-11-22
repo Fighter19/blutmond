@@ -314,6 +314,7 @@ def write_tmx(path):
         "nextlayerid": "7", "nextobjectid": "1",
     })
     mp = ET.SubElement(m, "properties")
+    prop(mp, "music", "castle")
     prop(mp, "room_id", "test_room")
     prop(mp, "area", "test")
     prop(mp, "gravity", "0.25", "float")
@@ -373,20 +374,9 @@ def write_tmx(path):
     ET.ElementTree(m).write(path, encoding="UTF-8", xml_declaration=True)
 
 
-def write_room2(path):
-    """A small second room behind the door of the first one."""
-    w, h = 32, 12
-    main_layer = [[0] * w for _ in range(h)]
+def write_small_room(path, room_id, area, w, h, main_layer, objects):
+    """A room with a background, a main layer and its collision, and objects."""
     bg = [[gid("sky_top" if y < 4 else ("sky_mid" if y < 8 else "sky_bottom")) for _ in range(w)] for y in range(h)]
-    ground = 10
-    for x in range(w):
-        main_layer[ground][x] = gid("grass" if x % 3 else "grass2")
-        main_layer[ground + 1][x] = gid("dirt" if x % 2 else "dirt2")
-    for x in range(10, 15):
-        main_layer[7][x] = gid("platform")
-    for y in range(5, ground):
-        for x in (28, 29, 30, 31):
-            main_layer[y][x] = gid("stone" if (x + y) % 2 else "stone2")
     first_col = 1 + len(TILES)
     first_mat = first_col + 30
 
@@ -396,8 +386,9 @@ def write_room2(path):
         "nextlayerid": "6", "nextobjectid": "1",
     })
     mp = ET.SubElement(m, "properties")
-    prop(mp, "room_id", "test_room_2")
-    prop(mp, "area", "test")
+    prop(mp, "music", "castle")
+    prop(mp, "room_id", room_id)
+    prop(mp, "area", area)
     ts = ET.SubElement(m, "tileset", {"firstgid": "1", "name": "test_tiles", "tilewidth": str(T),
                                       "tileheight": str(T), "tilecount": str(len(TILES)), "columns": str(COLS)})
     rows = (len(TILES) + COLS - 1) // COLS
@@ -423,13 +414,6 @@ def write_room2(path):
     og = ET.SubElement(m, "objectgroup", {"id": "5", "name": "objects"})
     ogp = ET.SubElement(og, "properties")
     prop(ogp, "role", "objects")
-    objects = [
-        ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "test_room"), ("target_door", "exit_east"), ("direction", "west")]),
-        ("CameraZone", "room", 0, 0, w * T, h * T, False, []),
-        ("Bat", "bat", 200, 104, 0, 0, True, []),
-        ("Dummy", "dummy", 96, 160, 0, 0, True, []),
-        ("WeaponStand", "dagger", 400, 160, 0, 0, True, [("Gives", "Dagger")]),
-    ]
     oid = 1
     for otype, name, x, y, ow, oh, point, props in objects:
         a = {"id": str(oid), "name": name, "type": otype, "x": str(x), "y": str(y)}
@@ -448,12 +432,63 @@ def write_room2(path):
     ET.ElementTree(m).write(path, encoding="UTF-8", xml_declaration=True)
 
 
+def write_room2(path):
+    """A small second room behind the door of the first one; a step at its east end leads to
+    the door of the boss hall."""
+    w, h = 32, 12
+    main_layer = [[0] * w for _ in range(h)]
+    ground = 10
+    for x in range(w):
+        main_layer[ground][x] = gid("grass" if x % 3 else "grass2")
+        main_layer[ground + 1][x] = gid("dirt" if x % 2 else "dirt2")
+    for x in range(10, 15):
+        main_layer[7][x] = gid("platform")
+    for y in range(8, ground):
+        for x in (28, 29, 30, 31):
+            main_layer[y][x] = gid("stone" if (x + y) % 2 else "stone2")
+    objects = [
+        ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "test_room"), ("target_door", "exit_east"), ("direction", "west")]),
+        ("CameraZone", "room", 0, 0, w * T, h * T, False, []),
+        ("Bat", "bat", 200, 104, 0, 0, True, []),
+        ("Dummy", "dummy", 96, 160, 0, 0, True, []),
+        ("WeaponStand", "dagger", 400, 160, 0, 0, True, [("Gives", "Dagger")]),
+        ("Door", "exit_east", w * T - 16, 80, 16, 48, False, [("target_room", "boss_hall"), ("target_door", "exit_west"), ("direction", "east")]),
+    ]
+    write_small_room(path, "test_room_2", "test", w, h, main_layer, objects)
+
+
+def write_boss_hall(path):
+    """The boss hall behind the second room: walls, a ceiling, two platforms, the moon bat. An
+    area of its own, so the first two rooms are cooked the same with and without it."""
+    w, h = 30, 12
+    main_layer = [[0] * w for _ in range(h)]
+    ground = 10
+    for x in range(w):
+        main_layer[0][x] = gid("brick" if x % 2 else "brick2")
+        main_layer[ground][x] = gid("brick" if x % 2 else "brick2")
+        main_layer[ground + 1][x] = gid("dirt" if x % 2 else "dirt2")
+    for y in range(1, ground):
+        for x in (0, w - 1):
+            if x == 0 and y >= 7:
+                continue   # the door
+            main_layer[y][x] = gid("stone" if (x + y) % 2 else "stone2")
+    for x in list(range(6, 10)) + list(range(20, 24)):
+        main_layer[6][x] = gid("platform")
+    objects = [
+        ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "test_room_2"), ("target_door", "exit_east"), ("direction", "west")]),
+        ("CameraZone", "room", 0, 0, w * T, h * T, False, []),
+        ("MoonBat", "vesper", 200, 40, 0, 0, True, []),
+    ]
+    write_small_room(path, "boss_hall", "keep", w, h, main_layer, objects)
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "assets", "test_room")
     os.makedirs(out, exist_ok=True)
     draw_tileset().save(os.path.join(out, "tileset.png"))
     write_tmx(os.path.join(out, "room.tmx"))
     write_room2(os.path.join(out, "room2.tmx"))
+    write_boss_hall(os.path.join(out, "boss_hall.tmx"))
 
 
 if __name__ == "__main__":

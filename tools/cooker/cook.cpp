@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <map>
 #include <set>
 #include <sstream>
@@ -1083,6 +1084,39 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
         entries[uint16_t(id)] = l.texts[i].second;
       }
       if (unused > 5) report.warning("text", l.path, std::to_string(unused - 5) + " more translations of texts this pack does not have");
+      // Characters no font of the pack has (they would show as '?'): what a new language,
+      // Japanese say, needs a font for.
+      if (!fontRanges.empty())
+      {
+        std::set<uint32_t> missing;
+        for (const auto &[id, text] : entries)
+          for (size_t k = 0; k < text.size();)
+          {
+            uint8_t c = uint8_t(text[k]);
+            int more = c < 0x80 ? 0 : (c & 0xE0) == 0xC0 ? 1 : (c & 0xF0) == 0xE0 ? 2 : 3;
+            uint32_t code = more == 0 ? c : more == 1 ? c & 0x1Fu : more == 2 ? c & 0x0Fu : c & 0x07u;
+            for (int m = 1; m <= more && k + size_t(m) < text.size(); m++) code = (code << 6) | (uint8_t(text[k + size_t(m)]) & 0x3Fu);
+            k += size_t(more) + 1;
+            if (code == '\n' || code == ' ') continue;
+            bool found = false;
+            for (const auto &[name, ranges] : fontRanges)
+              for (const font::Range &r : ranges) found |= code >= r.first && code < r.first + r.count;
+            if (!found) missing.insert(code);
+          }
+        if (!missing.empty())
+        {
+          std::string list;
+          int shown = 0;
+          for (uint32_t code : missing)
+            if (shown++ < 12)
+            {
+              char hex[16];
+              std::snprintf(hex, sizeof(hex), " U+%04X", unsigned(code));
+              list += hex;
+            }
+          report.warning("text", l.path, "language " + l.code + ": " + std::to_string(missing.size()) + " characters no font has (shown as ?):" + list);
+        }
+      }
       Bytes b;
       b.u16(code);
       b.u16(name);

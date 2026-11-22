@@ -94,6 +94,8 @@ In serialisation order. Count is the array length.
 | `lockTimer` | u16 |  | snapshot |
 | `animHeld` | u8 |  | snapshot |
 | `health` | s16 |  | save link |
+| `dialogue` | u8 |  | snapshot |
+| `dialogueSpeaker`, `dialogueLine` | u16 |  | snapshot |
 | `doorCooldown` | u16 |  | snapshot |
 | `saveCooldown` | u16 |  | transient |
 | `deaths` | u32 |  | save |
@@ -124,6 +126,7 @@ In serialisation order. Count is the array length.
 | `actors.health` | s32 | 8 | snapshot |
 | `actors.team` | u8 | 8 | snapshot |
 | `actors.invulnerable` | u8 | 8 | snapshot |
+| `actors.spawned`, `actors.gone` | u8 | 8 each | snapshot |
 | `actors.seed` | u32 |  | snapshot |
 | `actors.storeCount` | u8 |  | save |
 | `actors.storeKey` | u32 | 16 | save |
@@ -134,6 +137,7 @@ In serialisation order. Count is the array length.
 | `inventory.equipped` | u32 | 8 | save, link |
 | `inventory.quick` | u32 | 4 | save, link |
 | `inventory.statBase` | s16 | 16 | save, link |
+| `inventory.statBonus` | s16 | 16 | snapshot |
 | `attachments.classKey` | u32 | 12 | snapshot |
 | `attachments.state`, `attachments.wait` | u8 | 12 each | snapshot |
 | `attachments.pc`, `attachments.timer` | u16 | 12 each | snapshot |
@@ -146,9 +150,15 @@ In serialisation order. Count is the array length.
 | `hits.frames` | u16 | 8 | snapshot |
 | `hits.reach` | s16 | 8 | snapshot |
 | `hits.struck` | u16 | 8 | snapshot |
+| `screens.count` | u8 |  | snapshot |
+| `screens.classKey` | u32 | 4 | snapshot |
+| `screens.state`, `screens.wait` | u8 | 4 each | snapshot |
+| `screens.pc`, `screens.timer` | u16 | 4 each | snapshot |
+| `screens.fields` | s32 | 32 | snapshot |
+| `screens.repeat` | u8 |  | transient |
 
 Sizes with this table: a save game is 569 bytes of payload, a link transfer 426, a snapshot
-1755 (1759 with the autopilot); each plus the 16-byte header. Attachment slots 0 to 7 are the
+1977 (1983 with the autopilot); each plus the 16-byte header. Attachment slots 0 to 7 are the
 player's, 8 to 11 the room's. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).
 

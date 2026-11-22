@@ -61,11 +61,20 @@ function record<Armour> armourAt(int n) {
 
 function slots() {
   for s in 0..4 {
-    ui_label(2, 2 + s * 3, " ");
     ui_label(3, 3 + s * 3, "          ");
     ui_label(3, 3 + s * 3, record_text(equipped(equipSlot(s)), #title));
   }
+  slotCursor();
+}
+
+function slotCursor() {
+  for s in 0..4 { ui_label(2, 2 + s * 3, " "); }
   if !Choosing { ui_label(2, 2 + Slot * 3, ">"); }
+}
+
+function listCursor() {
+  for y in 2..13 { ui_label(15, y, " "); }
+  if Choosing { ui_label(15, 2 + Pick, ">"); }
 }
 
 function list() {
@@ -87,7 +96,7 @@ function list() {
       }
     }
   }
-  if Choosing { ui_label(15, 2 + Pick, ">"); }
+  listCursor();
 }
 
 // What the choice would change: attack and defence now, and with it.
@@ -121,30 +130,44 @@ function preview() {
   }
 }
 
+// Each press draws again only what it changed (the menu runs as interpreted script on the GBA).
 event press(name b) {
   if !Choosing {
-    if b == #Up { Slot = (Slot + 3) % 4; }
-    if b == #Down { Slot = (Slot + 1) % 4; }
+    if b == #Up || b == #Down {
+      if b == #Up { Slot = (Slot + 3) % 4; }
+      else { Slot = (Slot + 1) % 4; }
+      slotCursor();
+      list();
+    }
     if b == #A {
       Choosing = true;
       Pick = 0;
+      slotCursor();
+      listCursor();
+      preview();
     }
-    if b == #B {
-      close_screen();
-      return;
-    }
-  } else {
-    if b == #Up { Pick = (Pick + Count - 1) % Count; }
-    if b == #Down { Pick = (Pick + 1) % Count; }
-    if b == #A {
-      if Slot == 0 { equip(0, weaponAt(Pick)); }
-      else { equip(equipSlot(Slot), armourAt(Pick)); }
-      play_sound(#jump);
-      Choosing = false;
-    }
-    if b == #B { Choosing = false; }
+    if b == #B { close_screen(); }
+    return;
   }
-  slots();
-  list();
-  preview();
+  if b == #Up || b == #Down {
+    if b == #Up { Pick = (Pick + Count - 1) % Count; }
+    else { Pick = (Pick + 1) % Count; }
+    listCursor();
+    preview();
+  }
+  if b == #A {
+    if Slot == 0 { equip(0, weaponAt(Pick)); }
+    else { equip(equipSlot(Slot), armourAt(Pick)); }
+    play_sound(#jump);
+    Choosing = false;
+    slots();
+    listCursor();
+    preview();
+  }
+  if b == #B {
+    Choosing = false;
+    slotCursor();
+    listCursor();
+    preview();
+  }
 }

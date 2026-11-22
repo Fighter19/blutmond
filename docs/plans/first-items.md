@@ -9,7 +9,15 @@ training dummy (no drawing and no number yet); the bat with 4 health from its re
 back home and defeated after two strikes of the sword. The autopilot fights the bat, so the
 recorded play-through of the tests (host and mGBA, the same picture and state) now contains the
 fight. Equipping is `equip(slot, record)` from a script, not yet through roles and a menu; the
-weapon slot is 0. Not yet as the plan has it: the roles (`role item, equip(...)`, they come
+weapon slot is 0. Steps 3 and 4 built in part: equipment through the Equipment menu (a script,
+ui.md), armour's stats while worn (`ArmourStats`, the default behaviour of armour; the
+weapon's own stats through `WeaponSwing`), the damage rule with defence (`max(1, damage -
+Defence)`; elements not yet), the most health from MaxHealth, potions used in the Items page.
+And a first boss: Vesper, the moon bat, in a third room (the boss hall), with an intro where it
+speaks (`say`), a fight with dives (an armed bite) and fireballs (objects made at run time
+that arm their own hit box), a health bar, and the Iron Helm it drops; defeated it stays so.
+The bat drops a potion half of the time. The autopilot plays all of it, and the picture at
+frame 4100 is the same on the PC and the GBA. Not yet as the plan has it: the roles (`role item, equip(...)`, they come
 with structures.md step 4), the Data tab (structures.md step 5), icons and sounds; the
 scripts the other `behaviour` fields name do not exist yet. Armour names its slot with an enum
 `EquipSlot` instead of a byte. Steps 3 to 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).

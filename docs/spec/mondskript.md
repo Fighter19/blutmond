@@ -195,9 +195,9 @@ every other file of the same module.
 | Enums | `enum E { A, B }` before the class or in a file of its own; variables and parameters of type `E`; values written `E.A`, or just `A` where the type is known (defaults, `defaultproperties`); `==` and `!=` between values of the same enum. An enum is not a number: assigning one to `int` or to another enum is an error | `switch`, conversion to `int` |
 | Structures | `struct S { ... }` and `struct S is Base { ... }` declared and laid out for records: field types, alignment, defaults, sizes, see "Structures" below | structures as variables of a class |
 | Records | `record<S>` variables, parameters and results, `#Name` as a record, field access (`.field`, `.inner.field`, `.array[2]`, through `record<T>` fields), `for x in records(S)`; [data-format.md](data-format.md) §5 | a dynamic array index |
-| Classes | `class Name extends Actor;` and `extends Attachment` (below), `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes (`Player`, `Screen`), inheritance between script classes, components (`has`) |
-| Functions | functions with up to 3 parameters and a result, calls nested up to 16 deep; all are final | `virtual`, `static` |
-| Events | Actor: `spawn()`, `tick()`, `touch()` (the player starts touching the object); Attachment: `attached()`, `detached()`, `tick()`, `press(name button)`, `release(name button)`, `jumped()`, `landed()`; both: `hit(int amount)` (struck: for an attachment, the player was), `struck(int amount)` (a hit of its own struck another); in the class and per state | `dies`, `enter_room`, `leave_room`, `use`, `message`, the target and element of a hit |
+| Classes | `class Name extends Actor;`, `extends Attachment` and `extends Screen` (below), `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes (`Player`, `Screen`), inheritance between script classes, components (`has`) |
+| Functions | functions with up to 3 parameters and a result (also `record<S>`), calls nested up to 16 deep; all are final; runtime functions take up to 4 values | `virtual`, `static` |
+| Events | Actor: `spawn()`, `tick()`, `touch()` (the player starts touching the object); Attachment: `attached()`, `detached()`, `tick()`, `press(name button)`, `release(name button)`, `jumped()`, `landed()`; both: `hit(int amount)` (struck: for an attachment, the player was), `struck(int amount)` (a hit of its own struck another); Screen: `opened()`, `closed()`, `tick()`, `press(name)`, `release(name)`; in the class and per state | `dies`, `enter_room`, `leave_room`, `use`, `message`, the target and element of a hit |
 | States | `state` with events and state code after `begin:`, `gotostate`, `start_state`; latent `sleep(frames)`, `finish_anim()`, `wait_until(condition)` | functions overridden per state; locals and `for` in state code (their values would not survive a wait: use variables of the class) |
 | Statements | `var` locals, `if`/`else`, `while`, `loop`, `for x in a..b`, `break`, `continue`, `return`, assignment with `=`, `+=`, `-=`, `*=`, `/=` | `switch`, `match`, queries |
 | Expressions | `+ - * / %`, comparisons, `&& || !` (short circuit), `fix(...)`, `int(...)`; integer literals become `fix` where `fix` is expected; mixing `int` and `fix` is an error | |
@@ -286,6 +286,50 @@ from an object they do nothing. A save game keeps what is equipped and attaches 
 Not yet for hits: guard boxes, the element and the target's defence in the
 damage, the target in `struck`, projectiles ([../plans/hitboxes.md](../plans/hitboxes.md)).
 
+### Screens
+
+A class that `extends Screen` is a menu or another screen of the game
+([../plans/ui.md](../plans/ui.md) §4): `open_screen(#Class)` puts it on a stack of at most 4
+(Start opens `StartMenu`); while one is open the room stands still and is darkened. It draws
+itself with the UI calls in `opened()`, which comes again when it must draw again (a state
+loaded, the language changed, the screen above it closed); the top one gets the buttons as
+`press(name)` (`#Up` `#Down` `#Left` `#Right` `#A` `#B` `#Start` `#Select` `#L` `#R`, held
+directions repeat); `close_screen()` closes the top one. It reads the player's `health` and
+calls everything an attachment may.
+
+```
+class SystemMenu extends Screen;
+var int Pick;
+event opened() {
+  ui_frame(8, 3, 14, 4 + language_count());
+  ui_label(10, 4, "Language");
+  for i in 0..language_count() { ui_label(11, 6 + i, language_name(i)); }
+}
+event press(name b) {
+  if b == #A { set_language(Pick); }
+  if b == #B { close_screen(); }
+}
+```
+
+The UI calls draw on the UI layer in 8 x 8 cells (30 x 20): `ui_frame(x, y, w, h)`,
+`ui_label(x, y, text)`, `ui_number(x, y, value, digits)`, `ui_text(x, y, w, text)` (wrapped),
+`ui_gauge(x, y, w, percent)`, `ui_clear(x, y, w, h)`, `ui_show(on)`. Any script may use them
+(the boss's health bar is drawn by the boss). Texts are shown in the language chosen
+(`language()`, `set_language(i)`, `language_count()`, `language_name(i)`;
+[pack-format.md](pack-format.md) §3.2). For equipment and items: `equipped(slot)`,
+`record_text(record, #field)` and `record_int(record, #field)` (a field of a record of any
+structure), `heal(n)`, `max_health()`, `player_health()`; `equip(slot, record)` puts on what the
+player owns.
+
+### Scenes and objects made at run time
+
+`say(speaker, line)` shows the dialogue box with a name and a line until the player presses A;
+`wait_until(dialogue_done())` waits for that. `player_lock(frames)` keeps the player from
+walking and jumping meanwhile. `spawn(#Class, x, y)` makes an object of an Actor class at run
+time, `spawn_with(#Class, record)` at the object's own place with the record in the new one's
+first `record<S>` variable (a drop), `destroy()` removes the object, `floor_y()` is the floor
+below it. At most 8 objects in a room; made ones are gone with the room.
+
 ### Structures
 
 ```
@@ -356,7 +400,8 @@ order; which enum is known only to the compiler), 7 record (a record's key). Eve
 order of their numbers, with the kinds of class that get them: 0 `spawn()` (Actor), 1
 `tick()` (both), 2 `touch()` (Actor), 3 `attached()`, 4 `detached()`, 5 `press(name)`, 6
 `release(name)`, 7 `jumped()`, 8 `landed()` (Attachment), 9 `hit(int)`, 10 `struck(int)`
-(both). The line table's offset may be 0
+(both), 11 `opened()`, 12 `closed()` (Screen; it also gets `tick`, `press`, `release`). Class
+kinds: 0 Actor, 1 Attachment, 2 Screen. The line table's offset may be 0
 (none). Version 1 had the three events of an Actor and 0 in place of the kind; it is refused.
 
 #### Instructions

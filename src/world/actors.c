@@ -453,6 +453,9 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_max_health:
     *result = bmGameMaxHealth(g);
     break;
+  case BM_SCRIPT_API_player_health:
+    *result = g->health;
+    break;
   case BM_SCRIPT_API_say:
     bmGameSay(g, (uint16_t)args[0], (uint16_t)args[1]);
     break;
