@@ -286,12 +286,25 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
                 <Label text="Hitbox X"/><SpinBox id="anim_hx" expand="1"/><Label text="Y"/><SpinBox id="anim_hy" expand="1"/>
                 <Label text="W"/><SpinBox id="anim_hw" expand="1"/><Label text="H"/><SpinBox id="anim_hh" expand="1"/>
               </HBox>
+              <Label text="Boxes: green hurt, red hit, blue guard" bold="1"/>
+              <CheckBox id="anim_box_sprite" text="The sprite's boxes (frames without their own)"/>
+              <Scroll min-size="0 70"><ItemList id="anim_boxes"/></Scroll>
+              <HBox>
+                <OptionButton id="anim_box_kind" items="Hurt;Hit;Guard" expand="1"/>
+                <Button id="anim_box_add" text="Add"/><Button id="anim_box_delete" text="Delete"/>
+              </HBox>
+              <HBox>
+                <Label text="X"/><SpinBox id="anim_bx" expand="1"/><Label text="Y"/><SpinBox id="anim_by" expand="1"/>
+                <Label text="W"/><SpinBox id="anim_bw" expand="1"/><Label text="H"/><SpinBox id="anim_bh" expand="1"/>
+              </HBox>
+              <HBox><Label text="Name"/><LineEdit id="anim_box_name" expand="1"/></HBox>
             </VBox></Scroll></PanelContainer>
             <HSplit fixed-end="300">
             <VBox expand="1">
               <HBox>
                 <Button id="anim_play" text="Pause"/>
                 <CheckBox id="anim_show_hitbox" text="Hitbox" pressed="1"/>
+                <CheckBox id="anim_show_boxes" text="Boxes" pressed="1"/>
                 <CheckBox id="anim_show_pieces" text="Hardware sprites" pressed="1"/>
               </HBox>
               <AnimPreview id="anim_preview" expand="1"/>

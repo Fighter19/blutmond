@@ -17,6 +17,10 @@ typedef struct BmSpriteSheet
   uint16_t nameId;
   uint16_t frameCount, animCount, tileCount;
   const uint8_t *pFrames, *pPieces, *pAnims, *pSteps, *pPalette, *pTiles;
+  // Version 2: boxes (NULL for a version 1 chunk: no boxes).
+  const uint8_t *pBoxIndex, *pBoxes, *pBoxNames;
+  uint16_t boxCount;
+  uint8_t boxNameCount;
   // Where it was loaded.
   uint16_t tileBase;
   uint8_t bank;
@@ -67,3 +71,16 @@ uint8_t bmSpriteSheetDraw(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x
 
 /// The frame's hitbox relative to the anchor (mirrored with `hflip`).
 BmSpriteBox bmSpriteSheetHitbox(const BmSpriteSheet *pSheet, uint16_t frame, bool hflip);
+
+/// Kinds of boxes (docs/plans/hitboxes.md §2).
+typedef enum BmBoxKind { BM_BOX_HURT = 0, BM_BOX_HIT = 1, BM_BOX_GUARD = 2 } BmBoxKind;
+
+typedef struct BmSpriteNamedBox
+{
+  BmSpriteBox box;    // relative to the anchor, mirrored with hflip
+  uint8_t kind;       // BmBoxKind
+  uint16_t name;      // string id of the box's name, 0xFFFF none
+} BmSpriteNamedBox;
+
+/// The hurt, hit and guard boxes of a frame (at most `max`); returns how many it has.
+uint8_t bmSpriteSheetBoxes(const BmSpriteSheet *pSheet, uint16_t frame, bool hflip, BmSpriteNamedBox *pBoxes, uint8_t max);

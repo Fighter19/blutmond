@@ -1,6 +1,6 @@
 # Sprite format
 
-Version 1, draft.
+Version 2, draft.
 
 A sprite is a source asset ([asset-model.md](asset-model.md)): a **sheet image** plus a
 **sprite file** (`.bmsprite`, XML) that says where the frames are and how they are played.
@@ -27,6 +27,7 @@ The file name without its extension is the sprite's **name**; the game finds spr
 | `hitbox` (in `sprite`) | `x`, `y`, `w`, `h` | the hitbox of every frame that has none of its own, relative to the anchor |
 | `frame` | `x`, `y`, `w`, `h`; `ax`, `ay` | a rectangle of the sheet (1 to 128 pixels each way) and the **anchor** inside it: the point that is placed at the object's position. For actors that is the feet (bottom centre), as in rooms ([room-format.md](room-format.md) §5). Frames are numbered in file order from 0 |
 | `hitbox` (in `frame`) | `x`, `y`, `w`, `h` | this frame's own hitbox |
+| `box` (in `sprite` or `frame`) | `kind` (`hurt`, `hit`, `guard`), `name`, `x`, `y`, `w`, `h` | a box for fighting ([../plans/hitboxes.md](../plans/hitboxes.md) §2): `hurt` where the figure can be hit, `hit` where it hits while a script arms it, `guard` where a hit is blocked. Relative to the anchor, x and y from -128 to 127, w and h up to 255. `hit` and `guard` boxes have a name; boxes of one name belong together. In `sprite`: the boxes of every frame that has none of that kind of its own. At most 4 of a kind per frame and 8 names per sprite |
 | `animation` | `name`, `loop` (1 or 0) | a named sequence. An animation that does not loop stays on its last step and reports that it has finished |
 | `step` | `frame`, `duration` | show a frame for `duration` game frames (60 per second on the GBA), at least 1 |
 
@@ -49,8 +50,9 @@ For the GBA profile a sprite becomes one `SPRT` chunk ([pack-format.md](pack-for
 ```
 u16 name (string id)   u16 frames   u16 animations   u16 tiles   u16 pieces   u16 steps
 u32 offset of: frames, pieces, animations, steps, palette, tiles      (from the chunk start)
+u32 offset of: box index, boxes, box names   u16 boxes   u8 box names   u8 0
 
-frame (12 bytes):     u16 first piece, u8 piece count, u8 0,
+frame (12 bytes):     u16 first piece, u8 piece count, u8 box count,
                       s8 hitbox x, y, u8 hitbox w, h,
                       s8 bounds x, y, u8 bounds w, h        (of the drawn pixels)
 piece (6 bytes):      s8 dx, dy (top left, relative to the anchor),
@@ -60,12 +62,21 @@ step (4 bytes):       u16 frame, u16 duration
 palette:              16 × u16 BGR555 (entry 0 is transparent and written as 0)
 tiles:                32 bytes each: 8 rows of 4 bytes, the left pixel of each pair in the low
                       four bits. The tiles of a piece follow each other row by row.
+box index:            u16 first box of each frame
+box (6 bytes):        s8 x, y, u8 w, h (relative to the anchor), u8 kind (0 hurt, 1 hit,
+                      2 guard), u8 name (index into the box names, 0xFF none)
+box names:            u16 string id each
 ```
 
 Shape and size give the piece's pixels as on the hardware: square 8, 16, 32, 64; wide 16×8,
 32×8, 32×16, 64×32; tall 8×16, 8×32, 16×32, 32×64. Shape 3 does not exist and such a piece is
 not drawn. Everything is little endian and the chunk is padded to four bytes. The runtime
 does not use the bounds.
+
+The header is 52 bytes. A chunk of version 1 has the 36 bytes up to the tiles' offset only,
+with its frames at offset 36, and no boxes; the runtime tells the two apart by where the
+frames start (at least 52: version 2) and reads a version 1 chunk as one without boxes. A
+frame's boxes are its own of a kind, else the sprite's of that kind, worked out by the cooker.
 
 A reader MUST check that every piece, step and frame reference lies inside its table before
 using the chunk.
@@ -74,8 +85,8 @@ using the chunk.
 
 - A sheet is loaded by copying its tiles into sprite memory and its palette into an OBJ bank;
   the sheets of a pack stay loaded across room changes.
-- Mirroring (facing left) flips every piece and mirrors its position and the hitbox around the
-  anchor; a sprite needs only frames that face right.
+- Mirroring (facing left) flips every piece and mirrors its position, the hitbox and the
+  boxes around the anchor; a sprite needs only frames that face right.
 - The position in an animation (animation, step, frames shown) is plain data and part of the
   game state ([state.md](state.md)), so save states and link transfers continue animations
   where they were.
@@ -92,3 +103,4 @@ using the chunk.
 
 - 1: first version.
 - 1.1: tile bytes, piece sizes; the run-time rules moved to runtime-core.md.
+- 2: hurt, hit and guard boxes in the file and in `SPRT` (box index, boxes, box names).

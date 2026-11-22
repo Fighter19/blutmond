@@ -157,6 +157,68 @@ static void testRuntime()
   TEST_ASSERT(chunk != nullptr && size > 36);
 }
 
+// Hurt, hit and guard boxes (hitboxes.md step 1): in the file (on the sprite for every frame,
+// on a frame replacing those of a kind), saved and loaded again, cooked into SPRT version 2,
+// read by the runtime, mirrored with the facing; and the cooker's limits.
+static void testBoxes()
+{
+  fs::create_directories(s_work);
+  fs::copy_file(s_assets + "/test_room/player.png", s_work + "/player.png", fs::copy_options::overwrite_existing);
+  sprite::Sprite s = sprite::load(s_assets + "/test_room/player.bmsprite");
+  s.path = s_work + "/boxed.bmsprite";
+  s.boxes = {{sprite::BoxKind::Hurt, "", {-5, -28, 10, 28}}};                       // every frame
+  s.frames[3].boxes = {{sprite::BoxKind::Hurt, "", {-6, -20, 12, 20}},              // ducked
+                       {sprite::BoxKind::Hit, "blade", {6, -18, 26, 6}},
+                       {sprite::BoxKind::Hit, "blade", {28, -24, 8, 14}},
+                       {sprite::BoxKind::Guard, "shield", {-10, -24, 4, 16}}};
+  s.frames[4].boxes = {{sprite::BoxKind::Hit, "blade", {6, -18, 26, 6}}};          // keeps the sprite's hurt box
+  TEST_ASSERT(sprite::save(s));
+  sprite::Sprite t = sprite::load(s.path);
+  TEST_ASSERT(t.boxes == s.boxes && t.frames[3].boxes == s.frames[3].boxes && t.frames[4].boxes == s.frames[4].boxes && t.frames[0].boxes.empty());
+  std::vector<sprite::NamedBox> f4 = sprite::frameBoxes(t, t.frames[4]);
+  TEST_ASSERT(f4.size() == 2 && f4[0].kind == sprite::BoxKind::Hurt && f4[0].box.h == 28 && f4[1].name == "blade");
+
+  CookOptions options;
+  options.profile = *profileByName("gba");
+  options.sprites = {s.path};
+  std::vector<tmx::Map> maps{tmx::load(s_assets + "/test_room/room.tmx")};
+  Report report;
+  static std::vector<uint8_t> data;
+  data = cook(maps, options, report);
+  TEST_ASSERT(!report.hasErrors() && !data.empty());
+  BmPack pack;
+  TEST_ASSERT(bmPackOpen(&pack, data.data(), uint32_t(data.size()), true) == BM_PACK_OK);
+  BmSpriteSheet sheet;
+  TEST_ASSERT(bmSpriteSheetFind(&sheet, &pack, "boxed") == BM_SUCCESS);
+  TEST_ASSERT(sheet.boxCount == 8 + 4 + 2 && sheet.boxNameCount == 2);   // 8 frames with the sprite's box, 4 own, 1 own + the sprite's
+  BmSpriteNamedBox b[8];
+  TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 0, false, b, 8) == 1 && b[0].kind == BM_BOX_HURT && b[0].box.x == -5 && b[0].box.h == 28 && b[0].name == 0xFFFF);
+  TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 3, false, b, 8) == 4);
+  TEST_ASSERT(b[0].kind == BM_BOX_HURT && b[0].box.h == 20);
+  TEST_ASSERT(b[1].kind == BM_BOX_HIT && b[2].kind == BM_BOX_HIT && b[3].kind == BM_BOX_GUARD);
+  TEST_ASSERT(std::string(bmPackString(&pack, b[1].name)) == "blade" && b[1].name == b[2].name);
+  TEST_ASSERT(std::string(bmPackString(&pack, b[3].name)) == "shield");
+  TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 3, true, b, 8) == 4 && b[1].box.x == -6 - 26 && b[1].box.w == 26);   // mirrored
+  TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 4, false, b, 8) == 2 && b[0].box.h == 28 && b[1].kind == BM_BOX_HIT);
+  TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 3, false, b, 2) == 4);   // how many there are, filled up to max
+
+  // Limits: 4 of a kind per frame, names for hit and guard boxes, sizes.
+  auto problem = [&](const std::vector<sprite::NamedBox> &boxes) {
+    sprite::Sprite x = s;
+    x.frames[1].boxes = boxes;
+    Report r;
+    sprite::cook(x, *profileByName("gba"), r);
+    for (const ReportEntry &e : r.entries)
+      if (e.level == ReportEntry::Level::Error) return e.message;
+    return std::string();
+  };
+  sprite::NamedBox hurt{sprite::BoxKind::Hurt, "", {0, 0, 4, 4}};
+  TEST_ASSERT(problem({hurt, hurt, hurt, hurt}).empty());
+  TEST_ASSERT(problem({hurt, hurt, hurt, hurt, hurt}).find("more than 4 hurt") != std::string::npos);
+  TEST_ASSERT(problem({{sprite::BoxKind::Hit, "", {0, 0, 4, 4}}}).find("needs a name") != std::string::npos);
+  TEST_ASSERT(problem({{sprite::BoxKind::Hurt, "", {0, 0, 300, 4}}}).find("at most 255") != std::string::npos);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 3) return 2;
@@ -165,6 +227,7 @@ int main(int argc, char **argv)
   RUN_TEST(testLoadSaveRoundTrip);
   RUN_TEST(testCook);
   RUN_TEST(testRuntime);
+  RUN_TEST(testBoxes);
   fs::remove_all(s_work);
   return TEST_RESULT();
 }

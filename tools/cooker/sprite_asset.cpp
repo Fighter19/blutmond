@@ -33,6 +33,23 @@ int luminance(uint16_t c)
 
 }  // namespace
 
+const char *boxKindName(BoxKind kind)
+{
+  return kind == BoxKind::Hit ? "hit" : kind == BoxKind::Guard ? "guard" : "hurt";
+}
+
+std::vector<NamedBox> frameBoxes(const Sprite &s, const Frame &f)
+{
+  std::vector<NamedBox> out;
+  for (int k = 0; k < 3; k++)
+  {
+    bool own = std::any_of(f.boxes.begin(), f.boxes.end(), [&](const NamedBox &b) { return int(b.kind) == k; });
+    for (const NamedBox &b : own ? f.boxes : s.boxes)
+      if (int(b.kind) == k) out.push_back(b);
+  }
+  return out;
+}
+
 Sprite load(const std::string &path)
 {
   Sprite s;
@@ -46,7 +63,24 @@ Sprite load(const std::string &path)
   s.imagePath = (fs::path(path).parent_path() / s.imageAttr).lexically_normal().string();
   s.image = std::make_shared<Image>(loadImage(s.imagePath));
   auto box = [](const xml::Element *e) { return Box{toInt(e, "x", 0), toInt(e, "y", 0), toInt(e, "w", 0), toInt(e, "h", 0)}; };
+  auto boxes = [&](const xml::Element *parent) {
+    std::vector<NamedBox> out;
+    for (const xml::Element *b : parent->childrenNamed("box"))
+    {
+      NamedBox nb;
+      std::string kind = b->attr("kind", "hurt");
+      if (kind == "hurt") nb.kind = BoxKind::Hurt;
+      else if (kind == "hit") nb.kind = BoxKind::Hit;
+      else if (kind == "guard") nb.kind = BoxKind::Guard;
+      else throw std::runtime_error(path + ": a box is of kind hurt, hit or guard, not '" + kind + "'");
+      nb.name = b->attr("name");
+      nb.box = box(b);
+      out.push_back(nb);
+    }
+    return out;
+  };
   if (const xml::Element *h = root->child("hitbox")) s.hitbox = box(h);
+  s.boxes = boxes(root.get());
   for (const xml::Element *f : root->childrenNamed("frame"))
   {
     Frame fr;
@@ -61,6 +95,7 @@ Sprite load(const std::string &path)
       fr.ownHitbox = true;
       fr.hitbox = box(h);
     }
+    fr.boxes = boxes(f);
     s.frames.push_back(fr);
   }
   for (const xml::Element *a : root->childrenNamed("animation"))
@@ -84,13 +119,27 @@ bool save(const Sprite &s, std::string *pError)
   }
   out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<sprite version=\"1\" image=\"" << s.imageAttr << "\">\n";
   out << " <hitbox x=\"" << s.hitbox.x << "\" y=\"" << s.hitbox.y << "\" w=\"" << s.hitbox.w << "\" h=\"" << s.hitbox.h << "\"/>\n";
+  auto writeBoxes = [&](const std::vector<NamedBox> &boxes, const char *indent) {
+    for (const NamedBox &b : boxes)
+    {
+      out << indent << "<box kind=\"" << boxKindName(b.kind) << "\"";
+      if (!b.name.empty()) out << " name=\"" << b.name << "\"";
+      out << " x=\"" << b.box.x << "\" y=\"" << b.box.y << "\" w=\"" << b.box.w << "\" h=\"" << b.box.h << "\"/>\n";
+    }
+  };
+  writeBoxes(s.boxes, " ");
   for (const Frame &f : s.frames)
   {
     out << " <frame x=\"" << f.x << "\" y=\"" << f.y << "\" w=\"" << f.w << "\" h=\"" << f.h << "\" ax=\"" << f.ax << "\" ay=\"" << f.ay << "\"";
-    if (f.ownHitbox)
-      out << ">\n  <hitbox x=\"" << f.hitbox.x << "\" y=\"" << f.hitbox.y << "\" w=\"" << f.hitbox.w << "\" h=\"" << f.hitbox.h << "\"/>\n </frame>\n";
-    else
+    if (!f.ownHitbox && f.boxes.empty())
+    {
       out << "/>\n";
+      continue;
+    }
+    out << ">\n";
+    if (f.ownHitbox) out << "  <hitbox x=\"" << f.hitbox.x << "\" y=\"" << f.hitbox.y << "\" w=\"" << f.hitbox.w << "\" h=\"" << f.hitbox.h << "\"/>\n";
+    writeBoxes(f.boxes, "  ");
+    out << " </frame>\n";
   }
   for (const Animation &a : s.animations)
   {
@@ -165,6 +214,19 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
     const Frame &f = s.frames[fi];
     CookedFrame cf;
     cf.hitbox = f.ownHitbox ? f.hitbox : s.hitbox;
+    cf.boxes = frameBoxes(s, f);
+    // Boxes: at most 4 of a kind, inside what a frame record can hold; names for hit and guard.
+    int perKind[3] = {0, 0, 0};
+    for (const NamedBox &b : cf.boxes)
+    {
+      std::string where = s.path + " frame " + std::to_string(fi);
+      if (++perKind[int(b.kind)] == 5) report.error("does-not-fit", where, std::string("more than 4 ") + boxKindName(b.kind) + " boxes");
+      if (b.box.x < -128 || b.box.x > 127 || b.box.y < -128 || b.box.y > 127 || b.box.w < 0 || b.box.w > 255 || b.box.h < 0 || b.box.h > 255)
+        report.error("does-not-fit", where, "a box goes from -128 to 127 and is at most 255 wide and high");
+      if (b.kind != BoxKind::Hurt && b.name.empty()) report.error("box-name", where, std::string("a ") + boxKindName(b.kind) + " box needs a name");
+      if (!b.name.empty() && std::find(out.boxNames.begin(), out.boxNames.end(), b.name) == out.boxNames.end()) out.boxNames.push_back(b.name);
+    }
+    if (out.boxNames.size() > 8) report.error("does-not-fit", s.path, "a sprite has at most 8 box names");
     if (f.w <= 0 || f.h <= 0 || f.w > 128 || f.h > 128)
     {
       report.error("does-not-fit", s.path, "frame " + std::to_string(fi) + " must be between 1 and 128 pixels wide and high");
@@ -259,19 +321,25 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
   return out;
 }
 
-std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, const std::vector<uint16_t> &animationNames)
+std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, const std::vector<uint16_t> &animationNames,
+                           const std::vector<uint16_t> &boxNameIds)
 {
   std::vector<uint8_t> b;
   auto u8 = [&](int v) { b.push_back(uint8_t(v)); };
   auto u16 = [&](uint32_t v) { u8(int(v)); u8(int(v >> 8)); };
   auto u32 = [&](uint32_t v) { u16(v); u16(v >> 16); };
 
-  size_t pieces = 0, steps = 0;
+  size_t pieces = 0, steps = 0, boxes = 0;
   for (const CookedFrame &f : c.frames) pieces += f.pieces.size();
+  for (const CookedFrame &f : c.frames) boxes += f.boxes.size();
   for (const Animation &a : s.animations) steps += a.steps.size();
-  const uint32_t header = 36;
+  // Version 2: the header goes on with the boxes' tables (a version 1 chunk has a 36-byte
+  // header, so its frames start at 36).
+  const uint32_t header = 52;
   uint32_t framesAt = header, piecesAt = framesAt + uint32_t(c.frames.size()) * 12, animsAt = piecesAt + uint32_t(pieces) * 6;
   uint32_t stepsAt = animsAt + uint32_t(s.animations.size()) * 8, paletteAt = stepsAt + uint32_t(steps) * 4, tilesAt = paletteAt + 32;
+  uint32_t boxIndexAt = tilesAt + uint32_t(c.tiles.size()) * 32, boxesAt = boxIndexAt + uint32_t(c.frames.size()) * 2;
+  uint32_t namesAt = boxesAt + uint32_t(boxes) * 6;
 
   u16(nameId);
   u16(uint32_t(c.frames.size()));
@@ -285,13 +353,19 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   u32(stepsAt);
   u32(paletteAt);
   u32(tilesAt);
+  u32(boxIndexAt);
+  u32(boxesAt);
+  u32(namesAt);
+  u16(uint32_t(boxes));
+  u8(int(c.boxNames.size()));
+  u8(0);
 
   uint32_t pieceStart = 0;
   for (const CookedFrame &f : c.frames)
   {
     u16(pieceStart);
     u8(int(f.pieces.size()));
-    u8(0);
+    u8(int(f.boxes.size()));
     u8(f.hitbox.x);
     u8(f.hitbox.y);
     u8(f.hitbox.w);
@@ -335,6 +409,24 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   for (const auto &t : c.tiles)
     for (int y = 0; y < 8; y++)
       for (int x = 0; x < 8; x += 2) u8(t[size_t(y * 8 + x)] | (t[size_t(y * 8 + x + 1)] << 4));
+  uint32_t boxStart = 0;
+  for (const CookedFrame &f : c.frames)
+  {
+    u16(boxStart);
+    boxStart += uint32_t(f.boxes.size());
+  }
+  for (const CookedFrame &f : c.frames)
+    for (const NamedBox &nb : f.boxes)
+    {
+      u8(nb.box.x);
+      u8(nb.box.y);
+      u8(nb.box.w);
+      u8(nb.box.h);
+      u8(int(nb.kind));
+      auto it = std::find(c.boxNames.begin(), c.boxNames.end(), nb.name);
+      u8(nb.name.empty() || it == c.boxNames.end() ? 0xFF : int(it - c.boxNames.begin()));
+    }
+  for (size_t i = 0; i < c.boxNames.size(); i++) u16(i < boxNameIds.size() ? boxNameIds[i] : 0xFFFF);
   while (b.size() % 4) u8(0);
   return b;
 }

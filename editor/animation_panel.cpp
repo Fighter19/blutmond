@@ -106,6 +106,15 @@ void AnimPreview::draw(Canvas &c)
     for (const sprite::Piece &p : f.pieces) c.border({ax + p.dx * zoom, ay + p.dy * zoom, p.w * zoom, p.h * zoom}, {0.2f, 1, 1, 0.8f}, 1);
   if (showHitbox && f.hitbox.w > 0)
     c.border({ax + f.hitbox.x * zoom, ay + f.hitbox.y * zoom, f.hitbox.w * zoom, f.hitbox.h * zoom}, {1, 0.25f, 0.25f, 1}, 2);
+  if (showBoxes)
+    for (size_t i = 0; i < f.boxes.size(); i++)
+    {
+      const sprite::NamedBox &b = f.boxes[i];
+      Color col = b.kind == sprite::BoxKind::Hit ? Color{1, 0.2f, 0.2f, 1} : b.kind == sprite::BoxKind::Guard ? Color{0.3f, 0.5f, 1, 1} : Color{0.2f, 0.9f, 0.3f, 1};
+      Rect r{ax + b.box.x * zoom, ay + b.box.y * zoom, b.box.w * zoom, b.box.h * zoom};
+      c.rect(r, {col.x, col.y, col.z, 0.18f});
+      c.border(r, col, int(i) == selectedBox ? 3.0f : 1.5f);
+    }
   c.line({ax - 6, ay}, {ax + 6, ay}, {1, 0.9f, 0.2f, 1}, 2);
   c.line({ax, ay - 6}, {ax, ay + 6}, {1, 0.9f, 0.2f, 1}, 2);
   c.popClip();
@@ -144,6 +153,13 @@ void AnimationPanel::bind(Control &root, Renderer &renderer)
     rect_[i] = root.findAs<SpinBox>(rectIds[i]);
     hitbox_[i] = root.findAs<SpinBox>(hitIds[i]);
   }
+  boxes_ = root.findAs<ItemList>("anim_boxes");
+  boxSprite_ = root.findAs<CheckBox>("anim_box_sprite");
+  boxKind_ = root.findAs<OptionButton>("anim_box_kind");
+  boxName_ = root.findAs<LineEdit>("anim_box_name");
+  static const char *boxIds[4] = {"anim_bx", "anim_by", "anim_bw", "anim_bh"};
+  for (int i = 0; i < 4; i++) box_[i] = root.findAs<SpinBox>(boxIds[i]);
+  boxes_->tileSize = 0;
   anchor_[0] = root.findAs<SpinBox>("anim_ax");
   anchor_[1] = root.findAs<SpinBox>("anim_ay");
   anims_->tileSize = steps_->tileSize = 0;
@@ -183,6 +199,63 @@ void AnimationPanel::bind(Control &root, Renderer &renderer)
   number(hitbox_[1], -128, 127, [box](int v) { box()->y = v; });
   number(hitbox_[2], 0, 255, [box](int v) { box()->w = v; });
   number(hitbox_[3], 0, 255, [box](int v) { box()->h = v; });
+  // Boxes (hitboxes.md §2): of the frame shown, or the sprite's.
+  auto selectedBox = [this]() -> sprite::NamedBox * {
+    std::vector<sprite::NamedBox> *list = boxList();
+    return list && boxes_->selected >= 0 && size_t(boxes_->selected) < list->size() ? &(*list)[size_t(boxes_->selected)] : nullptr;
+  };
+  for (int i = 0; i < 4; i++)
+  {
+    box_[i]->minValue = i < 2 ? -128 : 0;
+    box_[i]->maxValue = i < 2 ? 127 : 255;
+    box_[i]->decimals = 0;
+    box_[i]->valueChanged.connect([this, i, selectedBox](double v) {
+      sprite::NamedBox *b = selectedBox();
+      if (updating_ || !loaded_ || !b) return;
+      int *field[4] = {&b->box.x, &b->box.y, &b->box.w, &b->box.h};
+      *field[i] = int(v);
+      boxEdited();
+    });
+  }
+  boxSprite_->toggled.connect([this](bool) {
+    boxes_->selected = -1;
+    fillBoxes();
+  });
+  boxes_->selectedChanged.connect([this](int) { fillBoxes(); });
+  boxKind_->itemSelected.connect([this, selectedBox](int k) {
+    sprite::NamedBox *b = selectedBox();
+    if (updating_ || !b || k < 0 || k > 2) return;
+    b->kind = sprite::BoxKind(k);
+    if (b->kind != sprite::BoxKind::Hurt && b->name.empty()) b->name = b->kind == sprite::BoxKind::Hit ? "blade" : "guard";
+    boxEdited();
+  });
+  boxName_->submitted.connect([this, selectedBox](const std::string &name) {
+    sprite::NamedBox *b = selectedBox();
+    if (updating_ || !b || b->name == name) return;
+    b->name = name;
+    boxEdited();
+  });
+  root.findAs<Button>("anim_box_add")->clicked.connect([this] {
+    std::vector<sprite::NamedBox> *list = boxList();
+    if (!list) return;
+    sprite::NamedBox b;
+    b.kind = sprite::BoxKind(std::max(0, std::min(2, boxKind_->selected())));
+    b.name = b.kind == sprite::BoxKind::Hit ? "blade" : b.kind == sprite::BoxKind::Guard ? "guard" : "";
+    b.box = sprite_.hitbox.w > 0 ? sprite_.hitbox : sprite::Box{-8, -16, 16, 16};
+    if (b.kind == sprite::BoxKind::Hit) b.box = {6, -18, 16, 6};   // in front of the figure
+    list->push_back(b);
+    boxes_->selected = int(list->size()) - 1;
+    boxEdited();
+  });
+  root.findAs<Button>("anim_box_delete")->clicked.connect([this] {
+    std::vector<sprite::NamedBox> *list = boxList();
+    if (!list || boxes_->selected < 0 || size_t(boxes_->selected) >= list->size()) return;
+    list->erase(list->begin() + boxes_->selected);
+    boxes_->selected = std::min(boxes_->selected, int(list->size()) - 1);
+    boxEdited();
+  });
+  root.findAs<CheckBox>("anim_show_boxes")->toggled.connect([this](bool on) { preview_->showBoxes = on; });
+
   number(duration_, 1, 600, [this](int v) {
     int a = currentAnim();
     if (a >= 0 && steps_->selected >= 0 && size_t(steps_->selected) < sprite_.animations[size_t(a)].steps.size())
@@ -479,6 +552,9 @@ void AnimationPanel::showFrame()
   }
   else
     frameTitle_->text = "No frame selected";
+  updating_ = false;
+  fillBoxes();
+  updating_ = true;
   const sprite::Box &b = have && f->ownHitbox ? f->hitbox : sprite_.hitbox;
   hitbox_[0]->setValue(b.x, false);
   hitbox_[1]->setValue(b.y, false);
@@ -572,6 +648,54 @@ void AnimationPanel::update(float dt)
   }
   if (size_t(playStep_) >= an.steps.size()) playStep_ = 0;
   preview_->frame = an.steps[size_t(playStep_)].frame;
+}
+
+std::vector<sprite::NamedBox> *AnimationPanel::boxList()
+{
+  if (!loaded_) return nullptr;
+  if (boxSprite_ && boxSprite_->pressed) return &sprite_.boxes;
+  sprite::Frame *f = currentFrame();
+  return f ? &f->boxes : nullptr;
+}
+
+void AnimationPanel::fillBoxes()
+{
+  if (!boxes_) return;
+  updating_ = true;
+  boxes_->items.clear();
+  std::vector<sprite::NamedBox> *list = boxList();
+  if (list)
+    for (const sprite::NamedBox &b : *list)
+      boxes_->items.push_back({std::string(sprite::boxKindName(b.kind)) + (b.name.empty() ? "" : " " + b.name) + "  " + std::to_string(b.box.x) + "," +
+                                   std::to_string(b.box.y) + "  " + std::to_string(b.box.w) + "x" + std::to_string(b.box.h),
+                               b.kind == sprite::BoxKind::Hit ? "crosshairs" : b.kind == sprite::BoxKind::Guard ? "lock" : "square-o", {}, {}, {}, {}});
+  if (boxes_->selected >= int(boxes_->items.size())) boxes_->selected = int(boxes_->items.size()) - 1;
+  const sprite::NamedBox *b = list && boxes_->selected >= 0 ? &(*list)[size_t(boxes_->selected)] : nullptr;
+  if (b)
+  {
+    box_[0]->setValue(b->box.x, false);
+    box_[1]->setValue(b->box.y, false);
+    box_[2]->setValue(b->box.w, false);
+    box_[3]->setValue(b->box.h, false);
+    boxKind_->select(int(b->kind), false);
+    boxName_->setText(b->name);
+  }
+  // The preview marks the box being edited (when the frame shown has it).
+  preview_->selectedBox = -1;
+  if (b && !boxSprite_->pressed && preview_->cooked && size_t(preview_->frame) < preview_->cooked->frames.size())
+  {
+    const auto &shown = preview_->cooked->frames[size_t(preview_->frame)].boxes;
+    for (size_t i = 0; i < shown.size(); i++)
+      if (shown[i] == *b) preview_->selectedBox = int(i);
+  }
+  updating_ = false;
+}
+
+void AnimationPanel::boxEdited()
+{
+  rebuild();
+  edited();
+  fillBoxes();
 }
 
 }  // namespace bm::editor

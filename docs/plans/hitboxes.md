@@ -1,6 +1,11 @@
 # Plan: hit and hurt boxes
 
-Status: plan, nothing built. Milestone M17 in [../PLAN.md](../PLAN.md). Fills in what
+Status: step 1 built: boxes in the sprite file and in `SPRT` version 2
+([../spec/sprite-format.md](../spec/sprite-format.md)), read by the runtime
+(`bmSpriteSheetBoxes`); the Animation tab lists the boxes of a frame or of the sprite, adds,
+deletes and edits them by their numbers and draws them over the frame. Not yet: boxes on an
+animation, drawing boxes with the mouse, copying them to other frames, onion skin (section 7).
+Steps 2 to 5 are open. Milestone M17 in [../PLAN.md](../PLAN.md). Fills in what
 [attachable-scripts.md](attachable-scripts.md) §6 only names ("hit boxes"), and is what the
 weapons and spells of [first-items.md](first-items.md) hit with.
 

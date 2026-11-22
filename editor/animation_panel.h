@@ -60,7 +60,8 @@ public:
   std::vector<FrameImage> images;
   int frame = 0;
   float zoom = 4;
-  bool showHitbox = true, showPieces = true;
+  bool showHitbox = true, showPieces = true, showBoxes = true;
+  int selectedBox = -1;   // drawn thicker: the box being edited
 };
 
 void registerAnimationControls();
@@ -88,6 +89,9 @@ private:
   void edited();           // an edit was made: save soon
   void save();
   void slice();
+  std::vector<sprite::NamedBox> *boxList();   // the frame's own boxes, or the sprite's
+  void fillBoxes();
+  void boxEdited();
   int currentAnim() const;
   sprite::Frame *currentFrame();
 
@@ -109,6 +113,11 @@ private:
   ose::ui::SpinBox *rect_[4] = {}, *anchor_[2] = {}, *hitbox_[4] = {};
   ose::ui::Label *frameTitle_ = nullptr, *cost_ = nullptr, *info_ = nullptr;
   ose::ui::Button *play_ = nullptr;
+  ose::ui::ItemList *boxes_ = nullptr;
+  ose::ui::CheckBox *boxSprite_ = nullptr;
+  ose::ui::OptionButton *boxKind_ = nullptr;
+  ose::ui::SpinBox *box_[4] = {};
+  ose::ui::LineEdit *boxName_ = nullptr;
 };
 
 }  // namespace bm::editor

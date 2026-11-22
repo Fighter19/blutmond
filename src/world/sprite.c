@@ -8,6 +8,8 @@
 #include "video.h"
 
 #define HEADER_SIZE 36
+#define HEADER_SIZE_V2 52   // version 2: the boxes' tables follow the version 1 header
+#define BOX_SIZE 6
 #define FRAME_SIZE 12
 #define PIECE_SIZE 6
 #define ANIM_SIZE 8
@@ -50,6 +52,21 @@ BmResult bmSpriteSheetOpen(BmSpriteSheet *s, const BmPack *pPack, uint32_t chunk
   s->pSteps = p + at[3];
   s->pPalette = p + at[4];
   s->pTiles = p + at[5];
+  // Version 2 (sprite-format.md): its frames start behind a longer header with the boxes.
+  if (at[0] >= HEADER_SIZE_V2 && size >= HEADER_SIZE_V2)
+  {
+    uint32_t indexAt = bmRead32(p + 36), boxesAt = bmRead32(p + 40), namesAt = bmRead32(p + 44);
+    s->boxCount = bmRead16(p + 48);
+    s->boxNameCount = p[50];
+    if (indexAt + (uint32_t)s->frameCount * 2 > size || boxesAt + (uint32_t)s->boxCount * BOX_SIZE > size ||
+        namesAt + (uint32_t)s->boxNameCount * 2 > size)
+      return BM_ERROR_INVALID_ARGUMENT;
+    s->pBoxIndex = p + indexAt;
+    s->pBoxes = p + boxesAt;
+    s->pBoxNames = p + namesAt;
+    for (uint16_t f = 0; f < s->frameCount; f++)
+      if ((uint32_t)bmRead16(s->pBoxIndex + f * 2) + s->pFrames[f * FRAME_SIZE + 3] > s->boxCount) return BM_ERROR_INVALID_ARGUMENT;
+  }
   // Every reference must stay inside its table, so drawing never reads outside the chunk.
   for (uint16_t f = 0; f < s->frameCount; f++)
   {
@@ -211,4 +228,24 @@ BmSpriteBox bmSpriteSheetHitbox(const BmSpriteSheet *s, uint16_t frame, bool hfl
   box.h = fr[7];
   if (hflip) box.x = (int8_t)(-box.x - box.w);
   return box;
+}
+
+uint8_t bmSpriteSheetBoxes(const BmSpriteSheet *s, uint16_t frame, bool hflip, BmSpriteNamedBox *pBoxes, uint8_t max)
+{
+  if (s->pBoxIndex == NULL || frame >= s->frameCount) return 0;
+  uint16_t first = bmRead16(s->pBoxIndex + frame * 2);
+  uint8_t count = s->pFrames[frame * FRAME_SIZE + 3];
+  for (uint8_t i = 0; i < count && i < max; i++)
+  {
+    const uint8_t *b = s->pBoxes + (uint32_t)(first + i) * BOX_SIZE;
+    BmSpriteNamedBox *o = &pBoxes[i];
+    o->box.x = (int8_t)b[0];
+    o->box.y = (int8_t)b[1];
+    o->box.w = b[2];
+    o->box.h = b[3];
+    if (hflip) o->box.x = (int8_t)(-o->box.x - o->box.w);
+    o->kind = b[4];
+    o->name = b[5] < s->boxNameCount ? bmRead16(s->pBoxNames + b[5] * 2) : 0xFFFF;
+  }
+  return count;
 }

@@ -881,7 +881,9 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       std::vector<uint16_t> names;
       for (const sprite::Animation &a : s.animations) names.push_back(strings.id(a.name));
       Bytes b;
-      b.data = sprite::chunk(s, cooked, strings.id(s.name), names);
+      std::vector<uint16_t> boxNames;
+      for (const std::string &n : cooked.boxNames) boxNames.push_back(strings.id(n));
+      b.data = sprite::chunk(s, cooked, strings.id(s.name), names, boxNames);
       add(writer, BM_CHUNK_SPRT, BM_CATEGORY_ACTORS, 0, b);
     }
     catch (const std::exception &e)
