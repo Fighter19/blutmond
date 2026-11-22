@@ -7,7 +7,7 @@
 // Run (F6) plays all rooms: on the PC in the game's window, or on a GBA over the Xboo cable
 // (editor/runner.h). With "Live" on, every cook while it runs is pushed in as a hot reload.
 //
-//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--target pc|gba] [--frames N --screenshot out.ppm] [--tab N] [--action name]
+//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--target pc|gba] [--frames N --screenshot out.ppm] [--tab N] [--action name] [--room N] [--record Name] [--object-menu N]
 //            [--game path] [--bmlink path] [--gba-image path] [--xboo device] [--reset none|xboo]
 //            [--port N] [--gba-rom path]
 //
@@ -42,6 +42,7 @@
 #include "rom_export.h"
 #include "runner.h"
 #include "script_panel.h"
+#include "data_panel.h"
 #include "sound_panel.h"
 #include "ui/containers.h"
 #include "ui/lists.h"
@@ -443,6 +444,28 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
           </HSplit>
           <PanelContainer theme-type="StatusBar"><HBox><Label id="gfx_hover" text="Point at video memory to see what it holds" clip-text="1"/></HBox></PanelContainer>
         </VBox>
+        <VBox title="Data" separation="0">
+          <PanelContainer theme-type="Toolbar"><HBox>
+            <Label text="Table"/>
+            <OptionButton id="data_table"/>
+            <Button id="data_new" text="New record" tooltip="A new record of this table (right click a record for more)"/>
+            <Button id="data_duplicate" text="Duplicate" tooltip="A copy of the record: a new record based on it"/>
+            <Button id="data_delete" text="Delete"/>
+            <Label id="data_status" text="" expand="1" clip-text="1"/>
+          </HBox></PanelContainer>
+          <HSplit expand="1" fixed="220">
+            <PanelContainer><Scroll expand="1"><ItemList id="data_records"/></Scroll></PanelContainer>
+            <HSplit expand="1" fixed-end="300">
+              <Scroll expand="1"><VBox id="data_fields"/></Scroll>
+              <PanelContainer><VBox>
+                <Label text="Preview" bold="1"/>
+                <TextureRect id="data_preview"/>
+                <Label id="data_preview_name" bold="1"/>
+                <Label id="data_preview_text" wrap="1"/>
+              </VBox></PanelContainer>
+            </HSplit>
+          </HSplit>
+        </VBox>
       </TabContainer>
       <HSplit ratio="0.5">
         <PanelContainer><VBox>
@@ -505,6 +528,7 @@ struct Editor
   PalettePanel palettePanel;
   AnimationPanel animationPanel;
   ScriptPanel scriptPanel;
+  DataPanel dataPanel;
   SoundPanel soundPanel;
   Label *status = nullptr, *camera = nullptr;
   Label *hwTiles = nullptr, *hwBanks = nullptr, *hwMaps = nullptr, *hwLayers = nullptr, *hwPack = nullptr;
@@ -748,6 +772,7 @@ struct Editor
     std::vector<std::string> songs = songPaths(projectPanel.catalog());
     project.setSongs(songs);
     project.setData(dataPaths(projectPanel.catalog()));
+    dataPanel.setFiles(dataPaths(projectPanel.catalog()), scripts, sprites);
     project.setFonts(fontPaths(projectPanel.catalog()));
     project.setLanguages(languagePaths(projectPanel.catalog()));
     soundPanel.setSongs(songs);
@@ -758,6 +783,80 @@ struct Editor
     if (!scripts.empty()) scriptPanel.scriptDir = std::filesystem::path(scripts[0]).parent_path().string();
     else if (!projectPanel.file().assetDirs.empty())
       scriptPanel.scriptDir = (std::filesystem::path(projectPanel.file().assetDirs[0]) / "scripts").string();
+  }
+
+  void showTab(int tab)
+  {
+    if (auto *center = app.ui().root() ? app.ui().root()->findAs<TabContainer>("center") : nullptr) center->setCurrent(tab);
+  }
+
+  // The script file that declares class `name`, or "".
+  std::string scriptOfClass(const std::string &name, std::string *pText) const
+  {
+    for (const std::string &p : scriptPaths(projectPanel.catalog()))
+    {
+      std::ifstream in(p);
+      std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+      size_t at = text.find("class " + name + " ");
+      if (at == std::string::npos || (at > 0 && text[at - 1] != '\n')) continue;
+      if (pText) *pText = text;
+      return p;
+    }
+    return "";
+  }
+
+  // The context menu of an object in the room view (right click): its script, and the records
+  // it uses, for editing: those its properties in Tiled name (Kind = FastBat) and those its
+  // script names (#Bat, the lines it says: #VesperWakes).
+  void objectMenu(int index, ose::Vec2 at)
+  {
+    std::vector<MenuItem> items;
+    auto item = [](const std::string &label, const std::string &icon, std::function<void()> run) {
+      MenuItem m;
+      m.label = label;
+      m.icon = icon;
+      m.run = std::move(run);
+      return m;
+    };
+    if (index >= 0 && size_t(index) < project.objects().size())
+    {
+      const ObjectMarker &o = project.objects()[size_t(index)];
+      std::string text;
+      std::string path = scriptOfClass(o.type, &text);
+      if (!path.empty())
+        items.push_back(item("Edit the script of " + o.type, "terminal", [this, path] {
+          if (scriptPanel.path() != path) scriptPanel.open(path);
+          showTab(2);
+        }));
+      std::vector<std::string> seen;
+      auto addRecord = [&](const std::string &name) {
+        if (name.empty() || !dataPanel.hasRecord(name) || seen.size() >= 16) return;
+        for (const std::string &s : seen)
+          if (s == name) return;
+        seen.push_back(name);
+        items.push_back(item("Edit " + dataPanel.tableOf(name) + " " + name, "table", [this, name] {
+          dataPanel.openRecord(name);
+          showTab(5);
+        }));
+      };
+      for (const auto &p : o.properties) addRecord(p.second);
+      for (size_t i = 0; i < text.size(); i++)
+      {
+        if (text[i] != '#') continue;
+        size_t j = i + 1;
+        while (j < text.size() && (std::isalnum((unsigned char)text[j]) || text[j] == '_')) j++;
+        addRecord(text.substr(i + 1, j - i - 1));
+        i = j;
+      }
+      // The speakers of the lines it says (their names and portraits).
+      for (size_t k = 0, n = seen.size(); k < n; k++) addRecord(dataPanel.valueOf(seen[k], "speaker"));
+      if (items.empty()) items.push_back(item(o.type + ": nothing to edit here (no script, no records)", "info", nullptr));
+    }
+    else
+    {
+      items.push_back(item("Records...", "table", [this] { showTab(5); }));
+    }
+    PopupMenu::open(app.ui(), items, ose::ui::Rect{at.x, at.y, 0, 0}, PopupPlacement::AtPoint);
   }
 
   // The room list of the project changed: keep the room that was shown, if it is still there.
@@ -909,7 +1008,26 @@ struct Editor
     projectPanel.assetsChanged = [this] { spritesChanged(); };
     scriptPanel.bind(*root, ui);
     scriptPanel.log = projectPanel.log;
-    scriptPanel.changed = [this] { pushLive(); };
+    scriptPanel.changed = [this] {
+      pushLive();
+      // The structures may have changed.
+      dataPanel.setFiles(dataPaths(projectPanel.catalog()), scriptPaths(projectPanel.catalog()), spritePaths(projectPanel.catalog()));
+    };
+    dataPanel.bind(*root, ui, app.renderer());
+    dataPanel.log = projectPanel.log;
+    dataPanel.changed = [this] {
+      cook();
+      pushLive();
+    };
+    projectPanel.dataPicked = [this](const std::string &path) {
+      dataPanel.open(path);
+      showTab(5);
+    };
+    projectPanel.roomShown = [this](int i) {
+      projectPanel.roomPicked(i);
+      showTab(0);
+    };
+    overview->objectMenu = [this](int index, ose::Vec2 at) { objectMenu(index, at); };
     scriptPanel.created = [this] {
       projectPanel.refresh();
       spritesChanged();
@@ -990,6 +1108,7 @@ struct Editor
     palettePanel.update(dt);
     animationPanel.update(dt);
     scriptPanel.update(dt);
+    dataPanel.update(dt);
     soundPanel.update(dt);
     reloadTimer += dt;
     if (reloadTimer > 1.0f)
@@ -1047,6 +1166,9 @@ int main(int argc, char **argv)
   const char *screenshot = nullptr;
   std::vector<std::string> actions;   // menu actions to run at the start (help.version, ...)
   int tab = 0;
+  std::string openRecord;   // --record: the Data tab with this record
+  int objectMenu = -1;      // --object-menu: the context menu of this object of the room
+  int startRoom = -1;       // --room: the project's room shown first
   RunTarget startTarget = RunTarget::Pc;
   RunSettings run;
 #ifdef BM_EDITOR_GAME
@@ -1072,6 +1194,9 @@ int main(int argc, char **argv)
     else if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshot = argv[++i];
     else if (std::strcmp(argv[i], "--tab") == 0 && i + 1 < argc) tab = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--action") == 0 && i + 1 < argc) actions.push_back(argv[++i]);
+    else if (std::strcmp(argv[i], "--record") == 0 && i + 1 < argc) openRecord = argv[++i];
+    else if (std::strcmp(argv[i], "--room") == 0 && i + 1 < argc) startRoom = std::atoi(argv[++i]);
+    else if (std::strcmp(argv[i], "--object-menu") == 0 && i + 1 < argc) objectMenu = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--target") == 0 && i + 1 < argc) startTarget = std::strcmp(argv[++i], "gba") == 0 ? RunTarget::Gba : RunTarget::Pc;
     else if (std::strncmp(argv[i], "--", 2) == 0 && i + 1 < argc && run.set(argv[i] + 2, argv[i + 1])) i++;
     else if (std::filesystem::path(argv[i]).extension() == ".bmproj") projectPath = argv[i];
@@ -1143,6 +1268,22 @@ int main(int argc, char **argv)
   if (auto *center = app.ui().root()->findAs<TabContainer>("center")) center->setCurrent(tab);
   for (const std::string &a : actions)
     if (!app.ui().actions().run(a)) std::fprintf(stderr, "no action %s\n", a.c_str());
+  if (startRoom >= 0 && editor.projectPanel.roomPicked) editor.projectPanel.roomPicked(startRoom);
+  if (!openRecord.empty())
+  {
+    if (editor.dataPanel.openRecord(openRecord)) editor.showTab(5);
+    else std::fprintf(stderr, "no record %s\n", openRecord.c_str());
+  }
+  if (objectMenu >= 0)
+  {
+    // As a right click on the object in the room view (for screenshots and tests).
+    if (size_t(objectMenu) < editor.project.objects().size())
+    {
+      const ObjectMarker &o = editor.project.objects()[size_t(objectMenu)];
+      editor.objectMenu(objectMenu, ose::Vec2{float(o.x), float(o.y) + 100});
+    }
+    else std::fprintf(stderr, "no object %d in the room\n", objectMenu);
+  }
 
   if (frames > 0)
   {

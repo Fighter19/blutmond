@@ -68,6 +68,22 @@ void RoomOverview::draw(Canvas &c)
   c.popClip();
 }
 
+int RoomOverview::objectAt(Vec2 p) const
+{
+  if (project == nullptr) return -1;
+  float rx = (p.x - rect_.x - pan_.x) / zoom_, ry = (p.y - rect_.y - pan_.y) / zoom_;
+  const auto &objects = project->objects();
+  // The last drawn first; an area by its rectangle, a point by a figure's size above it.
+  for (int i = int(objects.size()) - 1; i >= 0; i--)
+  {
+    const ObjectMarker &o = objects[size_t(i)];
+    bool hit = o.w || o.h ? rx >= o.x && rx < o.x + o.w && ry >= o.y && ry < o.y + o.h
+                          : rx >= o.x - 10 && rx < o.x + 10 && ry >= o.y - 28 && ry < o.y + 6;
+    if (hit) return i;
+  }
+  return -1;
+}
+
 void RoomOverview::placeCamera(Vec2 p)
 {
   int x = int((p.x - rect_.x - pan_.x) / zoom_) - 120;
@@ -98,6 +114,8 @@ bool RoomOverview::event(const InputEvent &e)
     {
       panning_ = true;
       last_ = e.pos;
+      rightDown_ = e.button == MouseButton::Right;
+      downAt_ = e.pos;
     }
     return true;
   case InputEvent::Type::MouseMove:
@@ -115,7 +133,9 @@ bool RoomOverview::event(const InputEvent &e)
     }
     return false;
   case InputEvent::Type::MouseUp:
-    panning_ = placing_ = false;
+    // A right click that did not drag: the context menu.
+    if (rightDown_ && std::abs(e.pos.x - downAt_.x) < 4 && std::abs(e.pos.y - downAt_.y) < 4 && objectMenu) objectMenu(objectAt(e.pos), e.pos);
+    panning_ = placing_ = rightDown_ = false;
     return true;
   default:
     return false;

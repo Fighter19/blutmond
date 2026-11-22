@@ -6,7 +6,10 @@ specified in [../spec/mondskript.md](../spec/mondskript.md) §11,
 [../spec/data-format.md](../spec/data-format.md), [../spec/state.md](../spec/state.md) §4 and
 [../spec/link-protocol.md](../spec/link-protocol.md); the test level's bat reads its numbers
 from an `Enemy` record, the coin it collects goes into the inventory, and a GBA brought to
-where another one is carries it along. Steps 4 and 5 are open.
+where another one is carries it along. Step 5 is built too: the editor's Data tab (records of
+a table as a list, a record's fields as a form chosen by type, inherited values shown, every
+change written to its line of the file and cooked and pushed at once, a preview of the sprite
+it names; right click for new, duplicate, delete). Step 4 is open.
 
 Where the built version differs from sections 2 to 7: `DTAB` also holds the defaults record;
 reading an unknown key gives the defaults silently (no report through the link yet);

@@ -234,10 +234,17 @@ start:
   is written at a save point.
 - **The most health**: 30 + the stat MaxHealth (number 0), at least 1. The stats' numbers are
   a convention with the game's `enum Stat` (first-items.md §1).
-- **Dialogue** (`say(speaker, line)`): `dialogue = 1` and the two string ids are kept; unless a
-  screen is open, the UI layer's rows 15 to 19 are cleared, a frame of 30 x 5 cells is drawn
-  there, the speaker's text at (1, 16) and the line wrapped into 27 x 2 cells at (2, 17), and
-  the layer is shown. A pressed in a frame while `dialogue != 0` (step 3 of section 3): the rows
+- **Dialogue** (`say(speaker, line)`, and with a portrait `say_line`, `say_as`): `dialogue =
+  1` and the string ids of the speaker's name, the line and the portrait (a sprite's name,
+  0xFFFF none) are kept; unless a screen is open, the UI layer's rows 15 to 19 are cleared, a
+  frame of 30 x 5 cells is drawn there, the speaker's text at (1 + p, 16) and the line wrapped
+  into (27 - p) x 2 cells at (2 + p, 17), with p = 5 if the portrait names a sprite sheet of
+  the pack, else 0, and the layer is shown. While `dialogue != 0` and no screen is open, that
+  sheet's first animation (its frame at the game frame) is drawn first of all sprites, with
+  its anchor at (8, 124) and priority 0, in front of the box. `say_line(record)` reads the
+  record's fields `speaker` (a record) and `says` (a text), and of the speaker `name` (a text)
+  and `portrait` (a sprite), by their names in whichever table holds them;
+  `say_as(speaker, line)` the speaker's two. A pressed in a frame while `dialogue != 0` (step 3 of section 3): the rows
   are cleared, `dialogue = 0`, and that A is no jump.
 - **Hurt(damage)** (hazards, `hurt_player`): Strike(damage, `x + facing`), so the push is
   backwards.
@@ -408,6 +415,7 @@ value is dropped and counts as a script error.
 | 78 | `return_to_save()` | `returnPending = 1` (section 6, "Return") |
 | 79, 80 | `quick_slot(i)`, `set_quick_slot(i, record)` | `quick[i]` for i 0 to 3 (0 otherwise); set it |
 | 81 | `set_knockback(percent)` | object only: `steady = 100 - percent` (percent clamped to 0..100) |
+| 82, 83 | `say_line(record)`, `say_as(speaker, line)` | the dialogue box with a portrait (section 6, "Dialogue") |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
 (state.md §4): what equipment adds, taken away in its `detached()`, not saved. `stat` (28)

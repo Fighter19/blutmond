@@ -23,11 +23,17 @@ public:
   bool showCollision = true, showObjects = true, showGrid = false;
   int cameraX = 0, cameraY = 0;
   std::function<void(int, int)> cameraMoved;
+  /// A right click without dragging: the object under the pointer (index into the project's
+  /// objects, -1 for none) and where (screen), for a context menu.
+  std::function<void(int, ose::Vec2)> objectMenu;
+  /// The object at a point of the view (screen), or -1.
+  int objectAt(ose::Vec2 p) const;
 
 private:
   float zoom_ = 2;
   ose::Vec2 pan_{8, 8};
-  bool panning_ = false, placing_ = false;
+  bool panning_ = false, placing_ = false, rightDown_ = false;
+  ose::Vec2 downAt_;
   ose::Vec2 last_;
   void placeCamera(ose::Vec2 p);
 };

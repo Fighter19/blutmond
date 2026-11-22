@@ -1,7 +1,13 @@
 # Plan: dialogue and cutscenes
 
 Status: a first part built: `say(speaker, line)` shows a box with a name and a line until A
-(`dialogue_done()`), `player_lock(frames)`; the boss's intro uses them. Languages (step 4)
+(`dialogue_done()`), `player_lock(frames)`; the boss's intro uses them. Speakers are records
+(`struct Speaker { text name; sprite portrait; }`, without voice, colour and side yet) and so
+are lines (`struct Line { record<Speaker> speaker; text says; }`, instead of talk files for
+now); `say_line(#Line)` and `say_as(#Speaker, "...")` show the speaker's portrait (a 32 x 32
+sprite, one expression) at the box's left. Both are edited in the editor's Data tab, with the
+portrait and the line as the box shows them in its preview; right clicking an object in the
+room lists the lines its script says and their speakers. Languages (step 4)
 are built differently from section 4: a translation file per language keyed by the original
 text, not by line ids; text is UTF-8 on the device (decoded per character), so fonts of other
 scripts can be added in parts; the cooker reports characters no font has; the language is an

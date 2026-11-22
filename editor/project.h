@@ -29,6 +29,7 @@ struct ObjectMarker
 {
   std::string type, name;
   int x = 0, y = 0, w = 0, h = 0;
+  std::vector<std::pair<std::string, std::string>> properties;   // as set in Tiled
 };
 
 struct HardwareUse

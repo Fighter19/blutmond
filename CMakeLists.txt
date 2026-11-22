@@ -340,7 +340,7 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST PRIVATE "BM_NATIVE_INCLUDE_DIR=\"${PROJECT_SOURCE_DIR}/src/script\"")
   target_compile_options(bm_cooker PRIVATE ${BM_WARNINGS})
   # The editor's project model (project file, asset catalogue, new rooms), without UI.
-  add_library(bm_editor_model STATIC editor/project_file.cpp editor/vram.cpp editor/rom_export.cpp)
+  add_library(bm_editor_model STATIC editor/project_file.cpp editor/vram.cpp editor/rom_export.cpp editor/data_file.cpp)
   target_include_directories(bm_editor_model PUBLIC editor src/pack)
   target_link_libraries(bm_editor_model PUBLIC bm_cooker blutmond)
   target_compile_options(bm_editor_model PRIVATE ${BM_WARNINGS})
@@ -374,7 +374,7 @@ if(BM_PLATFORM STREQUAL "host")
       endforeach()
     endif()
     add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
-      editor/dialogs.cpp editor/credits.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
+      editor/dialogs.cpp editor/credits.cpp editor/data_panel.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
       editor/code_edit.cpp editor/script_panel.cpp editor/sound_panel.cpp ${CMAKE_BINARY_DIR}/generated/build_version.c)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
     # The commit and build date for Help > Version: looked at in every build, rewritten when the
@@ -553,6 +553,11 @@ if(BM_PLATFORM STREQUAL "host")
   target_include_directories(test_sprite PRIVATE tests)
   target_compile_options(test_sprite PRIVATE ${BM_WARNINGS})
   add_test(NAME test_sprite COMMAND test_sprite ${PROJECT_SOURCE_DIR}/assets ${CMAKE_CURRENT_BINARY_DIR}/test-output/sprite)
+  add_executable(test_data_file tests/test_data_file.cpp)
+  target_link_libraries(test_data_file PRIVATE bm_editor_model)
+  target_include_directories(test_data_file PRIVATE tests)
+  target_compile_options(test_data_file PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_data_file COMMAND test_data_file)
   add_executable(test_vram tests/test_vram.cpp)
   target_link_libraries(test_vram PRIVATE bm_editor_model)
   target_include_directories(test_vram PRIVATE tests)
@@ -645,6 +650,14 @@ if(BM_PLATFORM STREQUAL "host")
     # Mesa's EGL driver, loaded by SDL's offscreen driver, leaks a few allocations at exit;
     # they are not ours, so LeakSanitizer is off for this test.
     set_tests_properties(editor_offscreen PROPERTIES
+      ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;EGL_PLATFORM=surfaceless;GALLIUM_DRIVER=llvmpipe;ASAN_OPTIONS=detect_leaks=0")
+    # The Data tab with a line of dialogue (its speaker's portrait in the preview), and the
+    # context menu of the boss in the boss hall.
+    add_test(NAME editor_data_tab
+      COMMAND bmeditor --frames 3 --screenshot ${cooked}/editor_data.ppm --record VesperWakes ${PROJECT_SOURCE_DIR}/assets/test.bmproj)
+    add_test(NAME editor_object_menu
+      COMMAND bmeditor --frames 3 --screenshot ${cooked}/editor_menu.ppm --room 2 --object-menu 2 ${PROJECT_SOURCE_DIR}/assets/test.bmproj)
+    set_tests_properties(editor_data_tab editor_object_menu PROPERTIES FAIL_REGULAR_EXPRESSION "no record|no object"
       ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;EGL_PLATFORM=surfaceless;GALLIUM_DRIVER=llvmpipe;ASAN_OPTIONS=detect_leaks=0")
   endif()
 

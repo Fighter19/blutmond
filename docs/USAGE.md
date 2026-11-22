@@ -63,8 +63,10 @@ build/bmeditor game.bmproj
 Options: `--theme classic|light|dark` (also in the View menu, remembered), `--target pc|gba`,
 `--xboo device`, `--reset none|xboo`, `--gba-image file`, `--bmlink file`, `--game file`,
 `--port N`. The last six can also stand in `~/.config/blutmond/editor.conf` as `key = value`.
-`--action name` runs a menu action at the start (`help.version`, `run.start`, ...), and with
-`--frames N --screenshot out.ppm` the editor draws N frames, saves the picture and quits.
+`--action name` runs a menu action at the start (`help.version`, `run.start`, ...), `--room N`
+shows the project's room N, `--record Name` opens a record in the Data tab, `--object-menu N`
+opens the context menu of object N of the room shown, and with `--frames N --screenshot
+out.ppm` the editor draws N frames, saves the picture and quits.
 **Help > Version** shows the commit the editor was built from (marked if the tree had changes
 not committed) and when that commit was first built there; the published pages show the
 commit they were built from.
@@ -83,8 +85,21 @@ commit they were built from.
   (`-DBM_GBA_BUILD_DIR`), `gba-rom` in `editor.conf` or `--gba-rom file`. On the command line
   the same is `build/bmexport build-gba/game.gba level.bmpk out.gba`. For real hardware the
   logo is still missing from the header (section 4): `tools/gbafix.py out.gba --logo FILE`.
-- The tabs (Room, Animation, Script, Sound, Graphics, and Project and State on the left) are
-  described in the [README](../README.md).
+- The tabs (Room, Animation, Script, Sound, Graphics, Data, and Project and State on the left)
+  are described in the [README](../README.md).
+- **Data**: the records of the project, a table at a time (items, enemies, speakers, lines of
+  dialogue). A record's fields are a form: texts and numbers are typed (Enter or leaving the
+  field saves), enums, records, sprites and yes/no are chosen; a field the record does not set
+  shows in grey what it gets from its base record or the default, and choosing "(...)" or
+  emptying a field gives it back. Every change is written to its line of the `.bmdata` file
+  and cooked, and with Live it reaches the running game. The preview shows the sprite a record
+  names; for a line of dialogue the speaker's portrait, name and words.
+- **Right click** (the context menu): on an entry of the Project panel, where to edit it (the
+  Animation, Script, Sound or Data tab, the Room tab for a room), open it with the system's
+  program, delete it; on an object in the Room view, its script and the records it uses (the
+  ones its properties in Tiled name and the ones its script names, such as the lines it says
+  and their speakers); on a record in the Data tab, new, duplicate and delete. A right drag in
+  the Room view still moves the view.
 - The window can have any size: the dividers between the project panel, the tabs, the side
   panels and Report/Messages can be dragged; side panels keep their width when the window
   grows; toolbars wrap onto a second row when they do not fit; tall side panels scroll. The

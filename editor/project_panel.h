@@ -33,6 +33,10 @@ public:
   std::function<void(const std::string &path)> scriptPicked;
   /// A song file was picked: show it in the Sound tab.
   std::function<void(const std::string &path)> songPicked;
+  /// A record file was picked: show it in the Data tab.
+  std::function<void(const std::string &path)> dataPicked;
+  /// The Room tab should show this project room (index into file().rooms).
+  std::function<void(int)> roomShown;
   /// Assets were added or removed (the set of sprites may have changed).
   std::function<void()> assetsChanged;
   std::function<void(const std::string &line, bool error)> log;
@@ -40,6 +44,9 @@ public:
   std::string engineDir;
 
   void bind(ose::ui::Control &root, ose::ui::Context &ui);
+  /// The context menu of an entry (right click): open it where it is edited, open it with
+  /// the system's program, delete it.
+  void contextMenu(const std::string &path, float x, float y);
   void setProject(ProjectFile file);
   const ProjectFile &file() const { return file_; }
   const AssetCatalog &catalog() const { return catalog_; }

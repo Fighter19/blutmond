@@ -232,6 +232,10 @@ void Project::analyse()
       m.w = bmRead16(o + 8);
       m.h = bmRead16(o + 10);
       m.name = stringAt(pack, bmRead16(o + 12));
+      uint16_t propertyCount = bmRead16(o + 14);
+      uint32_t at = bmRead32(o + 16);
+      for (uint16_t k = 0; k < propertyCount && at + (k + 1u) * 4 <= size; k++)
+        m.properties.push_back({stringAt(pack, bmRead16(objs + at + k * 4)), stringAt(pack, bmRead16(objs + at + k * 4 + 2))});
       if (m.type != "@room") objects_.push_back(m);   // the room's own scripts: not a marker
     }
   }

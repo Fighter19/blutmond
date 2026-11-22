@@ -140,6 +140,13 @@ changes, so it can run next to Tiled.
   budget bars for background VRAM, screen blocks, sprite VRAM, OAM, palette banks and line
   tables. It shows the editor's preview, or the running game: Capture (F8) reads the video
   state over the live link (PC or GBA), Follow repeats that every second.
+- **Data** (centre tab): the records (items, enemies, speakers and lines of dialogue), a table
+  at a time, as a list and a form; every change is saved to the `.bmdata` file and cooked at
+  once. A preview shows a record's sprite, for a line of dialogue the speaker's portrait, name
+  and words. Right click a record for new, duplicate and delete.
+- **Right click** opens a context menu: on the Project panel's entries (where to edit them),
+  on an object in the Room view (its script, the records and dialogue lines it uses) and on a
+  record.
 
 **Run** (F6) cooks all rooms into one pack and plays it on the target chosen next to the button:
 
