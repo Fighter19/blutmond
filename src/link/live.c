@@ -323,8 +323,15 @@ static bool sendHello(BmLive *l, uint32_t first)
   return send(l, BM_LINK_HELLO, out, (uint16_t)(BM_LIVE_HELLO_SIZE + hashes * BM_LIVE_HELLO_ENTRY));
 }
 
-// The state as it is now, sent in parts by pumpState (STATE_DATA: offset, total, data).
-static uint8_t s_stateOut[BM_LIVE_STATE_CAPACITY] BM_EWRAM_BSS;
+// The state as it is now, sent in parts by pumpState (STATE_DATA: offset, total, data). In
+// EWRAM; a program may give its own (a multiboot image keeps it in IWRAM, apps/game/main.c).
+#ifdef BM_PLATFORM_GBA
+// Its own section, so that the linker drops it when the program gives its own.
+__attribute__((weak, section(".sbss.bm_live_state_out"))) uint8_t bm_live_state_out[BM_LIVE_STATE_CAPACITY];
+#else
+__attribute__((weak)) uint8_t bm_live_state_out[BM_LIVE_STATE_CAPACITY];
+#endif
+#define s_stateOut bm_live_state_out
 
 static bool sendState(BmLive *l, uint8_t mask)
 {

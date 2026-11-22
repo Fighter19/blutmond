@@ -132,6 +132,11 @@ State: `x`, `y` (fix, the feet: bottom centre of the box), `vx`, `vy` (fix per f
 `onGround`, `climbing`, `inWater`, `jumpCutDone`, `facing` (-1 or 1), `coyote`, `jumpBuffer`,
 `dropThrough` (frames), `safeX`, `safeY` (pixels), `flipped`.
 
+**An attack in the air** keeps the jump going: while `lockTimer` holds the player and they are
+not on the ground, the body gets `coast` with no direction, and in the air without a direction
+and with `coast` the horizontal speed stays (no air drag). On the ground a lock stands the
+player still (friction) as before.
+
 **Gravity flipped** (`flipped`, `flip_gravity`): gravity pulls up. The box stays `[y - height,
 y]`, but the feet are its top: everything below is mirrored (jumping goes down, the gravity and
 the fastest fall point up, a "floor" is the underside of anything solid from below, found
@@ -654,8 +659,9 @@ direction as on a numpad (5 none, 6 right, 8 up, 3 down-right) is compared with 
 
 **Input**: `_`-separated tokens, the last a game button (`Attack`, `Jump`, `Dash`, `Spell`,
 `Use`, attachments.h), the others directions: `Up` 8, `Down` 2, `Fwd` 6, `Back` 4, `UpFwd` 9,
-`UpBack` 7, `DownFwd` 3, `DownBack` 1; with `facing < 0` they are mirrored (6 and 4 swap, and so
-on). At least one direction, at most 8.
+`UpBack` 7, `DownFwd` 3, `DownBack` 1; mirrored (6 and 4 swap, and so on) if the newest
+direction in the history points left (1, 4, 7), or if it points neither left nor right and
+`facing < 0` (the body turns only after the commands). At least one direction, at most 8.
 
 **Matching**, for a game button newly pressed while there is no dialogue, no lock, no teleport,
 at least one direction in the history and the newest at most 10 frames old: going from the
@@ -668,7 +674,9 @@ matches for this button, the one with most directions (the first of equals in ta
 **Doing it**: if `cost > mana`, nothing (the button does what it does). Else its `behaviour`
 is attached in slot `BM_GAME_COMMAND_SLOT` (6) for `frames` frames (at least 1), its first
 record variable the command; `mana -= cost`, `cmdLast` = its key, `cmdDone += 1`; the button is
-not pressed for the attachments this frame (the weapon does not swing). The table and its
+not pressed for the attachments this frame (the weapon does not swing). Before it is
+attached the player faces the way the input was read (the lock the behaviour takes would keep
+the body from turning). The table and its
 fields are found when a room is loaded.
 
 ## 14. What is not specified here

@@ -103,6 +103,9 @@ typedef struct BmStateMailbox
 #endif
 BmStateMailbox bm_state_inbox BM_MAILBOX_SECTION;
 BmStateMailbox bm_state_outbox BM_MAILBOX_SECTION;
+#if defined(BM_GBA_MULTIBOOT) && !defined(BM_NATIVE_SLOT_BYTES)
+uint8_t bm_live_state_out[BM_LIVE_STATE_CAPACITY];   // live.c's, here in IWRAM too
+#endif
 
 #ifdef BM_PLATFORM_HOST
 static const char *s_loadPath, *s_snapshotPath;

@@ -186,10 +186,24 @@ an input (`#Down_DownFwd_Fwd_Attack`), a mana cost and a behaviour, belonging to
 a charm (an accessory) that gives it whatever the weapon. The Start menu's Commands page lists
 the ones the player has now with their keys.
 
+Every weapon has two at least. A weapon's moves are one script, `CommandStrike`, with the
+numbers in the record: `startup`, `hits` strikes `every` frames apart, `reach` (negative: both
+sides), `power` (percent of the weapon's attack), `dash` and `hop` at the start, `element`,
+`anim`.
+
 | Command | Of | Input | MP | What |
 |---|---|---|---|---|
-| Lunge | Short Sword, Flame Brand | Down, Down-Fwd, Fwd + B | 4 | a dash forward, blade first, for twice the weapon's attack |
+| Lunge | Short Sword (Flame Brand: of fire) | Down, Down-Fwd, Fwd + B | 4 | a dash forward, 200 % |
+| Rising Slash | Short Sword (Flame Brand: of fire) | Fwd, Down, Down-Fwd + B | 5 | a hop up, two cuts of 150 % |
+| Flame Burst | Flame Brand | Down, Down + B | 6 | fire 36 px around, three times, 120 % |
 | Flurry | Dagger | Fwd, Fwd + B | 2 | three stabs, 8 frames apart |
+| Slip Stab | Dagger | Back, Fwd + B | 3 | a hop back, a 40 px stab of 150 % |
+| Ground Breaker | Great Axe | Down, Down + B | 6 | after 14 frames one blow on both sides, 250 % |
+| Whirlwind | Great Axe | Back, Down-Back, Down, Down-Fwd, Fwd + B | 8 | four strikes around |
+| Long Lash | Chain Whip | Back, Fwd + B | 4 | 72 px, 150 % |
+| Twirl | Chain Whip | Down, Up + B | 5 | three strikes 40 px around, 80 % |
+| Volley | Throwing Knives | Down, Down-Fwd, Fwd + B | 4 | three strikes 96 px ahead |
+| Leaping Throw | Throwing Knives | Down, Up + B | 5 | a leap, two strikes 96 px ahead |
 | Blood Absorb | Crimson Charm | Up, Down + R | 6 | four pulses, 20 frames apart, strike 2 within 40 px on both sides; what is struck heals as much |
 | Gravity Flip | Moon Charm | Down, Up + A | 3 | the player walks on ceilings, or back |
 

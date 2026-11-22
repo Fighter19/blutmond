@@ -73,7 +73,11 @@ struct KeyItem is Item {
 }
 
 // A special move (src/world/commands.h): directions, then a button. It belongs to a weapon, or
-// to a charm that gives it whatever the weapon. Its behaviour is attached for `frames`.
+// to a charm that gives it whatever the weapon. Its behaviour is attached for `frames`. A
+// weapon's moves are mostly CommandStrike, which the numbers below describe: after `startup`
+// frames `hits` strikes, `every` frames apart, `reach` pixels ahead (negative: on both sides),
+// each `power` percent of the weapon's attack; at the start a push of `dash` forward
+// (negative: back) and `hop` up.
 struct Command {
   text           title;
   text           keys;          // the input as the Commands page shows it
@@ -82,6 +86,15 @@ struct Command {
   int            cost;          // mana
   record<Weapon> weapon;
   record<Armour> charm;
-  attach         behaviour;
-  int            frames = 30;
+  attach         behaviour = CommandStrike;
+  short          frames = 30;
+  short          power = 100;
+  short          reach = 20;
+  byte           hits = 1;
+  byte           every = 8;
+  byte           startup;
+  Element        element;
+  fix            dash;
+  fix            hop;
+  name           anim = #slash;
 }

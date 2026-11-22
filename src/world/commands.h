@@ -11,7 +11,8 @@
 //
 //   name   input       directions and the button, separated by _: Down_DownFwd_Fwd_Attack.
 //                      Up, Down, Fwd, Back, UpFwd, UpBack, DownFwd, DownBack (Fwd is the way
-//                      the player faces when the button is pressed); Attack, Jump, Dash,
+//                      the d-pad points left or right when the button is pressed, else the way
+//                      the player faces); Attack, Jump, Dash,
 //                      Spell, Use (attachments.h)
 //   int    cost        mana it takes; without enough the button does what it does anyway
 //   record weapon      the weapon whose command it is, or

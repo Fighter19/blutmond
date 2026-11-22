@@ -56,7 +56,7 @@ static uint32_t run(BmBody *b, int frames, BmBodyInput in)
   return events;
 }
 
-static const BmBodyInput NONE = {0, 0, false, false};
+static const BmBodyInput NONE = {0, 0, false, false, false};
 
 static void testShapeHeightsAndFlips(void)
 {
@@ -84,9 +84,9 @@ static void testWallStopsAndRoomEdgesAreSolid(void)
   build(rows);
   BmBody b;
   bmBodyPlace(&b, 40, 96);
-  run(&b, 80, (BmBodyInput){1, 0, false, false});
+  run(&b, 80, (BmBodyInput){1, 0, false, false, false});
   TEST_ASSERT(BM_FIX_INT(b.x) + s_params.halfWidth == 128);  // touching the wall at x 128
-  run(&b, 200, (BmBodyInput){-1, 0, false, false});
+  run(&b, 200, (BmBodyInput){-1, 0, false, false, false});
   TEST_ASSERT(BM_FIX_INT(b.x) - s_params.halfWidth == 0);    // left room edge
 }
 
@@ -100,7 +100,7 @@ static void testWalksUpAndDownSlopesWithoutLeavingTheGround(void)
   int airborne = 0, maxUp = 0;
   for (int i = 0; i < 120; i++)
   {
-    bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){1, 0, false, false});
+    bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){1, 0, false, false, false});
     airborne += b.onGround ? 0 : 1;
     if (112 - BM_FIX_INT(b.y) > maxUp) maxUp = 112 - BM_FIX_INT(b.y);
   }
@@ -116,7 +116,7 @@ static void testStepsUpHalfBlocks(void)
   build(rows);
   BmBody b;
   bmBodyPlace(&b, 40, 112);
-  run(&b, 30, (BmBodyInput){1, 0, false, false});
+  run(&b, 30, (BmBodyInput){1, 0, false, false, false});
   TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 104);
 }
 
@@ -129,10 +129,10 @@ static void testJumpHeightAndCeiling(void)
   bmBodyPlace(&b, 40, 112);
   run(&b, 2, NONE);
   int top = 112;
-  bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 0, true, true});
+  bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 0, true, true, false});
   for (int i = 0; i < 60; i++)
   {
-    bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 0, false, true});
+    bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 0, false, true, false});
     if (BM_FIX_INT(b.y) < top) top = BM_FIX_INT(b.y);
   }
   TEST_ASSERT(112 - top >= 48 && 112 - top <= 57);  // about 3.5 tiles
@@ -142,8 +142,8 @@ static void testJumpHeightAndCeiling(void)
   build(low);
   bmBodyPlace(&b, 40, 112);
   run(&b, 2, NONE);
-  uint32_t ev = bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 0, true, true});
-  ev |= run(&b, 10, (BmBodyInput){0, 0, false, true});
+  uint32_t ev = bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 0, true, true, false});
+  ev |= run(&b, 10, (BmBodyInput){0, 0, false, true, false});
   TEST_ASSERT(ev & BM_BODY_HIT_CEILING);
   TEST_ASSERT(BM_FIX_INT(b.y) - s_params.height >= 80);  // head stayed below the block
 }
@@ -156,12 +156,12 @@ static void testJumpThroughPlatforms(void)
   BmBody b;
   bmBodyPlace(&b, 50, 112);
   run(&b, 2, NONE);
-  bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 0, true, true});
-  run(&b, 60, (BmBodyInput){0, 0, false, true});
+  bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 0, true, true, false});
+  run(&b, 60, (BmBodyInput){0, 0, false, true, false});
   TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 80);  // jumped up through it, landed on top
 
   // Down + jump drops through.
-  bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 1, true, true});
+  bmBodyStep(&b, &s_params, &s_coll, &s_room, (BmBodyInput){0, 1, true, true, false});
   run(&b, 40, NONE);
   TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 112);
 }
@@ -174,10 +174,10 @@ static void testLadderClimbAndStandOnTop(void)
   BmBody b;
   bmBodyPlace(&b, 56, 112);
   run(&b, 2, NONE);
-  run(&b, 120, (BmBodyInput){0, -1, false, false});
+  run(&b, 120, (BmBodyInput){0, -1, false, false, false});
   run(&b, 5, NONE);
   TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 48);  // standing on the ladder's top cell
-  run(&b, 120, (BmBodyInput){0, 1, false, false});
+  run(&b, 120, (BmBodyInput){0, 1, false, false, false});
   run(&b, 5, NONE);
   TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 112);  // climbed back down through it
 }
@@ -201,7 +201,7 @@ static void testDamageMaterialReported(void)
   build(rows);
   BmBody b;
   bmBodyPlace(&b, 40, 112);
-  uint32_t ev = run(&b, 40, (BmBodyInput){1, 0, false, false});
+  uint32_t ev = run(&b, 40, (BmBodyInput){1, 0, false, false, false});
   TEST_ASSERT(ev & BM_BODY_DAMAGE);
 }
 

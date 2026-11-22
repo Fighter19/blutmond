@@ -55,9 +55,9 @@ for each screen effect, and a teleporter at the east end back to the first room.
 starts in that room (`--room debug_lobby`), `--debug-item` puts the mirror in the bag at the
 start.
 
-Special moves: a weapon has a list of **commands** (directions, then a button, like Down,
+Every weapon has a list of **commands** (directions, then a button, like Down,
 Down-Fwd, Fwd + B for the Short Sword's Lunge), and a charm worn gives its commands with any
-weapon (the Crimson Charm absorbs blood, the Moon Charm flips gravity). Start, Commands lists
+weapon (the Crimson Charm absorbs blood, the Moon Charm flips gravity). An attack while jumping keeps the jump going. Start, Commands lists
 what the player has now. The debug lobby has a Dagger and both charms lying about to try them.
 
 Doors with a `panel` property (a sprite) swing open in a 3D look as the player walks up to

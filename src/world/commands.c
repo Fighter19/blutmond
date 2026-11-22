@@ -116,7 +116,7 @@ static uint16_t tokenButton(const char *t, size_t n)
 }
 
 // How many directions the input has if it matches the history for `button` now, else -1.
-static int32_t matches(const BmGame *g, const char *input, uint16_t button)
+static int32_t matches(const BmGame *g, const char *input, uint16_t button, int8_t facing)
 {
   uint8_t dirs[8];
   int32_t n = 0;
@@ -133,7 +133,7 @@ static int32_t matches(const BmGame *g, const char *input, uint16_t button)
   }
   if (key != button || n == 0) return -1;
   // Facing left, the directions are mirrored.
-  if (g->player.facing < 0)
+  if (facing < 0)
     for (int32_t i = 0; i < n; i++) dirs[i] = (uint8_t)(dirs[i] + 2 - 2 * ((dirs[i] - 1) % 3));
   // From the newest: the last direction began at most LAST_STEP_FRAMES ago, each one before it
   // at most STEP_FRAMES before the next (other directions between them are passed over).
@@ -159,8 +159,17 @@ static bool owns(const BmGame *g, uint32_t weapon, uint32_t charm)
   return false;
 }
 
+// The way the player faces when the button is pressed: where the d-pad points now (the body
+// would turn that way this frame, after the commands), else as before.
+static int8_t facingNow(const BmGame *g)
+{
+  uint8_t now = g->cmdCount != 0 ? g->cmdDirs[(g->cmdHead + BM_COMMAND_HISTORY - 1) % BM_COMMAND_HISTORY] : 5;
+  return (now % 3 == 0) ? 1 : (now % 3 == 1) ? -1 : g->player.facing;
+}
+
 uint32_t bmCommandsMatch(BmGame *g, uint16_t button)
 {
+  int8_t facing = facingNow(g);
   BmDataTable t;
   if (!commandTable(g, &t)) return 0;
   Fields f = s_fields;
@@ -173,7 +182,7 @@ uint32_t bmCommandsMatch(BmGame *g, uint16_t button)
     const uint8_t *record = bmDataRecord(&t, key);
     if (record == NULL || !owns(g, (uint32_t)readField(&t, record, f.weapon), (uint32_t)readField(&t, record, f.charm))) continue;
     const char *input = bmPackString(g->pPack, (uint16_t)readField(&t, record, f.input));
-    int32_t length = input != NULL ? matches(g, input, button) : -1;
+    int32_t length = input != NULL ? matches(g, input, button, facing) : -1;
     if (length > bestLength)
     {
       best = key;
@@ -217,7 +226,14 @@ uint16_t bmCommandsFrame(BmGame *g, uint16_t keys, uint16_t previousKeys)
     if (cost > g->mana) continue;   // not enough: the button does what it does anyway
     int32_t frames = readField(&t, record, f.frames);
     uint16_t behaviour = (uint16_t)readField(&t, record, f.behaviour);
-    if (!bmAttachmentsAttachRecord(g, BM_GAME_COMMAND_SLOT, behaviour, (uint16_t)(frames > 0 ? frames : 1), key)) continue;
+    // Facing the way the input was read (the lock it takes keeps the body from turning itself).
+    int8_t facing = g->player.facing;
+    g->player.facing = facingNow(g);
+    if (!bmAttachmentsAttachRecord(g, BM_GAME_COMMAND_SLOT, behaviour, (uint16_t)(frames > 0 ? frames : 1), key))
+    {
+      g->player.facing = facing;
+      continue;
+    }
     g->mana = (int16_t)(g->mana - cost);
     g->cmdLast = key;
     g->cmdDone++;

@@ -232,7 +232,7 @@ static void testTheItemTables(void)
 {
   start();
   static const struct { const char *table; uint16_t records; } tables[] = {
-    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 7 }, { "Armour", 10 }, { "KeyItem", 3 }, { "Command", 5 } };
+    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 7 }, { "Armour", 10 }, { "KeyItem", 3 }, { "Command", 15 } };
   for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++)
   {
     BmDataTable t;
@@ -1022,7 +1022,7 @@ static void testCommands(void)
   const uint16_t lunge[] = { BM_KEY_DOWN, BM_KEY_DOWN | BM_KEY_RIGHT, BM_KEY_RIGHT, BM_KEY_RIGHT | BM_KEY_B };
   inputs(lunge, 4);
   TEST_ASSERT(s_game.cmdLast == keyOf("Lunge") && s_game.cmdDone == 1 && s_game.mana == 16);
-  TEST_ASSERT(t->classKey[BM_GAME_COMMAND_SLOT] == keyOf("CommandLunge") && swing[1] == 0 && s_game.player.vx > BM_FIX(2.0));
+  TEST_ASSERT(t->classKey[BM_GAME_COMMAND_SLOT] == keyOf("CommandStrike") && swing[1] == 0 && s_game.player.vx > BM_FIX(2.0));
   frames(40, 0);
   // Facing left it is mirrored: Down, Down-Back(left), Left.
   const uint16_t lungeLeft[] = { BM_KEY_DOWN, BM_KEY_DOWN | BM_KEY_LEFT, BM_KEY_LEFT, BM_KEY_LEFT | BM_KEY_B };
@@ -1100,6 +1100,117 @@ static void testCommands(void)
   printf("    blood absorb: health 10 -> %d\n", (int)s_game.health);
   TEST_ASSERT(s_game.health == 18);   // four pulses of 2 from the dummy
   TEST_ASSERT(bm_script_errors == 0);
+}
+
+// The keys of an input (`Down_DownFwd_Fwd_Attack`) facing right, a frame each; the button with
+// the last direction. Returns how many.
+static int keysOfInput(const char *input, uint16_t *keys)
+{
+  static const struct { const char *name; uint16_t keys; } tokens[] = {
+    { "Up", BM_KEY_UP }, { "Down", BM_KEY_DOWN }, { "Fwd", BM_KEY_RIGHT }, { "Back", BM_KEY_LEFT },
+    { "UpFwd", BM_KEY_UP | BM_KEY_RIGHT }, { "UpBack", BM_KEY_UP | BM_KEY_LEFT },
+    { "DownFwd", BM_KEY_DOWN | BM_KEY_RIGHT }, { "DownBack", BM_KEY_DOWN | BM_KEY_LEFT },
+    { "Attack", BM_KEY_B }, { "Jump", BM_KEY_A }, { "Spell", BM_KEY_R }, { "Dash", BM_KEY_L },
+  };
+  int n = 0;
+  for (const char *p = input; *p;)
+  {
+    const char *end = strchr(p, '_');
+    size_t len = end ? (size_t)(end - p) : strlen(p);
+    for (size_t i = 0; i < sizeof(tokens) / sizeof(tokens[0]); i++)
+      if (strlen(tokens[i].name) == len && strncmp(p, tokens[i].name, len) == 0)
+      {
+        if (end == NULL && n > 0) keys[n - 1] |= tokens[i].keys;   // the button with the last direction
+        else
+        {
+          if (n > 0 && keys[n - 1] == tokens[i].keys) keys[n++] = 0;   // the same twice: let go between
+          keys[n++] = tokens[i].keys;
+        }
+      }
+    p = end ? end + 1 : p + len;
+  }
+  return n;
+}
+
+// Every weapon has a list of commands (two at least), and each of them, done with its input,
+// strikes the training dummy.
+static void testEveryWeaponHasCommands(void)
+{
+  BmDataTable weapons, commands;
+  TEST_ASSERT(bmDataFindTable(&s_pack, stringIdOf("Weapon"), &weapons) && bmDataFindTable(&s_pack, stringIdOf("Command"), &commands));
+  int16_t fInput = -1, fWeapon = -1;
+  for (uint16_t f = 0; f < commands.fieldCount; f++)
+  {
+    BmDataField field = bmDataTableField(&commands, f);
+    const char *name = bmPackString(&s_pack, field.name);
+    if (strcmp(name, "input") == 0) fInput = (int16_t)f;
+    if (strcmp(name, "weapon") == 0) fWeapon = (int16_t)f;
+  }
+  TEST_ASSERT(fInput >= 0 && fWeapon >= 0);
+  for (uint16_t w = 0; w < weapons.recordCount; w++)
+  {
+    uint32_t weapon = bmDataRecordKey(&weapons, w);
+    int count = 0;
+    for (uint16_t c = 0; c < commands.recordCount; c++)
+    {
+      uint32_t key = bmDataRecordKey(&commands, c);
+      const uint8_t *record = bmDataRecord(&commands, key);
+      BmDataField fw = bmDataTableField(&commands, (uint16_t)fWeapon), fi = bmDataTableField(&commands, (uint16_t)fInput);
+      if ((uint32_t)bmDataRead(&commands, record, fw.offset, (BmDataType)fw.type) != weapon) continue;
+      count++;
+      const char *input = bmPackString(&s_pack, (uint16_t)bmDataRead(&commands, record, fi.offset, (BmDataType)fi.type));
+      // In the second room, the dummy just ahead; the weapon in hand, mana full.
+      TEST_ASSERT(bmGameStart(&s_game, &s_pack, "test_room_2") == BM_SUCCESS);
+      frames(2, 0);
+      bmInventoryGive(&s_game.inventory, weapon, 1);
+      bmAttachmentsEquip(&s_game, 0, weapon);
+      s_game.inventory.equipped[0] = weapon;   // also a weapon whose own swing is not written yet
+      int dummy = actorOfClass("Dummy");
+      TEST_ASSERT(dummy >= 0);
+      const int32_t *hits = &s_game.actors.fields[dummy * BM_SCRIPT_MAX_FIELDS];
+      bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[dummy]) - 14, 160);
+      s_game.player.facing = 1;
+      frames(20, 0);
+      s_game.mana = 20;
+      int32_t before = hits[0];
+      uint16_t keys[16];
+      int n = keysOfInput(input, keys);
+      for (int i = 0; i < n; i++) frames(1, keys[i]);
+      frames(60, 0);
+      bool done = s_game.cmdLast == key;
+      printf("    %-16s %-40s %s, dummy struck %d times\n", bmPackString(&s_pack, bmDataRecordName(&weapons, w)), input, done ? "done" : "NOT DONE",
+             (int)(hits[0] - before));
+      TEST_ASSERT(done && hits[0] > before);
+    }
+    TEST_ASSERT(count >= 2);
+  }
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+// Jumping and attacking: the swing holds the player, but in the air the jump keeps its speed.
+static void testAnAttackInTheAirKeepsTheJumpGoing(void)
+{
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);
+  frames(2, 0);
+  const uint32_t sword = keyOf("ShortSword");
+  bmInventoryGive(&s_game.inventory, sword, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, sword));
+  bmBodyPlace(&s_game.player, 40, 160);
+  frames(5, 0);
+  frames(20, BM_KEY_RIGHT);                       // running
+  bm_fix run = s_game.player.vx;
+  frames(1, BM_KEY_RIGHT | BM_KEY_A);             // jump
+  frames(2, BM_KEY_RIGHT | BM_KEY_A);
+  frames(1, BM_KEY_RIGHT | BM_KEY_A | BM_KEY_B);  // and swing
+  TEST_ASSERT(s_game.lockTimer != 0 && !s_game.player.onGround);
+  frames(8, BM_KEY_RIGHT | BM_KEY_A);
+  TEST_ASSERT(s_game.lockTimer != 0 && !s_game.player.onGround && s_game.player.vx == run && run > 0);
+  // On the ground a swing stands still, as before.
+  frames(60, 0);
+  frames(20, BM_KEY_RIGHT);
+  frames(1, BM_KEY_RIGHT | BM_KEY_B);
+  frames(6, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.player.onGround && s_game.player.vx == 0);
 }
 
 // Doors with a panel open as the player comes near (drawn as affine sprites, sheared).
@@ -1261,6 +1372,8 @@ int main(int argc, char **argv)
   RUN_TEST(testTheDebugLobby);
   RUN_TEST(testDoorPanelsOpenNearby);
   RUN_TEST(testCommands);
+  RUN_TEST(testEveryWeaponHasCommands);
+  RUN_TEST(testAnAttackInTheAirKeepsTheJumpGoing);
   RUN_TEST(testALineAppearsLetterByLetter);
   RUN_TEST(testTheBossIsDefeated);
   free(s_data);

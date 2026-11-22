@@ -956,6 +956,9 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   // A lock (a swing) takes walking and jumping away; set this frame, it already counts.
   if (g->lockTimer != 0)
   {
+    // In the air the jump goes on as it was (an attack does not brake it); on the ground the
+    // player stands.
+    in.coast = !g->player.onGround;
     in.dx = 0;
     in.jumpPressed = false;
     g->lockTimer--;

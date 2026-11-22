@@ -1,7 +1,9 @@
-# Commands: special moves (src/world/commands.h). A weapon's work while it is equipped; a
-# charm's while the charm is, with any weapon.
+# Commands: special moves (src/world/commands.h). Every weapon has its list, working while it is
+# equipped; a charm's work while the charm is worn, with any weapon. A weapon's moves are
+# CommandStrike with their numbers (the Command structure in data/items.ms).
 table Command
 
+# Short Sword
 record Lunge {
   title = "Lunge"
   keys = "Down, Down-Fwd, Fwd + B"
@@ -9,14 +11,52 @@ record Lunge {
   input = #Down_DownFwd_Fwd_Attack
   cost = 4
   weapon = ShortSword
-  behaviour = CommandLunge
   frames = 24
+  power = 200
+  reach = 24
+  dash = 5.0
 }
 
+record RisingSlash {
+  title = "Rising Slash"
+  keys = "Fwd, Down, Down-Fwd + B"
+  description = "Two cuts on the way up."
+  input = #Fwd_Down_DownFwd_Attack
+  cost = 5
+  weapon = ShortSword
+  frames = 24
+  power = 150
+  hits = 2
+  every = 6
+  hop = 4.5
+}
+
+# Flame Brand: the sword's moves, burning, and one of its own.
 record FlameLunge : Lunge {
   weapon = FlameBrand
+  element = Fire
 }
 
+record FlameRisingSlash : RisingSlash {
+  weapon = FlameBrand
+  element = Fire
+}
+
+record FlameBurst {
+  title = "Flame Burst"
+  keys = "Down, Down + B"
+  description = "Fire all around, three times."
+  input = #Down_Down_Attack
+  cost = 6
+  weapon = FlameBrand
+  frames = 30
+  power = 120
+  reach = -36
+  hits = 3
+  element = Fire
+}
+
+# Dagger
 record Flurry {
   title = "Flurry"
   keys = "Fwd, Fwd + B"
@@ -24,10 +64,113 @@ record Flurry {
   input = #Fwd_Fwd_Attack
   cost = 2
   weapon = Dagger
-  behaviour = CommandFlurry
   frames = 30
+  reach = 16
+  hits = 3
 }
 
+record SlipStab {
+  title = "Slip Stab"
+  keys = "Back, Fwd + B"
+  description = "A hop back, then a stab where you were."
+  input = #Back_Fwd_Attack
+  cost = 3
+  weapon = Dagger
+  frames = 24
+  power = 150
+  reach = 40
+  startup = 10
+  dash = -2.0
+  hop = 2.0
+}
+
+# Great Axe
+record GroundBreaker {
+  title = "Ground Breaker"
+  keys = "Down, Down + B"
+  description = "One great blow that strikes on both sides."
+  input = #Down_Down_Attack
+  cost = 6
+  weapon = GreatAxe
+  frames = 30
+  power = 250
+  reach = -32
+  startup = 14
+  anim = #Overhead
+}
+
+record Whirlwind {
+  title = "Whirlwind"
+  keys = "Back, Down-Back, Down, Down-Fwd, Fwd + B"
+  description = "The axe spins: four strikes all around."
+  input = #Back_DownBack_Down_DownFwd_Fwd_Attack
+  cost = 8
+  weapon = GreatAxe
+  frames = 40
+  reach = -28
+  hits = 4
+}
+
+# Chain Whip
+record LongLash {
+  title = "Long Lash"
+  keys = "Back, Fwd + B"
+  description = "The chain at its longest."
+  input = #Back_Fwd_Attack
+  cost = 4
+  weapon = ChainWhip
+  frames = 20
+  power = 150
+  reach = 72
+  startup = 8
+  anim = #Whip
+}
+
+record Twirl {
+  title = "Twirl"
+  keys = "Down, Up + B"
+  description = "The chain whirls around you three times."
+  input = #Down_Up_Attack
+  cost = 5
+  weapon = ChainWhip
+  frames = 30
+  power = 80
+  reach = -40
+  hits = 3
+  anim = #Whip
+}
+
+# Throwing Knives
+record Volley {
+  title = "Volley"
+  keys = "Down, Down-Fwd, Fwd + B"
+  description = "Three knives in quick succession."
+  input = #Down_DownFwd_Fwd_Attack
+  cost = 4
+  weapon = ThrowingKnives
+  frames = 24
+  reach = 96
+  hits = 3
+  every = 6
+  anim = #Throw
+}
+
+record LeapingThrow {
+  title = "Leaping Throw"
+  keys = "Down, Up + B"
+  description = "A leap, and two knives from the air."
+  input = #Down_Up_Attack
+  cost = 5
+  weapon = ThrowingKnives
+  frames = 30
+  reach = 96
+  hits = 2
+  startup = 6
+  hop = 5.0
+  anim = #Throw
+}
+
+# Charms
 record BloodAbsorb {
   title = "Blood Absorb"
   keys = "Up, Down + R"
