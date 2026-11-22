@@ -55,6 +55,10 @@ for each screen effect, and a teleporter at the east end back to the first room.
 starts in that room (`--room debug_lobby`), `--debug-item` puts the mirror in the bag at the
 start.
 
+Doors with a `panel` property (a sprite) swing open in a 3D look as the player walks up to
+them: an affine sprite, scaled and sheared about its hinge. All doors of the test level have
+one (`door_panel`).
+
 Without a window (for tests and scripts): `--frames N`, `--headless`, `--autoplay`,
 `--snapshot-at N file`, `--load file`, `--listen PORT`, `--follow`, `--until-frame N`,
 `--realtime`, `--random-keys N`. The comment at the top of `apps/game/main.c` describes them.
