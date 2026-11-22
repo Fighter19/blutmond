@@ -122,7 +122,9 @@ static const char *stateOf(int actor)
 {
   const BmActors *a = &s_game.actors;
   if (a->state[actor] == 0xFF) return "";
-  return bmPackString(&s_pack, bmVmStateName(&a->module, a->classIndex[actor], a->state[actor]));
+  uint16_t cls = 0;
+  const BmVmModule *m = bmActorsModule(a, actor, &cls);
+  return m != NULL ? bmPackString(&s_pack, bmVmStateName(m, cls, a->state[actor])) : NULL;
 }
 
 static void testTheBatChasesHitsAndGoesHome(void)

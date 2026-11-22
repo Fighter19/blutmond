@@ -913,8 +913,15 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
   // Scripts: all classes in one module.
   if (!options.scripts.empty())
   {
+    // In order of their file names, not of the command line: string ids are given out in the
+    // order of first use, and a script's module should only change when that script does.
+    std::vector<std::string> scriptPaths = options.scripts;
+    std::stable_sort(scriptPaths.begin(), scriptPaths.end(), [](const std::string &x, const std::string &y) {
+      std::string bx = x.substr(x.find_last_of("/\\") + 1), by = y.substr(y.find_last_of("/\\") + 1);
+      return bx != by ? bx < by : x < y;
+    });
     std::vector<script::Source> sources;
-    for (const std::string &path : options.scripts)
+    for (const std::string &path : scriptPaths)
     {
       try
       {
@@ -934,13 +941,18 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     }
     if (module.ok())
     {
-      Bytes b;
-      b.data = module.data;
-      add(writer, BM_CHUNK_MODB, BM_CATEGORY_SCRIPTS, 0, b);
-      size_t words = 0;
+      // One module per class (attachable-scripts.md §4): a changed script changes one chunk.
+      size_t words = 0, bytes = 0;
+      for (const script::ClassModule &cm : module.classModules)
+      {
+        Bytes b;
+        b.data = cm.data;
+        add(writer, BM_CHUNK_MODB, BM_CATEGORY_SCRIPTS, 0, b);
+        bytes += cm.data.size();
+      }
       for (const script::ClassInfo &c : module.classes) words += size_t(c.codeWords);
-      report.info("script", "module", std::to_string(module.classes.size()) + " classes, " + std::to_string(words * 2) + " bytes of code, " +
-                                        std::to_string(module.data.size()) + " bytes in the pack");
+      report.info("script", "modules", std::to_string(module.classes.size()) + " classes, " + std::to_string(words * 2) + " bytes of code, " +
+                                         std::to_string(bytes) + " bytes in the pack");
       for (const script::StructInfo &s : module.structs)
         report.info("structure", s.file, s.name + (s.base.empty() ? "" : " is " + s.base) + ": " + std::to_string(s.fields.size()) +
                                              " fields, " + std::to_string(s.size) + " bytes per record");
@@ -953,7 +965,14 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       }
       if (!options.scriptC.empty() || !options.nativeCompiler.empty())
       {
-        std::string c = script::emitC(module, bmCrc32(0, module.data.data(), module.data.size()));
+        // One native image with the code of every class's module.
+        std::vector<script::NativeSource> natives;
+        for (size_t i = 0; i < module.classModules.size(); i++)
+        {
+          const std::vector<uint8_t> &d = module.classModules[i].data;
+          natives.push_back({&module, &d, bmCrc32(0, d.data(), d.size()), i});
+        }
+        std::string c = script::emitC(natives);
         if (!options.scriptC.empty()) std::ofstream(options.scriptC) << c;
         if (!options.nativeCompiler.empty())
         {

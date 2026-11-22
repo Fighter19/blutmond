@@ -117,7 +117,8 @@ static const BmVmNativeModule *compileNative(const Module &module)
   if (std::system(command.c_str()) == 0)
   {
     void *lib = dlopen((base + ".so").c_str(), RTLD_NOW);
-    if (lib) native = static_cast<const BmVmNativeModule *>(dlsym(lib, "bm_native_module"));
+    const BmVmNativeImage *image = lib ? static_cast<const BmVmNativeImage *>(dlsym(lib, "bm_native_image")) : nullptr;
+    if (image) native = bmVmNativeFind(image, crc32(module.data));
     if (!native) printf("  cannot load %s.so: %s\n", base.c_str(), dlerror());
   }
   else printf("  the C made from the script does not compile: %s.c\n", base.c_str());
@@ -527,6 +528,43 @@ struct Stats { byte strength = 2; byte luck; }
   TEST_ASSERT(err(many + " }\n").find("at most 32 fields") != std::string::npos);
 }
 
+// One module per class (attachable-scripts.md §4): each verifies on its own, holds one class
+// with its own functions and constants, and does not change when another class's script does.
+static void testOneModulePerClass()
+{
+  const std::string a = "class A extends Actor;\nvar int V = 100000;\nfunction int f(int x) { return x * 3; }\nevent spawn() { V = f(V) + 70000; }\n";
+  const std::string b1 = "class B extends Actor;\nvar int W;\nfunction int g() { return 123456; }\nevent tick() { W = g(); log(W); }\n";
+  const std::string b2 = "class B extends Actor;\nvar int W;\nfunction int h() { return 1; }\nfunction int g() { return 654321 + h(); }\nevent tick() { W = g(); }\n";
+  Module m1 = compile({{"a.ms", a}, {"b.ms", b1}}, stringId), m2 = compile({{"a.ms", a}, {"b.ms", b2}}, stringId);
+  TEST_ASSERT(m1.ok() && m2.ok() && m1.classModules.size() == 2 && m2.classModules.size() == 2);
+  if (!m1.ok() || !m2.ok()) return;
+  TEST_ASSERT(m1.classModules[0].name == "A" && m1.classModules[1].name == "B");
+  TEST_ASSERT(m1.classModules[0].data == m2.classModules[0].data);   // A did not change
+  TEST_ASSERT(m1.classModules[1].data != m2.classModules[1].data);
+  for (const ClassModule &cm : m2.classModules)
+  {
+    BmVmModule vm;
+    const char *why = nullptr;
+    TEST_ASSERT(bmVmModuleOpen(&vm, cm.data.data(), uint32_t(cm.data.size()), &why));
+    TEST_ASSERT(vm.classCount == 1);
+  }
+  // A's module alone runs as A does in the module with both.
+  BmVmModule vm;
+  const char *why = nullptr;
+  TEST_ASSERT(bmVmModuleOpen(&vm, m2.classModules[0].data.data(), uint32_t(m2.classModules[0].data.size()), &why));
+  Game game;
+  BmVmHost host = {&game, hostCall, hostGet, hostSet, hostField, hostWaitOver, hostError};
+  BmVmInstance inst;
+  bmVmInstanceInit(&vm, &inst, 0);
+  bmVmEvent(&vm, &host, &inst, BM_SCRIPT_EVENT_spawn);
+  TEST_ASSERT(inst.fields[0] == 370000 && game.errors.empty());
+  // B's module: its call to h() goes to its own function 0.
+  TEST_ASSERT(bmVmModuleOpen(&vm, m2.classModules[1].data.data(), uint32_t(m2.classModules[1].data.size()), &why));
+  bmVmInstanceInit(&vm, &inst, 0);
+  bmVmEvent(&vm, &host, &inst, BM_SCRIPT_EVENT_tick);
+  TEST_ASSERT(inst.fields[0] == 654322 && game.errors.empty());
+}
+
 static void testEndlessLoopIsStopped()
 {
   Run r("class T extends Actor;\nevent tick() {\n  loop {\n    x = x + 1.0;\n  }\n}\n");
@@ -598,19 +636,24 @@ defaultproperties { start_state = S; }
   TEST_ASSERT(refused > 100 && accepted > 100);
 }
 
-// The loader's checks, on a module image made by hand for the GBA's machine.
+// The loader's checks, on an image made by hand for the GBA's machine.
 static void testNativeLoaderChecks()
 {
   auto put32 = [](std::vector<uint8_t> &b, uint32_t v) { for (int k = 0; k < 4; k++) b.push_back(uint8_t(v >> (k * 8))); };
-  // Image: header (magic, version 1, 2 functions, crc), two entries, 8 bytes of "code".
+  // Image: header (magic, version, 1 module, 0), the module's address (16); the module: header
+  // (magic, version, 2 functions, crc), two entries; then "code" and an address inside.
   std::vector<uint8_t> image;
+  put32(image, BM_NATIVE_MAGIC);
+  put32(image, BM_NATIVE_VERSION | (1u << 16));
+  put32(image, 0);
+  put32(image, 16);          // 12: the module at offset 16
   put32(image, BM_NATIVE_MAGIC);
   put32(image, BM_NATIVE_VERSION | (2u << 16));
   put32(image, 0xC0FFEE);
-  put32(image, 20);          // entry 0: the code at offset 20
-  put32(image, 0);           // entry 1: none
-  put32(image, 0xE12FFF1E);  // bx lr
-  put32(image, 12);          // an address inside the image
+  put32(image, 36);          // 28: entry 0, the code at offset 36
+  put32(image, 0);           // 32: entry 1, none
+  put32(image, 0xE12FFF1E);  // 36: bx lr
+  put32(image, 12);          // 40: an address inside the image
   auto chunk = [&](const std::vector<uint8_t> &img, std::vector<uint32_t> relocs, uint32_t target = BM_NATIVE_TARGET_ARMV4T) {
     std::vector<uint8_t> c;
     put32(c, BM_NATIVE_MAGIC);
@@ -623,30 +666,43 @@ static void testNativeLoaderChecks()
   };
   uint32_t slot[16] = {};
   const char *why = nullptr;
-  auto load = [&](const std::vector<uint8_t> &c, uint32_t crc = 0xC0FFEE, uint32_t slotSize = sizeof(slot)) {
+  auto load = [&](const std::vector<uint8_t> &c, uint32_t slotSize = sizeof(slot)) {
     why = nullptr;
-    return bmVmNativeRelocate(c.data(), uint32_t(c.size()), slot, slotSize, crc, BM_NATIVE_TARGET_ARMV4T, 0x03000100, &why);
+    return bmVmNativeRelocate(c.data(), uint32_t(c.size()), slot, slotSize, BM_NATIVE_TARGET_ARMV4T, 0x03000100, &why);
   };
-  TEST_ASSERT(load(chunk(image, {12, 24})));
-  TEST_ASSERT(slot[3] == 0x03000100 + 20 && slot[6] == 0x03000100 + 12 && slot[4] == 0 && slot[5] == 0xE12FFF1E);
-  TEST_ASSERT(!load(chunk(image, {12, 24}), 0xBAD) && std::string(why).find("other scripts") != std::string::npos);
-  TEST_ASSERT(!load(chunk(image, {12, 24}), 0xC0FFEE, 16) && std::string(why).find("too big") != std::string::npos);
-  TEST_ASSERT(!load(chunk(image, {12, 24}, BM_NATIVE_TARGET_NONE)) && std::string(why).find("another machine") != std::string::npos);
-  TEST_ASSERT(!load(chunk(image, {12, 28})) && std::string(why).find("relocation outside") != std::string::npos);
-  TEST_ASSERT(!load(chunk(image, {12, 22})));                  // not on a word
-  TEST_ASSERT(!load(chunk(image, {24})) && std::string(why).find("entry outside") != std::string::npos);   // the entry is not relocated
+  const std::vector<uint32_t> relocs = {12, 28, 40};
+  TEST_ASSERT(load(chunk(image, relocs)));
+  TEST_ASSERT(slot[3] == 0x03000100 + 16 && slot[7] == 0x03000100 + 36 && slot[10] == 0x03000100 + 12 && slot[8] == 0 && slot[9] == 0xE12FFF1E);
+  TEST_ASSERT(!load(chunk(image, relocs), 16) && std::string(why).find("too big") != std::string::npos);
+  TEST_ASSERT(!load(chunk(image, relocs, BM_NATIVE_TARGET_NONE)) && std::string(why).find("another machine") != std::string::npos);
+  TEST_ASSERT(!load(chunk(image, {12, 28, 44})) && std::string(why).find("relocation outside") != std::string::npos);
+  TEST_ASSERT(!load(chunk(image, {12, 28, 42})));                // not on a word
+  TEST_ASSERT(!load(chunk(image, {12, 40})) && std::string(why).find("entry outside") != std::string::npos);   // the entry is not relocated
+  TEST_ASSERT(!load(chunk(image, {28, 40})) && std::string(why).find("bad module") != std::string::npos);      // nor the module's address
   std::vector<uint8_t> wild = image;
-  wild[12] = 4;                                                // entry 0 points into the header
-  TEST_ASSERT(!load(chunk(wild, {12, 24})));
+  wild[28] = 4;                                                  // entry 0 points into the image's header
+  TEST_ASSERT(!load(chunk(wild, relocs)));
   wild = image;
-  wild[24] = 200;                                              // an address beyond the image
-  TEST_ASSERT(!load(chunk(wild, {12, 24})) && std::string(why).find("to outside") != std::string::npos);
-  std::vector<uint8_t> cut = chunk(image, {12, 24});
+  wild[12] = 200;                                                // the module beyond the image
+  TEST_ASSERT(!load(chunk(wild, relocs)));
+  wild = image;
+  wild[40] = 200;                                                // an address beyond the image
+  TEST_ASSERT(!load(chunk(wild, relocs)) && std::string(why).find("to outside") != std::string::npos);
+  wild = image;
+  wild[20] = 3;                                                  // the module's version
+  TEST_ASSERT(!load(chunk(wild, relocs)) && std::string(why).find("bad module") != std::string::npos);
+  std::vector<uint8_t> cut = chunk(image, relocs);
   cut.resize(cut.size() - 5);
   TEST_ASSERT(!load(cut) && std::string(why).find("cut off") != std::string::npos);
   // On this machine nothing native can be loaded from a pack.
-  std::vector<uint8_t> good = chunk(image, {12, 24});
-  TEST_ASSERT(bmVmNativeLoad(good.data(), uint32_t(good.size()), slot, sizeof(slot), 0xC0FFEE, &why) == nullptr);
+  std::vector<uint8_t> good = chunk(image, relocs);
+  TEST_ASSERT(bmVmNativeLoad(good.data(), uint32_t(good.size()), slot, sizeof(slot), &why) == nullptr);
+  // A module is found by the CRC of the bytecode it was made from.
+  static const BmVmNativeModule a = {{BM_NATIVE_MAGIC, BM_NATIVE_VERSION, 0, 0x1111}, {nullptr}};
+  static const BmVmNativeModule b = {{BM_NATIVE_MAGIC, BM_NATIVE_VERSION, 0, 0x2222}, {nullptr}};
+  struct { BmVmNativeHeader head; const BmVmNativeModule *modules[2]; } two = {{BM_NATIVE_MAGIC, BM_NATIVE_VERSION, 2, 0}, {&a, &b}};
+  const BmVmNativeImage *img = reinterpret_cast<const BmVmNativeImage *>(&two);
+  TEST_ASSERT(bmVmNativeFind(img, 0x2222) == &b && bmVmNativeFind(img, 0x1111) == &a && bmVmNativeFind(img, 0x3333) == nullptr);
   // A native module for other bytecode is not accepted by a module.
   Run r("class T extends Actor;\nevent tick() { log(1); }\n");
   TEST_ASSERT(r.ok);
@@ -711,6 +767,7 @@ int main()
   RUN_TEST(testErrors);
   RUN_TEST(testEnums);
   RUN_TEST(testStructures);
+  RUN_TEST(testOneModulePerClass);
   RUN_TEST(testEndlessLoopIsStopped);
   RUN_TEST(testCorruptModulesAreSafe);
   RUN_TEST(testNativeLoaderChecks);

@@ -1,6 +1,6 @@
 # Mondskript
 
-Version 0.6, draft.
+Version 0.7, draft.
 
 Mondskript is Blutmond's scripting language. It is modelled on the old UnrealScript (classes
 with declared fields, states with latent functions, `defaultproperties`) and avoids its known
@@ -170,7 +170,11 @@ source → parser → AST → type check → IR ─┬─► bytecode module ('M
 - **Bytecode**: register based, 16-bit instructions. A module contains: header (magic `BMMB`,
   version, counts), classes, states, variables, functions, constant pool, code, line table.
   The loader **verifies** it before use and rejects a module that fails. The layout, the
-  instructions and the verifier's rules are in section 11.
+  instructions and the verifier's rules are in section 11. The cooker writes **one module per
+  class** (one `MODB` chunk each): a class's functions and constants are numbered from 0 in its
+  module, so a module changes only when its script does, and a changed script travels over
+  the link as one small chunk. The runtime opens every `MODB` chunk of the pack and makes a
+  table of the classes in them; a module with several classes (older packs) works too.
 - **Native**: the generated C uses no global variables (only a context pointer) and calls the
   runtime only through that context. It is compiled with `arm-none-eabi-gcc` and linked at
   address 0 with `--emit-relocs`; the packer keeps the list of absolute addresses and the
@@ -401,21 +405,28 @@ its own: everything is in the object and the context), or a relocation it cannot
 inside the module do not change when it is loaded.
 
 ```
-chunk:  "BMNA"   u16 version (1)   u16 machine (1: ARMv4T, little endian)
+chunk:  "BMNA"   u16 version (2)   u16 machine (1: ARMv4T, little endian)
         u32 image size (a multiple of 4)   u32 number of addresses
         image
         u32 offset in the image of each address, ascending
 
-image:  "BMNA"   u16 version   u16 functions   u32 CRC-32 of the bytecode module
-        u32 entry of each function (0: not an entry; else an offset, relocated like any address)
-        code and constants
+image:  "BMNA"   u16 version   u16 modules   u32 0
+        u32 address of each module (relocated like any address)
+        modules, code and constants
+
+module: "BMNA"   u16 version   u16 functions   u32 CRC-32 of its bytecode module
+        u32 entry of each function (0: not an entry; else an address, relocated)
 ```
 
-**Loading** (`src/script/native.h`). When a pack's bytecode module is opened, the runtime
+One image holds the native code of every class's module (one C file, one link, one ELF file
+for the debugger); the runtime gives each bytecode module the native module with its CRC, and
+interprets a module that has none (a script pushed since the pack was cooked).
+
+**Loading** (`src/script/native.h`). When a pack's bytecode modules are opened, the runtime
 looks for a `MODN` chunk for its machine, checks it in the pack (sizes, every address inside
-the image, the CRC of the bytecode it was made from, every entry a relocated address behind
-the table), copies the image into its slot (8 KB of IWRAM on the GBA) and adds the slot's
-address to every listed word. From then on `bmVmEvent` and `bmVmStep` call the entry of a
+the image, every module and every entry a relocated address inside it), copies the image into
+its slot (8 KB of IWRAM on the GBA) and adds the slot's address to every listed word. Each
+bytecode module then takes the native module made from it (the CRC); from then on `bmVmEvent` and `bmVmStep` call the entry of a
 function instead of interpreting it. A chunk that is refused counts as a script error; the
 scripts then run interpreted. A new pack without native code (a live push) switches back to
 the interpreter at the same frame boundary as any reload; no native function is running then,
@@ -441,3 +452,4 @@ for now), per-class modules loaded on room changes.
 - 0.5: enums, and structures laid out for records; variable type 6 (enum).
 - 0.6: `record<S>`, field access, `for x in records(S)`; variable type 7 (record); runtime
   functions 22 to 24; the inventory functions 25 to 29.
+- 0.7: one bytecode module per class; native images of version 2 with a module per class.

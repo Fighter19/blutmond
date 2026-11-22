@@ -56,10 +56,13 @@ const struct { uint8_t argc; bool latent; } kApi[BM_SCRIPT_API_COUNT] = {
 
 }  // namespace
 
-std::string emitC(const Module &module, uint32_t bytecodeCrc)
+// The functions of one module and its table of entries, `bm_native_module_<index>`.
+static void emitModule(std::ostringstream &o, const NativeSource &src, size_t index)
 {
-  if (!module.ok() || module.data.size() < BM_VM_HEADER_SIZE) return {};
-  const uint8_t *p = module.data.data();
+  const Module &module = *src.module;
+  uint32_t bytecodeCrc = src.bytecodeCrc;
+  const std::vector<uint8_t> &data = src.data ? *src.data : module.data;
+  const uint8_t *p = data.data();
   uint16_t functionCount = rd16(p + 10);
   const uint8_t *functions = p + rd32(p + 20), *consts = p + rd32(p + 24), *code = p + rd32(p + 28);
   const uint8_t *lineTable = rd32(p + 36) ? p + rd32(p + 36) : nullptr;
@@ -76,7 +79,8 @@ std::string emitC(const Module &module, uint32_t bytecodeCrc)
     fn.stateCode = (f[8] & BM_VM_FUNCTION_STATE_CODE) != 0;
     fn.cls = rd16(f + 10);
     fn.code = code + size_t(fn.start) * 2;
-    std::string cls = fn.cls < module.classes.size() ? identifier(module.classes[fn.cls].name) : "class";
+    size_t clsIndex = src.firstClass + fn.cls;
+    std::string cls = clsIndex < module.classes.size() ? identifier(module.classes[clsIndex].name) : "class";
     fn.name = cls + (fn.stateCode ? "_state" : "_fn") + std::to_string(i);
     if (lineTable)
     {
@@ -85,10 +89,7 @@ std::string emitC(const Module &module, uint32_t bytecodeCrc)
     }
   }
 
-  std::ostringstream o;
-  o << "// Made by the Mondskript compiler from the bytecode module with CRC " << std::hex << bytecodeCrc << std::dec << ". Do not edit.\n";
-  o << "#include \"native.h\"\n\n";
-  o << "#define FAILED(c) ((c)->pInstance->wait == BM_VM_FAILED)\n\n";
+  o << "// The bytecode module with CRC " << std::hex << bytecodeCrc << std::dec << ".\n";
   for (const Fn &fn : fns)
   {
     if (fn.stateCode) continue;
@@ -281,8 +282,8 @@ std::string emitC(const Module &module, uint32_t bytecodeCrc)
     stamp(trailerAt, fn.lines.empty() ? 0 : fn.lines.back().second);
   }
 
-  o << "__attribute__((section(\".bmhead\"), used)) const struct { BmVmNativeHeader head; BmVmNativeEntry entries[" << (functionCount ? functionCount : 1)
-    << "]; } bm_native_module = {\n  { BM_NATIVE_MAGIC, BM_NATIVE_VERSION, " << functionCount << ", 0x" << std::hex << bytecodeCrc << std::dec << "u },\n  {\n";
+  o << "static const struct { BmVmNativeHeader head; BmVmNativeEntry entries[" << (functionCount ? functionCount : 1)
+    << "]; } bm_native_module_" << index << " = {\n  { BM_NATIVE_MAGIC, BM_NATIVE_VERSION, " << functionCount << ", 0x" << std::hex << bytecodeCrc << std::dec << "u },\n  {\n";
   for (const Fn &fn : fns)
   {
     if (fn.stateCode) o << "    " << fn.name << ",\n";
@@ -290,8 +291,34 @@ std::string emitC(const Module &module, uint32_t bytecodeCrc)
     else o << "    0,\n";
   }
   if (functionCount == 0) o << "    0,\n";
+  o << "  }\n};\n\n";
+}
+
+std::string emitC(const std::vector<NativeSource> &sources)
+{
+  for (const NativeSource &src : sources)
+  {
+    const std::vector<uint8_t> &data = src.data ? *src.data : src.module->data;
+    if (!src.module->ok() || data.size() < BM_VM_HEADER_SIZE) return {};
+  }
+  std::ostringstream o;
+  o << "// Made by the Mondskript compiler from " << sources.size() << " bytecode module(s). Do not edit.\n";
+  o << "#include \"native.h\"\n\n";
+  o << "#define FAILED(c) ((c)->pInstance->wait == BM_VM_FAILED)\n\n";
+  for (size_t i = 0; i < sources.size(); i++) emitModule(o, sources[i], i);
+  // The image's head: at the start of the module (the linker script puts .bmhead first).
+  size_t n = sources.size();
+  o << "__attribute__((section(\".bmhead\"), used)) const struct { BmVmNativeHeader head; const BmVmNativeModule *modules[" << (n ? n : 1)
+    << "]; } bm_native_image = {\n  { BM_NATIVE_MAGIC, BM_NATIVE_VERSION, " << n << ", 0 },\n  {\n";
+  for (size_t i = 0; i < n; i++) o << "    (const BmVmNativeModule *)&bm_native_module_" << i << ",\n";
+  if (n == 0) o << "    0,\n";
   o << "  }\n};\n";
   return o.str();
+}
+
+std::string emitC(const Module &module, uint32_t bytecodeCrc)
+{
+  return emitC(std::vector<NativeSource>{{&module, nullptr, bytecodeCrc}});
 }
 
 }  // namespace bm::script

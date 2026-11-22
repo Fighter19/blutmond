@@ -20,16 +20,23 @@
 
 #define BM_ACTORS_MAX 8
 #define BM_ACTORS_STORE 16
+#define BM_ACTORS_MODULES 24   // script modules in a pack (one per class)
+#define BM_ACTORS_CLASSES 32   // classes in all of them
 
 struct BmGame;
 
 typedef struct BmActors
 {
-  // Derived: rebuilt when a room is entered.
-  bool hasModule;
-  BmVmModule module;
-  const uint8_t *pVerified;            // the module data that passed verification
-  uint32_t verifiedHash;
+  // Derived: rebuilt when a room is entered. The pack's script modules (one per class, or
+  // one for all in older packs), and a table of every class in them.
+  bool hasModule;                      // there is at least one class
+  uint8_t moduleCount;
+  BmVmModule modules[BM_ACTORS_MODULES];
+  const uint8_t *pVerified[BM_ACTORS_MODULES];   // the module data that passed verification
+  uint32_t verifiedHash[BM_ACTORS_MODULES];
+  uint8_t classCount;
+  uint8_t classModule[BM_ACTORS_CLASSES];        // which module a class is in
+  uint8_t classInModule[BM_ACTORS_CLASSES];      // its index there
   uint8_t object[BM_ACTORS_MAX];       // index into the game's objects
   int8_t sheet[BM_ACTORS_MAX];         // sprite sheet, or -1
   int32_t homeX[BM_ACTORS_MAX], homeY[BM_ACTORS_MAX];
@@ -37,9 +44,9 @@ typedef struct BmActors
   uint8_t current;                     // the actor whose script is running
 
   // State.
-  uint32_t moduleHash;                 // the module the state below belongs to
+  uint32_t moduleHash;                 // the modules the state below belongs to
   uint8_t count;
-  uint16_t classIndex[BM_ACTORS_MAX];
+  uint16_t classIndex[BM_ACTORS_MAX];  // into the class table
   uint8_t state[BM_ACTORS_MAX], wait[BM_ACTORS_MAX];
   uint16_t pc[BM_ACTORS_MAX], timer[BM_ACTORS_MAX];
   int32_t fields[BM_ACTORS_MAX * BM_SCRIPT_MAX_FIELDS];
@@ -54,6 +61,9 @@ typedef struct BmActors
   uint32_t storeKey[BM_ACTORS_STORE];
   int32_t storeValue[BM_ACTORS_STORE];
 } BmActors;
+
+/// The module of an actor's class and the class's index in it (for tests and tools).
+const BmVmModule *bmActorsModule(const BmActors *pActors, uint8_t actor, uint16_t *pClassInModule);
 
 /// Called when a room was entered. `fresh`: objects start anew (a room change or a restart);
 /// otherwise the state was just loaded and only what is derived is rebuilt - unless the scripts

@@ -55,18 +55,20 @@ defaultproperties { start_state = S; }
   std::vector<uint32_t> slot(imageSize / 4 + 1);
   const char *why = nullptr;
   const uint32_t base = 0x03004000;
-  TEST_ASSERT(bmVmNativeRelocate(chunk.data(), uint32_t(chunk.size()), slot.data(), uint32_t(slot.size() * 4), crc, BM_NATIVE_TARGET_ARMV4T, base, &why));
-  uint32_t functions = slot[1] >> 16, entries = 0;
-  TEST_ASSERT(slot[2] == crc && functions == 4);
+  TEST_ASSERT(bmVmNativeRelocate(chunk.data(), uint32_t(chunk.size()), slot.data(), uint32_t(slot.size() * 4), BM_NATIVE_TARGET_ARMV4T, base, &why));
+  // The image lists one module: the one made from this bytecode.
+  TEST_ASSERT((slot[1] >> 16) == 1 && slot[3] >= base + 16 && slot[3] < base + imageSize);
+  uint32_t mod = (slot[3] - base) / 4;
+  uint32_t functions = slot[mod + 1] >> 16, entries = 0;
+  TEST_ASSERT(slot[mod + 2] == crc && functions == 4);
   for (uint32_t i = 0; i < functions; i++)
   {
-    uint32_t e = slot[3 + i];
+    uint32_t e = slot[mod + 3 + i];
     if (e == 0) continue;   // twice() takes a value: not an entry
     entries++;
-    TEST_ASSERT(e >= base + 12 + functions * 4 && e < base + imageSize && (e & 3) == 0);
+    TEST_ASSERT(e >= base + 16 && e < base + imageSize && (e & 3) == 0);
   }
   TEST_ASSERT(entries == 3);
-  TEST_ASSERT(!bmVmNativeRelocate(chunk.data(), uint32_t(chunk.size()), slot.data(), uint32_t(slot.size() * 4), crc + 1, BM_NATIVE_TARGET_ARMV4T, base, &why));
 }
 
 static void testWhatCannotBeAModuleIsRefused()

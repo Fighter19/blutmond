@@ -21,9 +21,22 @@ uint32_t bm_script_cycles;
 
 // --- Helpers --------------------------------------------------------------------------------
 
+// The module an actor's class is in; its instance names the class by its index there.
+static const BmVmModule *moduleOf(const BmActors *a, uint8_t i)
+{
+  return &a->modules[a->classModule[a->classIndex[i]]];
+}
+
+const BmVmModule *bmActorsModule(const BmActors *a, uint8_t i, uint16_t *pClassInModule)
+{
+  if (i >= a->count || a->classIndex[i] >= a->classCount) return NULL;
+  if (pClassInModule != NULL) *pClassInModule = a->classInModule[a->classIndex[i]];
+  return moduleOf(a, i);
+}
+
 static void loadInstance(const BmActors *a, uint8_t i, BmVmInstance *inst)
 {
-  inst->classIndex = a->classIndex[i];
+  inst->classIndex = a->classInModule[a->classIndex[i]];
   inst->state = a->state[i];
   inst->wait = a->wait[i];
   inst->pc = a->pc[i];
@@ -292,7 +305,7 @@ static void hostFieldChanged(void *pContext, BmVmInstance *inst, uint16_t field)
   BmGame *g = pContext;
   BmActors *a = &g->actors;
   uint8_t flags = 0;
-  bmVmClassField(&a->module, inst->classIndex, (uint8_t)field, NULL, NULL, &flags, NULL);
+  bmVmClassField(moduleOf(a, a->current), inst->classIndex, (uint8_t)field, NULL, NULL, &flags, NULL);
   if (!(flags & BM_SCRIPT_FIELD_SAVE)) return;
   uint32_t key = storeKey(g, a->current, field);
   for (uint8_t k = 0; k < a->storeCount; k++)
@@ -352,9 +365,9 @@ static BmVmHost hostOf(BmGame *g)
 static int32_t classNamed(const BmGame *g, const char *name)
 {
   const BmActors *a = &g->actors;
-  for (uint16_t c = 0; c < a->module.classCount; c++)
+  for (uint16_t c = 0; c < a->classCount; c++)
   {
-    const char *n = bmPackString(g->pPack, bmVmClassName(&a->module, c));
+    const char *n = bmPackString(g->pPack, bmVmClassName(&a->modules[a->classModule[c]], a->classInModule[c]));
     if (n != NULL && strcmp(n, name) == 0) return c;
   }
   return -1;
@@ -403,11 +416,12 @@ static void applyProperties(BmGame *g, uint8_t i, BmVmInstance *inst)
 {
   const BmActors *a = &g->actors;
   const BmObjectView *o = &g->objects[a->object[i]];
-  for (uint8_t f = 0; f < bmVmClassFieldCount(&a->module, inst->classIndex); f++)
+  const BmVmModule *m = moduleOf(a, i);
+  for (uint8_t f = 0; f < bmVmClassFieldCount(m, inst->classIndex); f++)
   {
     uint16_t nameId;
     uint8_t type, flags;
-    bmVmClassField(&a->module, inst->classIndex, f, &nameId, &type, &flags, NULL);
+    bmVmClassField(m, inst->classIndex, f, &nameId, &type, &flags, NULL);
     if (!(flags & BM_SCRIPT_FIELD_EDITABLE)) continue;
     const char *name = bmPackString(g->pPack, nameId);
     for (uint16_t p = 0; name != NULL && p < o->propertyCount; p++)
@@ -426,10 +440,12 @@ static void applyProperties(BmGame *g, uint8_t i, BmVmInstance *inst)
   }
 }
 
-// The pack's native code for the scripts, if it has some for this machine: the functions then
-// run as native code instead of being interpreted (native.h).
-static void loadNative(BmGame *g, BmVmModule *pModule, uint32_t bytecodeCrc)
+// The pack's native code for the scripts, if it has some for this machine: the functions of
+// every module it has code for then run as native code instead of being interpreted (native.h).
+static void loadNative(BmGame *g)
 {
+  BmActors *a = &g->actors;
+  for (uint8_t m = 0; m < a->moduleCount; m++) bmVmModuleSetNative(&a->modules[m], NULL);
   int32_t chunk = bmPackFindChunk(g->pPack, BM_CHUNK_MODN, 0);
   if (chunk < 0) return;
   uint32_t size = 0, slotSize = 0;
@@ -437,51 +453,80 @@ static void loadNative(BmGame *g, BmVmModule *pModule, uint32_t bytecodeCrc)
   void *pSlot = bmVmNativeSlot(&slotSize);
   const char *why = NULL;
   bmHalDebugClearAll();   // breakpoints in the code that is about to be replaced
-  const BmVmNativeModule *pNative = bmVmNativeLoad(p, size, pSlot, slotSize, bytecodeCrc, &why);
-  if (pNative == NULL || !bmVmModuleSetNative(pModule, pNative))
+  const BmVmNativeImage *pImage = bmVmNativeLoad(p, size, pSlot, slotSize, &why);
+  if (pImage == NULL)
   {
 #if BM_NATIVE_TARGET != BM_NATIVE_TARGET_NONE
-    // On a machine that could run it, a module that does not load is a fault of the pack.
+    // On a machine that could run it, an image that does not load is a fault of the pack.
     bm_script_errors++;
 #endif
+    return;
   }
+  // A module the image has no code for (a script pushed since) is interpreted.
+  for (uint8_t m = 0; m < a->moduleCount; m++)
+  {
+    const BmVmNativeModule *pNative = bmVmNativeFind(pImage, a->verifiedHash[m]);
+    if (pNative != NULL && !bmVmModuleSetNative(&a->modules[m], pNative)) bm_script_errors++;
+  }
+}
+
+// Opens the pack's script modules (only those that changed since the last time are verified
+// again) and lists their classes. Returns a hash over all of them.
+static uint32_t loadModules(BmGame *g)
+{
+  BmActors *a = &g->actors;
+  uint32_t hash = 0;
+  bool changed = false;
+  uint8_t n = 0;
+  for (int32_t chunk = bmPackFindChunk(g->pPack, BM_CHUNK_MODB, 0); chunk >= 0 && n < BM_ACTORS_MODULES;
+       chunk = bmPackFindChunk(g->pPack, BM_CHUNK_MODB, (uint32_t)chunk + 1))
+  {
+    uint32_t size = 0;
+    const uint8_t *p = bmPackChunkData(g->pPack, (uint32_t)chunk, &size);
+    BmChunkEntry entry;
+    if (p == NULL || !bmPackGetChunk(g->pPack, (uint32_t)chunk, &entry)) continue;
+    // The module that was verified when the pack was first used: no need to do it again.
+    if (n < a->moduleCount && a->pVerified[n] == p && a->verifiedHash[n] == entry.hash)
+    {
+      hash = hash * 31u + entry.hash;
+      n++;
+      continue;
+    }
+    const char *why = NULL;
+    changed = true;
+    if (!bmVmModuleOpen(&a->modules[n], p, size, &why))
+    {
+      bm_script_errors++;
+#ifdef BM_PLATFORM_HOST
+      printf("script module refused: %s\n", why ? why : "unreadable");
+#endif
+      continue;
+    }
+    a->pVerified[n] = p;
+    a->verifiedHash[n] = entry.hash;
+    hash = hash * 31u + entry.hash;
+    n++;
+  }
+  if (n != a->moduleCount) changed = true;
+  a->moduleCount = n;
+  if (changed) loadNative(g);
+  a->classCount = 0;
+  for (uint8_t m = 0; m < n; m++)
+    for (uint16_t c = 0; c < a->modules[m].classCount && a->classCount < BM_ACTORS_CLASSES; c++)
+    {
+      a->classModule[a->classCount] = m;
+      a->classInModule[a->classCount] = (uint8_t)c;
+      a->classCount++;
+    }
+  a->hasModule = a->classCount != 0;
+  return hash;
 }
 
 void bmActorsEnterRoom(BmGame *g, bool fresh)
 {
   BmActors *a = &g->actors;
   a->pendingDoor = 0;
-  uint32_t hash = 0;
-  int32_t chunk = bmPackFindChunk(g->pPack, BM_CHUNK_MODB, 0);
-  uint32_t size = 0;
-  const uint8_t *p = chunk >= 0 ? bmPackChunkData(g->pPack, (uint32_t)chunk, &size) : NULL;
-  BmChunkEntry entry;
-  if (p != NULL && bmPackGetChunk(g->pPack, (uint32_t)chunk, &entry) && a->hasModule && a->pVerified == p && a->verifiedHash == entry.hash)
-  {
-    // The module that was verified when the pack was first used: no need to do it again.
-    hash = entry.hash;
-  }
-  else if (chunk >= 0)
-  {
-    a->hasModule = false;
-    const char *why = NULL;
-    if (p != NULL && bmPackGetChunk(g->pPack, (uint32_t)chunk, &entry) && bmVmModuleOpen(&a->module, p, size, &why))
-    {
-      loadNative(g, &a->module, entry.hash);
-      a->hasModule = true;
-      a->pVerified = p;
-      a->verifiedHash = entry.hash;
-      hash = entry.hash;
-    }
-    else
-    {
-      bm_script_errors++;
-#ifdef BM_PLATFORM_HOST
-      printf("script module refused: %s\n", why ? why : "unreadable");
-#endif
-    }
-  }
-  if (chunk < 0) a->hasModule = false;
+  uint32_t hash = loadModules(g);
   // State made with other scripts does not fit these: start the objects anew.
   if (hash != a->moduleHash) fresh = true;
   a->moduleHash = hash;
@@ -502,7 +547,7 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     // The anchor: a point as it is, a rectangle at its bottom centre.
     a->homeX[n] = BM_FIX(v->x + v->w / 2);
     a->homeY[n] = BM_FIX(v->y + v->h);
-    uint16_t spriteId = bmVmClassSprite(&a->module, (uint16_t)cls);
+    uint16_t spriteId = bmVmClassSprite(&a->modules[a->classModule[cls]], a->classInModule[cls]);
     a->sheet[n] = sheetNamed(g, spriteId != BM_VM_NONE ? bmPackString(g->pPack, spriteId) : v->className);
     if (!fresh && (n >= a->count || a->classIndex[n] != (uint16_t)cls)) fresh = true;  // not the room the state was made in
     if (fresh) a->classIndex[n] = (uint16_t)cls;
@@ -516,7 +561,7 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
   for (uint8_t i = 0; i < n; i++)
   {
     BmVmInstance inst;
-    bmVmInstanceInit(&a->module, &inst, a->classIndex[i]);
+    bmVmInstanceInit(moduleOf(a, i), &inst, a->classInModule[a->classIndex[i]]);
     a->x[i] = a->homeX[i];
     a->y[i] = a->homeY[i];
     a->facing[i] = 1;
@@ -531,7 +576,7 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
       if ((a->storeKey[k] & ~0xFFu) == (storeKey(g, i, 0) & ~0xFFu) && field < BM_SCRIPT_MAX_FIELDS) inst.fields[field] = a->storeValue[k];
     }
     a->current = i;
-    bmVmEvent(&a->module, &host, &inst, BM_SCRIPT_EVENT_spawn);
+    bmVmEvent(moduleOf(a, i), &host, &inst, BM_SCRIPT_EVENT_spawn);
     storeInstance(a, i, &inst);
   }
 }
@@ -547,11 +592,12 @@ void bmActorsFrame(BmGame *g)
     BmVmInstance inst;
     loadInstance(a, i, &inst);
     a->current = i;
-    bmVmEvent(&a->module, &host, &inst, BM_SCRIPT_EVENT_tick);
+    const BmVmModule *m = moduleOf(a, i);
+    bmVmEvent(m, &host, &inst, BM_SCRIPT_EVENT_tick);
     bool touching = touchesPlayer(g, i);
-    if (touching && !a->touching[i]) bmVmEvent(&a->module, &host, &inst, BM_SCRIPT_EVENT_touch);
+    if (touching && !a->touching[i]) bmVmEvent(m, &host, &inst, BM_SCRIPT_EVENT_touch);
     a->touching[i] = touching;
-    bmVmStep(&a->module, &host, &inst);
+    bmVmStep(m, &host, &inst);
     storeInstance(a, i, &inst);
   }
   bm_script_cycles += bmHalCycles() - started;

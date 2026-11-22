@@ -11,8 +11,22 @@
 
 namespace bm::script {
 
-/// C source for a module. `bytecodeCrc` is the CRC-32 of module.data, which ties the native
-/// module to its bytecode. Empty if the module has errors.
+/// A bytecode module to translate: the compiled module (for class names) and the module's
+/// bytes (module.data, or one of module.classModules), with their CRC-32, which ties the
+/// native code to them.
+struct NativeSource
+{
+  const Module *module;
+  const std::vector<uint8_t> *data;   // nullptr: module->data
+  uint32_t bytecodeCrc;
+  size_t firstClass = 0;              // module->classes index of the bytes' first class
+};
+
+/// C source for a native image (native.h) with the code of each module. Empty if a module
+/// has errors.
+std::string emitC(const std::vector<NativeSource> &sources);
+
+/// The same for one module (module.data).
 std::string emitC(const Module &module, uint32_t bytecodeCrc);
 
 }  // namespace bm::script

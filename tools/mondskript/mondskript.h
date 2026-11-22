@@ -79,9 +79,16 @@ struct Source
   std::string path, text;
 };
 
+struct ClassModule
+{
+  std::string name;             // the class
+  std::vector<uint8_t> data;    // a module with only this class (one MODB chunk in a pack)
+};
+
 struct Module
 {
-  std::vector<uint8_t> data;    // empty when there are errors
+  std::vector<uint8_t> data;    // every class in one module; empty when there are errors
+  std::vector<ClassModule> classModules;   // the same classes, a module each
   std::vector<ClassInfo> classes;
   std::vector<EnumInfo> enums;
   std::vector<StructInfo> structs;

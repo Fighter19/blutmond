@@ -1,6 +1,8 @@
 # Plan: attachable scripts
 
-Status: plan, nothing built. Milestone M14 in [../PLAN.md](../PLAN.md).
+Status: step 1 built: one bytecode module per class, native images with a module per class
+([../spec/mondskript.md](../spec/mondskript.md) §10 and §12); the layout hash of section 4
+comes with step 2. Steps 2 to 8 are open. Milestone M14 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

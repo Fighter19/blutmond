@@ -16,7 +16,7 @@
 #include "vm.h"
 
 #define BM_NATIVE_MAGIC 0x414E4D42u   // "BMNA"
-#define BM_NATIVE_VERSION 1
+#define BM_NATIVE_VERSION 2   // 2: an image holds several modules (one per class)
 #define BM_NATIVE_CHUNK_HEADER 16
 
 // Machines a native module can be built for (the chunk's target field).
@@ -66,29 +66,41 @@ typedef struct BmVmNativeCtx
 /// continue at if a latent function started waiting, else 0xFFFF.
 typedef uint32_t (*BmVmNativeEntry)(BmVmNativeCtx *pCtx, uint32_t pc);
 
-/// The start of a native module's image.
+/// The start of a native module, and of the image that holds several.
 typedef struct BmVmNativeHeader
 {
   uint32_t magic;
   uint16_t version;
-  uint16_t functionCount;
-  uint32_t bytecodeCrc;                 // CRC-32 of the bytecode module it was made from
+  uint16_t functionCount;               // the image: its number of modules
+  uint32_t bytecodeCrc;                 // CRC-32 of the bytecode module it was made from; the image: 0
 } BmVmNativeHeader;
 
+/// The native code of one bytecode module.
 typedef struct BmVmNativeModule
 {
   BmVmNativeHeader head;
   BmVmNativeEntry entries[1];           // functionCount of them; NULL: not an entry (the interpreter runs it)
 } BmVmNativeModule;
 
-/// Copies the image of a MODN chunk to `pSlot` and relocates it there. Returns the module, or
-/// NULL with a reason: not for this machine, too big for the slot, damaged, or not made from
-/// the bytecode with checksum `bytecodeCrc`.
-const BmVmNativeModule *bmVmNativeLoad(const uint8_t *pChunk, uint32_t size, void *pSlot, uint32_t slotSize, uint32_t bytecodeCrc, const char **ppError);
+/// What a MODN chunk holds: native code for several bytecode modules (a module per script
+/// class), all loaded into the slot together.
+typedef struct BmVmNativeImage
+{
+  BmVmNativeHeader head;
+  const BmVmNativeModule *modules[1];   // head.functionCount of them
+} BmVmNativeImage;
+
+/// Copies the image of a MODN chunk to `pSlot` and relocates it there. Returns the image, or
+/// NULL with a reason: not for this machine, too big for the slot, or damaged.
+const BmVmNativeImage *bmVmNativeLoad(const uint8_t *pChunk, uint32_t size, void *pSlot, uint32_t slotSize, const char **ppError);
 
 /// The loader's work for any target (for tests): checks the chunk, copies the image to `pSlot`
 /// and adds `base` to every address in it.
-bool bmVmNativeRelocate(const uint8_t *pChunk, uint32_t size, void *pSlot, uint32_t slotSize, uint32_t bytecodeCrc, uint32_t target, uint32_t base, const char **ppError);
+bool bmVmNativeRelocate(const uint8_t *pChunk, uint32_t size, void *pSlot, uint32_t slotSize, uint32_t target, uint32_t base, const char **ppError);
+
+/// The native module of a loaded image made from the bytecode module with checksum
+/// `bytecodeCrc`, or NULL (that module is then interpreted).
+const BmVmNativeModule *bmVmNativeFind(const BmVmNativeImage *pImage, uint32_t bytecodeCrc);
 
 /// Makes a module run its functions as native code (NULL: interpret again). The native module
 /// must have been made from this bytecode; false if its function count does not fit.

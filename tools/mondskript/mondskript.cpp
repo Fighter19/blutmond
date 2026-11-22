@@ -624,6 +624,9 @@ struct Function
   std::vector<std::pair<uint16_t, uint16_t>> lines;
   int regCount = 0;
   int classIndex = 0;
+  // Words that hold a function index (CALL) or a constant index (LOADK): renumbered when
+  // the classes are written as modules of their own or all together.
+  std::vector<size_t> callSites, constSites;
 };
 
 struct State
@@ -636,6 +639,8 @@ struct State
 struct Class
 {
   ClassInfo info;
+  std::vector<int32_t> constPool;   // this class's constants (LOADK indices are into it)
+  size_t firstFunction = 0, functionCount = 0;
   std::vector<State> states;
   int events[BM_SCRIPT_EVENT_COUNT];
   std::map<std::string, int> functions;            // class-level functions by name
@@ -1091,6 +1096,7 @@ private:
         if (consts_[k] == v.value) break;
       if (k == consts_.size()) consts_.push_back(v.value);
       op2(BM_OP_LOADK, r, int(k));
+      fn_->constSites.push_back(fn_->code.size() - 1);
     }
     v.isConst = false;
     v.reg = r;
@@ -1300,6 +1306,7 @@ private:
       else
       {
         op2(BM_OP_CALL, result, fnIt->second);
+        fn_->callSites.push_back(fn_->code.size() - 1);
         emit(uint16_t(first));
       }
       v.reg = result;
@@ -1932,11 +1939,130 @@ Source readSource(const std::string &path)
   return {path, ss.str()};
 }
 
+// Writes the given classes as one module (src/script/vm.h): their functions and constants
+// renumbered from 0 in that order. Empty, with the reason, if it does not verify.
+static std::vector<uint8_t> writeModule(const std::vector<Class> &classes, const std::vector<size_t> &which, const std::vector<Function> &functions,
+                                        const std::function<uint16_t(const std::string &)> &stringId, std::string *pWhy)
+{
+  // Where each chosen class's functions and constants start in this module.
+  std::vector<size_t> fnBase(classes.size(), 0), constBase(classes.size(), 0);
+  std::vector<int32_t> consts;
+  std::vector<const Function *> fns;
+  for (size_t k = 0; k < which.size(); k++)
+  {
+    const Class &c = classes[which[k]];
+    fnBase[which[k]] = fns.size();
+    constBase[which[k]] = consts.size();
+    for (size_t f = 0; f < c.functionCount; f++) fns.push_back(&functions[c.firstFunction + f]);
+    consts.insert(consts.end(), c.constPool.begin(), c.constPool.end());
+  }
+  auto fnIndex = [&](size_t ci, int global) { return uint32_t(int(fnBase[ci]) + global - int(classes[ci].firstFunction)); };
+  auto classOf = [&](const Function &f) { return size_t(f.classIndex); };
+  auto position = [&](size_t ci) {
+    for (size_t k = 0; k < which.size(); k++)
+      if (which[k] == ci) return uint32_t(k);
+    return 0u;
+  };
+
+  std::vector<uint8_t> b(BM_VM_HEADER_SIZE, 0);
+  std::memcpy(b.data(), "BMMB", 4);
+  auto hdr16 = [&](size_t at, uint32_t v) { b[at] = uint8_t(v); b[at + 1] = uint8_t(v >> 8); };
+  hdr16(4, BM_VM_VERSION);
+  hdr16(6, BM_SCRIPT_API_COUNT);
+  hdr16(8, uint32_t(which.size()));
+  hdr16(10, uint32_t(fns.size()));
+  hdr16(12, uint32_t(consts.size()));
+  hdr16(14, BM_SCRIPT_EVENT_COUNT);
+
+  set32(b, 16, uint32_t(b.size()));
+  size_t classTable = b.size();
+  b.resize(b.size() + which.size() * BM_VM_CLASS_SIZE, 0);
+  for (size_t k = 0; k < which.size(); k++)
+  {
+    size_t ci = which[k];
+    const Class &c = classes[ci];
+    size_t at = classTable + k * BM_VM_CLASS_SIZE;
+    hdr16(at, stringId(c.info.name));
+    hdr16(at + 2, c.info.sprite.empty() ? BM_VM_NONE : stringId(c.info.sprite));
+    b[at + 4] = uint8_t(c.info.fields.size());
+    b[at + 5] = uint8_t(c.states.size());
+    b[at + 6] = uint8_t(c.startState < 0 ? 0xFF : c.startState);
+    for (int e = 0; e < BM_SCRIPT_EVENT_COUNT; e++) hdr16(at + 8 + size_t(e) * 2, c.events[e] < 0 ? BM_VM_NONE : fnIndex(ci, c.events[e]));
+    set32(b, at + 16, uint32_t(b.size()));
+    for (const FieldInfo &f : c.info.fields)
+    {
+      put16(b, stringId(f.name));
+      b.push_back(uint8_t(moduleType(f.type)));
+      b.push_back(f.flags);
+      put32(b, uint32_t(f.defaultValue));
+    }
+    set32(b, at + 20, uint32_t(b.size()));
+    for (const State &st : c.states)
+    {
+      put16(b, stringId(st.name));
+      put16(b, st.code < 0 ? BM_VM_NONE : fnIndex(ci, st.code));
+      for (int e = 0; e < BM_SCRIPT_EVENT_COUNT; e++) put16(b, st.events[e] < 0 ? BM_VM_NONE : fnIndex(ci, st.events[e]));
+      put16(b, 0);
+    }
+  }
+  set32(b, 20, uint32_t(b.size()));
+  uint32_t word = 0;
+  for (const Function *f : fns)
+  {
+    put32(b, word);
+    put16(b, uint32_t(f->code.size()));
+    b.push_back(uint8_t(f->regCount));
+    b.push_back(uint8_t(f->params.size()));
+    b.push_back(f->stateCode ? BM_VM_FUNCTION_STATE_CODE : 0);
+    b.push_back(0);
+    put16(b, position(classOf(*f)));
+    word += uint32_t(f->code.size());
+  }
+  set32(b, 24, uint32_t(b.size()));
+  for (int32_t k : consts) put32(b, uint32_t(k));
+  set32(b, 28, uint32_t(b.size()));
+  set32(b, 32, word);
+  for (const Function *f : fns)
+  {
+    std::vector<uint16_t> code = f->code;
+    size_t ci = classOf(*f);
+    for (size_t s : f->callSites) code[s] = uint16_t(fnIndex(ci, code[s]));
+    for (size_t s : f->constSites) code[s] = uint16_t(code[s] + constBase[ci]);
+    for (uint16_t w : code) put16(b, w);
+  }
+  put16(b, 0);  // the spare word the verifier asks for
+  while (b.size() % 4) b.push_back(0);
+  // Line table: per function an offset, then file (string id), count and (word, line) pairs.
+  set32(b, 36, uint32_t(b.size()));
+  size_t lineOffsets = b.size();
+  b.resize(b.size() + fns.size() * 4, 0);
+  for (size_t i = 0; i < fns.size(); i++)
+  {
+    set32(b, lineOffsets + i * 4, uint32_t(b.size()));
+    put16(b, stringId(classes[classOf(*fns[i])].info.file));
+    put16(b, uint32_t(fns[i]->lines.size()));
+    for (const auto &[w, line] : fns[i]->lines)
+    {
+      put16(b, w);
+      put16(b, line);
+    }
+  }
+
+  // The compiler's output must pass the same check the runtime makes.
+  BmVmModule check;
+  const char *why = nullptr;
+  if (!bmVmModuleOpen(&check, b.data(), uint32_t(b.size()), &why))
+  {
+    if (pWhy) *pWhy = why ? why : "unknown";
+    return {};
+  }
+  return b;
+}
+
 Module compile(const std::vector<Source> &sources, const std::function<uint16_t(const std::string &)> &stringId)
 {
   Module out;
   std::vector<Function> functions;
-  std::vector<int32_t> consts;
   std::vector<Class> classes;
   std::set<std::string> names;
 
@@ -2000,8 +2126,12 @@ Module compile(const std::vector<Source> &sources, const std::function<uint16_t(
     size_t functionsBefore = functions.size();
     try
     {
-      Compiler c(src, tokens[si], types, stringId, functions, consts, int(classes.size()));
+      std::vector<int32_t> classConsts;
+      Compiler c(src, tokens[si], types, stringId, functions, classConsts, int(classes.size()));
       Class cls = c.run();
+      cls.constPool = classConsts;
+      cls.firstFunction = functionsBefore;
+      cls.functionCount = functions.size() - functionsBefore;
       if (!c.hasClass()) continue;
       if (!names.insert(cls.info.name).second || types.findEnum(cls.info.name) >= 0 || types.findStruct(cls.info.name) >= 0)
       {
@@ -2021,93 +2151,19 @@ Module compile(const std::vector<Source> &sources, const std::function<uint16_t(
   for (const Class &c : classes) out.classes.push_back(c.info);
   if (!out.ok()) return out;
 
-  // The module (src/script/vm.h).
-  std::vector<uint8_t> b(BM_VM_HEADER_SIZE, 0);
-  std::memcpy(b.data(), "BMMB", 4);
-  auto hdr16 = [&](size_t at, uint32_t v) { b[at] = uint8_t(v); b[at + 1] = uint8_t(v >> 8); };
-  hdr16(4, BM_VM_VERSION);
-  hdr16(6, BM_SCRIPT_API_COUNT);
-  hdr16(8, uint32_t(classes.size()));
-  hdr16(10, uint32_t(functions.size()));
-  hdr16(12, uint32_t(consts.size()));
-  hdr16(14, BM_SCRIPT_EVENT_COUNT);
-
-  set32(b, 16, uint32_t(b.size()));
-  size_t classTable = b.size();
-  b.resize(b.size() + classes.size() * BM_VM_CLASS_SIZE, 0);
-  for (size_t ci = 0; ci < classes.size(); ci++)
+  // One module with every class (tests, the editor's sizes), and one per class (the pack).
+  std::vector<size_t> all;
+  for (size_t ci = 0; ci < classes.size(); ci++) all.push_back(ci);
+  std::string why;
+  out.data = writeModule(classes, all, functions, stringId, &why);
+  for (size_t ci = 0; ci < classes.size() && why.empty(); ci++)
+    out.classModules.push_back({classes[ci].info.name, writeModule(classes, {ci}, functions, stringId, &why)});
+  if (!why.empty())
   {
-    const Class &c = classes[ci];
-    size_t at = classTable + ci * BM_VM_CLASS_SIZE;
-    hdr16(at, stringId(c.info.name));
-    hdr16(at + 2, c.info.sprite.empty() ? BM_VM_NONE : stringId(c.info.sprite));
-    b[at + 4] = uint8_t(c.info.fields.size());
-    b[at + 5] = uint8_t(c.states.size());
-    b[at + 6] = uint8_t(c.startState < 0 ? 0xFF : c.startState);
-    for (int e = 0; e < BM_SCRIPT_EVENT_COUNT; e++) hdr16(at + 8 + size_t(e) * 2, c.events[e] < 0 ? BM_VM_NONE : uint32_t(c.events[e]));
-    set32(b, at + 16, uint32_t(b.size()));
-    for (const FieldInfo &f : c.info.fields)
-    {
-      put16(b, stringId(f.name));
-      b.push_back(uint8_t(moduleType(f.type)));
-      b.push_back(f.flags);
-      put32(b, uint32_t(f.defaultValue));
-    }
-    set32(b, at + 20, uint32_t(b.size()));
-    for (const State &s : c.states)
-    {
-      put16(b, stringId(s.name));
-      put16(b, s.code < 0 ? BM_VM_NONE : uint32_t(s.code));
-      for (int e = 0; e < BM_SCRIPT_EVENT_COUNT; e++) put16(b, s.events[e] < 0 ? BM_VM_NONE : uint32_t(s.events[e]));
-      put16(b, 0);
-    }
+    out.data.clear();
+    out.classModules.clear();
+    out.diagnostics.push_back({sources.empty() ? std::string() : sources[0].path, 1, 1, "internal error: the module does not verify: " + why, false});
   }
-  set32(b, 20, uint32_t(b.size()));
-  uint32_t word = 0;
-  for (const Function &f : functions)
-  {
-    put32(b, word);
-    put16(b, uint32_t(f.code.size()));
-    b.push_back(uint8_t(f.regCount));
-    b.push_back(uint8_t(f.params.size()));
-    b.push_back(f.stateCode ? BM_VM_FUNCTION_STATE_CODE : 0);
-    b.push_back(0);
-    put16(b, uint32_t(f.classIndex));
-    word += uint32_t(f.code.size());
-  }
-  set32(b, 24, uint32_t(b.size()));
-  for (int32_t k : consts) put32(b, uint32_t(k));
-  set32(b, 28, uint32_t(b.size()));
-  set32(b, 32, word);
-  for (const Function &f : functions)
-    for (uint16_t w : f.code) put16(b, w);
-  put16(b, 0);  // the spare word the verifier asks for
-  while (b.size() % 4) b.push_back(0);
-  // Line table: per function an offset, then file (string id), count and (word, line) pairs.
-  set32(b, 36, uint32_t(b.size()));
-  size_t lineOffsets = b.size();
-  b.resize(b.size() + functions.size() * 4, 0);
-  for (size_t i = 0; i < functions.size(); i++)
-  {
-    set32(b, lineOffsets + i * 4, uint32_t(b.size()));
-    put16(b, stringId(classes[size_t(functions[i].classIndex)].info.file));
-    put16(b, uint32_t(functions[i].lines.size()));
-    for (const auto &[w, line] : functions[i].lines)
-    {
-      put16(b, w);
-      put16(b, line);
-    }
-  }
-
-  // The compiler's output must pass the same check the runtime makes.
-  BmVmModule check;
-  const char *why = nullptr;
-  if (!bmVmModuleOpen(&check, b.data(), uint32_t(b.size()), &why))
-  {
-    out.diagnostics.push_back({sources.empty() ? std::string() : sources[0].path, 1, 1, std::string("internal error: the module does not verify: ") + why, false});
-    return out;
-  }
-  out.data = std::move(b);
   return out;
 }
 

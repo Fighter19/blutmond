@@ -78,7 +78,8 @@ int main(void)
     {
       bm_bench.interpreterCycles = measure(&module, &host, &interpreted);
       void *pSlot = bmVmNativeSlot(&slotSize);
-      const BmVmNativeModule *pNative = bmVmNativeLoad(bmPackChunkData(&pack, (uint32_t)nativeChunk, &nativeSize), nativeSize, pSlot, slotSize, entry.hash, &why);
+      const BmVmNativeImage *pImage = bmVmNativeLoad(bmPackChunkData(&pack, (uint32_t)nativeChunk, &nativeSize), nativeSize, pSlot, slotSize, &why);
+      const BmVmNativeModule *pNative = bmVmNativeFind(pImage, entry.hash);
       if (pNative != NULL && bmVmModuleSetNative(&module, pNative))
       {
         bm_bench.nativeCycles = measure(&module, &host, &native);
