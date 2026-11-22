@@ -367,6 +367,166 @@ static void testErrors()
   TEST_ASSERT(m.diagnostics.size() == 2 && m.data.empty());
 }
 
+static const StructInfo *findStruct(const Module &m, const std::string &name)
+{
+  for (const StructInfo &s : m.structs)
+    if (s.name == name) return &s;
+  return nullptr;
+}
+
+static const StructField *findField(const StructInfo &s, const std::string &name)
+{
+  for (const StructField &f : s.fields)
+    if (f.name == name) return &f;
+  return nullptr;
+}
+
+static int32_t readLe(const std::vector<uint8_t> &d, size_t at, int size, bool sign)
+{
+  uint32_t v = 0;
+  for (int i = 0; i < size; i++) v |= uint32_t(d[at + size_t(i)]) << (8 * i);
+  if (sign && size < 4 && (v >> (8 * size - 1)) & 1) v |= ~0u << (8 * size);
+  return int32_t(v);
+}
+
+// Enums in classes: variables, values written Element.Fire (bare where the type is known),
+// comparisons; mixing two enums or an enum and a number is an error.
+static void testEnums()
+{
+  Run r(R"(enum Element { None, Fire, Ice, Holy }
+enum Mood { Calm, Angry }
+class T extends Actor;
+var Element E = Ice;
+var Mood M;
+event spawn() {
+  log(E == Element.Ice ? 1 : 0);
+}
+)");
+  // No '?:' in the language: the error says where.
+  TEST_ASSERT(!r.ok);
+  Run s(R"(enum Element { None, Fire, Ice, Holy }
+enum Mood { Calm, Angry }
+class T extends Actor;
+var Element E = Ice;
+var Mood M = Mood.Angry;
+const int ONE = 1;
+function bool is_fire(Element e) { return e == Element.Fire; }
+event spawn() {
+  if E == Element.Ice { log(1); }
+  E = Element.Fire;
+  if is_fire(E) { log(2); }
+  var Element local = Element.Holy;
+  if local != E { log(3); }
+  if M == Mood.Angry { log(4); }
+}
+)");
+  TEST_ASSERT(s.ok);
+  TEST_ASSERT(s.module.enums.size() == 2 && s.module.enums[0].values.size() == 4);
+  TEST_ASSERT(s.inst.fields[0] == 2 && s.inst.fields[1] == 1);   // defaults: Ice, Angry
+  TEST_ASSERT(s.module.classes[0].fields[0].typeLabel == "Element");
+  s.event(BM_SCRIPT_EVENT_spawn);
+  TEST_ASSERT((s.game.log == std::vector<int32_t>{1, 2, 3, 4}));
+  TEST_ASSERT(s.game.errors.empty());
+
+  const char *decl = "enum Element { None, Fire }\nenum Mood { Calm, Angry }\nclass T extends Actor;\nvar Element E;\nvar Mood M;\n";
+  TEST_ASSERT(firstError(std::string(decl) + "event tick() { E = M; }\n").find("must be Element, this is Mood") != std::string::npos);
+  TEST_ASSERT(firstError(std::string(decl) + "event tick() { E = 1; }\n").find("must be Element, this is int") != std::string::npos);
+  TEST_ASSERT(firstError(std::string(decl) + "event tick() { if E == M { } }\n").find("between Element and Mood") != std::string::npos);
+  TEST_ASSERT(firstError(std::string(decl) + "event tick() { E = Element.Ice; }\n").find("'Ice' is not a value of Element") != std::string::npos);
+  TEST_ASSERT(firstError(std::string(decl) + "event tick() { if E < Element.Fire { } }\n").find("needs numbers") != std::string::npos);
+  TEST_ASSERT(firstError("enum E { A, A }\nclass T extends Actor;\n").find("twice") != std::string::npos);
+  TEST_ASSERT(firstError("enum E { }\nclass T extends Actor;\n").find("at least one value") != std::string::npos);
+}
+
+// Structures: layout in declaration order with alignment, a base structure's fields in front,
+// sizes a multiple of 4, defaults; across files and in any order of declaration.
+static void testStructures()
+{
+  Module m = compile({{"items.ms", R"(
+struct Item {
+  text  title = "Nothing";
+  name  icon;
+  short price = 10;
+  ubyte max_stack = 1;
+}
+struct Weapon is Item {
+  int      attack    = 1;
+  byte     reach     = -3;
+  Element  element   = Fire;
+  name     swing     = #Slash;
+  sound    sfx;
+  attach   behaviour = WeaponSwing;
+  fix      speed     = 1.5;
+  record<Weapon> upgrade = #FlameBrand;
+  Stats    bonus;
+  short[3] combo     = 7;
+}
+)"},
+                      {"types.ms", R"(
+enum Element { None, Fire, Ice }
+struct Stats { byte strength = 2; byte luck; }
+)"}},
+                     stringId);
+  for (const Diagnostic &d : m.diagnostics) printf("  %s:%d: %s\n", d.file.c_str(), d.line, d.message.c_str());
+  TEST_ASSERT(m.ok());
+  TEST_ASSERT(m.classes.empty() && m.structs.size() == 3);   // files without a class are fine
+  const StructInfo *item = findStruct(m, "Item"), *weapon = findStruct(m, "Weapon"), *stats = findStruct(m, "Stats");
+  TEST_ASSERT(item && weapon && stats);
+  if (!item || !weapon || !stats) return;
+  // Item: title 0, icon 2, price 4, max_stack 6, size 8.
+  TEST_ASSERT(item->size == 8 && findField(*item, "max_stack")->offset == 6);
+  TEST_ASSERT(stats->size == 4 && stats->defaults[0] == 2);
+  // Weapon: Item's 8 bytes, attack 8, reach 12, element 13, swing 14, sfx 16, behaviour 18,
+  // speed 20, upgrade 24, bonus 28 (Stats, padded to 4 bytes), combo 32 (3 x 2), end 38, size 40.
+  struct { const char *name; int offset; BmDataType type; } expected[] = {
+      {"title", 0, BM_DATA_TEXT},    {"attack", 8, BM_DATA_INT},     {"reach", 12, BM_DATA_BYTE},  {"element", 13, BM_DATA_ENUM},
+      {"swing", 14, BM_DATA_NAME},   {"sfx", 16, BM_DATA_SOUND},     {"behaviour", 18, BM_DATA_ATTACH}, {"speed", 20, BM_DATA_FIX},
+      {"upgrade", 24, BM_DATA_RECORD}, {"bonus", 28, BM_DATA_STRUCT}, {"combo", 32, BM_DATA_SHORT}};
+  for (const auto &e : expected)
+  {
+    const StructField *f = findField(*weapon, e.name);
+    TEST_ASSERT(f != nullptr);
+    if (!f) continue;
+    if (f->offset != e.offset || f->type != e.type) printf("  %s at %d, type %s\n", e.name, f->offset, dataTypeName(f->type));
+    TEST_ASSERT(f->offset == e.offset && f->type == e.type);
+  }
+  TEST_ASSERT(weapon->size == 40 && weapon->fields.size() == 14 && weapon->fields[0].inherited && !weapon->fields[4].inherited);
+  TEST_ASSERT(findField(*weapon, "combo")->count == 3 && findField(*weapon, "combo")->typeLabel == "short[3]");
+  TEST_ASSERT(findField(*weapon, "upgrade")->detail == "Weapon" && findField(*weapon, "element")->detail == "Element");
+  // Defaults.
+  const std::vector<uint8_t> &d = weapon->defaults;
+  TEST_ASSERT(d.size() == 40);
+  TEST_ASSERT(s_strings[size_t(readLe(d, 0, 2, false))] == "Nothing");
+  TEST_ASSERT(readLe(d, 4, 2, true) == 10 && d[6] == 1);
+  TEST_ASSERT(readLe(d, 8, 4, true) == 1 && readLe(d, 12, 1, true) == -3 && d[13] == 1);
+  TEST_ASSERT(s_strings[size_t(readLe(d, 14, 2, false))] == "Slash");
+  TEST_ASSERT(readLe(d, 16, 2, false) == BM_DATA_NONE_ID);
+  TEST_ASSERT(s_strings[size_t(readLe(d, 18, 2, false))] == "WeaponSwing");
+  TEST_ASSERT(readLe(d, 20, 4, true) == 384);
+  TEST_ASSERT(uint32_t(readLe(d, 24, 4, false)) == nameKey("FlameBrand"));
+  TEST_ASSERT(d[28] == 2 && d[29] == 0);                       // Stats' own defaults
+  TEST_ASSERT(readLe(d, 32, 2, true) == 7 && readLe(d, 36, 2, true) == 7 && d[38] == 0);
+  TEST_ASSERT(nameKey("") == 2166136261u && nameKey("a") == 0xe40c292cu);   // FNV-1a, as src/world/actors.c
+
+  // Errors.
+  auto err = [](const std::string &text) {
+    Module e = compile({{"s.ms", text}}, stringId);
+    return e.diagnostics.empty() ? std::string() : e.diagnostics[0].message;
+  };
+  TEST_ASSERT(err("struct A { B b; }\nstruct B { A a; }\n").find("contains itself") != std::string::npos);
+  TEST_ASSERT(err("struct A { int[17] big; }\n").find("grows beyond 64 bytes") != std::string::npos);
+  TEST_ASSERT(err("struct A { byte b = 300; }\n").find("does not fit") != std::string::npos);
+  TEST_ASSERT(err("struct A { float f; }\n").find("not a type") != std::string::npos);
+  TEST_ASSERT(err("struct A { int x; }\nstruct B is A { int x; }\n").find("exists already") != std::string::npos);
+  TEST_ASSERT(err("struct A is Nope { }\n").find("no structure 'Nope'") != std::string::npos);
+  TEST_ASSERT(err("struct A { record<Nope> r; }\n").find("no structure 'Nope'") != std::string::npos);
+  TEST_ASSERT(err("enum E { X }\nstruct A { E e = Y; }\n").find("'Y' is not a value of E") != std::string::npos);
+  TEST_ASSERT(err("struct A { int x; }\nstruct A { int y; }\n").find("declared twice") != std::string::npos);
+  std::string many = "struct A {";
+  for (int i = 0; i < 33; i++) many += " bool f" + std::to_string(i) + ";";
+  TEST_ASSERT(err(many + " }\n").find("at most 32 fields") != std::string::npos);
+}
+
 static void testEndlessLoopIsStopped()
 {
   Run r("class T extends Actor;\nevent tick() {\n  loop {\n    x = x + 1.0;\n  }\n}\n");
@@ -549,6 +709,8 @@ int main()
   RUN_TEST(testControlFlow);
   RUN_TEST(testStatesAndLatentFunctions);
   RUN_TEST(testErrors);
+  RUN_TEST(testEnums);
+  RUN_TEST(testStructures);
   RUN_TEST(testEndlessLoopIsStopped);
   RUN_TEST(testCorruptModulesAreSafe);
   RUN_TEST(testNativeLoaderChecks);
@@ -558,6 +720,7 @@ int main()
   RUN_TEST(testArithmetic);
   RUN_TEST(testControlFlow);
   RUN_TEST(testStatesAndLatentFunctions);
+  RUN_TEST(testEnums);
   RUN_TEST(testEndlessLoopIsStopped);
   RUN_TEST(testNativeMatchesInterpreter);
   printf("  %d modules compiled to native code\n", s_nativeModules);

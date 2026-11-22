@@ -1,6 +1,6 @@
 # Mondskript
 
-Version 0.4, draft.
+Version 0.5, draft.
 
 Mondskript is Blutmond's scripting language. It is modelled on the old UnrealScript (classes
 with declared fields, states with latent functions, `defaultproperties`) and avoids its known
@@ -22,7 +22,7 @@ Design rules:
   where a string ID is expected).
 - Keywords: `class extends has var const function virtual final static event state begin
   gotostate if else while for in loop break continue return switch case default match
-  defaultproperties enum struct true false null self`.
+  defaultproperties enum struct is true false null self`.
 
 ## 2. Types
 
@@ -182,11 +182,14 @@ source → parser → AST → type check → IR ─┬─► bytecode module ('M
 
 The compiler (`tools/mondskript`), the interpreter (`src/script/vm.h`) and the game's scripted
 objects (`src/world/actors.h`) implement a first part of the above. Script files end in `.ms`
-and hold one class each.
+and hold enums and structures, then at most one class. What a file declares can be used in
+every other file of the same module.
 
 | Area | Implemented | Not yet |
 |---|---|---|
-| Types | `bool`, `int`, `fix`, `name`, `text`; every variable takes 4 bytes | `byte`/`short` and unsigned types, `fix16`, `vec`, enums, structs, arrays, handles (`C`, `C?`) |
+| Types | `bool`, `int`, `fix`, `name`, `text`, enums; every variable takes 4 bytes | `byte`/`short` and unsigned types in classes, `fix16`, `vec`, structs as variables, arrays, handles (`C`, `C?`) |
+| Enums | `enum E { A, B }` before the class or in a file of its own; variables and parameters of type `E`; values written `E.A`, or just `A` where the type is known (defaults, `defaultproperties`); `==` and `!=` between values of the same enum. An enum is not a number: assigning one to `int` or to another enum is an error | `switch`, conversion to `int` |
+| Structures | `struct S { ... }` and `struct S is Base { ... }` declared and laid out for records ([../plans/structures.md](../plans/structures.md) §2): field types, alignment, defaults, sizes, see "Structures" below | records and `record<S>` in scripts (that plan's step 2) |
 | Classes | `class Name extends Actor;`, `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes, inheritance between script classes, components (`has`) |
 | Functions | functions with up to 3 parameters and a result, calls nested up to 16 deep; all are final | `virtual`, `static` |
 | Events | `spawn()`, `tick()`, `touch()` (the player starts touching the object), in the class and per state | parameters; `hit`, `dies`, `enter_room`, `leave_room`, `use` |
@@ -195,6 +198,29 @@ and hold one class each.
 | Expressions | `+ - * / %`, comparisons, `&& || !` (short circuit), `fix(...)`, `int(...)`; integer literals become `fix` where `fix` is expected; mixing `int` and `fix` is an error | |
 | defaultproperties | values of variables, `start_state`, `sprite = "name"` | component and struct fields |
 | Run time | 8 scripted objects per room, 16 values of `save` variables kept across rooms and in the save game, 4 items | larger limits need state transfer in several packets |
+
+### Structures
+
+```
+enum Element { None, Fire, Ice }
+struct Item { text title = "Nothing"; name icon; short price = 10; ubyte max_stack = 1; }
+struct Weapon is Item { int attack = 1; Element element = Fire; record<Weapon> upgrade; short[3] combo = 7; }
+```
+
+- Field types (`src/data/data_types.h`): `bool`, `byte`, `ubyte`, `enum` (1 byte); `short`,
+  `ushort`, `name`, `text`, `sprite`, `sound`, `attach` (2); `int`, `uint`, `fix`,
+  `record<S>` (4); another structure, inline; and fixed arrays `T[n]` of any of them.
+- Fields are laid out in declaration order, each aligned to its size (an inner structure to
+  its largest field); `is Base` puts the base's fields first, at the same offsets. The size
+  is rounded up to a multiple of 4. At most 32 fields and 64 bytes.
+- Defaults: numbers (checked against the type's range), `true`/`false`, `#Name` for `name`
+  and `record<S>`, `"text"` for `text`, `"name"` or `#name` for `sprite` and `sound`, a class
+  name for `attach`, an enum value; an array takes one value for every element. Without a
+  default a field is 0, and `sprite`, `sound` and `attach` are none (0xFFFF). An inner
+  structure has the defaults of its own fields.
+- A record is identified by the FNV-1a hash of its name (`nameKey`), as items are.
+- The compiler hands the layouts to the cooker (`Module::structs`), which reports the size of
+  every structure. They reach the pack with the records ([../plans/structures.md](../plans/structures.md) §4).
 
 What scripts can call is one table shared by compiler, verifier and runtime
 (`src/script/script_api.h`); an entry's position is its index in bytecode, so entries are only
@@ -231,7 +257,8 @@ line table:          per function a u32 offset to: u16 file (string id), u16 n, 
 ```
 
 Everything is little endian. Variable types: 0 void, 1 bool, 2 int, 3 fix, 4 name, 5 text
-(names and texts are string ids). Events in the order of their numbers: 0 `spawn`, 1 `tick`,
+(names and texts are string ids), 6 enum (a value of an enum, numbered from 0 in declaration
+order; which enum is known only to the compiler). Events in the order of their numbers: 0 `spawn`, 1 `tick`,
 2 `touch`. The line table's offset may be 0 (none).
 
 #### Instructions
@@ -406,3 +433,4 @@ for now), per-class modules loaded on room changes.
 - 0.3: native modules (section 12).
 - 0.4: instruction numbers and encodings, how functions and state code run, the verifier's
   rules; what the runtime functions do moved to runtime-core.md.
+- 0.5: enums, and structures laid out for records; variable type 6 (enum).

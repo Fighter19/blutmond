@@ -17,6 +17,7 @@ typedef enum BmScriptType {
   BM_SCRIPT_FIX,    // 24.8
   BM_SCRIPT_NAME,   // string id, written #Name
   BM_SCRIPT_TEXT,   // string id, written "text"
+  BM_SCRIPT_ENUM,   // a value of an enum (0, 1, ...); which enum only the compiler knows
 } BmScriptType;
 
 // X(name, result type, argument count, argument types..., latent)

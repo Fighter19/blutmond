@@ -168,12 +168,32 @@ void ScriptPanel::compileNow()
 void ScriptPanel::fillOutline(const script::Module &module)
 {
   outline_->items.clear();
+  // Enums and structures of this file (docs/plans/structures.md), then its class.
+  bool declarations = false;
+  for (const script::EnumInfo &e : module.enums)
+  {
+    if (e.file != path_) continue;
+    std::string values;
+    for (const std::string &v : e.values) values += (values.empty() ? "" : ", ") + v;
+    outline_->items.push_back({"enum " + e.name + " { " + values + " }", "list", {}, {}, {}, {}});
+    declarations = true;
+  }
+  for (const script::StructInfo &s : module.structs)
+  {
+    if (s.file != path_) continue;
+    outline_->items.push_back({"struct " + s.name + (s.base.empty() ? "" : " is " + s.base) + "   (" + std::to_string(s.size) + " bytes per record)",
+                               "th", {}, {}, {}, {}});
+    for (const script::StructField &f : s.fields)
+      outline_->items.push_back({"    " + f.typeLabel + " " + f.name + "   @" + std::to_string(f.offset) + (f.inherited ? "   from " + s.base : ""),
+                                 "circle-o", {}, {}, {}, {}});
+    declarations = true;
+  }
   const script::ClassInfo *cls = nullptr;
   for (const script::ClassInfo &c : module.classes)
     if (c.file == path_) cls = &c;
   if (!cls)
   {
-    outline_->items.push_back({"(fix the problems to see the class)", "info", {}, {}, {}, {}});
+    if (!declarations) outline_->items.push_back({"(fix the problems to see the class)", "info", {}, {}, {}, {}});
     return;
   }
   outline_->items.push_back({"class " + cls->name + (cls->base.empty() ? "" : " extends " + cls->base), "cube", {}, {}, {}, {}});
@@ -190,7 +210,7 @@ void ScriptPanel::fillOutline(const script::Module &module)
     std::string value = f.type == BM_SCRIPT_FIX ? std::to_string(f.defaultValue / 256.0).substr(0, 5)
                         : f.type == BM_SCRIPT_BOOL ? (f.defaultValue ? "true" : "false")
                         : f.type == BM_SCRIPT_INT ? std::to_string(f.defaultValue) : std::string();
-    outline_->items.push_back({std::string(script::typeName(f.type)) + " " + f.name + (value.empty() ? "" : " = " + value) +
+    outline_->items.push_back({(f.typeLabel.empty() ? std::string(script::typeName(f.type)) : f.typeLabel) + " " + f.name + (value.empty() ? "" : " = " + value) +
                                    (f.category.empty() ? "" : "   [" + f.category + ": set per object in the room]") + flags,
                                (f.flags & BM_SCRIPT_FIELD_SAVE) ? "save" : f.category.empty() ? "circle-o" : "sliders", {}, {}, {}, {}});
   }

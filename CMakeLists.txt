@@ -273,7 +273,7 @@ if(BM_PLATFORM STREQUAL "host")
   # Uses stb_image from third_party.
   # The Mondskript compiler (tools/mondskript), with the interpreter's verifier.
   add_library(bm_script STATIC tools/mondskript/mondskript.cpp tools/mondskript/aot.cpp src/script/vm.c src/script/native.c)
-  target_include_directories(bm_script PUBLIC tools/mondskript src/script src/core/public)
+  target_include_directories(bm_script PUBLIC tools/mondskript src/script src/data src/core/public)
   target_compile_definitions(bm_script PUBLIC BM_PLATFORM_HOST)
   target_compile_options(bm_script PRIVATE ${BM_WARNINGS})
 

@@ -1,6 +1,8 @@
 # Plan: custom structures and records
 
-Status: plan, nothing built. Milestone M12 in [../PLAN.md](../PLAN.md).
+Status: step 1 built (enums and structures in the compiler, specified in
+[../spec/mondskript.md](../spec/mondskript.md) §11 "Structures"); steps 2 to 5 are open.
+Milestone M12 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

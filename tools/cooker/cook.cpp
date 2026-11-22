@@ -938,6 +938,9 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       for (const script::ClassInfo &c : module.classes) words += size_t(c.codeWords);
       report.info("script", "module", std::to_string(module.classes.size()) + " classes, " + std::to_string(words * 2) + " bytes of code, " +
                                         std::to_string(module.data.size()) + " bytes in the pack");
+      for (const script::StructInfo &s : module.structs)
+        report.info("structure", s.file, s.name + (s.base.empty() ? "" : " is " + s.base) + ": " + std::to_string(s.fields.size()) +
+                                             " fields, " + std::to_string(s.size) + " bytes per record");
       if (!options.scriptC.empty() || !options.nativeCompiler.empty())
       {
         std::string c = script::emitC(module, bmCrc32(0, module.data.data(), module.data.size()));
