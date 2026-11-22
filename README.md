@@ -76,7 +76,7 @@ ctest --test-dir build --output-on-failure
 
 Playing on the PC: `build/game` opens a window with the test level (or `build/game level.bmpk`).
 Arrows move, X or Space jumps (A), Z is B, A and S are L and R, Enter is Start, Backspace is
-Select, F11 toggles fullscreen and Esc quits; gamepads work too. The save game is kept in
+Select, F11 toggles fullscreen and Esc quits (not in the browser, where it leaves fullscreen); gamepads work too. The save game is kept in
 `~/.local/share/blutmond/save.bin`. The window also listens for the live link on
 127.0.0.1:7414 (`--listen N`, `--no-listen`). With `--frames N`, `--trace` or an output picture
 the game runs headless as before (`--headless` forces it).

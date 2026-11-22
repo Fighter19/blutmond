@@ -169,7 +169,11 @@ bool bmWindowFrame(const uint16_t *pPixels, uint16_t *pKeys)
     if (e.type == SDL_EVENT_QUIT) return false;
     if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat)
     {
+#ifndef __EMSCRIPTEN__
+      // Esc quits on the desktop. In the browser it is the page's (leaving fullscreen), and
+      // quitting would only leave the last picture standing on the canvas.
       if (e.key.key == SDLK_ESCAPE) return false;
+#endif
       if (e.key.key == SDLK_F11)
         SDL_SetWindowFullscreen(s_window, (SDL_GetWindowFlags(s_window) & SDL_WINDOW_FULLSCREEN) == 0);
     }

@@ -39,7 +39,7 @@ build/game level.bmpk           # a pack of your own
 ```
 
 Keys: arrows to move, X or Space is A (jump), Z is B, A and S are L and R, Return is Start,
-Backspace is Select, F11 full screen, Escape ends. Gamepads work. The window keeps a save game
+Backspace is Select, F11 full screen, Escape ends (in the browser it only leaves full screen). Gamepads work. The window keeps a save game
 in a file and listens for the link on `127.0.0.1:7414`.
 
 Start opens the menu: the player's status, Equipment, Items and System (the language: English,
