@@ -711,7 +711,16 @@ static void testTheMenus(void)
   press(BM_KEY_DOWN);
   press(BM_KEY_A);
   TEST_ASSERT(s_game.screens.count == 2 && uiShows("Lunge") && uiShows("Down, Down-Fwd, Fwd + B") && !uiShows("Flurry"));
+  // Down and Up move through the list (two moves: Lunge, Rising Slash), and B still goes back.
+  uint32_t errors = bm_script_errors;
+  press(BM_KEY_DOWN);
+  TEST_ASSERT(bm_script_errors == errors && uiShows("Two cuts on the way up."));
+  press(BM_KEY_DOWN);
+  TEST_ASSERT(bm_script_errors == errors && uiShows("A dash forward"));
+  press(BM_KEY_UP);
+  TEST_ASSERT(bm_script_errors == errors && uiShows("Two cuts on the way up."));
   press(BM_KEY_B);
+  TEST_ASSERT(s_game.screens.count == 1);
   // System: German. Every open menu shows itself again in it.
   press(BM_KEY_DOWN);
   press(BM_KEY_A);

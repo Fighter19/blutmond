@@ -736,8 +736,11 @@ static void hostError(void *pContext, BmVmInstance *inst, const char *pWhat, uin
   BmGame *g = pContext;
   bm_script_errors++;
 #ifdef BM_PLATFORM_HOST
-  printf("script error: %s, line %u: %s\n",
-         g->actors.current >= BM_ACTORS_MAX ? "an attachment" : objectOf(g, g->actors.current)->className, (unsigned)line, pWhat);
+  const char *who = g->actors.current == BM_ACTORS_SCREEN ? "a screen"
+                  : g->actors.current == BM_ACTORS_ROOM  ? "a room attachment"
+                  : g->actors.current >= BM_ACTORS_MAX   ? "an attachment"
+                                                         : objectOf(g, g->actors.current)->className;
+  printf("script error: %s, line %u: %s\n", who, (unsigned)line, pWhat);
 #else
   (void)g;
   (void)pWhat;

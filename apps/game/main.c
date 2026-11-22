@@ -36,7 +36,6 @@
 #endif
 
 #include "autopilot.h"
-#include "device.h"
 #include "game.h"
 #include "game_live.h"
 #include "live.h"
@@ -44,7 +43,6 @@
 #include "overlay.h"
 #include "hal.h"
 #include "pack.h"
-#include "physical_device.h"
 #ifdef BM_GAME_SEND
 #  include "transfer.h"
 #endif
@@ -100,6 +98,12 @@ typedef struct BmStateMailbox
 #  define BM_MAILBOX_SECTION
 #else
 #  define BM_MAILBOX_SECTION BM_EWRAM_BSS
+#endif
+#ifdef BM_PLATFORM_GBA
+// The game allocates nothing from the engine's memory heaps (src/core: the device API is for
+// other programs): no EWRAM heap, its room goes to the content pool (the linker scripts'
+// __bm_ewram_heap_size, 4 KB unless a program sets it).
+__asm__(".global __bm_ewram_heap_size\n.set __bm_ewram_heap_size, 0");
 #endif
 BmStateMailbox bm_state_inbox BM_MAILBOX_SECTION;
 BmStateMailbox bm_state_outbox BM_MAILBOX_SECTION;
@@ -250,9 +254,6 @@ static uint32_t s_randomKeys;  // --random-keys N: keys change at random, every 
 
 static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autoplay)
 {
-  BmDeviceHandle device = NULL;
-  if (bmCreateDevice(bmGetPhysicalDevice(), &device) != BM_SUCCESS) return 1;
-  g_defaultDevice = device;
   if (bmPackOpen(&s_pack, pData, size, false) != BM_PACK_OK) return 2;
 #ifdef BM_PLATFORM_HOST
   if (bmGameStart(&s_game, &s_pack, s_startRoom) != BM_SUCCESS) return 3;
