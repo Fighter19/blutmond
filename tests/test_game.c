@@ -633,6 +633,101 @@ static void testTheUiLayer(void)
   TEST_ASSERT(e == (uint16_t)(ui.map[0] | 15 << 12) && ui.dirtyRows == 0);
 }
 
+static void press(uint16_t key)
+{
+  frames(1, key);
+  frames(1, 0);
+}
+
+// Whether the UI layer shows `text` (ASCII) somewhere.
+static bool uiShows(const char *text)
+{
+  size_t n = strlen(text);
+  for (int y = 0; y < BM_UI_ROWS; y++)
+    for (int x = 0; x + (int)n <= 32; x++)
+    {
+      size_t k = 0;
+      while (k < n && cellChar(&s_game.ui, x + (int)k, y) == (uint8_t)text[k]) k++;
+      if (k == n) return true;
+    }
+  return false;
+}
+
+// ui.md steps 3 and 4, first-items.md step 3: the Start menu (a Screen script) pauses the room;
+// Equipment puts the Iron Helm on, whose script adds its defence while worn, and the damage
+// rule takes it off a hit; Items uses a potion; System switches the language and every open
+// menu shows itself again in it; a state taken inside a menu comes back inside it.
+static void testTheMenus(void)
+{
+  start();
+  BmInventory *inv = &s_game.inventory;
+  const uint32_t helm = keyOf("IronHelm"), potion = keyOf("Potion"), sword = keyOf("ShortSword");
+  bmInventoryGive(inv, helm, 1);
+  bmInventoryGive(inv, potion, 2);
+  bmInventoryGive(inv, sword, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, sword));
+  frames(10, 0);
+
+  // Start: the menu, the room stands still.
+  int32_t x = s_game.player.x;
+  press(BM_KEY_START);
+  TEST_ASSERT(s_game.screens.count == 1 && s_game.ui.shown);
+  TEST_ASSERT(uiShows("Equipment") && uiShows("Short Sword") && uiShows("Health"));
+  frames(20, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.player.x == x);
+  // Equipment: down to Head, A, down to the helm, A.
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Weapon"));
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(uiShows("Iron Helm"));
+  press(BM_KEY_DOWN);
+  TEST_ASSERT(uiShows(">   3"));   // the defence it would give
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.inventory.equipped[2] == helm);
+  TEST_ASSERT(bmInventoryStat(inv, BM_STAT_DEFENCE) == 3 && inv->statBase[BM_STAT_DEFENCE] == 0);
+  // Back to the Start menu, then Items: a potion heals 15.
+  press(BM_KEY_B);
+  TEST_ASSERT(s_game.screens.count == 1);
+  s_game.health = 10;
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Potion"));
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.health == 25 && bmInventoryCount(inv, potion) == 1);
+  press(BM_KEY_B);
+  // A state taken in the Start menu comes back in it, drawn again.
+  static uint8_t snap[3072];
+  BmStateBlock block = bmGameStateBlock(&s_game);
+  uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
+  TEST_ASSERT(size > 0);
+  printf("    snapshot in a menu: %u bytes\n", (unsigned)size);
+  // System: German. Every open menu shows itself again in it.
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 2);
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.language == 1 && uiShows("Sprache"));
+  press(BM_KEY_B);
+  TEST_ASSERT(uiShows("Kurzschwert") && uiShows("Ausr"));   // Ausrüstung
+  press(BM_KEY_B);
+  TEST_ASSERT(s_game.screens.count == 0 && !s_game.ui.shown);
+  bmGameSetLanguage(&s_game, 0);
+  TEST_ASSERT(bmStateRead(&block, 1, snap, size) == BM_STATE_OK && bmGameAfterLoad(&s_game) == BM_SUCCESS);
+  TEST_ASSERT(s_game.screens.count == 1 && uiShows("Equipment") && uiShows("Short Sword"));
+  press(BM_KEY_START);
+  TEST_ASSERT(s_game.screens.count == 0);
+  // The damage rule: 5 less the helm's 3.
+  int32_t before = s_game.health;
+  s_game.hurtTimer = 0;
+  TEST_ASSERT(bmGameStrikePlayer(&s_game, 5, s_game.player.x));
+  TEST_ASSERT(s_game.health == before - 2);
+  // Taken off: the defence goes with it.
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 2, 0) && bmInventoryStat(inv, BM_STAT_DEFENCE) == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 static uint8_t *readFile(const char *path, uint32_t *pSize)
 {
   FILE *f = fopen(path, "rb");
@@ -669,6 +764,7 @@ int main(int argc, char **argv)
   RUN_TEST(testAHitStrikesOnce);
   RUN_TEST(testTheSwordDefeatsTheBat);
   RUN_TEST(testTheUiLayer);
+  RUN_TEST(testTheMenus);
   free(s_data);
   free(s_windData);
   return TEST_RESULT();

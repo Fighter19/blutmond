@@ -589,7 +589,7 @@ event tick() { Ticks += 1; }
   TEST_ASSERT(firstError(head + "event tick() { hide(); }").find("cannot use it") != std::string::npos);
   TEST_ASSERT(firstError(head + "event tick() { log(home_x); }").find("has none") != std::string::npos);
   TEST_ASSERT(firstError(head + "event tick() { x = 1.0; }").find("cannot change it") != std::string::npos);
-  TEST_ASSERT(firstError("class T extends Player;\n").find("extend Actor or Attachment") != std::string::npos);
+  TEST_ASSERT(firstError("class T extends Player;\n").find("extend Actor, Attachment or Screen") != std::string::npos);
   TEST_ASSERT(firstError(head + "event tick() { if attach(1, #HighJump) { detach(1); impulse(0, -1.5); } }").empty());
 }
 

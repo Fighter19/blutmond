@@ -9,6 +9,7 @@
 // CameraZone, KillZone respawns, Door room changes and placeholders for other classes.
 
 #include "attachments.h"
+#include "screens.h"
 #include "inventory.h"
 #include "actors.h"
 #include "body.h"
@@ -91,6 +92,11 @@ typedef struct BmGame
   BmAttachments attachments;
   // Hits armed by scripts (docs/plans/hitboxes.md).
   BmHits hits;
+  // Menus and other screens (screens.h); while one is open the room stands still.
+  BmScreens screens;
+  // The dialogue box (say): shown until A is pressed.
+  uint8_t dialogue;
+  uint16_t dialogueSpeaker, dialogueLine;   // string ids
   // The UI layer (src/ui/ui.h): menus, dialogue, the HUD, the debug overlay. What it shows is
   // presentation, not game state.
   BmUi ui;
@@ -141,6 +147,13 @@ BmStateBlock bmGameStateBlock(BmGame *pGame);
 /// After the state was read: enters the stored room again and rebuilds everything derived
 /// (collision, objects, camera, streamed maps, sprites) without moving the player.
 BmResult bmGameAfterLoad(BmGame *pGame);
+
+/// The player's most health: 30 + the stat MaxHealth (inventory.h).
+int32_t bmGameMaxHealth(const BmGame *pGame);
+
+/// Shows the dialogue box (the bottom six rows of the UI layer) with a speaker's name and a line
+/// (string ids, shown in the language chosen). It stays until A is pressed.
+void bmGameSay(BmGame *pGame, uint16_t speaker, uint16_t line);
 
 /// Shows texts in `language` from now on and keeps it as an option in the save memory.
 void bmGameSetLanguage(BmGame *pGame, uint8_t language);

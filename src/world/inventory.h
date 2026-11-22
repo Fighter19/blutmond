@@ -25,7 +25,19 @@ typedef struct BmInventory
   uint32_t equipped[BM_INVENTORY_EQUIP];    // a record per slot, 0 none (structures.md step 4)
   uint32_t quick[BM_INVENTORY_QUICK];       // records on the quick slots, 0 none
   int16_t statBase[BM_INVENTORY_STATS];     // the player's own values (level-ups, upgrades)
+  int16_t statBonus[BM_INVENTORY_STATS];    // what attachments add while attached (not saved:
+                                            // equipping again after loading adds it again)
 } BmInventory;
+
+// Stats the engine reads, by the convention of first-items.md §1 (the game's `enum Stat`
+// starts MaxHealth, MaxMana, Attack, Defence): the player's health is 30 + MaxHealth, a hit on
+// the player is lowered by Defence.
+#define BM_STAT_MAX_HEALTH 0
+#define BM_STAT_ATTACK 2
+#define BM_STAT_DEFENCE 3
+
+/// A stat's value: own plus what attachments add.
+int32_t bmInventoryStat(const BmInventory *pInv, uint32_t stat);
 
 /// How many of `key` the player has (0 if none).
 uint32_t bmInventoryCount(const BmInventory *pInv, uint32_t key);

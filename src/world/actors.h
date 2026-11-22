@@ -24,6 +24,7 @@
 #define BM_ACTORS_CLASSES 32   // classes in all of them
 #define BM_ACTORS_OWNER 0xFF   // `current` while an attachment of the player runs
 #define BM_ACTORS_ROOM 0xFE    // `current` while an attachment of the room runs
+#define BM_ACTORS_SCREEN 0xFD  // `current` while a screen runs (currentSlot: its place on the stack)
 
 struct BmGame;
 
@@ -45,7 +46,8 @@ typedef struct BmActors
   uint8_t keepCount;
   uint16_t keepObject[BM_ACTORS_MAX];  // the object's persistent id
   uint32_t keepClass[BM_ACTORS_MAX], keepModule[BM_ACTORS_MAX], keepLayout[BM_ACTORS_MAX], keepState[BM_ACTORS_MAX];
-  uint8_t object[BM_ACTORS_MAX];       // index into the game's objects
+  uint8_t object[BM_ACTORS_MAX];       // index into the game's objects; 0xFF: made at run time
+  uint8_t roomCount;                   // the room's objects; those made at run time come after
   int8_t sheet[BM_ACTORS_MAX];         // sprite sheet, or -1
   int32_t homeX[BM_ACTORS_MAX], homeY[BM_ACTORS_MAX];
   uint8_t pendingDoor;                 // object index + 1 of a door to go through after the frame
@@ -67,6 +69,8 @@ typedef struct BmActors
   int32_t health[BM_ACTORS_MAX];       // struck only while above 0 (hits.h)
   uint8_t team[BM_ACTORS_MAX];         // 0: enemies
   uint8_t invulnerable[BM_ACTORS_MAX]; // frames until it can be struck again
+  uint8_t spawned[BM_ACTORS_MAX];      // made at run time (spawn): no room object, gone with the room
+  uint8_t gone[BM_ACTORS_MAX];         // destroyed: the place can be taken by the next spawn
   uint32_t seed;
   // `save` variables, by room, object and field.
   uint8_t storeCount;
@@ -98,6 +102,14 @@ uint8_t bmActorsDraw(struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
 /// The box of scripted object `actor` in room pixels: its rectangle, its sprite's body box, or
 /// 16x16 above its anchor.
 void bmActorsBox(const struct BmGame *pGame, uint8_t actor, int32_t *pX, int32_t *pY, int32_t *pW, int32_t *pH);
+
+/// A new object of the Actor class named `className` (string id) at (x, y) (fix), in a free
+/// place (one destroyed, or after the room's objects); its first record<S> variable is set to
+/// `record` if that is not 0. It gets spawn(). False if there is no such class or no place.
+bool bmActorsSpawn(struct BmGame *pGame, uint16_t className, int32_t x, int32_t y, uint32_t record);
+
+/// Object `actor` is gone: not drawn, not run, its hits end; its place is free.
+void bmActorsDestroy(struct BmGame *pGame, uint8_t actor);
 
 /// Runs an event of scripted object `actor` (hit, struck).
 void bmActorsEvent(struct BmGame *pGame, uint8_t actor, BmScriptEvent event, int32_t arg);

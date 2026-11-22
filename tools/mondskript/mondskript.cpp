@@ -64,7 +64,7 @@ const char *const kActorOnly[] = {
   BM_SCRIPT_ACTOR_ONLY(X)
 #undef X
 };
-const char *const kBaseClasses[] = {"Actor", "Attachment"};   // by BmScriptKind
+const char *const kBaseClasses[] = {"Actor", "Attachment", "Screen"};   // by BmScriptKind
 const char *const kKeywords[] = {"class", "extends", "var", "const", "function", "event", "state", "begin", "gotostate", "if", "else",
                                  "while", "for", "in", "loop", "break", "continue", "return", "defaultproperties", "true", "false",
                                  "save", "link", "transient", "derived", "wait_until", "enum", "struct", "is"};
@@ -915,7 +915,7 @@ private:
       int kind = -1;
       for (int k = 0; k < BM_SCRIPT_KIND_COUNT; k++)
         if (base.text == kBaseClasses[k]) kind = k;
-      if (kind < 0) error(base, "classes extend Actor or Attachment in this version");
+      if (kind < 0) error(base, "classes extend Actor, Attachment or Screen in this version");
       cls_.info.base = base.text;
       cls_.info.kind = BmScriptKind(kind);
     }
@@ -968,8 +968,8 @@ private:
       {
         Function f;
         BmScriptType type;
-        // "function int f(" has a type; "function f(" has none.
-        if (peek(1).kind == Tok::Ident && parseType(&type)) f.result = type;
+        // "function int f(" has a type; "function f(" has none; "function record<S> f(" too.
+        if ((peek(1).kind == Tok::Ident || peek().text == "record") && parseType(&type)) f.result = type;
         Token name = expectIdent("the name of the function");
         f.name = name.text;
         if (cls_.functions.count(f.name) || apiIndex(f.name) >= 0) error(name, "function '" + f.name + "' exists already");
@@ -1158,6 +1158,8 @@ private:
     adapt(v, want);
     // Runtime functions take records of any structure, and values of any enum.
     if ((want == BM_SCRIPT_RECORD && isRecordType(v.type)) || (want == BM_SCRIPT_ENUM && isEnumType(v.type))) return;
+    // A record from a runtime function (of no known structure) goes into any record<S>.
+    if (v.type == BM_SCRIPT_RECORD && isRecordType(want)) return;
     if (v.type != want)
       error(at, std::string(what) + " must be " + tn(want) + ", this is " + tn(v.type) +
                     (v.type == BM_SCRIPT_INT && want == BM_SCRIPT_FIX ? " (write fix(...) to convert)"

@@ -7,12 +7,15 @@
 #include <string.h>
 
 #include "attachments.h"
+#include "screens.h"
 #include "body.h"
 #include "data.h"
 #include "game.h"
 #include "hal.h"
 #include "hits.h"
 #include "native.h"
+#include "text.h"
+#include "ui.h"
 #include "video.h"
 
 #ifdef BM_PLATFORM_HOST
@@ -35,6 +38,15 @@ const BmVmModule *bmActorsModule(const BmActors *a, uint8_t i, uint16_t *pClassI
   if (i >= a->count || a->classIndex[i] >= a->classCount) return NULL;
   if (pClassInModule != NULL) *pClassInModule = a->classInModule[a->classIndex[i]];
   return moduleOf(a, i);
+}
+
+// The room object of actor i; one made at run time (spawn) has none and gets a point without
+// a name.
+static const BmObjectView *objectOf(const BmGame *g, uint8_t i)
+{
+  static const BmObjectView s_none = { "", "", 0xFFFF, 0, 0, 0, 0, 0, NULL, BM_OBJECT_OTHER };
+  uint8_t o = g->actors.object[i];
+  return o < g->objectCount ? &g->objects[o] : &s_none;
 }
 
 static void loadInstance(const BmActors *a, uint8_t i, BmVmInstance *inst)
@@ -93,7 +105,7 @@ static void setAnim(BmActors *a, uint8_t i, const BmAnimState *st)
 static void boxOf(const BmGame *g, uint8_t i, int32_t *px, int32_t *py, int32_t *pw, int32_t *ph)
 {
   const BmActors *a = &g->actors;
-  const BmObjectView *o = &g->objects[a->object[i]];
+  const BmObjectView *o = objectOf(g, i);
   int32_t x = BM_FIX_INT(a->x[i]), y = BM_FIX_INT(a->y[i]);
   if (o->w != 0 && o->h != 0)
   {
@@ -144,7 +156,7 @@ static uint32_t roomSlotKey(const BmGame *g, uint8_t slot, uint16_t field)
 
 static uint32_t storeKey(const BmGame *g, uint8_t i, uint16_t field)
 {
-  return ((g->roomIndex & 0xFF) << 24) | ((uint32_t)g->objects[g->actors.object[i]].persistentId << 8) | (field & 0xFF);
+  return ((g->roomIndex & 0xFF) << 24) | ((uint32_t)objectOf(g, i)->persistentId << 8) | (field & 0xFF);
 }
 
 // --- What scripts call ------------------------------------------------------------------------
@@ -253,7 +265,7 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     break;
   case BM_SCRIPT_API_log:
 #ifdef BM_PLATFORM_HOST
-    printf("script: %s logs %d\n", g->objects[a->object[i]].className, (int)args[0]);
+    printf("script: %s logs %d\n", objectOf(g, i)->className, (int)args[0]);
 #endif
     break;
   case BM_SCRIPT_API_random:
@@ -273,11 +285,24 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     else if (!has) bmInventoryGive(&g->inventory, h, 1);
     break;
   }
+  case BM_SCRIPT_API_add_stat:
+    if (i == BM_ACTORS_OWNER)
+    {
+      // From one of the player's attachments: a bonus while it is attached (it takes it away
+      // again in detached()), not a change of the player's own value.
+      if (args[0] >= 0 && args[0] < BM_INVENTORY_STATS)
+      {
+        int32_t v = g->inventory.statBonus[args[0]] + args[1];
+        g->inventory.statBonus[args[0]] = (int16_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v);
+      }
+      break;
+    }
+    bmInventoryScriptCall(&g->inventory, api, args, result);
+    break;
   case BM_SCRIPT_API_item_count:
   case BM_SCRIPT_API_give:
   case BM_SCRIPT_API_take:
   case BM_SCRIPT_API_stat:
-  case BM_SCRIPT_API_add_stat:
     bmInventoryScriptCall(&g->inventory, api, args, result);
     break;
   case BM_SCRIPT_API_attach:
@@ -343,6 +368,119 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     else if (api == BM_SCRIPT_API_owner_lock) g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
     else bmGamePlayPlayerAnim(g, (uint16_t)args[0]);
     break;
+  case BM_SCRIPT_API_ui_frame:
+    bmUiFrame(&g->ui, args[0], args[1], args[2], args[3]);
+    break;
+  case BM_SCRIPT_API_ui_label:
+    bmUiLabel(&g->ui, args[0], args[1], bmText(g->pPack, g->language, (uint16_t)args[2]));
+    break;
+  case BM_SCRIPT_API_ui_number:
+    bmUiNumber(&g->ui, args[0], args[1], args[2], (uint8_t)(args[3] < 1 ? 1 : args[3] > 11 ? 11 : args[3]));
+    break;
+  case BM_SCRIPT_API_ui_text:
+    bmUiText(&g->ui, args[0], args[1], args[2], BM_UI_ROWS - args[1], (uint16_t)args[3], NULL, 0);
+    break;
+  case BM_SCRIPT_API_ui_gauge:
+    bmUiGauge(&g->ui, args[0], args[1], args[2], args[3], 100);
+    break;
+  case BM_SCRIPT_API_ui_clear:
+    bmUiClearRect(&g->ui, args[0], args[1], args[2], args[3]);
+    break;
+  case BM_SCRIPT_API_ui_show:
+    bmUiShow(&g->ui, args[0] != 0);
+    break;
+  case BM_SCRIPT_API_open_screen:
+  {
+    uint8_t current = a->current, slot = a->currentSlot;
+    *result = bmScreensOpen(g, (uint16_t)args[0]);
+    a->current = current;
+    a->currentSlot = slot;
+    break;
+  }
+  case BM_SCRIPT_API_close_screen:
+  {
+    uint8_t current = a->current, slot = a->currentSlot;
+    bmScreensClose(g);
+    a->current = current;
+    a->currentSlot = slot;
+    break;
+  }
+  case BM_SCRIPT_API_language:
+    *result = g->language;
+    break;
+  case BM_SCRIPT_API_set_language:
+    if (args[0] >= 0 && args[0] < bmTextLanguageCount(g->pPack) && args[0] != g->language)
+    {
+      uint8_t current = a->current, slot = a->currentSlot;
+      bmGameSetLanguage(g, (uint8_t)args[0]);
+      bmScreensRedraw(g);   // every open screen in the new language
+      a->current = current;
+      a->currentSlot = slot;
+    }
+    break;
+  case BM_SCRIPT_API_language_count:
+    *result = bmTextLanguageCount(g->pPack);
+    break;
+  case BM_SCRIPT_API_language_name:
+    *result = args[0] >= 0 && args[0] < 256 ? bmTextLanguageName(g->pPack, (uint8_t)args[0]) : 0xFFFF;
+    break;
+  case BM_SCRIPT_API_equipped:
+    *result = args[0] >= 0 && args[0] < BM_INVENTORY_EQUIP ? (int32_t)g->inventory.equipped[args[0]] : 0;
+    break;
+  case BM_SCRIPT_API_record_text:
+  case BM_SCRIPT_API_record_int:
+  {
+    // A field by name in the record's own table, whatever structure that is.
+    BmDataTable table;
+    const uint8_t *record;
+    *result = api == BM_SCRIPT_API_record_text ? 0xFFFF : 0;
+    if (!bmDataFindRecord(g->pPack, (uint32_t)args[0], &table, &record)) break;
+    for (uint16_t f = 0; f < table.fieldCount; f++)
+    {
+      BmDataField field = bmDataTableField(&table, f);
+      if (field.name != (uint16_t)args[1]) continue;
+      *result = bmDataRead(&table, record, field.offset, (BmDataType)field.type);
+      break;
+    }
+    break;
+  }
+  case BM_SCRIPT_API_heal:
+  {
+    int32_t health = g->health + (args[0] > 0 ? args[0] : 0), max = bmGameMaxHealth(g);
+    g->health = (int16_t)(health > max ? max : health);
+    break;
+  }
+  case BM_SCRIPT_API_max_health:
+    *result = bmGameMaxHealth(g);
+    break;
+  case BM_SCRIPT_API_say:
+    bmGameSay(g, (uint16_t)args[0], (uint16_t)args[1]);
+    break;
+  case BM_SCRIPT_API_dialogue_done:
+    *result = g->dialogue == 0;
+    break;
+  case BM_SCRIPT_API_player_lock:
+    g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
+    break;
+  case BM_SCRIPT_API_spawn:
+  case BM_SCRIPT_API_spawn_with:
+  {
+    uint8_t current = a->current, slot = a->currentSlot;
+    if (api == BM_SCRIPT_API_spawn) *result = bmActorsSpawn(g, (uint16_t)args[0], args[1], args[2], 0);
+    else *result = bmActorsSpawn(g, (uint16_t)args[0], a->x[i], a->y[i], (uint32_t)args[1]);
+    a->current = current;
+    a->currentSlot = slot;
+    break;
+  }
+  case BM_SCRIPT_API_destroy:
+    bmActorsDestroy(g, i);
+    break;
+  case BM_SCRIPT_API_floor_y:
+  {
+    int32_t floor = bmCollisionFloor(&g->collision, BM_FIX_INT(a->x[i]), BM_FIX_INT(a->y[i]) - 1, g->room.heightPx, true);
+    *result = BM_FIX(floor == INT32_MAX ? g->room.heightPx : floor);
+    break;
+  }
   case BM_SCRIPT_API_impulse:
     g->player.vx += args[0];
     g->player.vy += args[1];
@@ -380,7 +518,7 @@ static int32_t hostGetVar(void *pContext, BmVmInstance *inst, uint16_t var)
   }
   if (i >= BM_ACTORS_MAX)
   {
-    // An attachment reads its owner's: the player's.
+    // An attachment reads its owner's: the player's; so does a screen.
     if (var == BM_SCRIPT_VAR_x) return g->player.x;
     if (var == BM_SCRIPT_VAR_y) return g->player.y;
     if (var == BM_SCRIPT_VAR_facing) return g->player.facing;
@@ -444,7 +582,8 @@ static void hostFieldChanged(void *pContext, BmVmInstance *inst, uint16_t field)
   }
   else
   {
-    if (a->current >= BM_ACTORS_MAX) return;   // the player's attachments keep no `save` variables yet
+    if (a->current >= BM_ACTORS_MAX) return;   // the player's attachments and screens keep no `save` variables yet
+    if (a->spawned[a->current]) return;        // an object made at run time is gone with the room
     bmVmClassField(moduleOf(a, a->current), inst->classIndex, (uint8_t)field, NULL, NULL, &flags, NULL);
     if (!(flags & BM_SCRIPT_FIELD_SAVE)) return;
     key = storeKey(g, a->current, field);
@@ -489,7 +628,7 @@ static void hostError(void *pContext, BmVmInstance *inst, const char *pWhat, uin
   bm_script_errors++;
 #ifdef BM_PLATFORM_HOST
   printf("script error: %s, line %u: %s\n",
-         g->actors.current >= BM_ACTORS_MAX ? "an attachment" : g->objects[g->actors.object[g->actors.current]].className, (unsigned)line, pWhat);
+         g->actors.current >= BM_ACTORS_MAX ? "an attachment" : objectOf(g, g->actors.current)->className, (unsigned)line, pWhat);
 #else
   (void)g;
   (void)pWhat;
@@ -559,7 +698,7 @@ static int32_t parseNumber(const char *s, bool fix)
 static void applyProperties(BmGame *g, uint8_t i, BmVmInstance *inst)
 {
   const BmActors *a = &g->actors;
-  const BmObjectView *o = &g->objects[a->object[i]];
+  const BmObjectView *o = objectOf(g, i);
   const BmVmModule *m = moduleOf(a, i);
   for (uint8_t f = 0; f < bmVmClassFieldCount(m, inst->classIndex); f++)
   {
@@ -667,6 +806,7 @@ static uint32_t loadModules(BmGame *g)
   a->hasModule = a->classCount != 0;
   if (changed) findButtonNames(g);
   bmAttachmentsBind(g);   // the player's attachments find their classes in the table
+  bmScreensBind(g);
   return hash;
 }
 
@@ -700,7 +840,7 @@ void bmActorsPrepareReload(BmGame *g)
   {
     uint16_t cls = a->classInModule[a->classIndex[i]];
     const BmVmModule *m = moduleOf(a, i);
-    a->keepObject[i] = g->objects[a->object[i]].persistentId;
+    a->keepObject[i] = objectOf(g, i)->persistentId;
     a->keepClass[i] = hashName(bmPackString(g->pPack, bmVmClassName(m, cls)));
     a->keepModule[i] = a->verifiedHash[a->classModule[a->classIndex[i]]];
     a->keepLayout[i] = layoutHash(g, m, cls);
@@ -716,7 +856,7 @@ static bool keepObject(BmGame *g, uint8_t i)
   if (i >= a->keepCount) return false;
   uint16_t cls = a->classInModule[a->classIndex[i]];
   const BmVmModule *m = moduleOf(a, i);
-  if (g->objects[a->object[i]].persistentId != a->keepObject[i] || hashName(bmPackString(g->pPack, bmVmClassName(m, cls))) != a->keepClass[i])
+  if (objectOf(g, i)->persistentId != a->keepObject[i] || hashName(bmPackString(g->pPack, bmVmClassName(m, cls))) != a->keepClass[i])
     return false;
   if (a->verifiedHash[a->classModule[a->classIndex[i]]] == a->keepModule[i]) return true;   // the same script
   if (layoutHash(g, m, cls) != a->keepLayout[i]) return false;
@@ -769,8 +909,28 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     if (fresh) a->classIndex[n] = (uint16_t)cls;
     n++;
   }
-  if (!fresh && n != a->count) fresh = true;
-  a->count = n;
+  a->roomCount = n;
+  // Objects made at run time come after the room's: a state loaded in the room brings them
+  // back (their classes by the state); a reload of single modules or a fresh start drops them.
+  uint8_t total = n;
+  while (!fresh && !perObject && total < a->count && a->spawned[total] && a->classIndex[total] < a->classCount)
+  {
+    a->object[total] = 0xFF;
+    a->homeX[total] = a->x[total];
+    a->homeY[total] = a->y[total];
+    uint16_t cls = a->classIndex[total];
+    uint16_t spriteId = bmVmClassSprite(&a->modules[a->classModule[cls]], a->classInModule[cls]);
+    a->sheet[total] = sheetNamed(g, spriteId != BM_VM_NONE ? bmPackString(g->pPack, spriteId)
+                                                          : bmPackString(g->pPack, bmVmClassName(&a->modules[a->classModule[cls]], a->classInModule[cls])));
+    total++;
+  }
+  if (!fresh && !perObject && total != a->count) fresh = true;
+  if (fresh || perObject)
+  {
+    a->count = n;
+    for (uint8_t i = 0; i < BM_ACTORS_MAX; i++) a->spawned[i] = a->gone[i] = 0;
+  }
+  else a->count = total;
   if (!fresh && !perObject) return;
 
   BmVmHost host = hostOf(g);
@@ -809,6 +969,7 @@ void bmActorsFrame(BmGame *g)
   uint32_t started = bmHalCycles();
   for (uint8_t i = 0; i < a->count; i++)
   {
+    if (a->gone[i]) continue;
     BmVmInstance inst;
     loadInstance(a, i, &inst);
     a->current = i;
@@ -823,7 +984,7 @@ void bmActorsFrame(BmGame *g)
   bm_script_cycles += bmHalCycles() - started;
   for (uint8_t i = 0; i < a->count; i++)
   {
-    if (a->sheet[i] >= 0)
+    if (a->sheet[i] >= 0 && !a->gone[i])
     {
       BmAnimState st = animOf(a, i);
       bmAnimTick(&g->sheets[a->sheet[i]], &st);
@@ -842,7 +1003,7 @@ uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
     if (a->sheet[i] < 0)
     {
       // No sprite: the placeholder frame, for objects placed as points.
-      const BmObjectView *o = &g->objects[a->object[i]];
+      const BmObjectView *o = objectOf(g, i);
       int32_t sx = BM_FIX_INT(a->x[i]) - 8 - g->room.cameraX, sy = BM_FIX_INT(a->y[i]) - 16 - g->room.cameraY;
       if (o->w != 0 || o->h != 0 || sx < -16 || sx > 240 || sy < -16 || sy > 160) continue;
       BmSprite b = { .x = (int16_t)sx, .y = (int16_t)sy, .shape = BM_SPRITE_SQUARE, .size = 1, .tile = (uint16_t)(g->builtinTile + 8),
@@ -859,10 +1020,72 @@ uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
   return used;
 }
 
+bool bmActorsSpawn(BmGame *g, uint16_t className, int32_t x, int32_t y, uint32_t record)
+{
+  BmActors *a = &g->actors;
+  const char *name = bmPackString(g->pPack, className);
+  int32_t cls = name != NULL ? classNamed(g, name) : -1;
+  if (!a->hasModule || cls < 0) return false;
+  // A place after the room's objects: one destroyed (not the one running now: it is stored
+  // again when its event ends), else a new one at the end.
+  uint8_t i = BM_ACTORS_MAX;
+  for (uint8_t k = a->roomCount; k < a->count && i == BM_ACTORS_MAX; k++)
+    if (a->gone[k] && k != a->current) i = k;
+  if (i == BM_ACTORS_MAX)
+  {
+    if (a->count >= BM_ACTORS_MAX) return false;
+    i = a->count++;
+  }
+  a->classIndex[i] = (uint16_t)cls;
+  a->object[i] = 0xFF;
+  a->spawned[i] = 1;
+  a->gone[i] = 0;
+  a->homeX[i] = a->x[i] = x;
+  a->homeY[i] = a->y[i] = y;
+  a->facing[i] = 1;
+  a->hidden[i] = a->touching[i] = 0;
+  a->health[i] = 0;
+  a->team[i] = 0;
+  a->invulnerable[i] = 0;
+  BmAnimState none = { 0, 0, 0, 0 };
+  setAnim(a, i, &none);
+  const BmVmModule *m = moduleOf(a, i);
+  uint16_t spriteId = bmVmClassSprite(m, a->classInModule[cls]);
+  a->sheet[i] = sheetNamed(g, spriteId != BM_VM_NONE ? bmPackString(g->pPack, spriteId) : name);
+  BmVmInstance inst;
+  bmVmInstanceInit(m, &inst, a->classInModule[cls]);
+  if (record != 0)
+  {
+    for (uint8_t f = 0; f < bmVmClassFieldCount(m, a->classInModule[cls]); f++)
+    {
+      uint8_t type;
+      bmVmClassField(m, a->classInModule[cls], f, NULL, &type, NULL, NULL);
+      if (type != BM_SCRIPT_RECORD) continue;
+      inst.fields[f] = (int32_t)record;
+      break;
+    }
+  }
+  storeInstance(a, i, &inst);
+  bmActorsEvent(g, i, BM_SCRIPT_EVENT_spawn, 0);
+  return true;
+}
+
+void bmActorsDestroy(BmGame *g, uint8_t i)
+{
+  BmActors *a = &g->actors;
+  if (i >= a->count) return;
+  a->gone[i] = 1;
+  a->hidden[i] = 1;
+  a->touching[i] = 0;
+  a->health[i] = 0;
+  for (uint8_t k = 0; k < BM_HITS_MAX; k++)
+    if (g->hits.source[k] == 1 + i) bmHitsDisarm(g, (uint8_t)(1 + i), g->hits.name[k]);
+}
+
 void bmActorsEvent(BmGame *g, uint8_t i, BmScriptEvent event, int32_t arg)
 {
   BmActors *a = &g->actors;
-  if (!a->hasModule || i >= a->count) return;
+  if (!a->hasModule || i >= a->count || a->gone[i]) return;
   BmVmHost host = hostOf(g);
   BmVmInstance inst;
   loadInstance(a, i, &inst);
@@ -1010,6 +1233,9 @@ static void findButtonNames(BmGame *g)
 #undef X
   };
   for (uint8_t b = 0; b < sizeof(names) / sizeof(names[0]); b++) t->buttonName[b] = findString(g->pPack, names[b]);
+  // And the names a screen's buttons have (screens.h).
+  static const char *const screenNames[10] = { "Up", "Down", "Left", "Right", "A", "B", "Start", "Select", "L", "R" };
+  for (uint8_t b = 0; b < 10; b++) g->screens.buttonName[b] = findString(g->pPack, screenNames[b]);
 }
 
 // The room's own object (class "@room", written by the cooker from the map's properties).
@@ -1200,4 +1426,152 @@ void bmAttachmentsEnterRoom(BmGame *g)
     }
     p = end;
   }
+}
+
+// --- Screens (screens.h) --------------------------------------------------------------------
+
+static int8_t screenClass(const BmGame *g, uint32_t key)
+{
+  const BmActors *a = &g->actors;
+  for (uint16_t c = 0; c < a->classCount && key != 0; c++)
+  {
+    const BmVmModule *m = &a->modules[a->classModule[c]];
+    if (bmVmClassKind(m, a->classInModule[c]) != BM_SCRIPT_KIND_SCREEN) continue;
+    if (hashName(bmPackString(g->pPack, bmVmClassName(m, a->classInModule[c]))) == key) return (int8_t)c;
+  }
+  return -1;
+}
+
+static void loadScreen(const BmScreens *t, uint8_t s, uint16_t classInModule, BmVmInstance *inst)
+{
+  inst->classIndex = classInModule;
+  inst->state = t->state[s];
+  inst->wait = t->wait[s];
+  inst->pc = t->pc[s];
+  inst->timer = t->timer[s];
+  memcpy(inst->fields, &t->fields[s * BM_SCRIPT_MAX_FIELDS], sizeof(inst->fields));
+}
+
+static void storeScreen(BmScreens *t, uint8_t s, const BmVmInstance *inst)
+{
+  t->state[s] = inst->state;
+  t->wait[s] = inst->wait;
+  t->pc[s] = inst->pc;
+  t->timer[s] = inst->timer;
+  memcpy(&t->fields[s * BM_SCRIPT_MAX_FIELDS], inst->fields, sizeof(inst->fields));
+}
+
+// An event (or, with `step`, the state code) of the screen at place s, if it is still there.
+static void screenRun(BmGame *g, uint8_t s, BmScriptEvent event, int32_t arg, bool step)
+{
+  BmActors *a = &g->actors;
+  BmScreens *t = &g->screens;
+  if (s >= t->count || t->cls[s] < 0) return;
+  uint8_t c = (uint8_t)t->cls[s];
+  uint32_t key = t->classKey[s];
+  const BmVmModule *m = &a->modules[a->classModule[c]];
+  BmVmHost host = hostOf(g);
+  BmVmInstance inst;
+  loadScreen(t, s, a->classInModule[c], &inst);
+  uint8_t current = a->current, currentSlot = a->currentSlot;
+  a->current = BM_ACTORS_SCREEN;
+  a->currentSlot = s;
+  if (step) bmVmStep(m, &host, &inst);
+  else bmVmEventWith(m, &host, &inst, event, arg);
+  a->current = current;
+  a->currentSlot = currentSlot;
+  // The screen may have closed itself (or opened another one in its place).
+  if (s < t->count && t->classKey[s] == key && t->cls[s] == (int8_t)c) storeScreen(t, s, &inst);
+}
+
+// The room behind open screens is darkened; the UI layer (background 3) is not.
+static void darkenRoom(bool on)
+{
+  if (on) bmBlendSet(BM_BLEND_DARKEN, BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2) | BM_LAYER_OBJ | BM_LAYER_BACKDROP, 0, 0, 0, 9);
+  else bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
+}
+
+bool bmScreensOpen(BmGame *g, uint16_t className)
+{
+  BmActors *a = &g->actors;
+  BmScreens *t = &g->screens;
+  uint32_t key = hashName(bmPackString(g->pPack, className));
+  int8_t c = screenClass(g, key);
+  if (c < 0 || t->count >= BM_SCREENS_MAX) return false;
+  uint8_t s = t->count++;
+  BmVmInstance inst;
+  bmVmInstanceInit(&a->modules[a->classModule[(uint8_t)c]], &inst, a->classInModule[(uint8_t)c]);
+  t->classKey[s] = key;
+  t->cls[s] = c;
+  storeScreen(t, s, &inst);
+  t->repeat = 0;
+  if (s == 0) darkenRoom(true);
+  bmUiShow(&g->ui, true);
+  screenRun(g, s, BM_SCRIPT_EVENT_opened, 0, false);
+  return true;
+}
+
+void bmScreensClose(BmGame *g)
+{
+  BmScreens *t = &g->screens;
+  if (t->count == 0) return;
+  uint8_t s = (uint8_t)(t->count - 1);
+  uint32_t key = t->classKey[s];
+  screenRun(g, s, BM_SCRIPT_EVENT_closed, 0, false);
+  if (t->count == 0 || t->classKey[t->count - 1] != key) return;   // closed() closed it already
+  t->count--;
+  t->classKey[t->count] = 0;
+  t->cls[t->count] = -1;
+  if (t->count == 0)
+  {
+    bmUiClear(&g->ui);
+    bmUiShow(&g->ui, g->dialogue != 0);
+    darkenRoom(false);
+    if (g->dialogue) bmGameSay(g, g->dialogueSpeaker, g->dialogueLine);   // the box comes back
+  }
+  else bmScreensRedraw(g);   // the one below shows again
+}
+
+void bmScreensFrame(BmGame *g, uint16_t keys, uint16_t previousKeys)
+{
+  BmScreens *t = &g->screens;
+  static const uint16_t keyOf[10] = { BM_KEY_UP, BM_KEY_DOWN, BM_KEY_LEFT, BM_KEY_RIGHT, BM_KEY_A, BM_KEY_B, BM_KEY_START, BM_KEY_SELECT, BM_KEY_L, BM_KEY_R };
+  uint32_t started = bmHalCycles();
+  // Buttons to the top screen; a direction held repeats after 15 frames, every 5.
+  uint16_t pressed = (uint16_t)(keys & ~previousKeys), released = (uint16_t)(~keys & previousKeys);
+  uint16_t directions = keys & (BM_KEY_UP | BM_KEY_DOWN | BM_KEY_LEFT | BM_KEY_RIGHT);
+  if (directions != 0 && (pressed & directions) == 0)
+  {
+    t->repeat = (uint8_t)(t->repeat < 255 ? t->repeat + 1 : 255);
+    if (t->repeat >= 15 && (t->repeat - 15) % 5 == 0) pressed |= directions;
+  }
+  else t->repeat = 0;
+  for (uint8_t b = 0; b < 10 && t->count > 0; b++)
+  {
+    if (t->buttonName[b] == BM_VM_NONE) continue;
+    if (pressed & keyOf[b]) screenRun(g, (uint8_t)(t->count - 1), BM_SCRIPT_EVENT_press, t->buttonName[b], false);
+    else if (released & keyOf[b]) screenRun(g, (uint8_t)(t->count - 1), BM_SCRIPT_EVENT_release, t->buttonName[b], false);
+  }
+  for (uint8_t s = 0; s < t->count; s++)
+  {
+    screenRun(g, s, BM_SCRIPT_EVENT_tick, 0, false);
+    screenRun(g, s, BM_SCRIPT_EVENT_tick, 0, true);
+  }
+  bm_script_cycles += bmHalCycles() - started;
+}
+
+void bmScreensRedraw(BmGame *g)
+{
+  BmScreens *t = &g->screens;
+  if (t->count == 0) return;
+  bmUiClear(&g->ui);
+  bmUiShow(&g->ui, true);
+  darkenRoom(true);
+  for (uint8_t s = 0; s < t->count; s++) screenRun(g, s, BM_SCRIPT_EVENT_opened, 0, false);
+}
+
+void bmScreensBind(BmGame *g)
+{
+  BmScreens *t = &g->screens;
+  for (uint8_t s = 0; s < BM_SCREENS_MAX; s++) t->cls[s] = s < t->count ? screenClass(g, t->classKey[s]) : -1;
 }

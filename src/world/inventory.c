@@ -69,7 +69,7 @@ bool bmInventoryScriptCall(BmInventory *pInv, uint16_t api, const int32_t *pArgs
     *pResult = pArgs[1] >= 0 && bmInventoryTake(pInv, (uint32_t)pArgs[0], (uint32_t)pArgs[1]);
     return true;
   case BM_SCRIPT_API_stat:
-    *pResult = pArgs[0] >= 0 && pArgs[0] < BM_INVENTORY_STATS ? pInv->statBase[pArgs[0]] : 0;
+    *pResult = pArgs[0] >= 0 && pArgs[0] < BM_INVENTORY_STATS ? bmInventoryStat(pInv, (uint32_t)pArgs[0]) : 0;
     return true;
   case BM_SCRIPT_API_add_stat:
     if (pArgs[0] >= 0 && pArgs[0] < BM_INVENTORY_STATS)
@@ -81,4 +81,9 @@ bool bmInventoryScriptCall(BmInventory *pInv, uint16_t api, const int32_t *pArgs
   default:
     return false;
   }
+}
+
+int32_t bmInventoryStat(const BmInventory *pInv, uint32_t stat)
+{
+  return stat < BM_INVENTORY_STATS ? (int32_t)pInv->statBase[stat] + pInv->statBonus[stat] : 0;
 }

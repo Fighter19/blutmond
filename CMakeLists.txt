@@ -67,6 +67,11 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong)
 set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS})
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/armour_stats.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/screens/start_menu.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/screens/equipment_menu.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/screens/items_menu.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/screens/system_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/engine/font_latin.bmfont
   ${PROJECT_SOURCE_DIR}/assets/test_room/lang/de.bmlang
   ${PROJECT_SOURCE_DIR}/assets/test_room/lang/fr.bmlang)
@@ -245,6 +250,11 @@ if(BM_PLATFORM STREQUAL "gba")
       target_include_directories(${target} PRIVATE ${PROJECT_SOURCE_DIR}/apps/game)
       if(variant STREQUAL "game_autoplay_native")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_NATIVE_PACK}\"")
+        if(target MATCHES "_mb$")
+          # Its embedded pack carries the native code too, and nothing is pushed into it in
+          # the tests: smaller buffers for pushed packs leave room for it (40 KB instead of 48).
+          target_compile_definitions(${target} PRIVATE BM_LIVE_CONTENT_SMALL=1)
+        endif()
       elseif(target MATCHES "_mb$" OR variant STREQUAL "game_send")
         # game_send boots a multiboot GBA and sends it its pack: that must fit there.
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_BASE_PACK}\"")
@@ -718,8 +728,9 @@ if(BM_PLATFORM STREQUAL "host")
       # picture must match the host's.
       foreach(image game_autoplay game_autoplay_mb)
         # On the GBA too: no deaths, one room change, the same sound as on the host (checksum
-        # over every sample mixed), and few frames missed. From ROM: at most 5 (3 while the new
-        # room is loaded: the full level has more chunks to look through; the base level takes 2). The multiboot image runs everything from slow RAM (it is for
+        # over every sample mixed), and few frames missed. From ROM: at most 5 (1 when the sword
+        # is picked up and equipped, 2 for the snapshot written at frame 300, 2 while the new room
+        # is loaded). The multiboot image runs everything from slow RAM (it is for
         # development): there the room load takes 3, the save point 1, the snapshot these images
         # write at game frame 300 for the state tests 2 (it is over 1.5 KB, written field by
         # field), and with music playing a busy frame can go over once more, so 7 are allowed.
@@ -805,9 +816,13 @@ if(BM_PLATFORM STREQUAL "host")
       add_test(NAME native_state_snapshot
         COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/game_autoplay_native.gba --frames 400 --dump ${elf}:bm_state_outbox ${out}/state_native_300.bmst)
       set_tests_properties(native_state_snapshot PROPERTIES FIXTURES_SETUP state_native)
+      # It plays the level's base (native code is only in that pack): the PC plays the same.
+      add_test(NAME state_snapshot_host_base
+        COMMAND game ${cooked}/test_level_base_gba.bmpk --autoplay --frames 400 --snapshot-at 300 ${out}/state_host_base_300.bmst)
+      set_tests_properties(state_snapshot_host_base PROPERTIES FIXTURES_REQUIRED test_level_base_pack FIXTURES_SETUP state_host_base)
       add_test(NAME native_state_identical
-        COMMAND ${CMAKE_COMMAND} -E compare_files ${out}/state_gba_300.bmst ${out}/state_native_300.bmst)
-      set_tests_properties(native_state_identical PROPERTIES FIXTURES_REQUIRED "state_gba;state_native")
+        COMMAND ${CMAKE_COMMAND} -E compare_files ${out}/state_host_base_300.bmst ${out}/state_native_300.bmst)
+      set_tests_properties(native_state_identical PROPERTIES FIXTURES_REQUIRED "state_host_base;state_native")
       add_test(NAME native_live_push_interprets
         COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game_autoplay_native.gba --errors 2000 2000 run 30 hello
           push ${cooked}/test_level_variant_gba.bmpk hot run 1300

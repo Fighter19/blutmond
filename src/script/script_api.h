@@ -66,7 +66,32 @@ typedef enum BmScriptType {
   X(equip,             BOOL, 2, INT,   RECORD, VOID,  VOID, 0) \
   X(owner_lock,        VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(owner_play_anim,   VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
-  X(owner_busy,        BOOL, 0, VOID,  VOID,  VOID,  VOID, 0)
+  X(owner_busy,        BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(ui_frame,          VOID, 4, INT,   INT,   INT,   INT,  0) \
+  X(ui_label,          VOID, 3, INT,   INT,   TEXT,  VOID, 0) \
+  X(ui_number,         VOID, 4, INT,   INT,   INT,   INT,  0) \
+  X(ui_text,           VOID, 4, INT,   INT,   INT,   TEXT, 0) \
+  X(ui_gauge,          VOID, 4, INT,   INT,   INT,   INT,  0) \
+  X(ui_clear,          VOID, 4, INT,   INT,   INT,   INT,  0) \
+  X(ui_show,           VOID, 1, BOOL,  VOID,  VOID,  VOID, 0) \
+  X(open_screen,       BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(close_screen,      VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(language,          INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(set_language,      VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(language_count,    INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(language_name,     TEXT, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(equipped,          RECORD, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(record_text,       TEXT, 2, RECORD, NAME,  VOID,  VOID, 0) \
+  X(record_int,        INT,  2, RECORD, NAME,  VOID,  VOID, 0) \
+  X(heal,              VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(max_health,        INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(spawn,             BOOL, 3, NAME,  FIX,   FIX,   VOID, 0) \
+  X(spawn_with,        BOOL, 2, NAME,  RECORD, VOID,  VOID, 0) \
+  X(destroy,           VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(floor_y,           FIX,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(say,               VOID, 2, TEXT,  TEXT,  VOID,  VOID, 0) \
+  X(dialogue_done,     BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(player_lock,       VOID, 1, INT,   VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -97,6 +122,24 @@ typedef enum BmScriptType {
 // player (attachable-scripts.md §3): no walking or jumping for that many frames; an animation
 // of the player's sprite that the engine does not replace until the lock is over (or, without a
 // lock, until it ends); whether a lock is on. Nothing from an object.
+//
+// Screens and the UI layer (src/ui/ui.h; ui.md §3-4): ui_frame(x, y, w, h), ui_label(x, y,
+// text), ui_number(x, y, value, digits), ui_text(x, y, w, text) (wrapped, down to the last
+// row), ui_gauge(x, y, w, percent), ui_clear(x, y, w, h), ui_show(on); open_screen(#Class)
+// puts a Screen class on the stack (false if there is none of that name or the stack is full),
+// close_screen() closes the top one. language(), set_language(i), language_count(),
+// language_name(i): the texts' language (an option, text.h). equipped(slot): the record in an
+// equipment slot (0: none); record_text(record, #field), record_int(record, #field): a field of
+// a record of any structure, by name (a text's string id; 0 if there is no such field). heal(n),
+// max_health(): the player's health.
+//
+// Objects made at run time (attachable-scripts.md §6): spawn(#Class, x, y) an Actor class at a
+// place, spawn_with(#Class, record) at the object's own anchor with the new one's first
+// record<S> variable set (an item drop); false when all 8 objects are in use. destroy(): the
+// object is gone. floor_y(): the top of the floor below the object's anchor (fix; the room's
+// bottom if there is none). say(speaker, line): the dialogue box with the speaker's name and the
+// line; dialogue_done() becomes true when the player has pressed A. player_lock(frames): the
+// player cannot walk or jump for that many frames (0 ends it).
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {
@@ -130,6 +173,7 @@ typedef enum BmScriptActorVar {
 typedef enum BmScriptKind {
   BM_SCRIPT_KIND_ACTOR = 0,        // `extends Actor`: an object of a room
   BM_SCRIPT_KIND_ATTACHMENT = 1,   // `extends Attachment`: attached to the player at run time
+  BM_SCRIPT_KIND_SCREEN = 2,       // `extends Screen`: a menu or other screen (ui.md §4)
   BM_SCRIPT_KIND_COUNT
 } BmScriptKind;
 
@@ -140,16 +184,18 @@ typedef enum BmScriptKind {
 // 1 Actor, 2 Attachment)
 #define BM_SCRIPT_EVENTS(X) \
   X(spawn,    VOID, 1) \
-  X(tick,     VOID, 3) \
+  X(tick,     VOID, 7) \
   X(touch,    VOID, 1) \
   X(attached, VOID, 2) \
   X(detached, VOID, 2) \
-  X(press,    NAME, 2) \
-  X(release,  NAME, 2) \
+  X(press,    NAME, 6) \
+  X(release,  NAME, 6) \
   X(jumped,   VOID, 2) \
   X(landed,   VOID, 2) \
   X(hit,      INT,  3) \
-  X(struck,   INT,  3)
+  X(struck,   INT,  3) \
+  X(opened,   VOID, 4) \
+  X(closed,   VOID, 4)
 
 typedef enum BmScriptEvent {
 #define X(name, arg, kinds) BM_SCRIPT_EVENT_##name,
@@ -161,7 +207,7 @@ typedef enum BmScriptEvent {
 // Runtime functions only an Actor may call: they act on the object itself. X(name)
 #define BM_SCRIPT_ACTOR_ONLY(X) \
   X(finish_anim) X(play_anim) X(anim_done) X(player_distance) X(move_toward_player) X(move_toward) \
-  X(enter_door) X(hide) X(show) X(face_player) X(touching_player)
+  X(enter_door) X(hide) X(show) X(face_player) X(touching_player) X(destroy) X(spawn_with) X(floor_y)
 
 // Field flags in the class table: the storage flags of docs/spec/state.md.
 #define BM_SCRIPT_FIELD_SAVE 1

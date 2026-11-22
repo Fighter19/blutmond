@@ -66,7 +66,7 @@ struct Armour is Item {
   EquipSlot slot;
   StatBlock stats;
   Element   resists;
-  attach    behaviour;
+  attach    behaviour = ArmourStats;   // its stats while worn
 }
 
 struct KeyItem is Item {

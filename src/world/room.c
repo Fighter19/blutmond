@@ -119,11 +119,22 @@ static void writeColumn(const BmRoomLayer *pLayer, int32_t x)
   }
 }
 
+// A row in runs: the cells that lie side by side in one screen block go in one write (on the
+// GBA a map write has a cost of its own; a room shown anew writes 66 rows).
 static void writeRow(const BmRoomLayer *pLayer, int32_t y)
 {
-  for (int32_t x = pLayer->windowX; x < pLayer->windowX + WINDOW_COLS; x++)
+  uint32_t hy = (uint32_t)y & (HW_ROWS - 1);
+  int32_t x = pLayer->windowX, end = pLayer->windowX + WINDOW_COLS;
+  while (x < end)
   {
-    writeCell(pLayer, x, y);
+    uint32_t hx = (uint32_t)x & (HW_COLS - 1);
+    int32_t run = 32 - (int32_t)(hx & 31);
+    if (run > end - x) run = end - x;
+    uint16_t entries[32];
+    for (int32_t k = 0; k < run; k++) entries[k] = layerEntry(pLayer, x + k, y);
+    uint8_t block = (uint8_t)(FIRST_SCREEN_BLOCK + pLayer->bg * 2 + (hx >= 32 ? 1 : 0));
+    bmMapLoad(block, (uint16_t)(hy * 32 + (hx & 31)), entries, (uint32_t)run);
+    x += run;
   }
 }
 

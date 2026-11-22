@@ -139,6 +139,10 @@ static BmPack s_pack;
 static BmGame s_game BM_EWRAM_BSS;
 static BmAutopilot s_pilot;
 
+#ifdef BM_LIVE_CONTENT_SMALL
+#  undef BM_LIVE_CONTENT_SIZE
+#  define BM_LIVE_CONTENT_SIZE (40 * 1024)   // the native-script multiboot image (CMakeLists.txt)
+#endif
 #ifndef BM_LIVE_CONTENT_SIZE
 #  define BM_LIVE_CONTENT_SIZE (96 * 1024)   // a cartridge image; a multiboot one has 48 KB
 #endif

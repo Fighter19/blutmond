@@ -419,7 +419,7 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   bmUiInit(&g->ui, pPack, NULL);   // without a font the UI draws nothing
   readOptions(g);
   g->actors.seed = 1;
-  g->health = BM_GAME_PLAYER_HEALTH;
+  g->health = (int16_t)bmGameMaxHealth(g);
   BmResult r = enterRoom(g, (uint32_t)index, true);
   if (r != BM_SUCCESS) return r;
   BmObjectView start;
@@ -489,9 +489,38 @@ void bmGameHurtPlayer(BmGame *g, int32_t damage)
   bmGameStrikePlayer(g, damage, g->player.x + g->player.facing);
 }
 
+int32_t bmGameMaxHealth(const BmGame *g)
+{
+  int32_t max = BM_GAME_PLAYER_HEALTH + bmInventoryStat(&g->inventory, BM_STAT_MAX_HEALTH);
+  return max < 1 ? 1 : max > 32767 ? 32767 : max;
+}
+
+void bmGameSay(BmGame *g, uint16_t speaker, uint16_t line)
+{
+  g->dialogue = 1;
+  g->dialogueSpeaker = speaker;
+  g->dialogueLine = line;
+  if (g->screens.count != 0) return;   // drawn when the menu closes
+  bmUiClearRect(&g->ui, 0, 14, 32, 6);
+  bmUiFrame(&g->ui, 0, 14, 30, 6);
+  bmUiLabel(&g->ui, 1, 15, bmText(g->pPack, g->language, speaker));
+  bmUiText(&g->ui, 2, 16, 27, 3, line, NULL, 0);
+  bmUiShow(&g->ui, true);
+}
+
+// A pressed: the dialogue box goes.
+static void endDialogue(BmGame *g)
+{
+  g->dialogue = 0;
+  bmUiClearRect(&g->ui, 0, 14, 32, 6);
+}
+
 bool bmGameStrikePlayer(BmGame *g, int32_t amount, int32_t fromX)
 {
   if (amount <= 0 || g->hurtTimer != 0) return false;
+  // The damage rule (first-items.md §1): less the player's defence, at least 1.
+  amount -= bmInventoryStat(&g->inventory, BM_STAT_DEFENCE);
+  if (amount < 1) amount = 1;
   bmSoundPlayEffect(&g->sound, "hurt");
   g->hurts++;
   g->hurtTimer = BM_HITS_PLAYER_INVULNERABLE;
@@ -506,7 +535,7 @@ bool bmGameStrikePlayer(BmGame *g, int32_t amount, int32_t fromX)
   if (g->health <= 0)
   {
     respawn(g);
-    g->health = BM_GAME_PLAYER_HEALTH;
+    g->health = (int16_t)bmGameMaxHealth(g);
   }
   return true;
 }
@@ -524,6 +553,36 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     .jumpPressed = (pressed & BM_KEY_A) != 0,
     .jumpHeld = (keys & BM_KEY_A) != 0,
   };
+  // A screen open (or Start opening the Start menu): the room stands still, the screens get
+  // the buttons.
+  if (g->screens.count == 0 && (pressed & BM_KEY_START) && g->dialogue == 0)
+  {
+    uint16_t start = 0xFFFF;
+    for (uint32_t id = 0; id < 0xFFFF; id++)
+    {
+      const char *t = bmPackString(g->pPack, (uint16_t)id);
+      if (t == NULL) break;
+      if (strcmp(t, "StartMenu") == 0) { start = (uint16_t)id; break; }
+    }
+    // The press that opened it is not one for the menu.
+    if (start != 0xFFFF && bmScreensOpen(g, start)) previous = keys;
+  }
+  if (g->screens.count != 0)
+  {
+    bmScreensFrame(g, keys, previous);
+    bmUiPresent(&g->ui);
+    updateSprites(g);
+    int8_t *l, *r;
+    bmHalAudioBuffers(&l, &r);
+    bmSoundFrame(&g->sound, l, r, BM_HAL_AUDIO_FRAME_SAMPLES);
+    return;
+  }
+  if (g->dialogue != 0 && (pressed & BM_KEY_A))
+  {
+    endDialogue(g);
+    pressed = (uint16_t)(pressed & ~BM_KEY_A);
+    in.jumpPressed = false;
+  }
   // Attachments first: what they decide this frame moves the player this frame.
   bmAttachmentsFrame(g, keys, previous);
   // A lock (a swing) takes walking and jumping away; set this frame, it already counts.
@@ -638,6 +697,9 @@ static const BmStateField s_gameFields[] = {
   F(lockTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(animHeld, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(health, BM_TYPE_S16, BM_STATE_SAVE | BM_STATE_LINK),
+  F(dialogue, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(dialogueSpeaker, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(dialogueLine, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(doorCooldown, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(saveCooldown, BM_TYPE_U16, BM_STATE_TRANSIENT),
   F(deaths, BM_TYPE_U32, BM_STATE_SAVE),
@@ -669,6 +731,8 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.health, BM_TYPE_S32, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.team, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.invulnerable, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.spawned, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.gone, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   F(actors.seed, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   // What `save` variables hold: this goes into the save game.
   F(actors.storeCount, BM_TYPE_U8, BM_STATE_SAVE),
@@ -681,6 +745,7 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, inventory.equipped, BM_TYPE_U32, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_EQUIP),
   BM_STATE_ARRAY(BmGame, inventory.quick, BM_TYPE_U32, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_QUICK),
   BM_STATE_ARRAY(BmGame, inventory.statBase, BM_TYPE_S16, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_STATS),
+  BM_STATE_ARRAY(BmGame, inventory.statBonus, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_INVENTORY_STATS),
   // Attachments: in the middle of what they do, exactly (snapshot); a save game makes them
   // again from what the player owns (not yet: attachable-scripts.md step 6).
   BM_STATE_ARRAY(BmGame, attachments.classKey, BM_TYPE_U32, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
@@ -700,6 +765,15 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, hits.frames, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   BM_STATE_ARRAY(BmGame, hits.reach, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   BM_STATE_ARRAY(BmGame, hits.struck, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  // Open screens, in the middle of what their scripts do.
+  F(screens.count, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  BM_STATE_ARRAY(BmGame, screens.classKey, BM_TYPE_U32, BM_STATE_SNAPSHOT, BM_SCREENS_MAX),
+  BM_STATE_ARRAY(BmGame, screens.state, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_SCREENS_MAX),
+  BM_STATE_ARRAY(BmGame, screens.wait, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_SCREENS_MAX),
+  BM_STATE_ARRAY(BmGame, screens.pc, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_SCREENS_MAX),
+  BM_STATE_ARRAY(BmGame, screens.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_SCREENS_MAX),
+  BM_STATE_ARRAY(BmGame, screens.fields, BM_TYPE_S32, BM_STATE_SNAPSHOT, BM_SCREENS_MAX * BM_SCRIPT_MAX_FIELDS),
+  F(screens.repeat, BM_TYPE_U8, BM_STATE_TRANSIENT),
 };
 #undef F
 
@@ -718,6 +792,12 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   if (r != BM_SUCCESS) return r;
   g->player = player;
   g->saveCooldown = 0;
+  // What was on the UI layer is not in the state: the screens and the dialogue draw it again.
+  bmUiClear(&g->ui);
+  bmUiShow(&g->ui, false);
+  bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
+  if (g->dialogue) bmGameSay(g, g->dialogueSpeaker, g->dialogueLine);
+  bmScreensRedraw(g);
   updateCamera(g);
   updateSprites(g);
   return BM_SUCCESS;
