@@ -54,6 +54,9 @@ typedef struct BmAttachments
 
 struct BmGame;
 
+/// An event with its argument to each of the player's attachments in slot order.
+void bmAttachmentsEach(struct BmGame *pGame, uint8_t event, int32_t arg);
+
 /// The damage `amount` (of `element`) through the filter event `event` (damage_in,
 /// damage_out) of the player's attachments in slot order; set_damage in them changes it.
 int32_t bmAttachmentsFilter(struct BmGame *pGame, uint8_t event, int32_t amount, uint8_t element);

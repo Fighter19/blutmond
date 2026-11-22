@@ -101,6 +101,7 @@ In serialisation order. Count is the array length.
 | `speedPercent` | s16 |  | snapshot |
 | `resists` | u8 | 4 | snapshot |
 | `returnPending` | u8 |  | snapshot |
+| `hitStop` | u8 |  | snapshot |
 | `lockGround`, `lockAir` | u8 |  | snapshot |
 | `pickupSound` | u8 |  | snapshot |
 | `doorSeq`, `doorTimer`, `doorArrive`, `doorArriveTimer` | u8 |  | snapshot |
@@ -189,6 +190,10 @@ In serialisation order. Count is the array length.
 | `hits.reach` | s16 | 8 | snapshot |
 | `hits.aim` | u8 | 8 | snapshot |
 | `hits.aimNext` | u8 | 9 | snapshot |
+| `hits.flags`, `hits.multi`, `hits.multiCount`, `hits.stop` | u8 | 8 each | snapshot |
+| `hits.knockX`, `hits.knockY` | fix | 8 each | snapshot |
+| `hits.nextFlags`, `hits.nextMulti`, `hits.nextStop` | u8 | 9 each | snapshot |
+| `hits.nextKnockX`, `hits.nextKnockY` | fix | 9 each | snapshot |
 | `hits.struck` | u16 | 8 | snapshot |
 | `screens.count` | u8 |  | snapshot |
 | `screens.classKey` | u32 | 4 | snapshot |
@@ -198,8 +203,8 @@ In serialisation order. Count is the array length.
 | `screens.repeat` | u8 |  | transient |
 
 Sizes with this table: a save game is 655 bytes of payload, a link transfer 501, a snapshot
-2591 (2597 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
-pushed state hold 3072 bytes. Attachment slots 0 to 11 are the
+2915 (2921 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
+pushed state hold 3072 bytes (150 left: the next fields need them made larger). Attachment slots 0 to 11 are the
 player's (8 to 11 the abilities', in `abilityKey` the record each holds), 12 to 15 the room's. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).
 
@@ -255,3 +260,6 @@ beginning.
 - Save slots, a profile field and compression in the save game.
 - The state map in the editor shows the table with sizes and totals; it does not show values
   of a running game.
+| `actors.vx`, `actors.vy`, `actors.fall` | fix | 8 each | snapshot |
+| `actors.life` | u16 | 8 | snapshot |
+| `actors.madeBy`, `actors.madeBySlot` | u8 | 8 each | snapshot |

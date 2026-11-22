@@ -162,6 +162,9 @@ static uint32_t storeKey(const BmGame *g, uint8_t i, uint16_t field)
 
 // --- What scripts call ------------------------------------------------------------------------
 
+static int32_t classNamed(const BmGame *g, const char *name);
+static void resetMotion(BmActors *a, uint8_t i);
+
 static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int32_t *args, int32_t *result)
 {
   BmGame *g = pContext;
@@ -418,6 +421,35 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_ui_clear:
     bmUiClearRect(&g->ui, args[0], args[1], args[2], args[3]);
     break;
+  case BM_SCRIPT_API_hit_option:
+  case BM_SCRIPT_API_hit_knock:
+  {
+    // For the figure calling: the object, or the player for its attachments.
+    if (i == BM_ACTORS_ROOM) break;
+    uint8_t f = i < BM_ACTORS_MAX ? (uint8_t)(1 + i) : BM_HITS_PLAYER;
+    if (api == BM_SCRIPT_API_hit_option) bmHitsOption(g, f, bmPackString(g->pPack, (uint16_t)args[0]), args[1]);
+    else bmHitsKnock(g, f, args[0], args[1]);
+    break;
+  }
+  case BM_SCRIPT_API_fly:
+    a->vx[i] = args[0];
+    a->vy[i] = args[1];
+    break;
+  case BM_SCRIPT_API_fall:
+    a->fall[i] = args[0];
+    break;
+  case BM_SCRIPT_API_lifetime:
+    a->life[i] = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
+    break;
+  case BM_SCRIPT_API_alive:
+  {
+    const char *name = bmPackString(g->pPack, (uint16_t)args[0]);
+    int32_t cls = name != NULL ? classNamed(g, name) : -1;
+    int32_t n = 0;
+    for (uint8_t k = 0; cls >= 0 && k < a->count; k++) n += !a->gone[k] && a->classIndex[k] == (uint16_t)cls;
+    *result = n;
+    break;
+  }
   case BM_SCRIPT_API_set_damage:
     g->filterAmount = args[0];
     break;
@@ -1180,6 +1212,7 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->steady[i] = 0;
     a->team[i] = 0;
     a->invulnerable[i] = 0;
+    resetMotion(a, i);
     BmAnimState none = { 0, 0, 0, 0 };
     setAnim(a, i, &none);
     applyProperties(g, i, &inst);
@@ -1256,9 +1289,21 @@ uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
   return used;
 }
 
+static void resetMotion(BmActors *a, uint8_t i)
+{
+  a->vx[i] = a->vy[i] = a->fall[i] = 0;
+  a->life[i] = 0;
+  a->madeBy[i] = BM_HITS_FREE;
+  a->madeBySlot[i] = BM_HITS_NO_SLOT;
+}
+
 bool bmActorsSpawn(BmGame *g, uint16_t className, int32_t x, int32_t y, uint32_t record)
 {
   BmActors *a = &g->actors;
+  // Who makes it: an object, the player (one of its attachments), or the room.
+  uint8_t maker = a->current < a->count ? (uint8_t)(1 + a->current) : a->current == BM_ACTORS_OWNER ? BM_HITS_PLAYER : BM_HITS_FREE;
+  uint8_t makerSlot = a->current == BM_ACTORS_OWNER ? a->currentSlot : BM_HITS_NO_SLOT;
+  uint8_t makerTeam = maker == BM_HITS_PLAYER ? BM_HITS_PLAYER_TEAM : maker != BM_HITS_FREE ? a->team[maker - 1] : 0;
   const char *name = bmPackString(g->pPack, className);
   int32_t cls = name != NULL ? classNamed(g, name) : -1;
   if (!a->hasModule || cls < 0) return false;
@@ -1284,8 +1329,11 @@ bool bmActorsSpawn(BmGame *g, uint16_t className, int32_t x, int32_t y, uint32_t
   a->affinity[i] = 0;
   a->knock[i] = 0;
   a->steady[i] = 0;
-  a->team[i] = 0;
+  a->team[i] = makerTeam;   // its hits are on the side of who made it
   a->invulnerable[i] = 0;
+  resetMotion(a, i);
+  a->madeBy[i] = maker;
+  a->madeBySlot[i] = makerSlot;
   BmAnimState none = { 0, 0, 0, 0 };
   setAnim(a, i, &none);
   const BmVmModule *m = moduleOf(a, i);
@@ -1307,6 +1355,38 @@ bool bmActorsSpawn(BmGame *g, uint16_t className, int32_t x, int32_t y, uint32_t
   storeInstance(a, i, &inst);
   bmActorsEvent(g, i, BM_SCRIPT_EVENT_spawn, 0);
   return true;
+}
+
+int32_t bmActorsClassNamed(const BmGame *g, const char *name)
+{
+  return classNamed(g, name);
+}
+
+void bmActorsMove(BmGame *g)
+{
+  BmActors *a = &g->actors;
+  const bm_fix most = BM_FIX(16);   // faster ones could not be tested along their way
+  for (uint8_t i = 0; a->hasModule && i < a->count; i++)
+  {
+    if (a->gone[i]) continue;
+    if (a->life[i] != 0 && --a->life[i] == 0)
+    {
+      if (a->spawned[i]) bmActorsDestroy(g, i);
+      else a->hidden[i] = 1;
+      continue;
+    }
+    if (a->vx[i] == 0 && a->vy[i] == 0 && a->fall[i] == 0) continue;
+    a->vy[i] += a->fall[i];
+    if (a->vx[i] > most) a->vx[i] = most;
+    if (a->vx[i] < -most) a->vx[i] = -most;
+    if (a->vy[i] > most) a->vy[i] = most;
+    if (a->vy[i] < -most) a->vy[i] = -most;
+    a->x[i] += a->vx[i];
+    a->y[i] += a->vy[i];
+    int32_t bx, by, bw, bh;
+    bmActorsBox(g, i, &bx, &by, &bw, &bh);
+    if (bmCollisionSolidSides(&g->collision, bx + bw / 2, by + bh / 2)) bmActorsEvent(g, i, BM_SCRIPT_EVENT_wall, 0);
+  }
 }
 
 void bmActorsDestroy(BmGame *g, uint8_t i)
@@ -1460,6 +1540,13 @@ int32_t bmAttachmentsFilter(BmGame *g, uint8_t event, int32_t amount, uint8_t el
   g->filterAmount = outer;
   g->filterElement = outerElement;
   return amount;
+}
+
+void bmAttachmentsEach(BmGame *g, uint8_t event, int32_t arg)
+{
+  BmAttachments *t = &g->attachments;
+  if ((t->occupied & ((1u << BM_ATTACH_PLAYER_SLOTS) - 1)) == 0) return;
+  for (uint8_t s = 0; s < BM_ATTACH_PLAYER_SLOTS; s++) slotEvent(g, s, (BmScriptEvent)event, arg);
 }
 
 void bmAttachmentsPlayerHit(BmGame *g, int32_t amount)

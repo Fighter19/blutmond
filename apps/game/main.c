@@ -348,6 +348,11 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
   if (s_loadPath != NULL && !loadSnapshot(s_load, s_loadSize)) return 4;
 #endif
   }
+  {
+    // The snapshots' schema hash now, not in the frame of the first one (state.c keeps it).
+    BmStateBlock blocks[2];
+    bmStateSchemaHash(blocks, stateBlocks(blocks));
+  }
   BmLiveHooks hooks = bmGameLiveHooks(&s_gameLive);
   bmLiveInit(&s_live, &hooks, POOL, POOL_SIZE, &s_pack);
   if (noPack)

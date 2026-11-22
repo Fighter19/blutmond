@@ -20,7 +20,18 @@ Defence)` for the player, without elements; the
 player's hurt timer is their invulnerability, also against hazards. A first projectile (the
 moon bat's fireball) is an object made at run time that moves itself and arms its own hit box:
 not yet the engine movement, wall event, team inheritance and stretched test of step 4.
-Steps 3 to 5 are open. Milestone M17 in [../PLAN.md](../PLAN.md). Fills in what
+Steps 3 and 4 built ([../spec/runtime-core.md](../spec/runtime-core.md) §10): the options
+come from `hit_option(#Pierce | #Multi | #Stop | #Reflect, n)` and `hit_knock(x, y)` called
+before `arm` or `hit_box` (a script call takes at most 3 arguments: no `arm(..., #Pierce)`);
+guard boxes block and send `blocked`/`guarded`; `#Multi` clears the struck list every n
+frames and leaves an object invulnerable only that long; hit stop holds the whole game still
+(not only the two figures); projectiles are objects the engine moves (`fly`, `fall`,
+`lifetime`, `wall()`), on their maker's team, their hits stretched back along their speed
+(at most 16 px a frame), turned around by `#Reflect`; `alive(#Class)` stands in for
+`max_alive`. Where it differs: the struck list is still a bit per figure; the moon bat's
+fireball still moves itself; no `aim_at`, `fly_angle` (layered-sprites.md step 4). The test
+pack with wind has the knight (a guard box), knives, a turret's bolt and a parry. Step 5 is
+open. Milestone M17 in [../PLAN.md](../PLAN.md). Fills in what
 [attachable-scripts.md](attachable-scripts.md) §6 only names ("hit boxes"), and is what the
 weapons and spells of [first-items.md](first-items.md) hit with.
 

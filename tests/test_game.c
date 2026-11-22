@@ -123,8 +123,15 @@ static void testSavePointWritesASaveGame(void)
 
 static int actorOfClass(const char *cls)
 {
+  // The first that is not gone (objects made at run time have no room object: by class).
+  int32_t index = bmActorsClassNamed(&s_game, cls);
   for (uint8_t i = 0; i < s_game.actors.count; i++)
-    if (strcmp(s_game.objects[s_game.actors.object[i]].className, cls) == 0) return i;
+  {
+    if (s_game.actors.gone[i]) continue;
+    if (s_game.actors.object[i] == 0xFF ? (int32_t)s_game.actors.classIndex[i] == index
+                                        : strcmp(s_game.objects[s_game.actors.object[i]].className, cls) == 0)
+      return i;
+  }
   return -1;
 }
 
@@ -409,6 +416,117 @@ static void testCapabilitiesAndFilters(void)
   frames(30, 0);
   frames(1, BM_KEY_L);
   TEST_ASSERT(b->vx > BM_FIX(2));
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+// hitboxes.md steps 3 and 4 (the wind pack's test scripts): a guard box stops hits unless they
+// pierce, #Multi strikes again and again, #Stop holds the game still, a hit's own push; objects
+// the engine moves: a knife thrown at 12 pixels a frame does not pass through what it meets,
+// two at most, gone at a wall; a bolt sent back with #Reflect strikes the turret that shot it.
+static int spawnAs(const char *cls, int32_t x, int32_t y, uint8_t maker)
+{
+  BmActors *a = &s_game.actors;
+  uint8_t current = a->current;
+  a->current = maker;
+  bool ok = bmActorsSpawn(&s_game, stringId(cls), BM_FIX(x), BM_FIX(y), 0);
+  a->current = current;
+  if (!ok) return -1;
+  int32_t index = bmActorsClassNamed(&s_game, cls);
+  for (int i = a->count - 1; i >= 0; i--)
+    if (!a->gone[i] && (int32_t)a->classIndex[i] == index) return i;
+  return -1;
+}
+
+static void testGuardsAndProjectiles(void)
+{
+  if (s_windData == NULL) return;
+  startWith(s_windData, s_windSize, "test_room_2");
+  bmAttachmentsDetach(&s_game, BM_ATTACH_ROOM_FIRST);   // no wind
+  BmActors *a = &s_game.actors;
+  BmBody *b = &s_game.player;
+  frames(30, 0);
+  // The knight at 300, its shield ahead (to the right).
+  int knight = spawnAs("Knight", 300, 160, BM_ACTORS_ROOM);
+  TEST_ASSERT(knight >= 0 && a->team[knight] == 0 && a->madeBy[knight] == BM_HITS_FREE);
+  const int32_t *kf = &a->fields[knight * BM_SCRIPT_MAX_FIELDS];   // Hits, LastDamage, Blocked
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 0, stringId("Heavy"), 0));
+  const int32_t *heavy = &s_game.attachments.fields[0];             // Strikes, Guarded
+  // From the right, into the shield: blocked, the attachment hears guarded().
+  bmBodyPlace(b, 318, 160);
+  b->facing = -1;
+  frames(20, 0);
+  frames(2, BM_KEY_B);
+  TEST_ASSERT(kf[2] == 1 && kf[0] == 0 && heavy[1] == 1 && heavy[0] == 0);
+  TEST_ASSERT(s_game.hitStop == 0);
+  // From behind: struck; the game holds still 6 frames (#Stop), and the push is the hit's own.
+  frames(30, 0);
+  bmBodyPlace(b, 286, 160);
+  b->facing = 1;
+  frames(20, 0);
+  uint32_t frame = s_game.frame;
+  int32_t px = b->x;
+  frames(1, BM_KEY_B);
+  TEST_ASSERT(kf[0] == 1 && kf[1] == 2 && heavy[0] == 1 && s_game.hitStop == 6);
+  frames(3, BM_KEY_RIGHT);
+  TEST_ASSERT(b->x == px && s_game.hitStop == 3);                    // nothing moves meanwhile
+  frames(3, 0);
+  TEST_ASSERT(s_game.hitStop == 0 && s_game.frame == frame + 7);
+  bmAttachmentsDetach(&s_game, 0);
+  // The Drill: through the shield, every 4 frames while it lasts.
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 1, stringId("Drill"), 0));
+  bmBodyPlace(b, 318, 160);
+  b->facing = -1;
+  frames(30, 0);
+  int hits = kf[0];
+  frames(1, BM_KEY_SELECT);
+  frames(24, 0);
+  TEST_ASSERT(kf[0] - hits >= 4 && kf[2] == 1);
+  bmAttachmentsDetach(&s_game, 1);
+
+  // Knives: two in the air at most; a fast one still strikes the knight it passes.
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 2, stringId("Thrower"), 0));
+  const int32_t *thrower = &s_game.attachments.fields[2 * BM_SCRIPT_MAX_FIELDS];   // Thrown, Strikes
+  bmBodyPlace(b, 200, 160);
+  b->facing = 1;
+  frames(30, 0);
+  hits = kf[0];
+  frames(1, BM_KEY_R);
+  int knife = actorOfClass("Knife");
+  TEST_ASSERT(knife >= 0 && a->vx[knife] == BM_FIX(12) && a->team[knife] == BM_HITS_PLAYER_TEAM && a->madeBy[knife] == BM_HITS_PLAYER);
+  frames(1, 0);
+  frames(1, BM_KEY_R);
+  frames(1, 0);
+  frames(1, BM_KEY_R);   // a third: not while two are in the air
+  TEST_ASSERT(thrower[0] == 2);
+  frames(20, 0);
+  TEST_ASSERT(kf[0] == hits + 1 && thrower[1] >= 1);                // struck, and the thrower heard of it
+  TEST_ASSERT(actorOfClass("Knife") < 0 || a->gone[actorOfClass("Knife")]);
+  // Thrown at the room's right wall from close by: gone there.
+  bmBodyPlace(b, 470, 160);
+  b->facing = 1;
+  frames(30, 0);
+  frames(1, BM_KEY_R);
+  frames(10, 0);
+  TEST_ASSERT(actorOfClass("Knife") < 0 || a->gone[actorOfClass("Knife")]);
+  bmAttachmentsDetach(&s_game, 2);
+
+  // The turret's bolt, parried: back to the turret, which it strikes.
+  int turret = spawnAs("Turret", 120, 160, BM_ACTORS_ROOM);
+  TEST_ASSERT(turret >= 0);
+  bmBodyPlace(b, 200, 160);
+  b->facing = -1;
+  frames(30, 0);
+  int bolt = spawnAs("Bolt", 136, 156, (uint8_t)turret);
+  TEST_ASSERT(bolt >= 0 && a->madeBy[bolt] == 1 + turret && a->vx[bolt] == BM_FIX(3));
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 3, stringId("Parry"), 0));
+  // Wait until it is close, then parry.
+  for (int i = 0; i < 40 && BM_FIX_INT(a->x[bolt]) < 176; i++) frames(1, 0);
+  int32_t health = s_game.health;
+  frames(1, BM_KEY_B);
+  frames(1, 0);
+  TEST_ASSERT(a->vx[bolt] == -BM_FIX(3) && a->team[bolt] == BM_HITS_PLAYER_TEAM && a->madeBy[bolt] == BM_HITS_PLAYER);
+  frames(40, 0);
+  TEST_ASSERT(a->fields[turret * BM_SCRIPT_MAX_FIELDS] == 1 && s_game.health == health);
   TEST_ASSERT(bm_script_errors == 0);
 }
 
@@ -1935,6 +2053,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheRoomsAttachmentsComeAndGoWithTheRoom);
   RUN_TEST(testAHitStrikesOnce);
   RUN_TEST(testCapabilitiesAndFilters);
+  RUN_TEST(testGuardsAndProjectiles);
   RUN_TEST(testTheSwordDefeatsTheBat);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);

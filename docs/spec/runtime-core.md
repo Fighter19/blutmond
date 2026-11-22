@@ -502,6 +502,12 @@ value is dropped and counts as a script error.
 | 97 | `set_damage(n)` | in `damage_in` or `damage_out` (section 6, 10): the amount the next filter gets and the strike uses |
 | 98 | `damage_is(element)` | in a filter: the damage is of that element |
 | 99 | `owner_velocity(vx, vy)` | from one of the player's attachments: the player's `vx`, `vy` (fix) are these now; nothing from anything else |
+| 100 | `hit_option(name, n)` | the next hit of the figure: `#Pierce`, `#Reflect`, `#Multi` n, `#Stop` n (section 10) |
+| 101 | `hit_knock(x, y)` | the next hit's push (fix) |
+| 102 | `fly(vx, vy)` | an object's speed, moved by the engine (section 10) |
+| 103 | `fall(g)` | its gravity |
+| 104 | `lifetime(frames)` | destroyed (or hidden) after that many frames; 0 for ever |
+| 105 | `alive(#Class)` | how many objects of the class are there |
 | 88 | `flip_gravity()` | the player's gravity turns over or back (section 5, "Gravity flipped"): `flipped` toggled, `vy = 0`, not on the ground, no coyote time; true if it now pulls up |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
@@ -573,9 +579,14 @@ the sheet's first tile + the piece's tile; palette bank = the sheet's; priority 
 Figures are numbered: 0 the player, `1 + i` scripted object `i`. A figure's **team** is 1 for
 the player and the variable `team` for an object. **Hits**: 8 entries, each source figure
 (0xFF: free), the attachment slot that made it (0xFF: none), box name (0xFFFF: a rectangle),
-damage, element, the source's animation when armed, frames left, reach, and the figures it
-struck (a bit each). `arm` takes the entry of the same source and name if there is one, else
-the first free; a hit started when all are used is dropped. A room entered fresh has none.
+damage, element, the source's animation when armed, frames left, reach, the figures it
+struck (a bit each), and its options: flags (1 pierce, 2 reflect), `multi` and its counter,
+`stop`, `knockX`, `knockY` (fix). `arm` takes the entry of the same source and name if there
+is one, else the first free; a hit started when all are used is dropped. A room entered fresh
+has none. **Options** come from the source figure's next-hit options (`hit_option(#Pierce |
+#Reflect, 0)`, `hit_option(#Multi | #Stop, n)` with n 0 to 255, `hit_knock(x, y)`; from an
+object for itself, from the player's attachments for the player, nothing from the room's),
+taken into the entry when it is armed (`arm` or `hit_box`) and set back to none.
 
 **Each frame**, for each entry in order that is not free:
 
@@ -592,12 +603,23 @@ the first free; a hit started when all are used is dropped. A room entered fresh
    - up: `[ax - 10, ax + 10)` x `[top - r, top + 8)`;
    - down: `[ax - 10, ax + 10)` x `[bottom - 8, bottom + r)`;
    - low: as ahead, over the lower half of the body box (`[top + h / 2, bottom)`).
+   For an object, every rectangle is then stretched back along its speed: by `INT(vx)` to the
+   left when `vx > 0` (to the right when less), the same with `vy` (a projectile does not pass
+   through what lay between).
 3. For each figure `f` in number order: skip the source, a figure of the same team, one
    already struck by this hit, and one that cannot be struck now (the player: `hurtTimer !=
-   0`; an object: hidden, `health <= 0`, or invulnerable). Its hurt rectangles are its boxes
+   0`; an object: hidden, `health <= 0`, or invulnerable) unless the hit reflects and `f` is a
+   projectile (an object made at run time whose `vx` or `vy` is not 0). Unless the hit pierces,
+   if any hit rectangle overlaps one of `f`'s boxes of kind guard on the frame showing, the hit
+   is **blocked**: the bit of `f` is set, `f` gets `blocked(amount)` (the player: each of their
+   attachments), the source object `guarded(amount)` and so does the attachment in the entry's
+   slot (or the one that made the projectile); then the next figure. Its hurt rectangles are its boxes
    of kind hurt on the frame showing, or its body box (the player's box of section 3, an
    object's box of section 8) if there are none. If any hit rectangle overlaps any of them, it
-   is struck with `amount = max(1, damage)`: the bit of `f` is set; if the hit is the
+   is struck with `amount = max(1, damage)`: the bit of `f` is set; a hit that reflects and a
+   projectile `f`: `f` turns (`vx`, `vy`, `facing` negated), takes the source's team, its maker
+   becomes the source (and its attachment), its own hits' struck bits are cleared, and nothing
+   more happens. A projectile's maker is the owner of its hits: if the hit is the
    player's, their attachments in slot order get `damage_out(amount)` (as `damage_in`, section
    6) and with 0 or less left nothing more happens; the player gets Strike
    (amount, `FIX(INT(source x))`, the hit's element, the source) (section 6); an object takes
@@ -605,10 +627,15 @@ the first free; a hit started when all are used is dropped. A room entered fresh
    `amount / 2` if it has bit `4 + element` (resists), at least 1, element 0 unchanged; then
    `health -= amount`, 20 frames invulnerable, `knock = ±2.0 * (100 - steady) / 100` away
    from the source's `FIX(INT(x))` (+ if the object's `x` is not less), its hits end, and it
-   gets `hit(amount)`. Then the source hears of it: the
-   attachment in the entry's slot, else a source object, gets `struck(amount)`. If the entry
+   gets `hit(amount)`. With `stop != 0`, `hitStop = max(hitStop, stop)`. A hit with its own push
+   uses `knockX` instead of 2.0 for an object and `knockX`, `knockY` instead of 2.0, 3.0 for the
+   player; a `#Multi` hit leaves an object invulnerable only `min(20, multi)` frames. Then the
+   source hears of it: a source object gets `struck(amount)`, and the attachment in the entry's
+   slot (for a projectile, the attachment that made it) gets `struck(amount)` too. If the entry
    is no longer the one it was (freed or replaced by those events), stop with it.
-4. A rectangle whose entry is still the same: `frames -= 1`, at 0 it is free.
+4. With `multi != 0`: `multiCount += 1`; when it reaches `multi`, it is 0 again and the struck
+   bits are cleared (it strikes the same figures again).
+5. A rectangle whose entry is still the same: `frames -= 1`, at 0 it is free.
 
 Then every object's invulnerability goes down by 1 if not 0.
 
@@ -616,6 +643,20 @@ Then every object's invulnerability goes down by 1 if not 0.
 each object with `knock != 0`: if it is gone or hidden, `knock = 0`; else if the collision is
 solid for sides at `(INT(x + knock) ± 6, INT(y) - 4)` or `(…, INT(y) - 12)` (+ when pushed
 right), `knock = 0`; else `x += knock` and `knock` moves 0.25 towards 0 (to 0 at most).
+
+**Hit stop**: while `hitStop != 0` at the start of a game frame (after the frame count and the
+buttons), it goes down by 1 and the frame only draws the sprites, presents the UI layer and
+mixes the sound: nothing moves.
+
+**Objects the engine moves** (`fly(vx, vy)`, `fall(g)`, `lifetime(frames)`, from an object
+for itself), once a frame after the scripted objects (step 8 of section 3), in index order,
+not gone: if `life != 0` it goes down by 1, and at 0 the object is destroyed (made at run
+time) or hidden, and nothing more. Else, if `vx`, `vy` or `fall` is not 0: `vy += fall`, both
+clamped to ±16.0, `x += vx`, `y += vy`; if the collision is solid for sides at the middle of
+its box (section 8), it gets `wall()`. **Made at run time** (`spawn`, `spawn_with`): its team
+is its maker's (an object's `team`, the player's 1 from one of their attachments, 0 from the
+room), and its maker and the maker's attachment slot are kept (`madeBy`, `madeBySlot`).
+`alive(#Class)` counts the objects of that class that are not gone.
 
 **The flash**: an object with a sheet whose `invulnerable > 12` (the first 8 frames after it
 was struck) is drawn with sprite palette bank 13, whose 16 colours are all white (31, 31, 31),

@@ -552,6 +552,11 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   g->noticeText = 0xFFFF;
   g->hudDirty = true;
   bmDataPrepare(pPack);   // the record tables, checked before the first frame needs them
+  {
+    // The save game's schema hash now, not in the frame of the first save point.
+    BmStateBlock block = bmGameStateBlock(g);
+    bmStateSchemaHash(&block, 1);
+  }
   BmResult r = enterRoom(g, (uint32_t)index, true);
   if (r != BM_SUCCESS) return r;
   BmObjectView start;
@@ -976,9 +981,10 @@ bool bmGameStrikePlayerWith(BmGame *g, int32_t amount, int32_t fromX, uint8_t el
   bmSoundPlayEffect(&g->sound, "hurt");
   g->hurts++;
   g->hurtTimer = BM_HITS_PLAYER_INVULNERABLE;
-  g->player.vy = -BM_FIX(3);
+  // The push: the hit's own (hit_knock), else 2 away and 3 up.
+  g->player.vy = -(g->strikeKnockY != 0 ? g->strikeKnockY : BM_FIX(3));
   int32_t away = fromX > g->player.x ? -1 : fromX < g->player.x ? 1 : -g->player.facing;
-  g->player.vx = away * BM_FIX(2);
+  g->player.vx = away * (g->strikeKnockX != 0 ? g->strikeKnockX : BM_FIX(2));
   // A struck figure's own hits end.
   for (uint8_t k = 0; k < BM_HITS_MAX; k++)
     if (g->hits.source[k] == BM_HITS_PLAYER) bmHitsDisarm(g, BM_HITS_PLAYER, g->hits.name[k]);
@@ -1002,6 +1008,17 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   uint16_t pressed = (uint16_t)(keys & ~previous);
   g->keysPrevious = keys;
   if (g->returnPending) returnToSave(g);
+  // Hit stop: the game holds still for a moment after a heavy hit (pictures and sound go on).
+  if (g->hitStop != 0)
+  {
+    g->hitStop--;
+    updateSprites(g);
+    bmUiPresent(&g->ui);
+    int8_t *l, *r;
+    bmHalAudioBuffers(&l, &r);
+    bmSoundFrame(&g->sound, l, r, BM_HAL_AUDIO_FRAME_SAMPLES);
+    return;
+  }
   // An item obtained last frame: its sound now (the frame it came had the item's work already).
   if (g->pickupSound)
   {
@@ -1211,6 +1228,8 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   // through after all had their turn.
   bmAttachmentsRoomFrame(g);
   bmActorsFrame(g);
+  // Objects the engine moves (projectiles).
+  bmActorsMove(g);
   // Objects struck earlier are pushed on (after their scripts moved them).
   bmHitsKnockFrame(g);
   if (g->actors.pendingDoor != 0)
@@ -1283,6 +1302,7 @@ static const BmStateField s_gameFields[] = {
   F(speedPercent, BM_TYPE_S16, BM_STATE_SNAPSHOT),
   BM_STATE_ARRAY(BmGame, resists, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_GAME_ELEMENTS),
   F(returnPending, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(hitStop, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(lockGround, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(pickupSound, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(lockAir, BM_TYPE_U8, BM_STATE_SNAPSHOT),
@@ -1357,6 +1377,12 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.steady, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.spawned, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.gone, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.vx, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.vy, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.fall, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.life, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.madeBy, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.madeBySlot, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   F(actors.seed, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   // What `save` variables hold: this goes into the save game.
   F(actors.storeCount, BM_TYPE_U8, BM_STATE_SAVE),
@@ -1393,6 +1419,17 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, hits.reach, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   BM_STATE_ARRAY(BmGame, hits.aim, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   BM_STATE_ARRAY(BmGame, hits.aimNext, BM_TYPE_U8, BM_STATE_SNAPSHOT, 9),
+  BM_STATE_ARRAY(BmGame, hits.flags, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.multi, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.multiCount, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.stop, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.knockX, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.knockY, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.nextFlags, BM_TYPE_U8, BM_STATE_SNAPSHOT, 9),
+  BM_STATE_ARRAY(BmGame, hits.nextMulti, BM_TYPE_U8, BM_STATE_SNAPSHOT, 9),
+  BM_STATE_ARRAY(BmGame, hits.nextStop, BM_TYPE_U8, BM_STATE_SNAPSHOT, 9),
+  BM_STATE_ARRAY(BmGame, hits.nextKnockX, BM_TYPE_FIX, BM_STATE_SNAPSHOT, 9),
+  BM_STATE_ARRAY(BmGame, hits.nextKnockY, BM_TYPE_FIX, BM_STATE_SNAPSHOT, 9),
   BM_STATE_ARRAY(BmGame, hits.struck, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   // Open screens, in the middle of what their scripts do.
   F(screens.count, BM_TYPE_U8, BM_STATE_SNAPSHOT),

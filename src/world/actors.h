@@ -74,6 +74,11 @@ typedef struct BmActors
   uint8_t steady[BM_ACTORS_MAX];       // percent of a push it does not take (set_knockback)
   uint8_t spawned[BM_ACTORS_MAX];      // made at run time (spawn): no room object, gone with the room
   uint8_t gone[BM_ACTORS_MAX];         // destroyed: the place can be taken by the next spawn
+  // Moved by the engine (fly, fall; hitboxes.md §5): speed and gravity (fix), frames left to
+  // live (0: for ever); who made it (a figure, hits.h; 0xFF the room) and the attachment that did.
+  int32_t vx[BM_ACTORS_MAX], vy[BM_ACTORS_MAX], fall[BM_ACTORS_MAX];
+  uint16_t life[BM_ACTORS_MAX];
+  uint8_t madeBy[BM_ACTORS_MAX], madeBySlot[BM_ACTORS_MAX];
   uint32_t seed;
   // `save` variables, by room, object and field.
   uint8_t storeCount;
@@ -121,6 +126,14 @@ void bmActorsBox(const struct BmGame *pGame, uint8_t actor, int32_t *pX, int32_t
 bool bmActorsSpawn(struct BmGame *pGame, uint16_t className, int32_t x, int32_t y, uint32_t record);
 
 /// Object `actor` is gone: not drawn, not run, its hits end; its place is free.
+/// The index in the class table of the scripted class with this name, or -1.
+int32_t bmActorsClassNamed(const struct BmGame *pGame, const char *name);
+
+/// Once a frame after the scripts: objects the engine moves (fly, fall) go on, get wall()
+/// when their middle enters a solid cell, and those with a lifetime count it down (destroyed,
+/// or hidden if they belong to the room, at 0).
+void bmActorsMove(struct BmGame *pGame);
+
 void bmActorsDestroy(struct BmGame *pGame, uint8_t actor);
 
 /// Runs an event of scripted object `actor` (hit, struck).

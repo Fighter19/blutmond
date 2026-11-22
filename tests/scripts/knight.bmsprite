@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="../../assets/test_room/bat.png">
+ <box kind="hurt" x="-6" y="-12" w="12" h="12"/>
+ <box kind="guard" name="shield" x="8" y="-12" w="6" h="12"/>
+ <frame x="0" y="0" w="16" h="16" ax="8" ay="12"/>
+ <animation name="idle" loop="1">
+  <step frame="0" duration="8"/>
+ </animation>
+</sprite>

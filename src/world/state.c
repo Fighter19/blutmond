@@ -21,7 +21,48 @@ uint32_t bmStateTypeSize(uint8_t type)
   }
 }
 
+// The hash only depends on the blocks' field tables, which do not change: worked out once per
+// set of tables (over every field's name it cost a GBA a good part of a frame per save game).
+#define HASH_CACHE 4
+#define HASH_BLOCKS 4
+static struct
+{
+  uint32_t blockCount;
+  const BmStateField *fields[HASH_BLOCKS];
+  uint16_t fieldCount[HASH_BLOCKS];
+  const char *name[HASH_BLOCKS];
+  uint32_t hash;
+} s_hashCache[HASH_CACHE] BM_EWRAM_BSS;
+static uint8_t s_hashNext BM_EWRAM_BSS;
+
+static uint32_t schemaHash(const BmStateBlock *pBlocks, uint32_t blockCount);
+
 uint32_t bmStateSchemaHash(const BmStateBlock *pBlocks, uint32_t blockCount)
+{
+  if (blockCount == 0 || blockCount > HASH_BLOCKS) return schemaHash(pBlocks, blockCount);
+  for (uint32_t c = 0; c < HASH_CACHE; c++)
+  {
+    bool same = s_hashCache[c].blockCount == blockCount;
+    for (uint32_t b = 0; same && b < blockCount; b++)
+      same = s_hashCache[c].fields[b] == pBlocks[b].pFields && s_hashCache[c].fieldCount[b] == pBlocks[b].fieldCount &&
+             s_hashCache[c].name[b] == pBlocks[b].name;
+    if (same) return s_hashCache[c].hash;
+  }
+  uint32_t hash = schemaHash(pBlocks, blockCount);
+  uint8_t c = s_hashNext;
+  s_hashNext = (uint8_t)((s_hashNext + 1) % HASH_CACHE);
+  s_hashCache[c].blockCount = blockCount;
+  for (uint32_t b = 0; b < blockCount; b++)
+  {
+    s_hashCache[c].fields[b] = pBlocks[b].pFields;
+    s_hashCache[c].fieldCount[b] = pBlocks[b].fieldCount;
+    s_hashCache[c].name[b] = pBlocks[b].name;
+  }
+  s_hashCache[c].hash = hash;
+  return hash;
+}
+
+static uint32_t schemaHash(const BmStateBlock *pBlocks, uint32_t blockCount)
 {
   uint32_t crc = 0;
   for (uint32_t b = 0; b < blockCount; b++)

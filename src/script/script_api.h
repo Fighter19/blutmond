@@ -123,7 +123,13 @@ typedef enum BmScriptType {
   X(map_reveal,        BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
   X(set_damage,        VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(damage_is,         BOOL, 1, ENUM,  VOID,  VOID,  VOID, 0) \
-  X(owner_velocity,    VOID, 2, FIX,   FIX,   VOID,  VOID, 0)
+  X(owner_velocity,    VOID, 2, FIX,   FIX,   VOID,  VOID, 0) \
+  X(hit_option,        VOID, 2, NAME,  INT,   VOID,  VOID, 0) \
+  X(hit_knock,         VOID, 2, FIX,   FIX,   VOID,  VOID, 0) \
+  X(fly,               VOID, 2, FIX,   FIX,   VOID,  VOID, 0) \
+  X(fall,              VOID, 1, FIX,   VOID,  VOID,  VOID, 0) \
+  X(lifetime,          VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(alive,             INT,  1, NAME,  VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -169,6 +175,16 @@ typedef enum BmScriptType {
 // player (attachable-scripts.md §3): no walking or jumping for that many frames; an animation
 // of the player's sprite that the engine does not replace until the lock is over (or, without a
 // lock, until it ends); whether a lock is on. Nothing from an object.
+//
+// Hit options (hitboxes.md §3): hit_option(#Pierce, 0) (not stopped by guard boxes),
+// hit_option(#Multi, n) (strikes the same figure again every n frames), hit_option(#Stop, n)
+// (the game holds still n frames when it strikes), hit_option(#Reflect, 0) (turns a projectile
+// around instead of striking it), hit_knock(x, y) (the push of what it strikes, fix) apply to the
+// next arm or hit_box of the figure that calls them (the player for its attachments).
+// Projectiles (hitboxes.md §5): fly(vx, vy), fall(gravity) and lifetime(frames) make the engine
+// move an object (it gets wall() when its middle enters a solid cell) and destroy it after that
+// many frames; an object made with spawn takes the team of whoever made it, and an attachment
+// that made it hears struck() of its hits too; alive(#Class) counts that class's objects.
 //
 // Filters (attachable-scripts.md §3): the player's attachments get damage_in(amount) in slot
 // order before the player is struck (after defence and resistance), damage_out(amount) before
@@ -267,7 +283,9 @@ typedef enum BmScriptKind {
 
 // Events the runtime calls. hit(amount): the figure was struck (its health already lowered;
 // an attachment gets it when the player was); struck(amount): a hit of this figure or
-// attachment struck another; damage_in(amount), damage_out(amount): filters, see set_damage.
+// attachment struck another; damage_in(amount), damage_out(amount): filters, see set_damage;
+// blocked(amount): a guard box of the figure stopped a hit; guarded(amount): a guard box stopped
+// a hit of this figure or attachment; wall(): a moving object (fly) entered a solid cell.
 // X(name, type of the parameter (VOID: none), kinds that get it:
 // 1 Actor, 2 Attachment)
 #define BM_SCRIPT_EVENTS(X) \
@@ -285,7 +303,10 @@ typedef enum BmScriptKind {
   X(opened,   VOID, 4) \
   X(closed,   VOID, 4) \
   X(damage_in,  INT, 2) \
-  X(damage_out, INT, 2)
+  X(damage_out, INT, 2) \
+  X(blocked,  INT,  3) \
+  X(guarded,  INT,  3) \
+  X(wall,     VOID, 1)
 
 typedef enum BmScriptEvent {
 #define X(name, arg, kinds) BM_SCRIPT_EVENT_##name,
@@ -299,7 +320,7 @@ typedef enum BmScriptEvent {
 #define BM_SCRIPT_ACTOR_ONLY(X) \
   X(finish_anim) X(play_anim) X(anim_done) X(player_distance) X(move_toward_player) X(move_toward) \
   X(enter_door) X(hide) X(show) X(face_player) X(touching_player) X(destroy) X(spawn_with) X(floor_y) \
-  X(set_affinity) X(set_knockback)
+  X(set_affinity) X(set_knockback) X(fly) X(fall) X(lifetime)
 
 // Field flags in the class table: the storage flags of docs/spec/state.md.
 #define BM_SCRIPT_FIELD_SAVE 1

@@ -203,7 +203,8 @@ every other file of the same module.
 | Records | `record<S>` variables, parameters and results, `#Name` as a record, field access (`.field`, `.inner.field`, `.array[2]`, through `record<T>` fields), `for x in records(S)`; [data-format.md](data-format.md) §5 | a dynamic array index |
 | Classes | `class Name extends Actor;`, `extends Attachment` and `extends Screen` (below), `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes (`Player`, `Screen`), inheritance between script classes, components (`has`) |
 | Functions | functions with up to 3 parameters and a result (also `record<S>`), calls nested up to 16 deep; all are final; runtime functions take up to 4 values | `virtual`, `static` |
-| Events | Actor: `spawn()`, `tick()`, `touch()` (the player starts touching the object); Attachment: `attached()`, `detached()`, `tick()`, `press(name button)`, `release(name button)`, `jumped()`, `landed()`; both: `hit(int amount)` (struck: for an attachment, the player was), `struck(int amount)` (a hit of its own struck another); Attachment: `damage_in(int amount)`, `damage_out(int amount)` (filters: `set_damage(n)` changes what strikes the player or what the player's hit does, `damage_is(element)` tells its element; runtime-core.md §6, §10); Screen: `opened()`, `closed()`, `tick()`, `press(name)`, `release(name)`; in the class and per state | `dies`, `enter_room`, `leave_room`, `use`, `message`, the target and element of a hit |
+| Events | Actor: `spawn()`, `tick()`, `touch()` (the player starts touching the object); Attachment: `attached()`, `detached()`, `tick()`, `press(name button)`, `release(name button)`, `jumped()`, `landed()`; both: `hit(int amount)` (struck: for an attachment, the player was), `struck(int amount)` (a hit of its own struck another); Actor: `wall()` (a moving object entered a solid cell); both: `blocked(int amount)` (a guard box
+stopped a hit), `guarded(int amount)` (a hit of its own was stopped); Attachment: `damage_in(int amount)`, `damage_out(int amount)` (filters: `set_damage(n)` changes what strikes the player or what the player's hit does, `damage_is(element)` tells its element; runtime-core.md §6, §10); Screen: `opened()`, `closed()`, `tick()`, `press(name)`, `release(name)`; in the class and per state | `dies`, `enter_room`, `leave_room`, `use`, `message`, the target and element of a hit |
 | States | `state` with events and state code after `begin:`, `gotostate`, `start_state`; latent `sleep(frames)`, `finish_anim()`, `wait_until(condition)` | functions overridden per state; locals and `for` in state code (their values would not survive a wait: use variables of the class) |
 | Statements | `var` locals, `if`/`else`, `while`, `loop`, `for x in a..b`, `break`, `continue`, `return`, assignment with `=`, `+=`, `-=`, `*=`, `/=` | `switch`, `match`, queries |
 | Expressions | `+ - * / %`, comparisons, `&& || !` (short circuit), `fix(...)`, `int(...)`; integer literals become `fix` where `fix` is expected; mixing `int` and `fix` is an error | |
@@ -265,6 +266,13 @@ attachment that made the hit gets `struck(amount)`. An object has the variables 
 (struck only while above 0; 0 at the start, so a script that wants to be struck sets it) and
 `team` (0, the enemies, by default; the player is 1). From an attachment of the player, the
 figure is the player.
+
+**Hit options and projectiles.** `hit_option(#Pierce, 0)`, `hit_option(#Multi, n)`,
+`hit_option(#Stop, n)`, `hit_option(#Reflect, 0)` and `hit_knock(x, y)` shape the next `arm`
+or `hit_box` of the figure that calls them. An object moves itself with `fly(vx, vy)`,
+`fall(g)` and `lifetime(frames)` (the engine moves it and sends `wall()`); what `spawn` makes
+is on its maker's side, and an attachment that made it hears `struck()` of its hits;
+`alive(#Class)` limits how many there are (runtime-core.md §10).
 
 **Capabilities, filters, actions.** `add_stat(Stat.AirJumps, 1)` from an attachment gives the
 player a jump in the air, `add_stat(Stat.WallSlide, 1)` slides down walls and jumps off them
@@ -419,7 +427,8 @@ order of their numbers, with the kinds of class that get them: 0 `spawn()` (Acto
 `tick()` (both), 2 `touch()` (Actor), 3 `attached()`, 4 `detached()`, 5 `press(name)`, 6
 `release(name)`, 7 `jumped()`, 8 `landed()` (Attachment), 9 `hit(int)`, 10 `struck(int)`
 (both), 11 `opened()`, 12 `closed()` (Screen; it also gets `tick`, `press`, `release`), 13
-`damage_in(int)`, 14 `damage_out(int)` (Attachment). Class
+`damage_in(int)`, 14 `damage_out(int)` (Attachment), 15 `blocked(int)`, 16 `guarded(int)` (both), 17
+`wall()` (Actor). Class
 kinds: 0 Actor, 1 Attachment, 2 Screen. The line table's offset may be 0
 (none). Version 1 had the three events of an Actor and 0 in place of the kind; it is refused.
 

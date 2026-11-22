@@ -14,8 +14,11 @@
 // end. The target gets hit(amount), the source - the object, or the attachment that armed it -
 // struck(amount).
 //
-// Not yet (hitboxes.md steps 3 and 4): guard boxes, #Pierce, #Multi, hit stop, knock back from
-// a hit, projectiles, elements in the damage rule, defence.
+// Options of a hit (hit_option, hit_knock; set before it is armed): #Pierce goes through guard
+// boxes, #Multi strikes a figure again every n frames, #Stop holds the game still when it
+// strikes, #Reflect turns a projectile around, and its own push. A guard box of the target that
+// the hit touches stops it (blocked, guarded) unless it pierces. A moving object's (a
+// projectile's) hit is stretched back along the way it came this frame.
 
 #include "shared.h"
 
@@ -45,7 +48,18 @@ typedef struct BmHits
   uint8_t aim[BM_HITS_MAX];        // a rectangle: BmHitAim
   uint16_t struck[BM_HITS_MAX];    // a bit per figure already struck
   uint8_t aimNext[1 + 8];          // per figure: the aim of its next rectangle (aim(), then reset)
+  uint8_t flags[BM_HITS_MAX];      // BM_HIT_PIERCE, BM_HIT_REFLECT
+  uint8_t multi[BM_HITS_MAX];      // strikes a figure again every this many frames (0: once)
+  uint8_t multiCount[BM_HITS_MAX];
+  uint8_t stop[BM_HITS_MAX];       // frames the game holds still when it strikes
+  int32_t knockX[BM_HITS_MAX], knockY[BM_HITS_MAX];   // fix: its push (0, 0: the usual one)
+  // Per figure: the options of its next hit (hit_option, hit_knock), used up by it.
+  uint8_t nextFlags[1 + 8], nextMulti[1 + 8], nextStop[1 + 8];
+  int32_t nextKnockX[1 + 8], nextKnockY[1 + 8];
 } BmHits;
+
+#define BM_HIT_PIERCE 1
+#define BM_HIT_REFLECT 2
 
 
 struct BmGame;
@@ -59,6 +73,13 @@ int32_t bmHitAimNamed(const char *name);
 
 /// The next rectangle figure `source` arms has this aim (hit_box after aim()).
 void bmHitsAim(struct BmGame *pGame, uint8_t source, uint8_t aim);
+
+/// An option for the next hit of figure `source`: `name` #Pierce, #Multi, #Stop or #Reflect
+/// (string), with its value. False if there is no such option.
+bool bmHitsOption(struct BmGame *pGame, uint8_t source, const char *name, int32_t value);
+
+/// The push of the next hit of figure `source` (fix, away from the source and up).
+void bmHitsKnock(struct BmGame *pGame, uint8_t source, int32_t x, int32_t y);
 
 /// No hits (a room is entered anew).
 void bmHitsClear(struct BmGame *pGame);

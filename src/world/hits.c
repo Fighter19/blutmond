@@ -133,6 +133,29 @@ static void endHit(BmHits *h, uint8_t k)
   h->element[k] = h->anim[k] = 0;
   h->frames[k] = h->struck[k] = 0;
   h->reach[k] = 0;
+  h->flags[k] = h->multi[k] = h->multiCount[k] = h->stop[k] = 0;
+  h->knockX[k] = h->knockY[k] = 0;
+}
+
+bool bmHitsOption(BmGame *g, uint8_t source, const char *name, int32_t value)
+{
+  BmHits *h = &g->hits;
+  if (source >= sizeof(h->nextFlags) || name == NULL) return false;
+  uint8_t v = (uint8_t)(value < 0 ? 0 : value > 255 ? 255 : value);
+  if (strcmp(name, "Pierce") == 0) h->nextFlags[source] |= BM_HIT_PIERCE;
+  else if (strcmp(name, "Reflect") == 0) h->nextFlags[source] |= BM_HIT_REFLECT;
+  else if (strcmp(name, "Multi") == 0) h->nextMulti[source] = v;
+  else if (strcmp(name, "Stop") == 0) h->nextStop[source] = v;
+  else return false;
+  return true;
+}
+
+void bmHitsKnock(BmGame *g, uint8_t source, int32_t x, int32_t y)
+{
+  BmHits *h = &g->hits;
+  if (source >= sizeof(h->nextKnockX)) return;
+  h->nextKnockX[source] = x;
+  h->nextKnockY[source] = y;
 }
 
 // The hits of a struck figure end.
@@ -179,6 +202,17 @@ bool bmHitsArm(BmGame *g, uint8_t source, uint8_t slot, uint16_t name, int32_t d
     h->aim[k] = h->aimNext[source];
     h->aimNext[source] = 0;
   }
+  // The options set for it, used up too.
+  if (source < sizeof(h->nextFlags))
+  {
+    h->flags[k] = h->nextFlags[source];
+    h->multi[k] = h->nextMulti[source];
+    h->stop[k] = h->nextStop[source];
+    h->knockX[k] = h->nextKnockX[source];
+    h->knockY[k] = h->nextKnockY[source];
+    h->nextFlags[source] = h->nextMulti[source] = h->nextStop[source] = 0;
+    h->nextKnockX[source] = h->nextKnockY[source] = 0;
+  }
   return true;
 }
 
@@ -223,12 +257,28 @@ static bool stillArmed(const BmGame *g, uint8_t k)
   return loops || !st.finished;
 }
 
+// A moving object's rectangles reach back along the way it came this frame: a fast one does not
+// pass through what lay between.
+static uint8_t stretch(const BmGame *g, uint8_t f, Rect *pOut, uint8_t n)
+{
+  if (f == BM_HITS_PLAYER) return n;
+  int32_t dx = BM_FIX_INT(g->actors.vx[f - 1]), dy = BM_FIX_INT(g->actors.vy[f - 1]);
+  for (uint8_t r = 0; r < n; r++)
+  {
+    if (dx > 0) { pOut[r].x -= dx; pOut[r].w += dx; }
+    else { pOut[r].w -= dx; }
+    if (dy > 0) { pOut[r].y -= dy; pOut[r].h += dy; }
+    else { pOut[r].h -= dy; }
+  }
+  return n;
+}
+
 // The live rectangles of a hit this frame.
 static uint8_t hitRects(const BmGame *g, uint8_t k, Rect *pOut)
 {
   const BmHits *h = &g->hits;
   uint8_t f = h->source[k];
-  if (h->name[k] != NO_NAME) return boxesOf(g, f, BM_BOX_HIT, h->name[k], pOut);
+  if (h->name[k] != NO_NAME) return stretch(g, f, pOut, boxesOf(g, f, BM_BOX_HIT, h->name[k], pOut));
   int32_t x, y;
   bool flip;
   anchorOf(g, f, &x, &y, &flip);
@@ -253,7 +303,7 @@ static uint8_t hitRects(const BmGame *g, uint8_t k, Rect *pOut)
     pOut[0] = reach < 0 ? (Rect){ x + reach, body.y, -2 * reach, body.h } : (Rect){ flip ? x - reach : x, body.y, reach, body.h };
     break;
   }
-  return 1;
+  return stretch(g, f, pOut, 1);
 }
 
 int32_t bmHitsElement(int32_t amount, uint8_t affinity, uint8_t element)
@@ -266,12 +316,12 @@ int32_t bmHitsElement(int32_t amount, uint8_t affinity, uint8_t element)
 
 // Object i is struck for `amount` (the element applied already) from room x `fromX` (fix): it
 // is pushed away from there (as much as it is not steady), blinks and hears of it.
-static void strikeObject(BmGame *g, uint8_t i, int32_t amount, int32_t fromX)
+static void strikeObject(BmGame *g, uint8_t i, int32_t amount, int32_t fromX, int32_t knock, uint8_t invulnerable)
 {
   BmActors *a = &g->actors;
   a->health[i] -= amount;
-  a->invulnerable[i] = BM_HITS_INVULNERABLE;
-  int32_t push = (int32_t)BM_HITS_KNOCK * (100 - (a->steady[i] > 100 ? 100 : a->steady[i])) / 100;
+  a->invulnerable[i] = invulnerable;
+  int32_t push = knock * (100 - (a->steady[i] > 100 ? 100 : a->steady[i])) / 100;
   a->knock[i] = a->x[i] < fromX ? -push : push;
   endHitsOf(g, (uint8_t)(i + 1));
   bmActorsEvent(g, i, BM_SCRIPT_EVENT_hit, amount);
@@ -280,7 +330,7 @@ static void strikeObject(BmGame *g, uint8_t i, int32_t amount, int32_t fromX)
 bool bmHitsStrikeObject(BmGame *g, uint8_t i, int32_t amount, uint8_t element, int32_t fromX)
 {
   if (i >= g->actors.count || amount <= 0 || !strikable(g, (uint8_t)(i + 1))) return false;
-  strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], element), fromX);
+  strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], element), fromX, BM_HITS_KNOCK, BM_HITS_INVULNERABLE);
   return true;
 }
 
@@ -311,14 +361,57 @@ void bmHitsKnockFrame(BmGame *g)
   }
 }
 
+// The figure a hit is for: the source, or for a projectile the figure that made it (the
+// player's bolt is the player's), and the attachment that should hear of it.
+static uint8_t ownerOf(const BmGame *g, uint8_t source, uint8_t *pSlot)
+{
+  if (source == BM_HITS_PLAYER || source >= figureCount(g)) return source;
+  uint8_t i = (uint8_t)(source - 1);
+  if (g->actors.madeBy[i] == BM_HITS_FREE) return source;
+  if (*pSlot == BM_HITS_NO_SLOT) *pSlot = g->actors.madeBySlot[i];
+  return g->actors.madeBy[i];
+}
+
+// Whether a figure is a projectile (an object made at run time that the engine moves).
+static bool isProjectile(const BmGame *g, uint8_t f)
+{
+  if (f == BM_HITS_PLAYER) return false;
+  const BmActors *a = &g->actors;
+  uint8_t i = (uint8_t)(f - 1);
+  return a->spawned[i] && (a->vx[i] != 0 || a->vy[i] != 0);
+}
+
+// A projectile struck by a hit that reflects: it turns around and is the reflector's now.
+static void reflect(BmGame *g, uint8_t k, uint8_t target)
+{
+  BmHits *h = &g->hits;
+  BmActors *a = &g->actors;
+  uint8_t i = (uint8_t)(target - 1), source = h->source[k], slot = h->slot[k];
+  a->vx[i] = -a->vx[i];
+  a->vy[i] = -a->vy[i];
+  a->facing[i] = (int8_t)-a->facing[i];
+  a->team[i] = teamOf(g, source);
+  a->madeBy[i] = ownerOf(g, source, &slot);
+  a->madeBySlot[i] = slot;
+  // Its own hits strike anew, for the other side.
+  for (uint8_t j = 0; j < BM_HITS_MAX; j++)
+    if (h->source[j] == target) h->struck[j] = 0;
+}
+
 // Figure `target` is struck by hit `k` for `amount`.
 static void strike(BmGame *g, uint8_t k, uint8_t target, int32_t amount)
 {
   BmHits *h = &g->hits;
   uint8_t source = h->source[k], slot = h->slot[k];
   h->struck[k] = (uint16_t)(h->struck[k] | (1u << target));
+  if ((h->flags[k] & BM_HIT_REFLECT) && isProjectile(g, target))
+  {
+    reflect(g, k, target);
+    return;
+  }
+  uint8_t owner = ownerOf(g, source, &slot);
   // The player's attachments' filters (a strength spell): nothing left, no strike.
-  if (source == BM_HITS_PLAYER)
+  if (owner == BM_HITS_PLAYER)
   {
     amount = bmAttachmentsFilter(g, BM_SCRIPT_EVENT_damage_out, amount, h->element[k]);
     if (amount <= 0) return;
@@ -326,18 +419,26 @@ static void strike(BmGame *g, uint8_t k, uint8_t target, int32_t amount)
   int32_t sx, sy;
   bool flip;
   anchorOf(g, source, &sx, &sy, &flip);
+  if (h->stop[k] > g->hitStop) g->hitStop = h->stop[k];
   if (target == BM_HITS_PLAYER)
   {
+    g->strikeKnockX = h->knockX[k];
+    g->strikeKnockY = h->knockY[k];
     bmGameStrikePlayerWith(g, amount, BM_FIX(sx), h->element[k], source);
+    g->strikeKnockX = g->strikeKnockY = 0;
   }
   else
   {
     uint8_t i = (uint8_t)(target - 1);
-    strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], h->element[k]), BM_FIX(sx));
+    // A hit that strikes again and again leaves the figure open to it that soon.
+    uint8_t invulnerable = h->multi[k] != 0 && h->multi[k] < BM_HITS_INVULNERABLE ? h->multi[k] : BM_HITS_INVULNERABLE;
+    strikeObject(g, i, bmHitsElement(amount, g->actors.affinity[i], h->element[k]), BM_FIX(sx),
+                 h->knockX[k] != 0 ? h->knockX[k] : BM_HITS_KNOCK, invulnerable);
   }
-  // The source hears of it: the attachment that armed the hit, or the object.
+  // The source hears of it: the attachment that armed the hit, or the object (and the
+  // attachment that made it, for a projectile).
+  if (source != BM_HITS_PLAYER && source < figureCount(g)) bmActorsEvent(g, (uint8_t)(source - 1), BM_SCRIPT_EVENT_struck, amount);
   if (slot != BM_HITS_NO_SLOT) bmAttachmentsEvent(g, slot, BM_SCRIPT_EVENT_struck, amount);
-  else if (source != BM_HITS_PLAYER && source < figureCount(g)) bmActorsEvent(g, (uint8_t)(source - 1), BM_SCRIPT_EVENT_struck, amount);
 }
 
 void bmHitsFrame(BmGame *g)
@@ -358,7 +459,28 @@ void bmHitsFrame(BmGame *g)
     // Figures in a fixed order: the player, then the objects by index.
     for (uint8_t f = 0; n != 0 && f < figureCount(g); f++)
     {
-      if (f == source || teamOf(g, f) == teamOf(g, source) || (h->struck[k] & (1u << f)) || !strikable(g, f)) continue;
+      // A projectile has no health: only a hit that reflects reaches it.
+      bool reflects = (h->flags[k] & BM_HIT_REFLECT) && isProjectile(g, f);
+      if (f == source || teamOf(g, f) == teamOf(g, source) || (h->struck[k] & (1u << f)) || !(reflects || strikable(g, f))) continue;
+      // A guard box the hit touches stops it, unless it pierces.
+      Rect guard[MAX_RECTS];
+      uint8_t gn = (h->flags[k] & BM_HIT_PIERCE) ? 0 : boxesOf(g, f, BM_BOX_GUARD, NO_NAME, guard);
+      bool guarded = false;
+      for (uint8_t a = 0; a < n && !guarded; a++)
+        for (uint8_t b = 0; b < gn && !guarded; b++) guarded = overlap(&hit[a], &guard[b]);
+      if (guarded)
+      {
+        int32_t amount = h->damage[k] < 1 ? 1 : h->damage[k];
+        uint8_t slot = h->slot[k];
+        h->struck[k] = (uint16_t)(h->struck[k] | (1u << f));
+        ownerOf(g, source, &slot);
+        if (f != BM_HITS_PLAYER) bmActorsEvent(g, (uint8_t)(f - 1), BM_SCRIPT_EVENT_blocked, amount);
+        else bmAttachmentsEach(g, BM_SCRIPT_EVENT_blocked, amount);
+        if (source != BM_HITS_PLAYER) bmActorsEvent(g, (uint8_t)(source - 1), BM_SCRIPT_EVENT_guarded, amount);
+        if (slot != BM_HITS_NO_SLOT) bmAttachmentsEvent(g, slot, BM_SCRIPT_EVENT_guarded, amount);
+        if (h->source[k] != source || h->name[k] != name) break;
+        continue;
+      }
       Rect hurt[MAX_RECTS];
       uint8_t m = hurtOf(g, f, hurt);
       bool touches = false;
@@ -371,6 +493,12 @@ void bmHitsFrame(BmGame *g)
       strike(g, k, f, amount);
       // The events may have ended or replaced this hit.
       if (h->source[k] != source || h->name[k] != name) break;
+    }
+    // #Multi: the figures struck may be struck again every so many frames.
+    if (h->source[k] == source && h->multi[k] != 0 && ++h->multiCount[k] >= h->multi[k])
+    {
+      h->multiCount[k] = 0;
+      h->struck[k] = 0;
     }
     // A rectangle lasts its frames.
     if (h->source[k] == source && h->name[k] == NO_NAME && name == NO_NAME && --h->frames[k] == 0) endHit(h, k);

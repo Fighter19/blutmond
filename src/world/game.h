@@ -90,6 +90,8 @@ typedef struct BmGame
   int16_t speedPercent;            // added to the player's running speed (add_speed: heavy armour)
   uint8_t resists[BM_GAME_ELEMENTS];   // per element: what the player wears that resists it
   uint8_t striker;                 // the figure striking the player right now (hits.h), else 0xFF
+  uint8_t hitStop;                 // frames the game holds still after a hit with #Stop struck
+  int32_t strikeKnockX, strikeKnockY;   // the push of the hit striking the player now (not state)
   int32_t filterAmount;            // a damage being filtered (damage_in, damage_out), and its
   uint8_t filterElement;           // element: only while the filters run, not state
   uint8_t returnPending;           // bmGameReturnToSave asked for: done at the next frame's start
