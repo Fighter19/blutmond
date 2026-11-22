@@ -308,13 +308,18 @@ value is dropped and counts as a script error.
 | 14 | `log(n)` | prints on the PC, nothing on a device |
 | 15 | `random(n)` | `seed = seed * 1664525 + 1013904223` (32 bits); result `(seed >> 8) % n`, or 0 if `n <= 0` (the seed still advances) |
 | 16 | `touching_player()` | as above |
-| 17, 18 | `give_item(name)`, `has_item(name)` | items are the 32-bit FNV-1a hashes of their names; at most 4, a fifth is dropped |
+| 17, 18 | `give_item(name)`, `has_item(name)` | an item is the 32-bit FNV-1a hash of its name, the same key as a record of that name; `give_item` puts one into the inventory ([state.md](state.md) §4) unless the player has one already, `has_item` is true if they have at least one |
 | 19 | `abs(n)` | |
 | 20 | `play_sound(name)` | starts that effect |
 | 21 | `play_music(name)` | starts that song unless it is the one playing |
 | 22 | `record_get(table, key, field)` | a value of a record, or of the structure's defaults if the key is not in the table; 0 if there is no table ([data-format.md](data-format.md) §4). The compiler writes these three for `record<S>`; `field` is `offset \| type << 16` |
 | 23 | `record_count(table)` | the number of records of that structure; 0 without a table |
 | 24 | `record_at(table, index)` | the key of the record at that place in key order; 0 outside |
+| 25 | `item_count(record)` | how many of that record the inventory holds |
+| 26 | `give(record, amount)` | adds up to 255 of a kind (a new kind needs one of the 64 entries); returns how many were added |
+| 27 | `take(record, amount)` | takes them away if there are that many (true), else changes nothing (false); an entry at 0 is removed |
+| 28 | `stat(value)` | the player's own value of a stat: the enum value's number picks one of 16 (`statBase`); 0 outside |
+| 29 | `add_stat(value, amount)` | adds to it, clamped to a 16-bit signed number |
 
 `dist(a, b) = max(|a|, |b|) + min(|a|, |b|) / 2`.
 

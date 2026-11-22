@@ -151,7 +151,7 @@ if(BM_PLATFORM STREQUAL "gba")
   set(BM_TEST_ROOM_PACK ${CMAKE_BINARY_DIR}/test_room_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_ROOM_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_ROOM_PACK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx
-    DEPENDS host_tools ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+    DEPENDS host_tools ${BM_BMCOOK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test room")
   add_custom_target(test_room_pack DEPENDS ${BM_TEST_ROOM_PACK})
 
@@ -159,7 +159,7 @@ if(BM_PLATFORM STREQUAL "gba")
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK}
       ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS host_tools ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS host_tools ${BM_BMCOOK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level")
   # The same level with the scripts also compiled to native code (mondskript.md section 12).
@@ -168,7 +168,7 @@ if(BM_PLATFORM STREQUAL "gba")
     COMMAND ${BM_BMCOOK} --profile gba --native ${CMAKE_C_COMPILER} --native-elf ${CMAKE_BINARY_DIR}/test_level_native.elf
       --script-c ${CMAKE_BINARY_DIR}/test_level_native.c -o ${BM_TEST_LEVEL_NATIVE_PACK}
       ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS host_tools ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS host_tools ${BM_BMCOOK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_ASSETS}
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
       ${PROJECT_SOURCE_DIR}/tools/mondskript/aot.cpp ${PROJECT_SOURCE_DIR}/tools/cooker/native_module.cpp
     COMMENT "Cooking the test level with native scripts")
@@ -225,7 +225,7 @@ if(BM_PLATFORM STREQUAL "gba")
   set(BM_SCRIPT_BENCH_PACK ${CMAKE_BINARY_DIR}/script_bench_gba.bmpk)
   add_custom_command(OUTPUT ${BM_SCRIPT_BENCH_PACK}
     COMMAND ${BM_BMCOOK} --profile gba --native ${CMAKE_C_COMPILER} -o ${BM_SCRIPT_BENCH_PACK} ${PROJECT_SOURCE_DIR}/tests/scripts/bench.ms
-    DEPENDS host_tools ${PROJECT_SOURCE_DIR}/tests/scripts/bench.ms ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
+    DEPENDS host_tools ${BM_BMCOOK} ${PROJECT_SOURCE_DIR}/tests/scripts/bench.ms ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
     COMMENT "Cooking the script benchmark")
   add_custom_target(script_bench_pack DEPENDS ${BM_SCRIPT_BENCH_PACK})
   bm_add_gba_image(script_bench apps/script_bench/main.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
@@ -746,18 +746,23 @@ if(BM_PLATFORM STREQUAL "host")
       # and a GBA that runs nothing but the bootstrap (it gets the runtime through it first).
       # The other side then reports the sender's room and position; the sender plays on.
       set(send ${BM_GBA_BUILD_DIR}/game_send.elf:bm_game_stats)
+      # The receiving GBA also carries the sender's inventory afterwards (the coin the autopilot
+      # took in the first room): bm_game_stats+92 counts the things carried, +96 is the CRC of
+      # the inventory's keys and amounts.
       add_test(NAME gba_to_gba_state
         COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/game.gba --frames 1500 --until a ${send}+24=1000
           --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=0 --check a ${send}+8=0 --check a ${send}+12=1
           --check a ${send}+64 --check a ${send}+68
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+28=1
-          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+56=0)
+          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+92=1
+          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+96=140279927)
       add_test(NAME gba_to_gba_boot
         COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/bootstrap_mb.gba --frames 1500 --until a ${send}+24=1000
           --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=2 --check a ${send}+8=0 --check a ${send}+12=1
           --check a ${send}+64 --check a ${send}+80 --check a ${send}+68
           --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+28=1
-          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+56=0)
+          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+92=1
+          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+96=140279927)
 
       # The PC game plays along with the GBA (docs/spec/link-protocol.md section 10): the GBA's
       # keys for each frame, mirrored by bmlink; the states are compared every 64 frames.

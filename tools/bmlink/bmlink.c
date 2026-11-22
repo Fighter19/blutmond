@@ -518,7 +518,7 @@ int main(int argc, char **argv)
       if (i + 1 < argc && strcmp(argv[i + 1], "save") == 0) { mask = BM_STATE_SAVE; i++; }
       else if (i + 1 < argc && strcmp(argv[i + 1], "link") == 0) { mask = BM_STATE_LINK; i++; }
       else if (i + 1 < argc && strcmp(argv[i + 1], "snapshot") == 0) i++;
-      uint8_t data[BM_LINK_MAX_PAYLOAD];
+      static uint8_t data[BM_LIVE_STATE_CAPACITY];
       uint32_t size;
       if (!bmLiveMasterGetState(&m, mask, data, sizeof(data), &size)) { failed = 1; break; }
       FILE *f = fopen(a1, "wb");

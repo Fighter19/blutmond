@@ -1105,8 +1105,9 @@ private:
       v.value *= 256;
       v.literalInt = false;
     }
-    // #ShortSword where a record<S> is expected is that record's key.
-    if (v.isConst && !v.nameText.empty() && isRecordType(want))
+    // #ShortSword where a record<S> (or a runtime function's record of any structure) is
+    // expected is that record's key.
+    if (v.isConst && !v.nameText.empty() && (isRecordType(want) || want == BM_SCRIPT_RECORD))
     {
       v.type = want;
       v.value = int32_t(nameKey(v.nameText));
@@ -1116,6 +1117,8 @@ private:
   void expectType(Value &v, BmScriptType want, const Token &at, const char *what)
   {
     adapt(v, want);
+    // Runtime functions take records of any structure, and values of any enum.
+    if ((want == BM_SCRIPT_RECORD && isRecordType(v.type)) || (want == BM_SCRIPT_ENUM && isEnumType(v.type))) return;
     if (v.type != want)
       error(at, std::string(what) + " must be " + tn(want) + ", this is " + tn(v.type) +
                     (v.type == BM_SCRIPT_INT && want == BM_SCRIPT_FIX ? " (write fix(...) to convert)"
@@ -1863,8 +1866,8 @@ bool Module::ok() const
 
 const char *typeName(BmScriptType type)
 {
-  static const char *const names[] = {"nothing", "bool", "int", "fix", "name", "text", "enum"};
-  return int(type) >= 0 && int(type) <= BM_SCRIPT_ENUM ? names[type] : "enum";
+  static const char *const names[] = {"nothing", "bool", "int", "fix", "name", "text", "enum", "record"};
+  return int(type) >= 0 && int(type) <= BM_SCRIPT_RECORD ? names[type] : "enum";
 }
 
 const char *dataTypeName(BmDataType type)

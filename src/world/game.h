@@ -8,6 +8,7 @@
 // (docs/spec/room-format.md section 5): the player with PlatformerControl, the camera with
 // CameraZone, KillZone respawns, Door room changes and placeholders for other classes.
 
+#include "inventory.h"
 #include "actors.h"
 #include "body.h"
 #include "collision.h"
@@ -77,6 +78,8 @@ typedef struct BmGame
   BmAnimState playerAnim;
   // Scripted objects of the room (docs/spec/mondskript.md).
   BmActors actors;
+  // What the player carries and wears (docs/plans/structures.md §7).
+  BmInventory inventory;
   // Music and sound effects. Not part of the game state yet: a loaded state starts the room's
   // song from its beginning.
   BmSound sound;

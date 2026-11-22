@@ -1,12 +1,20 @@
 # Plan: custom structures and records
 
-Status: steps 1 and 2 built (enums and structures in the compiler, record files, `DTAB`,
-`record<S>` in scripts), specified in [../spec/mondskript.md](../spec/mondskript.md) §11 and
-[../spec/data-format.md](../spec/data-format.md); the test level's bat reads its numbers
-from an `Enemy` record. Steps 3 to 5 are open. Where the built version differs from sections
-2 to 6: `DTAB` also holds the defaults record; reading an unknown key gives the defaults
-silently (no report through the link yet); `record_get` takes the field as `offset | type <<
-16`.
+Status: steps 1 to 3 built (enums and structures in the compiler, record files, `DTAB`,
+`record<S>` in scripts, the inventory in the game state and state transfer in parts),
+specified in [../spec/mondskript.md](../spec/mondskript.md) §11,
+[../spec/data-format.md](../spec/data-format.md), [../spec/state.md](../spec/state.md) §4 and
+[../spec/link-protocol.md](../spec/link-protocol.md); the test level's bat reads its numbers
+from an `Enemy` record, the coin it collects goes into the inventory, and a GBA brought to
+where another one is carries it along. Steps 4 and 5 are open.
+
+Where the built version differs from sections 2 to 7: `DTAB` also holds the defaults record;
+reading an unknown key gives the defaults silently (no report through the link yet);
+`record_get` takes the field as `offset | type << 16`. There is no `stats { ... }`
+declaration: stats are numbered by the values of an enum the game declares (`enum Stat`),
+and `stat()` returns the base value until equipment adds to it (step 4). Items given with
+`give_item` stay at most one of a kind, as before; `give` and `take` count.
+
 Milestone M12 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies

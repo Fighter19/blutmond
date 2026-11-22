@@ -224,13 +224,20 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_give_item:
   case BM_SCRIPT_API_has_item:
   {
+    // An item named #Key is the record Key's key: the same hash.
     uint32_t h = hashName(bmPackString(g->pPack, (uint16_t)args[0]));
-    bool has = false;
-    for (uint8_t k = 0; k < a->itemCount; k++) has = has || a->items[k] == h;
+    bool has = bmInventoryCount(&g->inventory, h) != 0;
     if (api == BM_SCRIPT_API_has_item) *result = has;
-    else if (!has && a->itemCount < BM_ACTORS_ITEMS) a->items[a->itemCount++] = h;
+    else if (!has) bmInventoryGive(&g->inventory, h, 1);
     break;
   }
+  case BM_SCRIPT_API_item_count:
+  case BM_SCRIPT_API_give:
+  case BM_SCRIPT_API_take:
+  case BM_SCRIPT_API_stat:
+  case BM_SCRIPT_API_add_stat:
+    bmInventoryScriptCall(&g->inventory, api, args, result);
+    break;
   case BM_SCRIPT_API_abs:
     *result = absolute(args[0]);
     break;

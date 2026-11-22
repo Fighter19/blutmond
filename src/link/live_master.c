@@ -114,15 +114,35 @@ bool bmLiveMasterGetState(BmLinkMaster *m, uint8_t mask, uint8_t *pOut, uint32_t
 {
   BmLinkPacket p;
   if (!bmLinkMasterRequest(m, BM_LINK_STATE_GET, &mask, 1, BM_LINK_STATE_DATA, &p, BM_LIVE_ANSWER_POLLS)) return false;
-  if (p.length > capacity) return false;
-  memcpy(pOut, p.payload, p.length);
-  *pSize = p.length;
+  // The parts come in order: offset, total, data.
+  uint32_t received = 0;
+  for (;;)
+  {
+    if (p.length < BM_LIVE_STATE_HEADER) return false;
+    uint32_t offset = bmLinkGet32(p.payload), total = bmLinkGet32(p.payload + 4), n = p.length - BM_LIVE_STATE_HEADER;
+    if (total == 0 || total > capacity || offset != received || n > total - offset) return false;
+    memcpy(pOut + offset, p.payload + BM_LIVE_STATE_HEADER, n);
+    received += n;
+    if (received == total) break;
+    if (!bmLinkMasterReceive(m, BM_LINK_STATE_DATA, &p, BM_LIVE_ANSWER_POLLS)) return false;
+  }
+  *pSize = received;
   return true;
 }
 
 bool bmLiveMasterPutState(BmLinkMaster *m, const uint8_t *pData, uint32_t size, BmLiveStatus *pStatus)
 {
-  if (size > BM_LINK_MAX_PAYLOAD || !bmLinkMasterQueue(m, BM_LINK_STATE_PUT, pData, (uint16_t)size)) return false;
+  if (size == 0 || size > BM_LIVE_STATE_CAPACITY) return false;
+  static uint8_t part[BM_LINK_MAX_PAYLOAD] BM_EWRAM_BSS;
+  for (uint32_t offset = 0; offset < size;)
+  {
+    uint32_t n = size - offset < BM_LIVE_STATE_DATA_MAX ? size - offset : BM_LIVE_STATE_DATA_MAX;
+    bmLinkPut32(part, offset);
+    bmLinkPut32(part + 4, size);
+    memcpy(part + BM_LIVE_STATE_HEADER, pData + offset, n);
+    if (!bmLinkMasterQueue(m, BM_LINK_STATE_PUT, part, (uint16_t)(BM_LIVE_STATE_HEADER + n))) return false;
+    offset += n;
+  }
   return bmLiveMasterApply(m, 0, BM_LIVE_STATE, NULL, pStatus);
 }
 

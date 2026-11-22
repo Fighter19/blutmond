@@ -1,6 +1,6 @@
 # Link protocol
 
-Version 0.6, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
+Version 0.7, draft. Implemented in `src/link/` (both sides) and `tools/bmlink/`.
 
 How the editor (or another GBA) talks to a running Blutmond runtime: booting it, sending
 content, reading state and logs, debugging. Requirement: **wherever xcomms can boot a GBA over
@@ -205,7 +205,7 @@ All values little endian.
 | `APPLY` | u32 transfer ID, u8 mode (0 restart, 1 hot, 2 hot with migration, 3 module, 4 state; 2 and 3 are answered "not supported"), 3 × u8 0, then optionally the text of a room ID from byte 8 to the end of the payload, at most 63 bytes, no terminator (the room to start in; used by restart). Modes 0 and 1: every chunk must be present and the pack must open with a correct CRC; mode 4 loads the last `STATE_PUT`. Applied at a frame boundary and answered with `STATUS` |
 | `STATUS` (24 bytes) | u8 kind (1 answer to `APPLY`; 0 is reserved for reports), u8 result (0 ok, 1 transfer incomplete, 2 CRC mismatch, 3 too large, 4 pack refused, 5 state of another layout, 6 mode not supported), u8 mode, u8 0, u32 transfer ID, u32 game frame, u32 room index, s16 x, s16 y, u32 reloads applied |
 | `STATE_GET` | u8 flag mask ([state.md](state.md)); without it, snapshot |
-| `STATE_DATA`, `STATE_PUT` | the serialised state ([state.md](state.md) §2), at most 1024 bytes, so one packet. `STATE_PUT` only stores it; `APPLY` with mode 4 loads it |
+| `STATE_DATA`, `STATE_PUT` | u32 offset, u32 total size, then a part of the serialised state ([state.md](state.md) §3), at most 1016 bytes per packet, the parts in order from offset 0. The runtime sends the parts of `STATE_DATA` at frame boundaries as its send buffers take them, and answers a state that does not fit its buffer (2048 bytes) with one packet of total size 0. `STATE_PUT` only stores the parts; the state counts as received with the part that reaches the total; `APPLY` with mode 4 loads it |
 | `RESET` | empty. 20 frames later (so the acknowledgement gets out) the device starts over ([gba-backend.md](gba-backend.md) §4) |
 | `INPUT` | section 10 |
 | `LOG` | text, no terminator |
@@ -504,4 +504,6 @@ autopilot for 1180 frames into the second room. Both machines must run the same 
 - 0.6: brought in line with the code: the header word, the CRC, the answer to `SYNC` and
   `SESS`, sequence number rules, buffer and retry numbers, which packet types are built,
   `RESET` and `INPUT` in the tables, the multiboot sequence, memory the debugger may touch.
+- 0.7: protocol version 2: `STATE_DATA` and `STATE_PUT` carry the state in parts (offset,
+  total size, data), since a snapshot with the inventory is larger than one packet.
 - 0.4.1: `SESS`. Found on hardware: a second run of `bmlink` counted its packets from 0 while the runtime went on from the first run's numbers, and nothing got through.

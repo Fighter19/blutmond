@@ -198,7 +198,7 @@ every other file of the same module.
 | Statements | `var` locals, `if`/`else`, `while`, `loop`, `for x in a..b`, `break`, `continue`, `return`, assignment with `=`, `+=`, `-=`, `*=`, `/=` | `switch`, `match`, queries |
 | Expressions | `+ - * / %`, comparisons, `&& || !` (short circuit), `fix(...)`, `int(...)`; integer literals become `fix` where `fix` is expected; mixing `int` and `fix` is an error | |
 | defaultproperties | values of variables, `start_state`, `sprite = "name"` | component and struct fields |
-| Run time | 8 scripted objects per room, 16 values of `save` variables kept across rooms and in the save game, 4 items | larger limits need state transfer in several packets |
+| Run time | 8 scripted objects per room, 16 values of `save` variables kept across rooms and in the save game; an inventory of 64 kinds of things up to 255 each and 16 stat values ([state.md](state.md) §4) | more objects and variables |
 
 ### Structures
 
@@ -231,7 +231,9 @@ added at the end. This version: `sleep`, `finish_anim`, `play_anim(name)`, `anim
 fix)`, `hurt_player(int)`, `enter_door`, `hide`, `show`, `face_player`, `log(int)`,
 `random(int)`, `touching_player`, `give_item(name)`, `has_item(name)`, `abs(int)`,
 `play_sound(name)`, `play_music(name)`, and for records `record_get`, `record_count`,
-`record_at` (written by the compiler, not by hand); and the
+`record_at` (written by the compiler, not by hand); for the inventory `item_count(record)`,
+`give(record, int)`, `take(record, int)`, `stat(enum)`, `add_stat(enum, int)`, where
+`record` takes a record of any structure (or `#Name`) and `enum` a value of any enum; and the
 actor variables `x`, `y`, `facing` and (read only) `home_x`, `home_y`. What each of these does,
 exactly, is in [runtime-core.md](runtime-core.md) §8.
 
@@ -438,4 +440,4 @@ for now), per-class modules loaded on room changes.
   rules; what the runtime functions do moved to runtime-core.md.
 - 0.5: enums, and structures laid out for records; variable type 6 (enum).
 - 0.6: `record<S>`, field access, `for x in records(S)`; variable type 7 (record); runtime
-  functions 22 to 24.
+  functions 22 to 24; the inventory functions 25 to 29.

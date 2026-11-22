@@ -10,7 +10,10 @@
 
 extern "C" {
 #include "data.h"
+#include "game.h"
+#include "inventory.h"
 #include "pack.h"
+#include "state.h"
 #include "vm.h"
 }
 
@@ -183,6 +186,7 @@ static void testTables()
 struct Host
 {
   const BmPack *pack = nullptr;
+  BmInventory inventory{};
   std::vector<int32_t> log;
   std::vector<std::string> errors;
 };
@@ -191,7 +195,7 @@ static bool hostCall(void *ctx, BmVmInstance *, uint16_t api, const int32_t *arg
 {
   Host &h = *static_cast<Host *>(ctx);
   if (api == BM_SCRIPT_API_log) h.log.push_back(args[0]);
-  else bmDataScriptCall(h.pack, api, args, result);
+  else if (!bmDataScriptCall(h.pack, api, args, result)) bmInventoryScriptCall(&h.inventory, api, args, result);
   return false;
 }
 static int32_t hostGet(void *, BmVmInstance *, uint16_t) { return 0; }
@@ -262,6 +266,98 @@ event spawn() {
   TEST_ASSERT(empty.errors.empty() && !empty.log.empty() && empty.log[0] == 0 && empty.log[1] == 0);
 }
 
+// The inventory (structures.md step 3): amounts up to 255, at most 64 kinds, entries that
+// reach 0 removed in order; in the save game and in what goes to another device.
+static void testInventory()
+{
+  BmInventory inv{};
+  TEST_ASSERT(bmInventoryGive(&inv, 7, 200) == 200 && bmInventoryGive(&inv, 7, 100) == 55 && bmInventoryCount(&inv, 7) == 255);
+  TEST_ASSERT(bmInventoryGive(&inv, 0, 1) == 0 && bmInventoryCount(&inv, 0) == 0);
+  for (uint32_t k = 100; k < 200; k++) bmInventoryGive(&inv, k, 1);
+  TEST_ASSERT(inv.count == BM_INVENTORY_SLOTS && bmInventoryCount(&inv, 100 + BM_INVENTORY_SLOTS - 2) == 1 && bmInventoryCount(&inv, 199) == 0);
+  TEST_ASSERT(!bmInventoryTake(&inv, 100, 2) && bmInventoryCount(&inv, 100) == 1);    // not enough: nothing changes
+  TEST_ASSERT(bmInventoryTake(&inv, 100, 1) && inv.count == BM_INVENTORY_SLOTS - 1);
+  TEST_ASSERT(inv.key[0] == 7 && inv.key[1] == 101 && inv.key[inv.count] == 0);     // the rest moved up
+  TEST_ASSERT(bmInventoryTake(&inv, 7, 0) && bmInventoryCount(&inv, 7) == 255);
+
+  // Save game and link: the inventory goes along, and comes back as it was.
+  static BmGame a, b;
+  std::memset(&a, 0, sizeof(a));
+  for (uint32_t k = 1; k <= 40; k++) bmInventoryGive(&a.inventory, k * 977, k);
+  a.inventory.equipped[2] = 12345;
+  a.inventory.quick[3] = 777;
+  a.inventory.statBase[5] = -42;
+  for (uint8_t mask : {uint8_t(BM_STATE_SAVE), uint8_t(BM_STATE_LINK)})
+  {
+    static uint8_t buffer[2048];
+    BmStateBlock blockA = bmGameStateBlock(&a);
+    uint32_t size = bmStateWrite(&blockA, 1, mask, buffer, sizeof(buffer));
+    TEST_ASSERT(size > BM_STATE_HEADER_SIZE + 400);
+    std::memset(&b, 0, sizeof(b));
+    BmStateBlock blockB = bmGameStateBlock(&b);
+    TEST_ASSERT(bmStateRead(&blockB, 1, buffer, size) == BM_STATE_OK);
+    TEST_ASSERT(std::memcmp(&a.inventory, &b.inventory, sizeof(a.inventory)) == 0);
+  }
+  // A snapshot no longer fits into one link packet: STATE_DATA and STATE_PUT go in parts.
+  BmStateBlock block = bmGameStateBlock(&a);
+  TEST_ASSERT(bmStateSize(&block, 1, BM_STATE_SNAPSHOT) > 1024);
+}
+
+static void testInventoryScripts()
+{
+  Cooked c;
+  cookPack(c, {write("weapons.ms", kStructures), write("bag.ms", R"(enum Stat { MaxHealth, Attack }
+class Bag extends Actor;
+event spawn() {
+  log(give(#ShortSword, 3));            // 3
+  log(give(#ShortSword, 300));          // 252: at most 255 of a kind
+  log(item_count(#ShortSword));         // 255
+  var record<Weapon> w = #FlameBrand;
+  give(w, 1);
+  log(item_count(w));                   // 1
+  if take(#ShortSword, 255) { log(10); }
+  if !take(#ShortSword, 1) { log(11); }
+  log(item_count(#ShortSword));         // 0
+  add_stat(Stat.Attack, 5);
+  add_stat(Stat.Attack, -2);
+  log(stat(Stat.Attack));               // 3
+  log(stat(Stat.MaxHealth));            // 0
+  give_item(#coin);
+  if has_item(#coin) { log(12); }
+}
+)")},
+          {write("weapons.bmdata", kWeapons)});
+  TEST_ASSERT(c.module.ok());
+  if (!c.module.ok()) return;
+  BmVmModule vm;
+  const char *why = nullptr;
+  TEST_ASSERT(bmVmModuleOpen(&vm, c.module.data.data(), uint32_t(c.module.data.size()), &why));
+  Host h;
+  h.pack = &c.opened;
+  BmVmHost host = {&h, hostCall, hostGet, hostSet, hostField, hostWaitOver, hostError};
+  BmVmInstance inst;
+  bmVmInstanceInit(&vm, &inst, 0);
+  bmVmEvent(&vm, &host, &inst, BM_SCRIPT_EVENT_spawn);
+  // give_item and has_item need the game (names from the pack): here they do nothing.
+  std::vector<int32_t> expected = {3, 252, 255, 1, 10, 11, 0, 3, 0};
+  if (h.log != expected)
+  {
+    printf("  got:");
+    for (int32_t v : h.log) printf(" %d", int(v));
+    printf("\n");
+  }
+  TEST_ASSERT(h.log == expected && h.errors.empty());
+  TEST_ASSERT(bmInventoryCount(&h.inventory, script::nameKey("FlameBrand")) == 1 && h.inventory.statBase[1] == 3);
+
+  // Runtime functions take a record of any structure and a value of any enum, but nothing else.
+  auto err = [](const std::string &cls) {
+    script::Module m = script::compile({{"w.ms", kStructures}, {"c.ms", cls}}, stringId);
+    return m.diagnostics.empty() ? std::string() : m.diagnostics[0].message;
+  };
+  TEST_ASSERT(err("class T extends Actor;\nevent tick() { give(3, 1); }").find("must be record") != std::string::npos);
+  TEST_ASSERT(err("class T extends Actor;\nevent tick() { log(stat(1)); }").find("must be enum") != std::string::npos);
+}
+
 static void testScriptErrors()
 {
   auto err = [](const std::string &cls) {
@@ -319,6 +415,8 @@ int main(int argc, char **argv)
   RUN_TEST(testTables);
   RUN_TEST(testScripts);
   RUN_TEST(testScriptErrors);
+  RUN_TEST(testInventory);
+  RUN_TEST(testInventoryScripts);
   RUN_TEST(testDataErrors);
   return TEST_RESULT();
 }

@@ -48,11 +48,21 @@ typedef enum BmScriptType {
   X(play_music,         VOID, 1, NAME, VOID, VOID, 0) \
   X(record_get,         INT,  3, INT,  INT,  INT,  0) \
   X(record_count,       INT,  1, INT,  VOID, VOID, 0) \
-  X(record_at,          INT,  2, INT,  INT,  VOID, 0)
+  X(record_at,          INT,  2, INT,  INT,  VOID, 0) \
+  X(item_count,         INT,  1, RECORD, VOID, VOID, 0) \
+  X(give,               INT,  2, RECORD, INT,  VOID, 0) \
+  X(take,               BOOL, 2, RECORD, INT,  VOID, 0) \
+  X(stat,               INT,  1, ENUM, VOID, VOID, 0) \
+  X(add_stat,           VOID, 2, ENUM, INT,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
 // structure's name; field: offset | type << 16 (BmDataType).
+//
+// item_count(record), give(record, amount), take(record, amount): the inventory
+// (src/world/inventory.h); an argument of type RECORD takes a record of any structure (or
+// #Name). stat(value), add_stat(value, amount): the player's own stat values, numbered by the
+// values of an enum the game declares (by convention `enum Stat { ... }`, at most 16).
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {

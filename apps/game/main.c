@@ -78,7 +78,7 @@ __attribute__((used, aligned(4), section(".bm_rom_slot"))) const volatile BmRomP
 #  define BM_SNAPSHOT_FRAME 0
 #endif
 
-#define BM_SNAPSHOT_CAPACITY 1024
+#define BM_SNAPSHOT_CAPACITY 2048
 
 /// Snapshot mailboxes, written and read by tools (tools/bm_mgba_run --poke/--dump).
 typedef struct BmStateMailbox
@@ -125,6 +125,8 @@ typedef struct BmGameStats
   uint32_t sendRuntimeCycles;  // of sendCycles, sending the runtime through the bootstrap
   uint32_t followChecks;      // input mirror: state checksums compared with the other device's
   uint32_t followMismatches;  // ... and how many differed
+  uint32_t items;        // things the player carries: the amounts of all inventory entries
+  uint32_t inventoryCrc; // CRC-32 over the inventory's keys and amounts (0: empty)
 } BmGameStats;
 BmGameStats bm_game_stats;
 
@@ -333,6 +335,10 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
     bm_game_stats.deaths = s_game.deaths;
     bm_game_stats.roomChanges = s_game.roomChanges;
     bm_game_stats.roomIndex = s_game.roomIndex;
+    bm_game_stats.items = 0;
+    for (uint32_t k = 0; k < s_game.inventory.count; k++) bm_game_stats.items += s_game.inventory.amount[k];
+    bm_game_stats.inventoryCrc = s_game.inventory.count == 0 ? 0
+                               : bmCrc32(bmCrc32(0, s_game.inventory.key, s_game.inventory.count * 4u), s_game.inventory.amount, s_game.inventory.count);
     bm_game_stats.gameFrame = s_game.frame;
     bm_game_stats.liveApplied = s_live.applied;
     bm_game_stats.soundCheck = s_game.sound.outputCrc;
@@ -601,9 +607,9 @@ int main(int argc, char **argv)
   }
   if (result == 0)
   {
-    printf("room %s, player %d,%d, deaths %u, hurts %u, room changes %u after %u frames\n", bmGameRoomId(&s_game),
+    printf("room %s, player %d,%d, deaths %u, hurts %u, room changes %u after %u frames, items %u\n", bmGameRoomId(&s_game),
            (int)BM_FIX_INT(s_game.player.x), (int)BM_FIX_INT(s_game.player.y), (unsigned)s_game.deaths,
-           (unsigned)s_game.hurts, (unsigned)s_game.roomChanges, frames);
+           (unsigned)s_game.hurts, (unsigned)s_game.roomChanges, frames, (unsigned)bm_game_stats.items);
   }
   free(data);
   return result;

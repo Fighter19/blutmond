@@ -122,11 +122,22 @@ In serialisation order. Count is the array length.
 | `actors.storeCount` | u8 |  | save |
 | `actors.storeKey` | u32 | 16 | save |
 | `actors.storeValue` | s32 | 16 | save |
-| `actors.itemCount` | u8 |  | save |
-| `actors.items` | u32 | 4 | save |
+| `inventory.count` | u8 |  | save, link |
+| `inventory.key` | u32 | 64 | save, link |
+| `inventory.amount` | u8 | 64 | save, link |
+| `inventory.equipped` | u32 | 8 | save, link |
+| `inventory.quick` | u32 | 4 | save, link |
+| `inventory.statBase` | s16 | 16 | save, link |
 
-Sizes with this table: a save game is 183 bytes of payload, a link transfer 23, a snapshot
-678 (682 with the autopilot); each plus the 16-byte header.
+Sizes with this table: a save game is 567 bytes of payload, a link transfer 424, a snapshot
+1062 (1066 with the autopilot); each plus the 16-byte header. A snapshot is larger than one
+link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).
+
+The inventory ([data-format.md](data-format.md), `src/world/inventory.h`): `count` entries in
+the order their kinds were first given, each a key (the FNV-1a hash of a record's or item's
+name) and an amount from 1 to 255; an entry that reaches 0 is removed and the ones behind it
+move up. `equipped` and `quick` hold keys (0 none) and are not used by the engine yet;
+`statBase` holds the player's own stat values, numbered by an enum the game declares.
 
 `actors.fields` holds 8 values per scripted object, object 0 first. The meaning of the
 fields is in [runtime-core.md](runtime-core.md).
@@ -147,15 +158,15 @@ beginning.
 
 ## 6. Uses
 
-- **Save game**: block `game` only, mask `save`, at offset 0 of the save memory (512 bytes are
-  read). Loading one also sets `vx` and `vy` to 0 and starts the scripted objects fresh.
+- **Save game**: block `game` only, mask `save`, at offset 0 of the save memory (1024 bytes
+  are read). Loading one also sets `vx` and `vy` to 0 and starts the scripted objects fresh.
 - **Snapshot**: all blocks, mask `snapshot`: save states, the editor, the input sync
   ([link-protocol.md](link-protocol.md) §10).
 - **Link**: all blocks, mask `link`: GBA to GBA ([link-protocol.md](link-protocol.md) §9).
   Note what it leaves out: the scripted objects, the random seed, the frame counter and the
   timers are `snapshot` only. The receiving device gets the room and the player; its scripted
   objects keep the state they had if they fit the room it ends up in, and start fresh
-  otherwise. A transfer after which both devices must stay identical needs
+  otherwise. The inventory goes along. A transfer after which both devices must stay identical needs
   a snapshot.
 - **State checksum** in the input sync: the CRC-32 of the whole serialised snapshot (header
   included) of block `game` alone.

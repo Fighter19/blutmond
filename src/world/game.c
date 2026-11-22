@@ -600,12 +600,17 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.animStep, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   F(actors.seed, BM_TYPE_U32, BM_STATE_SNAPSHOT),
-  // What `save` variables hold, and the items: these go into the save game.
+  // What `save` variables hold: this goes into the save game.
   F(actors.storeCount, BM_TYPE_U8, BM_STATE_SAVE),
   BM_STATE_ARRAY(BmGame, actors.storeKey, BM_TYPE_U32, BM_STATE_SAVE, BM_ACTORS_STORE),
   BM_STATE_ARRAY(BmGame, actors.storeValue, BM_TYPE_S32, BM_STATE_SAVE, BM_ACTORS_STORE),
-  F(actors.itemCount, BM_TYPE_U8, BM_STATE_SAVE),
-  BM_STATE_ARRAY(BmGame, actors.items, BM_TYPE_U32, BM_STATE_SAVE, BM_ACTORS_ITEMS),
+  // The inventory: into the save game and to another device.
+  F(inventory.count, BM_TYPE_U8, BM_STATE_SAVE | BM_STATE_LINK),
+  BM_STATE_ARRAY(BmGame, inventory.key, BM_TYPE_U32, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_SLOTS),
+  BM_STATE_ARRAY(BmGame, inventory.amount, BM_TYPE_U8, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_SLOTS),
+  BM_STATE_ARRAY(BmGame, inventory.equipped, BM_TYPE_U32, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_EQUIP),
+  BM_STATE_ARRAY(BmGame, inventory.quick, BM_TYPE_U32, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_QUICK),
+  BM_STATE_ARRAY(BmGame, inventory.statBase, BM_TYPE_S16, BM_STATE_SAVE | BM_STATE_LINK, BM_INVENTORY_STATS),
 };
 #undef F
 
@@ -635,7 +640,7 @@ BmResult bmGameAfterLoad(BmGame *g)
 }
 
 // Save memory layout: the save game at offset 0 (bmStateWrite format).
-#define SAVE_CAPACITY 512
+#define SAVE_CAPACITY 1024
 
 bool bmGameWriteSaveGame(BmGame *g)
 {

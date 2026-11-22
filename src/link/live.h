@@ -20,7 +20,7 @@
 
 #define BM_LIVE_RUNTIME_VERSION 1
 #define BM_LIVE_MAX_CHUNKS 512
-#define BM_LIVE_STATE_CAPACITY 1024
+#define BM_LIVE_STATE_CAPACITY 2048
 
 // Input mirror (below): key changes kept on each side, and how often the state is compared.
 #define BM_LIVE_INPUT_CHANGES 16
@@ -100,7 +100,10 @@ typedef struct BmLive
   uint8_t pendingCount;
 
   uint8_t statePut[BM_LIVE_STATE_CAPACITY];
-  uint32_t statePutSize;
+  uint32_t statePutSize;      // set when the last part of a STATE_PUT arrived
+
+  // STATE_DATA being sent: the serialised state in parts, like the PPU snapshot.
+  uint32_t stateOutOffset, stateOutEnd;
 
   // PPU_SNAPSHOT being sent: parts from snapshotOffset up to snapshotEnd, as the send ring
   // has room (a few per frame).
@@ -219,6 +222,11 @@ bool bmLiveLog(BmLive *pLive, const char *pText);
 /// CHUNK_DATA: transfer id, chunk index, reserved, offset in the chunk, then data.
 #define BM_LIVE_CHUNK_DATA_HEADER 12
 #define BM_LIVE_CHUNK_DATA_MAX (BM_LINK_MAX_PAYLOAD - BM_LIVE_CHUNK_DATA_HEADER)
+
+/// STATE_DATA and STATE_PUT: u32 offset, u32 total size, then data; a state larger than one
+/// packet goes in several, in order.
+#define BM_LIVE_STATE_HEADER 8
+#define BM_LIVE_STATE_DATA_MAX (BM_LINK_MAX_PAYLOAD - BM_LIVE_STATE_HEADER)
 
 /// PPU_SNAPSHOT: request u32 offset, u32 length (0: to the end); each answer u32 offset,
 /// u32 total size, then data.

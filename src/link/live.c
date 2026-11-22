@@ -187,13 +187,45 @@ static bool sendHello(BmLive *l)
   return send(l, BM_LINK_HELLO, out, (uint16_t)(BM_LIVE_HELLO_SIZE + hashes * 8));
 }
 
+// The state as it is now, sent in parts by pumpState (STATE_DATA: offset, total, data).
+static uint8_t s_stateOut[BM_LIVE_STATE_CAPACITY] BM_EWRAM_BSS;
+
 static bool sendState(BmLive *l, uint8_t mask)
 {
-  static uint8_t out[BM_LIVE_STATE_CAPACITY] BM_EWRAM_BSS;
   BmStateBlock blocks[8];
   uint32_t n = l->hooks.stateBlocks(l->hooks.pContext, blocks, 8);
-  uint32_t size = bmStateWrite(blocks, n, mask, out, sizeof(out));
-  return send(l, BM_LINK_STATE_DATA, out, (uint16_t)size);
+  uint32_t size = bmStateWrite(blocks, n, mask, s_stateOut, sizeof(s_stateOut));
+  if (size == 0)
+  {
+    // Does not fit: an empty answer.
+    uint8_t empty[BM_LIVE_STATE_HEADER] = { 0 };
+    return send(l, BM_LINK_STATE_DATA, empty, sizeof(empty));
+  }
+  l->stateOutOffset = 0;
+  l->stateOutEnd = size;
+  return true;
+}
+
+static void pumpState(BmLive *l)
+{
+  while (l->stateOutOffset < l->stateOutEnd)
+  {
+    uint32_t lock = bmHalLinkLock();
+    BmLinkPacket *p = bmLinkSlaveSendBegin(&l->slave);
+    bmHalLinkUnlock(lock);
+    if (p == NULL) return;
+    uint32_t n = l->stateOutEnd - l->stateOutOffset;
+    if (n > BM_LIVE_STATE_DATA_MAX) n = BM_LIVE_STATE_DATA_MAX;
+    p->type = BM_LINK_STATE_DATA;
+    p->length = (uint16_t)(BM_LIVE_STATE_HEADER + n);
+    bmLinkPut32(p->payload, l->stateOutOffset);
+    bmLinkPut32(p->payload + 4, l->stateOutEnd);
+    memcpy(p->payload + BM_LIVE_STATE_HEADER, s_stateOut + l->stateOutOffset, n);
+    l->stateOutOffset += n;
+    lock = bmHalLinkLock();
+    bmLinkSlaveSendCommit(&l->slave);
+    bmHalLinkUnlock(lock);
+  }
 }
 
 static BmLiveResult applyPack(BmLive *l, uint32_t id, BmLiveMode mode, const char *roomId)
@@ -587,10 +619,16 @@ static bool handle(BmLive *l, const BmLinkPacket *p)
     }
     return true;
   case BM_LINK_STATE_PUT:
-    if (p->length <= sizeof(l->statePut))
+    if (p->length >= BM_LIVE_STATE_HEADER)
     {
-      memcpy(l->statePut, p->payload, p->length);
-      l->statePutSize = p->length;
+      uint32_t offset = bmLinkGet32(p->payload), total = bmLinkGet32(p->payload + 4);
+      uint32_t n = p->length - BM_LIVE_STATE_HEADER;
+      if (offset == 0) l->statePutSize = 0;   // a new state starts
+      if (total <= sizeof(l->statePut) && offset <= total && n <= total - offset)
+      {
+        memcpy(l->statePut + offset, p->payload + BM_LIVE_STATE_HEADER, n);
+        if (offset + n == total) l->statePutSize = total;
+      }
     }
     return true;
   case BM_LINK_HELLO:
@@ -666,6 +704,7 @@ void bmLiveFrame(BmLive *l)
   // Following ends when it is told to, or when nothing has come for a long time.
   if (l->following && ++l->followIdle >= FOLLOW_TIMEOUT) l->following = false;
   pumpSnapshot(l);
+  pumpState(l);
 }
 
 bool bmLiveLog(BmLive *l, const char *pText)

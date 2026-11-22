@@ -14,7 +14,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define BM_LINK_PROTOCOL_VERSION 1
+#define BM_LINK_PROTOCOL_VERSION 2   // 2: state in parts (STATE_DATA, STATE_PUT)
 
 #define BM_LINK_WORD_POLL 0x424D504Cu  // "BMPL", master: give me your next word
 #define BM_LINK_WORD_IDLE 0x424D4944u  // "BMID", slave: nothing to send

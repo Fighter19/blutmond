@@ -154,7 +154,7 @@ static void testTheBatChasesHitsAndGoesHome(void)
   TEST_ASSERT(s_game.actors.y[bat] > y0);
 
   // A save state in the middle of the chase continues exactly the same.
-  static uint8_t snap[1024];
+  static uint8_t snap[2048];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
@@ -188,23 +188,23 @@ static void testAPickupStaysTaken(void)
   start();
   int pickup = actorOfClass("Pickup");
   TEST_ASSERT(pickup >= 0);
-  TEST_ASSERT(!s_game.actors.hidden[pickup] && s_game.actors.itemCount == 0);
+  TEST_ASSERT(!s_game.actors.hidden[pickup] && s_game.inventory.count == 0);
   // Onto the pickup: taken, hidden, the item is the player's.
   bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[pickup]), BM_FIX_INT(s_game.actors.y[pickup]));
   frames(2, 0);
   TEST_ASSERT(s_game.actors.hidden[pickup]);
-  TEST_ASSERT(s_game.actors.itemCount == 1);
+  TEST_ASSERT(s_game.inventory.count == 1);
   TEST_ASSERT(s_game.actors.storeCount == 1);
 
   // In the save game: a new game that loads it finds the pickup gone and the item kept.
   TEST_ASSERT(bmGameWriteSaveGame(&s_game));
   bmGameStart(&s_game, &s_pack, NULL);
   pickup = actorOfClass("Pickup");
-  TEST_ASSERT(!s_game.actors.hidden[pickup] && s_game.actors.itemCount == 0);
+  TEST_ASSERT(!s_game.actors.hidden[pickup] && s_game.inventory.count == 0);
   TEST_ASSERT(bmGameReadSaveGame(&s_game));
   pickup = actorOfClass("Pickup");
   TEST_ASSERT(s_game.actors.hidden[pickup]);
-  TEST_ASSERT(s_game.actors.itemCount == 1);
+  TEST_ASSERT(s_game.inventory.count == 1);
   TEST_ASSERT(bm_script_errors == 0);
 }
 

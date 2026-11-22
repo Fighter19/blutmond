@@ -11,7 +11,7 @@
 // the middle of a sleep.
 //
 // Limits of this version: 8 scripted objects per room, 8 variables per class, 16 values kept
-// across rooms and saves (`save` variables), 4 items.
+// across rooms and saves (`save` variables). Items are in the inventory (inventory.h).
 
 #include "shared.h"
 #include "sprite.h"
@@ -20,7 +20,6 @@
 
 #define BM_ACTORS_MAX 8
 #define BM_ACTORS_STORE 16
-#define BM_ACTORS_ITEMS 4
 
 struct BmGame;
 
@@ -50,12 +49,10 @@ typedef struct BmActors
   uint8_t anim[BM_ACTORS_MAX], animFinished[BM_ACTORS_MAX];
   uint16_t animStep[BM_ACTORS_MAX], animTimer[BM_ACTORS_MAX];
   uint32_t seed;
-  // `save` variables, by room, object and field; and the items the player has.
+  // `save` variables, by room, object and field.
   uint8_t storeCount;
   uint32_t storeKey[BM_ACTORS_STORE];
   int32_t storeValue[BM_ACTORS_STORE];
-  uint8_t itemCount;
-  uint32_t items[BM_ACTORS_ITEMS];     // hashes of the item names
 } BmActors;
 
 /// Called when a room was entered. `fresh`: objects start anew (a room change or a restart);
