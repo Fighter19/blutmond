@@ -5,6 +5,7 @@
 #include "game.h"
 #include "hal_host.h"
 #include "physical_device.h"
+#include "text.h"
 #include "ui.h"
 #include "video.h"
 
@@ -525,59 +526,111 @@ static void testTheSwordDefeatsTheBat(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
-// ui.md step 2: the UI layer with the engine's font from the pack: frames, labels on them,
-// numbers, placeholders and wrapped text.
+// The character a UI cell shows (through the glyph cache), ' ' for an empty or filled cell.
+static uint32_t cellChar(const BmUi *ui, int x, int y)
+{
+  uint8_t t = ui->map[y * 32 + x];
+  return t >= BM_UI_GLYPH_FIRST ? ui->glyphCode[t - BM_UI_GLYPH_FIRST] : ' ';
+}
+
+static void rowText(const BmUi *ui, int x, int y, int n, char *out)
+{
+  for (int i = 0; i < n; i++) out[i] = (char)cellChar(ui, x + i, y);
+  out[n] = 0;
+}
+
+// ui.md step 2 and the languages: the UI layer with the engine's font from the pack (ASCII and
+// the accented letters, two FONT chunks of one font), frames, labels, numbers, placeholders,
+// wrapped text, the glyph cache, and texts in French and German.
 static void testTheUiLayer(void)
 {
   start();
   static BmUi ui;
   TEST_ASSERT(bmUiInit(&ui, &s_pack, "nothing") == BM_ERROR_NOT_FOUND && !ui.ready);
-  TEST_ASSERT(bmUiInit(&ui, &s_pack, "font") == BM_SUCCESS && ui.ready);
-  TEST_ASSERT(ui.first == 32 && ui.count == 95);
-  // Glyph tiles start at 16, the copies on a frame's inside after them; the frame is 1 to 9.
-  const uint8_t A = (uint8_t)(16 + 'A' - 32), AOnFill = (uint8_t)(A + 95);
+  TEST_ASSERT(bmUiInit(&ui, &s_pack, "font") == BM_SUCCESS && ui.ready && ui.fontChunkCount == 2);
   bmUiLabel(&ui, 0, 0, "A");
-  TEST_ASSERT(ui.map[0] == A);
+  uint8_t a = ui.map[0];
+  TEST_ASSERT(a >= BM_UI_GLYPH_FIRST && cellChar(&ui, 0, 0) == 'A');
+  // On a frame's inside: another tile for the same character, and the frame's pieces.
   bmUiFrame(&ui, 2, 2, 6, 4);
   TEST_ASSERT(ui.map[2 * 32 + 2] == 1 && ui.map[2 * 32 + 3] == 2 && ui.map[3 * 32 + 3] == 5 && ui.map[5 * 32 + 7] == 9);
   bmUiLabel(&ui, 3, 3, "AA\nA");
-  TEST_ASSERT(ui.map[3 * 32 + 3] == AOnFill && ui.map[3 * 32 + 4] == AOnFill && ui.map[4 * 32 + 3] == AOnFill);
-  bmUiLabel(&ui, 20, 0, "\x7f");                          // not in the font: '?'
-  TEST_ASSERT(ui.map[20] == 16 + '?' - 32);
+  TEST_ASSERT(cellChar(&ui, 3, 3) == 'A' && ui.map[3 * 32 + 3] != a && ui.map[3 * 32 + 3] == ui.map[4 * 32 + 3]);
+  bmUiLabel(&ui, 3, 3, " ");   // a space on the inside is the inside
+  TEST_ASSERT(ui.map[3 * 32 + 3] == 5);
+  bmUiLabel(&ui, 20, 0, "\x7f");   // not in the font: '?'
+  TEST_ASSERT(cellChar(&ui, 20, 0) == '?');
+  // UTF-8: "Épée" is four characters.
+  TEST_ASSERT(bmUiLabel(&ui, 0, 1, "\xc3\x89p\xc3\xa9" "e") == 4 && cellChar(&ui, 0, 1) == 0xC9 && cellChar(&ui, 2, 1) == 0xE9);
   // Numbers: right-aligned, minus sign, stars when too long.
-  char row[8];
+  char row[16];
   bmUiNumber(&ui, 0, 10, -42, 5);
-  for (int i = 0; i < 5; i++) row[i] = (char)(ui.map[10 * 32 + i] - 16 + 32);
-  row[5] = 0;
+  rowText(&ui, 0, 10, 5, row);
   TEST_ASSERT(strcmp(row, "  -42") == 0);
   bmUiNumber(&ui, 0, 10, 123456, 3);
-  for (int i = 0; i < 3; i++) row[i] = (char)(ui.map[10 * 32 + i] - 16 + 32);
-  row[3] = 0;
+  rowText(&ui, 0, 10, 3, row);
   TEST_ASSERT(strcmp(row, "***") == 0);
-  // Placeholders: numbers and texts of the pack, {{ for a brace, unknown ones left out.
+  // A gauge: 3 of 8 in 2 cells is 6 eighths.
+  bmUiGauge(&ui, 0, 11, 2, 3, 8);
+  TEST_ASSERT(ui.map[11 * 32] == 10 + 6 && ui.map[11 * 32 + 1] == 10);
+  // Placeholders: numbers and texts of the pack, {{ for a brace, unknown ones left out; a
+  // character cut at the end is left out whole.
   char text[64];
   BmUiArg args[2] = { bmUiNumberArg(-7), bmUiTextArg(stringId("Dagger")) };
-  TEST_ASSERT(bmUiFormat(&s_pack, text, sizeof(text), "{1} x{0} {{ok} {5}", args, 2) == 16 && strcmp(text, "Dagger x-7 {ok} ") == 0);
-  TEST_ASSERT(bmUiFormat(&s_pack, text, 5, "{1} x{0}", args, 2) == 4 && strcmp(text, "Dagg") == 0);
+  TEST_ASSERT(bmUiFormat(&s_pack, 0, text, sizeof(text), "{1} x{0} {{ok} {5}", args, 2) == 16 && strcmp(text, "Dagger x-7 {ok} ") == 0);
+  TEST_ASSERT(bmUiFormat(&s_pack, 0, text, 5, "{1} x{0}", args, 2) == 4 && strcmp(text, "Dagg") == 0);
+  TEST_ASSERT(bmUiFormat(&s_pack, 0, text, 3, "a\xc3\xa9", NULL, 0) == 1 && strcmp(text, "a") == 0);
   // Wrapped at spaces: "A plain blade. The weapon everyone starts with." in 12 x 3 cells.
   bmUiClear(&ui);
-  int rows = bmUiText(&ui, 1, 12, 12, 3, stringId("A plain blade. The weapon everyone starts with."), NULL, 0);
-  TEST_ASSERT(rows == 3);
+  uint16_t blade = stringId("A plain blade. The weapon everyone starts with.");
+  TEST_ASSERT(bmUiText(&ui, 1, 12, 12, 3, blade, NULL, 0) == 3);
   char lines[3][13];
-  for (int y = 0; y < 3; y++)
+  for (int y = 0; y < 3; y++) rowText(&ui, 1, 12 + y, 12, lines[y]);
+  TEST_ASSERT(strncmp(lines[0], "A plain", 7) == 0 && strncmp(lines[1], "blade. The", 10) == 0 && strncmp(lines[2], "weapon", 6) == 0);
+
+  // Languages: English (the main one), German, French, in the order of the files.
+  TEST_ASSERT(bmTextLanguageCount(&s_pack) == 3);
+  TEST_ASSERT(strcmp(bmPackString(&s_pack, bmTextLanguageName(&s_pack, 0)), "English") == 0);
+  int32_t de = bmTextFindLanguage(&s_pack, "de"), fr = bmTextFindLanguage(&s_pack, "fr");
+  TEST_ASSERT(de == 1 && fr == 2 && bmTextFindLanguage(&s_pack, "ja") == -1);
+  TEST_ASSERT(strcmp(bmPackString(&s_pack, bmTextLanguageName(&s_pack, (uint8_t)fr)), "Fran\xc3\xa7" "ais") == 0);
+  TEST_ASSERT(strcmp(bmText(&s_pack, (uint8_t)de, stringId("Short Sword")), "Kurzschwert") == 0);
+  TEST_ASSERT(strcmp(bmText(&s_pack, (uint8_t)fr, stringId("Short Sword")), "\xc3\x89p\xc3\xa9" "e courte") == 0);
+  TEST_ASSERT(strcmp(bmText(&s_pack, (uint8_t)fr, stringId("test_room")), "test_room") == 0);   // not translated
+  bmUiSetLanguage(&ui, (uint8_t)de);
+  bmUiClear(&ui);
+  bmUiText(&ui, 0, 0, 30, 2, blade, NULL, 0);
+  rowText(&ui, 0, 0, 7, row);
+  TEST_ASSERT(strcmp(row, "Eine sc") == 0);
+  // The game keeps the language as an option.
+  bmGameSetLanguage(&s_game, (uint8_t)fr);
+  TEST_ASSERT(s_game.language == (uint8_t)fr && s_game.ui.language == (uint8_t)fr);
+  bmGameStart(&s_game, &s_pack, NULL);
+  TEST_ASSERT(s_game.language == (uint8_t)fr);
+  bmGameSetLanguage(&s_game, 0);
+
+  // The glyph cache: every character of the font on both grounds is more than it holds; tiles
+  // no cell shows any more are taken again.
+  bmUiSetLanguage(&ui, 0);
+  bmUiClear(&ui);
+  bmUiFrame(&ui, 0, 10, 32, 6);
+  for (int c = 33; c < 127; c++)
   {
-    for (int x = 0; x < 12; x++) lines[y][x] = ui.map[(12 + y) * 32 + 1 + x] ? (char)(ui.map[(12 + y) * 32 + 1 + x] - 16 + 32) : '_';
-    lines[y][12] = 0;
+    char one[2] = { (char)c, 0 };
+    bmUiLabel(&ui, (c - 33) % 32, (c - 33) / 32, one);
+    bmUiLabel(&ui, 1 + (c - 33) % 30, 11 + (c - 33) / 30, one);
   }
-  TEST_ASSERT(strcmp(lines[0], "A plain ____") == 0 || strcmp(lines[0], "A plain_____") == 0);
-  TEST_ASSERT(strncmp(lines[1], "blade. The", 10) == 0 && strncmp(lines[2], "weapon", 6) == 0);
+  bmUiClear(&ui);
+  bmUiLabel(&ui, 0, 0, "\xc3\x84\xc3\x96\xc3\x9c\xc3\x9f \xc3\xa0\xc3\xa7\xc3\xa8 \xe2\x80\x9chi\xe2\x80\x9d");
+  TEST_ASSERT(cellChar(&ui, 0, 0) == 0xC4 && cellChar(&ui, 3, 0) == 0xDF && cellChar(&ui, 9, 0) == 0x201C);
+
   // Present: background 3 shown, the map in screen block 25 with palette bank 15.
   bmUiShow(&ui, true);
   bmUiPresent(&ui);
   const BmPpuState *ppu = bmHalHostGetPpu();
   TEST_ASSERT(ppu->regs[BM_PPU_DISPCNT / 2] & BM_PPU_DISPCNT_BG(3));
-  uint16_t e = (uint16_t)(ppu->vram[25 * 0x800 + (12 * 32 + 1) * 2] | ppu->vram[25 * 0x800 + (12 * 32 + 1) * 2 + 1] << 8);
-  TEST_ASSERT(e == (uint16_t)(A | 15 << 12) && ui.dirtyRows == 0);
+  uint16_t e = (uint16_t)(ppu->vram[25 * 0x800] | ppu->vram[25 * 0x800 + 1] << 8);
+  TEST_ASSERT(e == (uint16_t)(ui.map[0] | 15 << 12) && ui.dirtyRows == 0);
 }
 
 static uint8_t *readFile(const char *path, uint32_t *pSize)

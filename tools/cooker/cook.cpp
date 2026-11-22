@@ -9,6 +9,7 @@
 #include "overrides.h"
 #include "song_asset.h"
 #include "font_asset.h"
+#include "lang_asset.h"
 #include "sprite_asset.h"
 
 #include <algorithm>
@@ -111,6 +112,12 @@ public:
     strings_.push_back(s);
     index_[s] = i;
     return i;
+  }
+  /// The id of a string already in the table, or -1.
+  int find(const std::string &s) const
+  {
+    auto it = index_.find(s);
+    return it != index_.end() ? it->second : -1;
   }
   Bytes chunk() const
   {
@@ -915,17 +922,23 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     }
   }
   // Fonts, one chunk each.
-  std::set<std::string> fontNames;
+  // Several files may make up one font (by name) if they do not share characters.
+  std::map<std::string, std::vector<font::Range>> fontRanges;
   for (const std::string &path : options.fonts)
   {
     try
     {
       font::Font f = font::load(path);
-      if (!fontNames.insert(f.name).second)
+      bool clash = false;
+      for (const font::Range &r : f.ranges)
+        for (const font::Range &o : fontRanges[f.name])
+          clash |= r.first < o.first + o.count && o.first < r.first + r.count;
+      if (clash)
       {
-        report.error("does-not-fit", path, "font name '" + f.name + "' is used twice");
+        report.error("does-not-fit", path, "font '" + f.name + "' has some of these characters in another file already");
         continue;
       }
+      fontRanges[f.name].insert(fontRanges[f.name].end(), f.ranges.begin(), f.ranges.end());
       Bytes b;
       b.data = font::chunk(f, strings.id(f.name));
       add(writer, BM_CHUNK_FONT, BM_CATEGORY_GRAPHICS, 0, b);
@@ -1027,6 +1040,71 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     }
   }
 
+  // Languages: the main one first (no translations), then one chunk per language file. A
+  // translation is found by its original among the pack's strings.
+  if (!options.languages.empty())
+  {
+    std::vector<lang::Language> languages;
+    lang::Language main;
+    main.code = options.mainLanguage;
+    main.name = options.mainLanguageName;
+    languages.push_back(main);
+    for (const std::string &path : options.languages)
+    {
+      try
+      {
+        languages.push_back(lang::load(path));
+      }
+      catch (const std::exception &e)
+      {
+        report.error("text", path, e.what());
+      }
+    }
+    std::set<std::string> codes;
+    for (const lang::Language &l : languages)
+    {
+      if (!codes.insert(l.code).second)
+      {
+        report.error("text", l.path, "language '" + l.code + "' is there twice");
+        continue;
+      }
+      uint16_t code = strings.id(l.code), name = strings.id(l.name);
+      std::map<uint16_t, std::string> entries;
+      int unused = 0;
+      for (size_t i = 0; i < l.texts.size(); i++)
+      {
+        int id = strings.find(l.texts[i].first);
+        if (id < 0)
+        {
+          if (unused++ < 5)
+            report.warning("text", l.path + ":" + std::to_string(l.lines[i]), "\"" + l.texts[i].first + "\" is no text of this pack");
+          continue;
+        }
+        entries[uint16_t(id)] = l.texts[i].second;
+      }
+      if (unused > 5) report.warning("text", l.path, std::to_string(unused - 5) + " more translations of texts this pack does not have");
+      Bytes b;
+      b.u16(code);
+      b.u16(name);
+      b.u16(uint32_t(entries.size()));
+      b.u16(0);
+      uint32_t offset = 8 + 8 * uint32_t(entries.size());
+      for (const auto &[id, text] : entries)
+      {
+        b.u16(id);
+        b.u16(0);
+        b.u32(offset);
+        offset += uint32_t(text.size()) + 1;
+      }
+      for (const auto &[id, text] : entries)
+      {
+        b.data.insert(b.data.end(), text.begin(), text.end());
+        b.u8(0);
+      }
+      if (!l.path.empty()) report.info("text", l.path, "language " + l.code + ": " + std::to_string(entries.size()) + " texts translated");
+      add(writer, BM_CHUNK_LANG, BM_CATEGORY_TEXT, 0, b);
+    }
+  }
   add(writer, BM_CHUNK_STRS, BM_CATEGORY_TEXT, 0, strings.chunk());
 
   for (const auto &[asset, used] : colors.overridesUsed)

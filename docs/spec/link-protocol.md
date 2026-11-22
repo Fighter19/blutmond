@@ -196,7 +196,7 @@ All values little endian.
 | Packet | Payload |
 |---|---|
 | `HELLO` M → S | empty |
-| `HELLO` S → M | u16 protocol (1), u16 runtime version (1), u16 ABI major, u16 ABI minor and u32 profile (those of the running pack's header), u32 content buffer size (65,536; 49,152 in a multiboot image), u32 size and u32 CRC of the running pack, u32 chunk count, u32 n, then n × (u32 hash, u32 size) of the running pack's first n chunks, n at most 124 |
+| `HELLO` S → M | u16 protocol (1), u16 runtime version (1), u16 ABI major, u16 ABI minor and u32 profile (those of the running pack's header), u32 content buffer size (98,304; 49,152 in a multiboot image), u32 size and u32 CRC of the running pack, u32 chunk count, u32 n, then n × (u32 hash, u32 size) of the running pack's first n chunks, n at most 124 |
 | `PING` | any bytes; the slave sends them back |
 | `TOC` | u32 transfer ID, u32 pack size, u16 part, u16 parts, then at most 1012 bytes of the stream "pack header (36 bytes) + chunk table". Part 0 must hold the whole pack header; it starts a transfer into the content buffer that the running pack does not use, which is first filled with zeros up to the pack size. The header goes to offset 0 and the table to where the header says. After the last part the runtime copies every chunk the running pack also has (same hash and size) and marks it present. A pack larger than the buffer, more than 512 chunks or a table outside the pack make the transfer fail (reported by `APPLY`) |
 | `CHUNK_BEGIN` | u32 transfer ID, u16 chunk index, u16 0, u32 size, u32 hash |

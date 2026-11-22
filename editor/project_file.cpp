@@ -46,6 +46,7 @@ AssetKind kindOf(const std::string &path)
   if (ext == ".bmsong") return AssetKind::Song;
   if (ext == ".bmdata") return AssetKind::Data;
   if (ext == ".bmfont") return AssetKind::Font;
+  if (ext == ".bmlang") return AssetKind::Language;
   if (ext == ".png" || ext == ".bmp" || ext == ".gif" || ext == ".tga") return AssetKind::Image;
   return AssetKind::Other;
 }
@@ -385,6 +386,14 @@ std::vector<std::string> songPaths(const AssetCatalog &catalog)
   std::vector<std::string> out;
   for (const AssetInfo &a : catalog.assets)
     if (a.kind == AssetKind::Song && a.problem.empty()) out.push_back(a.path);
+  return out;
+}
+
+std::vector<std::string> languagePaths(const AssetCatalog &catalog)
+{
+  std::vector<std::string> out;
+  for (const AssetInfo &a : catalog.assets)
+    if (a.kind == AssetKind::Language && a.problem.empty()) out.push_back(a.path);
   return out;
 }
 

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- More characters of the font "font": what French and German need. -->
+<font version="1" name="font" image="font_latin.png" cell_w="8" cell_h="8">
+ <range first="0xA0" count="96"/>
+ <range first="0x152" count="2"/>
+ <range first="0x2018" count="7"/>
+ <range first="0x2026" count="1"/>
+</font>

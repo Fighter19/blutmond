@@ -748,6 +748,7 @@ struct Editor
     project.setSongs(songs);
     project.setData(dataPaths(projectPanel.catalog()));
     project.setFonts(fontPaths(projectPanel.catalog()));
+    project.setLanguages(languagePaths(projectPanel.catalog()));
     soundPanel.setSongs(songs);
     if (!songs.empty()) soundPanel.songDir = std::filesystem::path(songs[0]).parent_path().string();
     else if (!projectPanel.file().assetDirs.empty())

@@ -140,7 +140,7 @@ static BmGame s_game BM_EWRAM_BSS;
 static BmAutopilot s_pilot;
 
 #ifndef BM_LIVE_CONTENT_SIZE
-#  define BM_LIVE_CONTENT_SIZE (64 * 1024)
+#  define BM_LIVE_CONTENT_SIZE (96 * 1024)   // a cartridge image; a multiboot one has 48 KB
 #endif
 static uint8_t s_content[2][BM_LIVE_CONTENT_SIZE] BM_EWRAM_BSS;
 static BmLive s_live BM_EWRAM_BSS;
@@ -237,7 +237,7 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
   BmLiveHooks hooks = bmGameLiveHooks(&s_gameLive);
   bmLiveInit(&s_live, &hooks, s_content[0], s_content[1], BM_LIVE_CONTENT_SIZE, &s_pack);
   bmLiveStart(&s_live);
-  bmOverlayInit(&s_pack, s_overlay);
+  bmOverlayInit(&s_game, s_overlay);
 
   uint32_t lastVideoFrame = bmVideoWaitFrame();
   uint32_t catchUp = 0;

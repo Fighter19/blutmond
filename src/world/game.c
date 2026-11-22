@@ -4,6 +4,8 @@
  */
 #include "game.h"
 
+#include "text.h"
+
 #include "hal.h"
 #include "video.h"
 
@@ -380,6 +382,8 @@ static void enterRoomSound(BmGame *g)
 
 static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
 {
+  // A pack pushed over the link: the UI's font is somewhere else now.
+  if (g->ui.ready && g->ui.pPackData != g->pPack->pData) bmUiRebind(&g->ui, g->pPack);
   // The room being left takes its attachments with it (they get detached() while it is
   // still there). A state just loaded (not fresh) brings its own.
   if (fresh) bmAttachmentsLeaveRoom(g);
@@ -402,6 +406,8 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   return bmRoomShow(&g->room, 0, 0);
 }
 
+static void readOptions(BmGame *g);
+
 BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
 {
   memset(g, 0, sizeof(*g));
@@ -410,6 +416,8 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   int32_t index = roomId ? bmGameFindRoom(pPack, roomId) : 0;
   if (index < 0) return BM_ERROR_INVALID_ARGUMENT;
   bmVideoInit();
+  bmUiInit(&g->ui, pPack, NULL);   // without a font the UI draws nothing
+  readOptions(g);
   g->actors.seed = 1;
   g->health = BM_GAME_PLAYER_HEALTH;
   BmResult r = enterRoom(g, (uint32_t)index, true);
@@ -597,6 +605,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   bmHitsFrame(g);
   updateCamera(g);
   updateSprites(g);
+  bmUiPresent(&g->ui);
 
   // This frame's sound; it plays from the next vertical blank.
   int8_t *left, *right;
@@ -719,8 +728,29 @@ BmResult bmGameAfterLoad(BmGame *g)
   return afterLoad(g, false);
 }
 
-// Save memory layout: the save game at offset 0 (bmStateWrite format).
+// Save memory layout: the save game at offset 0 (bmStateWrite format), the options at 1024.
 #define SAVE_CAPACITY 1024
+#define OPTIONS_OFFSET 1024
+#define OPTIONS_MAGIC 0x504F4D42u   // "BMOP"
+
+// Options: u32 magic, u8 language, u8 0, u16 0.
+static void readOptions(BmGame *g)
+{
+  uint8_t o[8];
+  bmHalSaveRead(OPTIONS_OFFSET, o, sizeof(o));
+  uint32_t magic = (uint32_t)o[0] | ((uint32_t)o[1] << 8) | ((uint32_t)o[2] << 16) | ((uint32_t)o[3] << 24);
+  g->language = magic == OPTIONS_MAGIC && o[4] < bmTextLanguageCount(g->pPack) ? o[4] : 0;
+  bmUiSetLanguage(&g->ui, g->language);
+}
+
+void bmGameSetLanguage(BmGame *g, uint8_t language)
+{
+  if (language >= bmTextLanguageCount(g->pPack)) return;
+  g->language = language;
+  bmUiSetLanguage(&g->ui, language);
+  uint8_t o[8] = { (uint8_t)OPTIONS_MAGIC, (uint8_t)(OPTIONS_MAGIC >> 8), (uint8_t)(OPTIONS_MAGIC >> 16), (uint8_t)(OPTIONS_MAGIC >> 24), language, 0, 0, 0 };
+  bmHalSaveWrite(OPTIONS_OFFSET, o, sizeof(o));
+}
 
 bool bmGameWriteSaveGame(BmGame *g)
 {

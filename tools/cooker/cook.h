@@ -83,6 +83,9 @@ struct CookOptions
   std::vector<std::string> data;
   /// Fonts (.bmfont, font_asset.h).
   std::vector<std::string> fonts;
+  /// Translations (.bmlang, lang_asset.h), and the main language's code and name.
+  std::vector<std::string> languages;
+  std::string mainLanguage = "en", mainLanguageName = "English";
   /// If set: the scripts are also compiled to native code with this GCC for the profile's
   /// machine (mondskript.md §12) and packed as a MODN chunk next to the bytecode.
   std::string nativeCompiler;

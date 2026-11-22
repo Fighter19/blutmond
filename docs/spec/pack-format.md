@@ -40,9 +40,9 @@ chunk formats named in section 3.
   where a new game starts.
 - **What the cooker writes**, in this order: per area `VLAY`, `PALE`, `TILE`, then per room of
   the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `SONG`, every `FONT`,
-  every `MODB`, optionally `MODN`, every `DTAB`, and `STRS`.
+  every `MODB`, optionally `MODN`, every `DTAB`, the `LANG`s, and `STRS`.
 - **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `PALE`, `TILE`, `SPRT`, `SONG`,
-  `FONT`, `MODB`, `MODN`, `DTAB`, `STRS`. `VLAY` is written but not read; where things go in video memory is
+  `FONT`, `MODB`, `MODN`, `DTAB`, `LANG`, `STRS`. `VLAY` is written but not read; where things go in video memory is
   fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
 - **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the
   profile (GBA: 1024); 15 background palette banks (the 16th is the UI's); a pack pushed over the link has at most 512 chunks
@@ -234,7 +234,8 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `MODB` | script module: classes, variables, states, functions and bytecode ([mondskript.md](mondskript.md) §11); one per class, in the order of the scripts' file names |
 | `MODN` | the same scripts as machine code for one machine, one image with a module per `MODB`, with the list of addresses to patch when it is loaded ([mondskript.md](mondskript.md) §12); optional |
 | `DTAB` | the records of one structure, read in place ([data-format.md](data-format.md) §3) |
-| `FONT` | one font, section 3.1 |
+| `FONT` | one font, or a part of one, section 3.1 |
+| `LANG` | one language: translations of the pack's texts, section 3.2 |
 | `WRLD` | world map: rooms, positions, door links, map screen data |
 
 Readers MUST skip chunk types they do not know.
@@ -244,26 +245,69 @@ Readers MUST skip chunk types they do not know.
 A font is an image of glyph cells and a file `name.bmfont` next to it:
 
 ```xml
-<font version="1" image="font.png" cell_w="8" cell_h="8" first="32" count="95"/>
+<font version="1" name="font" image="font.png" cell_w="8" cell_h="8">
+ <range first="32" count="95"/>      <!-- code points, in the order of the cells -->
+</font>
 ```
 
-Cells are read row by row from the top left of the image; cell i is character `first + i`
-(1 to 255). Bright opaque pixels (alpha and luminance from 128) are the ink, the rest is
-background; a drawn shadow is ignored, the runtime adds its own. The font's name is the file's
-stem. The chunk (category graphics):
+Cells are read row by row from the top left of the image; the ranges give their characters
+(Unicode code points up to 0xFFFF; numbers decimal or `0x...`). Bright opaque pixels (alpha
+and luminance from 128) are the ink, the rest is background; a drawn shadow is ignored, the
+runtime adds its own. The font's name is the `name` attribute, else the file's stem. **One
+font may be made of several files** with the same name and different characters (ASCII in
+one, accented letters in another, kana in a third): each is a chunk, and a reader looks in all
+of them. Two files of one font that share a character are an error. The chunk (category
+graphics):
 
 ```
 u16 name            string id
 u8  cell_w, cell_h  8 and 8 (8 x 16 is allowed in the file; the runtime reads 8 x 8 only)
-u8  first, count
+u8  2               version
+u8  0
+u16 range_count, glyph_count
 u16 0
-u8  rows[count * cell_h]   per glyph one byte per row: bit x set = ink at pixel x
+ranges { u16 first code point; u16 count; u16 first glyph; u16 0 } [range_count], by code point
+u8  rows[glyph_count * cell_h]   per glyph one byte per row: bit x set = ink at pixel x
 ```
 
-The runtime (`src/ui/ui.h`) makes two 4 bpp tiles of each glyph: ink colour 1, a shadow
-(colour 2) where the pixel above left is ink and the pixel is not, the ground transparent or
-the frame's inside (colour 3). The engine's font is `assets/engine/font.bmfont`, drawn by
-`tools/make_engine_font.py`.
+The runtime (`src/ui/ui.h`) makes a 4 bpp tile of a glyph when it is drawn: ink colour 1, a
+shadow (colour 2) where the pixel above left is ink and the pixel is not, the ground
+transparent or the frame's inside (colour 3). Only the glyphs on screen are tiles (a cache of
+224), so a font can have more characters than video memory holds. The engine's font is
+`assets/engine/font.bmfont` (ASCII) and `font_latin.bmfont` (the letters and quotes French and
+German need), drawn by `tools/make_engine_font.py`.
+
+### 3.2 Languages
+
+The pack's strings (`STRS`) are the **main language**. A translation file per further
+language, `xx.bmlang`, UTF-8:
+
+```
+# de.bmlang
+language de "Deutsch"
+"Short Sword" = "Kurzschwert"
+```
+
+Each line pairs a text of the main language, exactly as it is in the scripts and records, with
+its translation (`\"`, `\\` and `\n` inside quotes; `#` starts a comment). A translation of a
+text the pack does not have is reported as a warning. With at least one language file the
+cooker writes a `LANG` chunk (category text) for the main language (code `en`, name `English`,
+no entries) and then one per file, in the order given:
+
+```
+u16 code            string id ("de")
+u16 name            string id ("Deutsch"), in that language
+u16 count
+u16 0
+entries { u16 string id; u16 0; u32 offset of the translation in the chunk } [count], by id
+texts               UTF-8, each ending in a zero byte
+```
+
+Languages are numbered in the order of the `LANG` chunks, 0 the main one. A text is shown in
+a language through its string id: the entry with that id, else the main language's string
+(`src/ui/text.h`). Text is UTF-8 on every machine; a character the font lacks is drawn as `?`.
+The language chosen is an option, kept in the save memory apart from the save game
+(runtime-core.md §6).
 
 ## 4. Compression
 

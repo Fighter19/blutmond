@@ -40,6 +40,7 @@ enum {
   BM_CHUNK_MODN = BM_FOURCC('M', 'O', 'D', 'N'),   // native script module (src/script/native.h)
   BM_CHUNK_DTAB = BM_FOURCC('D', 'T', 'A', 'B'),   // records of one structure (src/data/data.h)
   BM_CHUNK_FONT = BM_FOURCC('F', 'O', 'N', 'T'),   // glyphs of a font (src/ui/ui.h)
+  BM_CHUNK_LANG = BM_FOURCC('L', 'A', 'N', 'G'),   // translations into one language (src/ui/text.h)
 };
 
 /// Storage layout (header flags bits 0-3), docs/spec/pack-format.md §2.6.

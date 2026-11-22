@@ -1,2 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<font version="1" image="font.png" cell_w="8" cell_h="8" first="32" count="95"/>
+<font version="1" name="font" image="font.png" cell_w="8" cell_h="8">
+ <range first="32" count="95"/>
+</font>

@@ -228,6 +228,9 @@ start:
   `KillZone`, `Door`, `Trigger`, `SavePoint`. `Trigger` does nothing yet. Properties other
   than those named here are ignored.
 - At most 64 objects of a room are read; further ones do not exist for the runtime.
+- **Options** at offset 1024 of the save memory: u32 `BMOP`, u8 language (pack-format.md
+  §3.2), three zero bytes. Read when the game starts (an unknown language or none: 0), written
+  when the language is changed.
 - **Save game**: the `save` fields of the state ([state.md](state.md)) at offset 0 of the
   save memory. Loading one sets `vx = vy = 0`, enters the stored room with the scripted
   objects fresh, and equips again (`equip`) what each equipment slot holds.

@@ -19,6 +19,7 @@
 #include "sound.h"
 #include "sprite.h"
 #include "state.h"
+#include "ui.h"
 
 #define BM_GAME_MAX_OBJECTS 64
 #define BM_GAME_MAX_SHEETS 8
@@ -90,6 +91,12 @@ typedef struct BmGame
   BmAttachments attachments;
   // Hits armed by scripts (docs/plans/hitboxes.md).
   BmHits hits;
+  // The UI layer (src/ui/ui.h): menus, dialogue, the HUD, the debug overlay. What it shows is
+  // presentation, not game state.
+  BmUi ui;
+  // The language texts are shown in (src/ui/text.h): an option kept in the save memory apart
+  // from the save game.
+  uint8_t language;
   // Music and sound effects. Not part of the game state yet: a loaded state starts the room's
   // song from its beginning.
   BmSound sound;
@@ -134,6 +141,9 @@ BmStateBlock bmGameStateBlock(BmGame *pGame);
 /// After the state was read: enters the stored room again and rebuilds everything derived
 /// (collision, objects, camera, streamed maps, sprites) without moving the player.
 BmResult bmGameAfterLoad(BmGame *pGame);
+
+/// Shows texts in `language` from now on and keeps it as an option in the save memory.
+void bmGameSetLanguage(BmGame *pGame, uint8_t language);
 
 /// Save game in the save memory: the `save` fields. Loading returns false if there is none
 /// or it was written by a different layout.
