@@ -16,7 +16,7 @@ protocols and language. The reasons behind them, the research and the roadmap ar
 | [data-format.md](data-format.md) | structures and records: record files, the cooked `DTAB` chunk, reading records from scripts |
 | [pack-format.md](pack-format.md) | the cooked binary pack: header, table of contents, chunk types, compression, load order |
 | [streaming.md](streaming.md) | planned: live-link streaming with rooms as anchors, room chain, priorities, load profiles |
-| [runtime-abi.md](runtime-abi.md) | live reload as built (content buffers, restart, hot, state); planned: API table, handles, residency |
+| [runtime-abi.md](runtime-abi.md) | live reload as built (content pool, restart, hot, state); planned: API table, handles, residency |
 | [state.md](state.md) | the game state: fields and flags, the serialised form, schema hash, save game, snapshot, what is rebuilt after loading |
 | [link-protocol.md](link-protocol.md) | transports, multiboot, words and packets, error handling, debugging, GBA to GBA, input mirror |
 | [mondskript.md](mondskript.md) | the scripting language, bytecode and native modules |

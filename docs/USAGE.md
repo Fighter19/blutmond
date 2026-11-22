@@ -154,7 +154,9 @@ The same commands work on the PC game with `--tcp 7414` instead of `--xboo ...`,
 image in the emulator with `--mgba build-gba/game.gba` (there also `run N`, `check`,
 `screenshot`). The comment at the top of `tools/bmlink/bmlink.c` lists everything.
 
-A multiboot GBA has 48 KB for a pushed pack (the test level is 39 KB).
+A multiboot GBA has about 140 KB for pushed packs (the test level is 75 KB). A pack that fits
+beside the running one arrives while the game plays on; a larger one replaces it, the game
+standing still until it is there, and is sent whole.
 
 ## 5. Changing things while the game runs
 

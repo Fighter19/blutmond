@@ -23,6 +23,27 @@ static bool usePack(void *pContext, const BmPack *pPack, BmLiveMode mode, const 
 {
   BmGameLive *gl = pContext;
   BmGame *g = gl->pGame;
+  if (gl->released)
+  {
+    // The old pack is gone: nothing to fall back to. On failure the game keeps waiting.
+    *gl->pPack = *pPack;
+    if (mode == BM_LIVE_RESTART)
+    {
+      if (bmGameStart(g, gl->pPack, roomId) != BM_SUCCESS) return false;
+      if (gl->pPilot != NULL) memset(gl->pPilot, 0, sizeof(*gl->pPilot));
+    }
+    else
+    {
+      // What bmActorsPrepareReload kept at the release serves a module reload only.
+      if (mode != BM_LIVE_MODULE) g->actors.keep = false;
+      int32_t index = bmGameFindRoom(pPack, gl->releasedRoom);
+      if (index < 0) return false;
+      g->roomIndex = (uint32_t)index;
+      if (bmGameAfterLoad(g) != BM_SUCCESS) return false;
+    }
+    gl->released = false;
+    return true;
+  }
   if (mode == BM_LIVE_RESTART)
   {
     BmPack old = *gl->pPack;
@@ -56,6 +77,17 @@ static bool usePack(void *pContext, const BmPack *pPack, BmLiveMode mode, const 
   return false;
 }
 
+static void releasePack(void *pContext)
+{
+  BmGameLive *gl = pContext;
+  BmGame *g = gl->pGame;
+  const char *current = bmGameRoomId(g);
+  strncpy(gl->releasedRoom, current != NULL ? current : "", sizeof(gl->releasedRoom) - 1);
+  gl->releasedRoom[sizeof(gl->releasedRoom) - 1] = 0;
+  bmActorsPrepareReload(g);   // the objects' classes and layouts, for a module reload
+  gl->released = true;
+}
+
 static bool afterStateLoad(void *pContext)
 {
   BmGameLive *gl = pContext;
@@ -73,5 +105,5 @@ static void status(void *pContext, uint32_t *pFrame, uint32_t *pRoom, int16_t *p
 
 BmLiveHooks bmGameLiveHooks(BmGameLive *gl)
 {
-  return (BmLiveHooks){ gl, stateBlocks, usePack, afterStateLoad, status };
+  return (BmLiveHooks){ gl, stateBlocks, usePack, releasePack, afterStateLoad, status };
 }

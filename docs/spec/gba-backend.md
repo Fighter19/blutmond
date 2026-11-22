@@ -61,10 +61,15 @@ The frame rate is the machine's: 59.7275 per second on a GBA (16,777,216 cycles 
 
 - User stack from 0x03007F00 downward (4 KB reserved), interrupt stack from 0x03007FA0. The
   BIOS uses 0x03007FE0 and up. The link's handler runs on the user stack.
-- Linker scripts: `gba_cart.ld` and `gba_mb.ld`. They differ only in where code and constants
-  go.
-- A multiboot image must fit into 256 KB with its zero-initialised data. The game's buffers
-  for pushed content are 48 KB each there instead of 64 KB.
+- Linker scripts: `gba_cart.ld` and `gba_mb.ld`. They differ only in where code, constants
+  and the embedded pack go.
+- EWRAM from the bottom: what is loaded (a multiboot image: all code and constants, then the
+  embedded pack, section `.bm_pack`, last); the content pool for pushed packs
+  (`__bm_pool_start` to `__bm_pool_end`, [runtime-abi.md](runtime-abi.md) §0); the engine's
+  EWRAM heap (4 KB, `__bm_ewram_heap_size`); the zero-initialised data (`.sbss`) at the top.
+  So a multiboot image does not carry its zeros, its embedded pack is the start of the pool,
+  and whatever the program does not take belongs to the pool. A program too large for any
+  pool is a link error.
 
 **Start code** (`crt0.S`): the header (the logo is left empty and put in by the sending tool,
 [../HARDWARE.md](../HARDWARE.md) §3; game code `BMND`, maker `00`, the fixed value 0x96). A

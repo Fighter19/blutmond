@@ -15,6 +15,10 @@ typedef struct BmGameLive
   BmGame *pGame;
   BmPack *pPack;           // the pack the game uses (pGame->pPack points here)
   BmAutopilot *pPilot;     // may be NULL
+  // While the pack is released for one arriving over it (BmLiveHooks.releasePack): what was
+  // taken from it beforehand.
+  bool released;
+  char releasedRoom[64];   // the room's id, to find it again in the new pack
 } BmGameLive;
 
 uint32_t bmGameLiveStateBlocks(BmGameLive *pLive, BmStateBlock *pBlocks, uint32_t max);

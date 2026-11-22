@@ -49,6 +49,8 @@
 #endif
 #include "video.h"
 
+#include <string.h>
+
 #ifdef BM_PLATFORM_HOST
 #  include "hal_host.h"
 #  ifdef __EMSCRIPTEN__
@@ -145,16 +147,20 @@ uint32_t bm_native_slot[BM_NATIVE_SLOT_BYTES / 4];
 uint32_t bm_native_slot_bytes = BM_NATIVE_SLOT_BYTES;   // not const: a weak constant can be folded away
 #endif
 
-#ifdef BM_LIVE_CONTENT_SMALL
-#  undef BM_LIVE_CONTENT_SIZE
-#  define BM_LIVE_CONTENT_SIZE (40 * 1024)   // the native-script multiboot image (CMakeLists.txt)
+// The content pool for packs that arrive over the link (src/link/live.h). On the GBA it is
+// what the program leaves of EWRAM (the linker script); a multiboot image's embedded pack
+// lies at its start, so its room is used again once another pack arrives.
+#ifdef BM_PLATFORM_GBA
+extern uint8_t __bm_pool_start[], __bm_pool_end[];
+#  define POOL __bm_pool_start
+#  define POOL_SIZE ((uint32_t)(__bm_pool_end - __bm_pool_start))
+#else
+static uint8_t s_pool[256 * 1024] __attribute__((aligned(4)));
+#  define POOL s_pool
+#  define POOL_SIZE ((uint32_t)sizeof(s_pool))
 #endif
-#ifndef BM_LIVE_CONTENT_SIZE
-#  define BM_LIVE_CONTENT_SIZE (96 * 1024)   // a cartridge image; a multiboot one has 48 KB
-#endif
-static uint8_t s_content[2][BM_LIVE_CONTENT_SIZE] BM_EWRAM_BSS;
 static BmLive s_live BM_EWRAM_BSS;
-static BmGameLive s_gameLive = { &s_game, &s_pack, &s_pilot };
+static BmGameLive s_gameLive = { &s_game, &s_pack, &s_pilot, false, { 0 } };
 
 #ifdef BM_GAME_SEND
 extern const uint8_t bm_embedded_bootstrap[], bm_embedded_bootstrap_end[];
@@ -245,7 +251,7 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
   if (s_loadPath != NULL && !loadSnapshot(s_load, s_loadSize)) return 4;
 #endif
   BmLiveHooks hooks = bmGameLiveHooks(&s_gameLive);
-  bmLiveInit(&s_live, &hooks, s_content[0], s_content[1], BM_LIVE_CONTENT_SIZE, &s_pack);
+  bmLiveInit(&s_live, &hooks, POOL, POOL_SIZE, &s_pack);
   bmLiveStart(&s_live);
   bmOverlayInit(&s_game, s_overlay);
 
@@ -259,12 +265,26 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
       if (videoFrame != lastVideoFrame + 1) bm_game_stats.lagFrames += videoFrame - lastVideoFrame - 1;
       lastVideoFrame = videoFrame;
     }
-    if (bm_state_inbox.size != 0)
+    if (bm_state_inbox.size != 0 && !bmLiveWaiting(&s_live))
     {
       if (loadSnapshot(bm_state_inbox.data, bm_state_inbox.size)) bm_game_stats.snapshotsLoaded++;
       bm_state_inbox.size = 0;
     }
     bmLiveFrame(&s_live);
+    if (bmLiveWaiting(&s_live))
+    {
+      // The pack is being replaced over itself: nothing of it may be read until the new one
+      // is applied. The picture stays; the sound is quiet.
+      int8_t *left, *right;
+      bmHalAudioBuffers(&left, &right);
+      memset(left, 0, BM_HAL_AUDIO_FRAME_SAMPLES);
+      memset(right, 0, BM_HAL_AUDIO_FRAME_SAMPLES);
+#ifdef BM_PLATFORM_HOST
+      if (s_frameHook != NULL && !s_frameHook()) break;
+#endif
+      frame--;
+      continue;
+    }
     if (bmLiveCapturing(&s_live))
     {
       // The video state is being read over the link: hold still until it is through.

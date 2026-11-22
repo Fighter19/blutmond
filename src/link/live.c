@@ -16,21 +16,17 @@ BM_IWRAM_CODE static uint32_t exchange(void *pContext, uint32_t received)
 
 static void debugStopped(void *pContext, BmHalDebugRegs *pRegs, int slot);
 
-void bmLiveInit(BmLive *l, const BmLiveHooks *pHooks, uint8_t *pBuffer0, uint8_t *pBuffer1, uint32_t capacity,
-                const BmPack *pPack)
+void bmLiveInit(BmLive *l, const BmLiveHooks *pHooks, uint8_t *pPool, uint32_t poolSize, const BmPack *pPack)
 {
   memset(l, 0, sizeof(*l));
   bmLinkSlaveInit(&l->slave, bmLiveHandler, l);
   l->hooks = *pHooks;
-  l->pBuffers[0] = pBuffer0;
-  l->pBuffers[1] = pBuffer1;
-  l->capacity = capacity;
+  l->pPool = pPool;
+  l->poolSize = poolSize & ~3u;
   l->active = *pPack;
-  l->activeBuffer = -1;
   l->regions[0] = (BmLiveRegion){ "link", l, (uint32_t)sizeof(*l), BM_REGION_RUNTIME };
-  l->regions[1] = (BmLiveRegion){ "content 0", pBuffer0, capacity, BM_REGION_CONTENT };
-  l->regions[2] = (BmLiveRegion){ "content 1", pBuffer1, capacity, BM_REGION_CONTENT };
-  l->regions[3] = (BmLiveRegion){ "state put", l->statePut, sizeof(l->statePut), BM_REGION_CONTENT };
+  l->regions[1] = (BmLiveRegion){ "content pool", pPool, l->poolSize, BM_REGION_CONTENT };
+  l->regions[2] = (BmLiveRegion){ "state put", l->statePut, sizeof(l->statePut), BM_REGION_CONTENT };
   l->debugSlot = -1;
   l->debugAvailable = bmHalDebugInit(debugStopped, l);
 }
@@ -38,6 +34,42 @@ void bmLiveInit(BmLive *l, const BmLiveHooks *pHooks, uint8_t *pBuffer0, uint8_t
 void bmLiveStart(BmLive *l)
 {
   bmHalLinkStart(exchange, l, BM_LINK_WORD_IDLE);
+}
+
+// --- Content pool --------------------------------------------------------------------------
+
+// Where the running pack lies in the pool: from offset *pFrom to *pTo. False if it is outside
+// (or there is none).
+static bool activeInPool(const BmLive *l, uint32_t *pFrom, uint32_t *pTo)
+{
+  if (l->active.size == 0 || l->active.pData < l->pPool || l->active.pData >= l->pPool + l->poolSize) return false;
+  *pFrom = (uint32_t)(l->active.pData - l->pPool);
+  *pTo = *pFrom + l->active.size;
+  return true;
+}
+
+uint32_t bmLiveRoomBeside(const BmLive *l)
+{
+  uint32_t from, to;
+  if (!activeInPool(l, &from, &to)) return l->poolSize;
+  uint32_t after = to <= l->poolSize ? (l->poolSize - to) & ~3u : 0;
+  return from > after ? from : after;
+}
+
+// A place for an arriving pack of `size` bytes: before the running one (at the pool's start)
+// or after it (ending at the pool's end), so the next one again finds one piece free. NULL if
+// it only fits over the running one (*pOver set) or not at all.
+static uint8_t *placePack(const BmLive *l, uint32_t size, bool *pOver)
+{
+  uint32_t from, to;
+  *pOver = false;
+  if (size > l->poolSize) return NULL;
+  if (!activeInPool(l, &from, &to)) return l->pPool;
+  if (size <= from) return l->pPool;
+  uint32_t end = (l->poolSize - size) & ~3u;
+  if (end >= to) return l->pPool + end;
+  *pOver = true;
+  return NULL;
 }
 
 // --- Serial interrupt ----------------------------------------------------------------------
@@ -114,9 +146,19 @@ static void receiveToc(BmLive *l, const BmLinkPacket *p)
     l->totalSize = total;
     l->tocReceived = 0;
     l->tocComplete = false;
-    l->transferFailed = total > l->capacity || n < BM_PACK_HEADER_SIZE;
-    l->pStaging = l->pBuffers[l->activeBuffer == 0 ? 1 : 0];
     memset(l->present, 0, sizeof(l->present));
+    bool over = false;
+    l->pStaging = n < BM_PACK_HEADER_SIZE ? NULL : placePack(l, total, &over);
+    if (l->pStaging == NULL && n >= BM_PACK_HEADER_SIZE && over && l->hooks.releasePack != NULL)
+    {
+      // Only over the running pack: the game lets go of it and holds still until this one
+      // is applied; nothing of the old one can be copied.
+      l->hooks.releasePack(l->hooks.pContext);
+      l->packReleased = true;
+      memset(&l->active, 0, sizeof(l->active));
+      l->pStaging = l->pPool;
+    }
+    l->transferFailed = l->pStaging == NULL;
     if (l->transferFailed) return;
     l->tocOffset = bmRead32(bytes + 24);
     l->chunkCount = bmRead32(bytes + 20);
@@ -172,11 +214,12 @@ static bool sendHello(BmLive *l)
   bmLinkPut16(out + 4, h->abiMajor);
   bmLinkPut16(out + 6, h->abiMinor);
   bmLinkPut32(out + 8, h->profile);
-  bmLinkPut32(out + 12, l->capacity);
+  bmLinkPut32(out + 12, bmLiveRoomBeside(l));
   bmLinkPut32(out + 16, l->active.size);
   bmLinkPut32(out + 20, h->crc32);
   bmLinkPut32(out + 24, count);
   bmLinkPut32(out + 28, hashes);
+  bmLinkPut32(out + 32, l->hooks.releasePack != NULL ? l->poolSize : bmLiveRoomBeside(l));
   for (uint32_t i = 0; i < hashes; i++)
   {
     BmChunkEntry e;
@@ -239,7 +282,7 @@ static BmLiveResult applyPack(BmLive *l, uint32_t id, BmLiveMode mode, const cha
   if (e != BM_PACK_OK) return BM_LIVE_ERROR_PACK;
   if (!l->hooks.usePack(l->hooks.pContext, &pack, mode, roomId)) return BM_LIVE_ERROR_PACK;
   l->active = pack;
-  l->activeBuffer = l->pStaging == l->pBuffers[0] ? 0 : 1;
+  l->packReleased = false;
   l->pStaging = NULL;
   l->tocComplete = false;
   return BM_LIVE_OK;
@@ -249,6 +292,7 @@ static BmLiveResult applyState(BmLive *l)
 {
   BmStateBlock blocks[8];
   uint32_t n = l->hooks.stateBlocks(l->hooks.pContext, blocks, 8);
+  if (l->packReleased) return BM_LIVE_ERROR_STATE;   // no pack to rebuild from
   if (l->statePutSize == 0 || bmStateRead(blocks, n, l->statePut, l->statePutSize) != BM_STATE_OK)
     return BM_LIVE_ERROR_STATE;
   l->statePutSize = 0;
@@ -755,4 +799,5 @@ void bmLiveDecodeHello(const uint8_t *i, BmLiveHello *h)
   h->activeCrc = bmLinkGet32(i + 20);
   h->chunkCount = bmLinkGet32(i + 24);
   h->hashCount = bmLinkGet32(i + 28);
+  h->poolCapacity = bmLinkGet32(i + 32);
 }

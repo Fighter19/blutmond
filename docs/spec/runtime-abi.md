@@ -7,15 +7,26 @@ Version 0.2, draft.
 Most of this document is the design. Built so far (`src/link/live.h`,
 `apps/game/game_live.c`):
 
-- **Two content buffers.** A pack pushed over the link is put together in the buffer the
-  running pack does not use ([link-protocol.md](link-protocol.md) §3). After a successful
-  `APPLY` that buffer holds the running pack and the other one is free for the next. The
-  first pack is the one built into the image and lies in neither.
-- **The region table** has four entries: the link's own memory (runtime), the two content
-  buffers and the buffer for a pushed state (content). Nothing reads it yet.
+- **One content pool.** Packs pushed over the link are put together in one area, the pool,
+  each at the size it has. On the GBA the pool is what the program leaves of EWRAM
+  ([gba-backend.md](gba-backend.md) §2): about 140 KB in a multiboot image, about 200 KB in a
+  cartridge image. The running pack lies at one end of it (or outside it: a cartridge's
+  embedded pack is in ROM), and an arriving pack goes to the other end, so the free room is
+  always one piece: a pack can arrive beside the running one when both fit together. A
+  multiboot image's embedded pack lies at the pool's start, so its room serves again once
+  another pack arrived.
+- **Over the running pack.** If the arriving pack fits the pool but not beside the running
+  one, the runtime lets go of the running pack at the first packet (`releasePack`) and puts
+  the new one together over it, from the pool's start. The game holds still meanwhile (the
+  picture stays, the sound is quiet) and nothing of the old pack can be kept, so every chunk
+  is sent. A transfer that breaks off leaves the game waiting for the next; restart, hot and
+  module work as usual afterwards (the room's ID and what a module reload compares were taken
+  from the old pack beforehand); a pushed state is refused while there is no pack.
+- **The region table** has three entries: the link's own memory (runtime), the pool and the
+  buffer for a pushed state (content). Nothing reads it yet.
 - **What the game provides** (`BmLiveHooks`): its state blocks ([state.md](state.md));
-  "use this pack" for the modes restart and hot; "state was loaded, rebuild what is derived";
-  and frame, room and position for `STATUS`.
+  "use this pack" for the modes restart and hot; "let go of the pack"; "state was loaded,
+  rebuild what is derived"; and frame, room and position for `STATUS`.
 - **restart**: the game starts over with the new pack ([runtime-core.md](runtime-core.md) §6,
   "start"), in the room whose ID was given or in room 0. If that fails, the old pack is
   started again and the answer is "pack refused".
@@ -98,8 +109,8 @@ Rules:
   the game hangs (memory reads, `WATCHDOG`) needs a second, lower-priority context and is
   future work.
 - Implementation (version 0.2, `src/link/live.h`): the region table lists the link's own
-  memory (runtime) and two content buffers and the state buffer (content). Packs arrive in the
-  buffer the running pack does not use; after a successful `APPLY` the buffers swap roles.
+  memory (runtime), the content pool and the state buffer (content). Packs arrive at the end
+  of the pool the running pack does not take, or over it (§0).
 - A watchdog (timer interrupt checking a frame counter) reports a hang over the link.
 
 ## 4. Room changes and residency

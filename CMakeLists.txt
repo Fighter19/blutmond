@@ -37,10 +37,9 @@ set(BM_WARNINGS -Wall -Wextra -Werror -pedantic)
 
 # --- Engine library -----------------------------------------------------------------------
 
-# What the test level is cooked from besides its rooms. The base: what fits a multiboot GBA
-# (48 KB for a pushed pack, the pack embedded in the same 256 KB); the multiboot images and the
-# native-script images play it. The full level adds languages, menus and the boss; the PC, the
-# web and the cartridge images play that.
+# What the test level is cooked from besides its rooms. The base: the first two rooms, whose
+# scripts compiled to native code fit the 12 KB native slot in IWRAM; the native-script images
+# play it. The full level adds languages, menus and the boss; every other image plays that.
 set(BM_TEST_LEVEL_BASE_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
 set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmsprite
@@ -130,9 +129,9 @@ function(bm_add_gba_image name)
     target_link_libraries(${target} PRIVATE blutmond)
     target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:C>:${BM_WARNINGS}>)
     if(kind STREQUAL "mb")
-      # Everything of a multiboot image shares 256 KB: smaller buffers for pushed content
-      # (48 KB each instead of 64) leave room for the runtime to grow.
-      target_compile_definitions(${target} PRIVATE BM_GBA_MULTIBOOT BM_LIVE_CONTENT_SIZE=49152)
+      # Everything of a multiboot image shares 256 KB; the content pool gets what is left
+      # (src/hal/gba/gba_mb.ld).
+      target_compile_definitions(${target} PRIVATE BM_GBA_MULTIBOOT)
     endif()
     target_link_options(${target} PRIVATE
       -T ${PROJECT_SOURCE_DIR}/src/hal/gba/gba_${kind}.ld
@@ -197,11 +196,6 @@ if(BM_PLATFORM STREQUAL "gba")
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level")
-  set(BM_TEST_LEVEL_BASE_PACK ${CMAKE_BINARY_DIR}/test_level_base_gba.bmpk)
-  add_custom_command(OUTPUT ${BM_TEST_LEVEL_BASE_PACK}
-    COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_BASE_PACK} ${BM_TEST_LEVEL_BASE_ROOMS} ${BM_TEST_LEVEL_BASE_ASSETS}
-    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_BASE_ROOMS} ${BM_TEST_LEVEL_BASE_ASSETS} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
-    COMMENT "Cooking the test level's base")
   # The same level with the scripts also compiled to native code (mondskript.md section 12).
   set(BM_TEST_LEVEL_NATIVE_PACK ${CMAKE_BINARY_DIR}/test_level_native_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_NATIVE_PACK}
@@ -212,7 +206,7 @@ if(BM_PLATFORM STREQUAL "gba")
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
       ${PROJECT_SOURCE_DIR}/tools/mondskript/aot.cpp ${PROJECT_SOURCE_DIR}/tools/cooker/native_module.cpp
     COMMENT "Cooking the test level with native scripts")
-  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_BASE_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
+  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
 
   # The game, played with the buttons, and the same with the autopilot (for tests and demos).
   # embed_pack.S is compiled per target with that target's BM_PACK_PATH.
@@ -260,14 +254,6 @@ if(BM_PLATFORM STREQUAL "gba")
       endif()
       if(variant STREQUAL "game_autoplay_native")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_NATIVE_PACK}\"")
-        if(target MATCHES "_mb$")
-          # Its embedded pack carries the native code too, and nothing is pushed into it in
-          # the tests: smaller buffers for pushed packs leave room for it (40 KB instead of 48).
-          target_compile_definitions(${target} PRIVATE BM_LIVE_CONTENT_SMALL=1)
-        endif()
-      elseif(target MATCHES "_mb$" OR variant STREQUAL "game_send")
-        # game_send boots a multiboot GBA and sends it its pack: that must fit there.
-        target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_BASE_PACK}\"")
       else()
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
       endif()
@@ -299,7 +285,7 @@ if(BM_PLATFORM STREQUAL "gba")
   # The embedded pack is pulled in by the assembler, which the build system cannot see: every
   # image that embeds one is assembled again when either pack changes.
   set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S PROPERTIES
-    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK};${BM_TEST_LEVEL_BASE_PACK};${BM_TEST_LEVEL_NATIVE_PACK};${BM_SCRIPT_BENCH_PACK}")
+    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK};${BM_TEST_LEVEL_NATIVE_PACK};${BM_SCRIPT_BENCH_PACK}")
   foreach(target ${BM_GBA_TARGETS})
     add_dependencies(${target} test_room_pack)
     target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_ROOM_PACK}\"")
@@ -575,7 +561,7 @@ if(BM_PLATFORM STREQUAL "host")
       ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx)
   set_tests_properties(cook_test_room_snes PROPERTIES PASS_REGULAR_EXPRESSION "layer-dropped.*foreground")
 
-  # The test level, and its base (what the multiboot images play, see BM_TEST_LEVEL_BASE_ASSETS).
+  # The test level, and its base (what the native-script images play, see BM_TEST_LEVEL_BASE_ASSETS).
   add_test(NAME cook_test_level
     COMMAND bmcook --profile gba -o ${cooked}/test_level_gba.bmpk ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS})
   set_tests_properties(cook_test_level PROPERTIES FIXTURES_SETUP test_level_pack)
@@ -608,11 +594,6 @@ if(BM_PLATFORM STREQUAL "host")
   add_test(NAME cook_test_level_variant
     COMMAND bmcook --profile gba -o ${cooked}/test_level_variant_gba.bmpk ${cooked}/room_variant.tmx ${variant_rooms} ${BM_TEST_LEVEL_ASSETS})
   set_tests_properties(cook_test_level_variant PROPERTIES FIXTURES_REQUIRED room_variant_tmx FIXTURES_SETUP test_level_variant)
-  # The same change on the base, for the multiboot images.
-  add_test(NAME cook_test_level_base_variant
-    COMMAND bmcook --profile gba -o ${cooked}/test_level_base_variant_gba.bmpk
-      ${cooked}/room_variant.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx ${BM_TEST_LEVEL_BASE_ASSETS})
-  set_tests_properties(cook_test_level_base_variant PROPERTIES FIXTURES_REQUIRED room_variant_tmx FIXTURES_SETUP test_level_base_variant)
   add_executable(test_live tests/test_live.c apps/game/autopilot.c apps/game/game_live.c)
   target_link_libraries(test_live PRIVATE blutmond bm_link_host)
   target_include_directories(test_live PRIVATE apps/game)
@@ -872,9 +853,9 @@ if(BM_PLATFORM STREQUAL "host")
       endif()
       # GBA to GBA (docs/spec/link-protocol.md section 9), two emulated GBAs joined by a cable.
       # The autoplaying game, in the second room at frame 800, brings the other GBA to where it
-      # is: a GBA running the game from a cartridge (it gets the sender's pack, the level's base,
-      # and the state: flags +72 = 4, two transfers applied), and a GBA that runs nothing but
-      # the bootstrap (it gets the runtime through it first, which carries that pack).
+      # is: a GBA running the game from a cartridge (it has the same pack already and gets only
+      # the state: flags +72 = 0, one transfer applied), and a GBA that runs nothing but the
+      # bootstrap (it gets the runtime through it first, which carries that pack).
       # The other side then reports the sender's room and position; the sender plays on.
       set(send ${BM_GBA_BUILD_DIR}/game_send.elf:bm_game_stats)
       # The receiving GBA also carries the sender's inventory afterwards (the coin and the Short
@@ -882,9 +863,9 @@ if(BM_PLATFORM STREQUAL "host")
       # carried, +96 is the CRC of the inventory's keys and amounts.
       add_test(NAME gba_to_gba_state
         COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/game.gba --frames 1500 --until a ${send}+24=1000
-          --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=4 --check a ${send}+8=0 --check a ${send}+12=1
+          --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=0 --check a ${send}+8=0 --check a ${send}+12=1
           --check a ${send}+64 --check a ${send}+68
-          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+28=2
+          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+28=1
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+92=2
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+96=2982369528)
       add_test(NAME gba_to_gba_boot
@@ -944,22 +925,18 @@ if(BM_PLATFORM STREQUAL "host")
       set_tests_properties(live_mgba_ppu_snapshot_matches PROPERTIES FIXTURES_REQUIRED live_mgba_ppu_render)
       foreach(image game_autoplay game_autoplay_mb)
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
-        # A multiboot image takes the base of the level (it has room for no more).
-        # The full level leads into the boss hall within the run (two room changes), the base not.
+        # The full level, also on a multiboot GBA: the variant does not fit beside the embedded
+        # pack there and replaces it (src/link/live.h). Into the boss hall within the run.
         set(level test_level)
         set(rooms 2)
-        if(image STREQUAL "game_autoplay_mb")
-          set(level test_level_base)
-          set(rooms 1)
-        endif()
         add_test(NAME live_mgba_bit_errors_${image}
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/${image}.gba --errors 2000 2000 run 30 hello
             push ${cooked}/${level}_variant_gba.bmpk hot
             state-get ${out}/live_${image}.bmst run 30 state-put ${out}/live_${image}.bmst
             push ${cooked}/${level}_gba.bmpk restart:test_room
-            push ${cooked}/${level}_variant_gba.bmpk hot run 1200
+            push ${cooked}/${level}_variant_gba.bmpk hot run 1500
             check ${elf}:bm_game_stats+28=4 check ${elf}:bm_game_stats+8=0 check ${elf}:bm_game_stats+12=${rooms} stats)
-        set_tests_properties(live_mgba_bit_errors_${image} PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_variant;test_level_base_pack;test_level_base_variant")
+        set_tests_properties(live_mgba_bit_errors_${image} PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_variant")
       endforeach()
 
       # PPU snapshot taken in mGBA, rendered by the software PPU, must match mGBA's picture.

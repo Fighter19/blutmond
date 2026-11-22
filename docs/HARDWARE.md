@@ -30,8 +30,9 @@ Two smaller ones:
   multiboot images overflowed EWRAM. The GBA build now adds `-Os` itself when the C flags
   carry no optimisation level.
 - The multiboot game was down to about 500 bytes of free EWRAM. Its two buffers for pushed
-  content are 48 KB instead of 64 KB now (33 KB free). A pack pushed to a multiboot GBA can
-  therefore be at most 48 KB.
+  content were cut to 48 KB each, which limited a pushed pack to 48 KB. They are one pool now
+  (about 140 KB, [spec/runtime-abi.md](spec/runtime-abi.md) §0): a pack up to that size can be
+  pushed, beside the running one when both fit, otherwise over it.
 
 One that was not software at all: for a while the GBA answered nothing because the cable's
 plug was pushed too far into the GBA. The symptom is described in section 5.

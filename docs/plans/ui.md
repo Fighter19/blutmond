@@ -24,7 +24,7 @@ are the test project's scripts (they name its structures), not engine assets; th
 counter goes on while a screen is open (the room does not), so recorded input stays one frame
 per frame; menus cost the GBA a frame now and then (interpreted scripts drawing them). Steps
 5 and 6 are open. Where step 2 differs from sections 2 and 3: the font chunk is 1 bit per pixel and the runtime draws the
-shadow (the test level's pack has to fit the 48 KB a multiboot GBA gives a pushed pack, and
+shadow (the test level's pack then had to fit the 48 KB a multiboot GBA gave a pushed pack, and
 had less than a kilobyte to spare); the UI keeps its map as one byte per cell for the 20
 visible rows; no canvas, no darkening behind single frames (an open screen darkens the whole room). Milestone M13
 in [../PLAN.md](../PLAN.md).

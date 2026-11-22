@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CONTENT_SIZE (96 * 1024)   // as a cartridge image (apps/game/main.c)
+#define POOL_SIZE (192 * 1024)   // about as a cartridge image (src/hal/gba/gba_cart.ld)
 #define WORDS_PER_FRAME 128   // about 30 KB/s at 60 frames per second
 
 static uint8_t *s_level, *s_variant, *s_scripts;
@@ -32,9 +32,9 @@ static uint32_t s_levelSize, s_variantSize, s_scriptsSize;
 static BmPack s_pack;
 static BmGame s_game;
 static BmAutopilot s_pilot;
-static BmGameLive s_gameLive = { &s_game, &s_pack, &s_pilot };
+static BmGameLive s_gameLive = { &s_game, &s_pack, &s_pilot, false, { 0 } };
 static BmLive s_live;
-static uint8_t s_content[2][CONTENT_SIZE];
+static uint8_t s_pool[POOL_SIZE] __attribute__((aligned(4)));
 
 typedef struct Wire
 {
@@ -50,7 +50,7 @@ static void frame(void)
 {
   bmVideoWaitFrame();
   bmLiveFrame(&s_live);
-  if (!s_paused) bmGameFrame(&s_game, bmAutopilotKeys(&s_pilot, &s_game));
+  if (!s_paused && !bmLiveWaiting(&s_live)) bmGameFrame(&s_game, bmAutopilotKeys(&s_pilot, &s_game));
 }
 
 static uint32_t rnd(void)
@@ -69,17 +69,25 @@ static uint32_t exchange(void *pContext, uint32_t out)
   return in;
 }
 
-static void start(BmLinkMaster *m)
+// The game with the level, and a pool of `poolSize` bytes for packs; `inPool`: the level lies
+// at the pool's start (as a multiboot image's embedded pack), otherwise outside (ROM).
+static void startWith(BmLinkMaster *m, uint32_t poolSize, bool inPool)
 {
   bmHalHostReset();
   BmDeviceHandle device = NULL;
   bmCreateDevice(bmGetPhysicalDevice(), &device);
   g_defaultDevice = device;
-  bmPackOpen(&s_pack, s_level, s_levelSize, true);
+  memset(s_pool, 0, sizeof(s_pool));
+  if (inPool) memcpy(s_pool, s_level, s_levelSize);
+  bmPackOpen(&s_pack, inPool ? s_pool : s_level, s_levelSize, true);
+  memset(&s_gameLive, 0, sizeof(s_gameLive));
+  s_gameLive.pGame = &s_game;
+  s_gameLive.pPack = &s_pack;
+  s_gameLive.pPilot = &s_pilot;
   bmGameStart(&s_game, &s_pack, NULL);
   memset(&s_pilot, 0, sizeof(s_pilot));
   BmLiveHooks hooks = bmGameLiveHooks(&s_gameLive);
-  bmLiveInit(&s_live, &hooks, s_content[0], s_content[1], CONTENT_SIZE, &s_pack);
+  bmLiveInit(&s_live, &hooks, s_pool, poolSize, &s_pack);
   bmLiveStart(&s_live);
   memset(&s_wire, 0, sizeof(s_wire));
   s_wire.rng = 99;
@@ -87,6 +95,11 @@ static void start(BmLinkMaster *m)
   bmLinkMasterInit(m, &t);
   s_paused = false;
   for (int i = 0; i < 30; i++) frame();
+}
+
+static void start(BmLinkMaster *m)
+{
+  startWith(m, POOL_SIZE, false);
 }
 
 static void testHello(void)
@@ -103,7 +116,8 @@ static void testHello(void)
   TEST_ASSERT(r.hello.activeSize == s_levelSize);
   TEST_ASSERT(r.hello.chunkCount == bmPackChunkCount(&s_pack));
   TEST_ASSERT(r.hello.hashCount == r.hello.chunkCount);
-  TEST_ASSERT(r.hello.contentCapacity == CONTENT_SIZE);
+  TEST_ASSERT(r.hello.contentCapacity == POOL_SIZE);   // the level is outside: all of it is free
+  TEST_ASSERT(r.hello.poolCapacity == POOL_SIZE);
   bmLinkMasterFree(&m);
 }
 
@@ -135,7 +149,7 @@ static void testHotReloadKeepsTheGameGoing(void)
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
   TEST_ASSERT(s_game.deaths == 0);
 
-  // A second push goes into the other buffer; the first one is what the game uses now.
+  // A second push goes to the other end of the pool; the first one is what the game uses now.
   TEST_ASSERT(bmLiveMasterHello(&m, &r));
   TEST_ASSERT(r.hello.activeSize == s_variantSize);
   TEST_ASSERT(bmLiveMasterPushPack(&m, s_level, s_levelSize, 2, &r, &stats));
@@ -190,6 +204,70 @@ static void testRestartInAnotherRoom(void)
   TEST_ASSERT(st.result == BM_LIVE_OK);
   TEST_ASSERT(st.roomIndex == 1);
   TEST_ASSERT(st.frame < 5);
+  bmLinkMasterFree(&m);
+}
+
+// The pool holds the running pack and the one arriving at its two ends, whatever their sizes,
+// so a pack is placed as long as both fit together.
+static void testPacksTakeTurnsAtTheEndsOfThePool(void)
+{
+  BmLinkMaster m;
+  uint32_t poolSize = (s_levelSize + s_variantSize + 64) & ~3u;
+  startWith(&m, poolSize, true);
+  BmLiveRemote r;
+  TEST_ASSERT(bmLiveMasterHello(&m, &r));
+  TEST_ASSERT(r.hello.contentCapacity == ((poolSize - s_levelSize) & ~3u));
+  TEST_ASSERT(r.hello.poolCapacity == poolSize);
+  BmLiveStatus st;
+  const uint8_t *packs[3] = { s_variant, s_level, s_variant };
+  uint32_t sizes[3] = { s_variantSize, s_levelSize, s_variantSize };
+  for (uint32_t k = 0; k < 3; k++)
+  {
+    const uint8_t *before = s_live.active.pData;
+    BmLivePushStats stats;
+    TEST_ASSERT(bmLiveMasterHello(&m, &r));
+    TEST_ASSERT(bmLiveMasterPushPack(&m, packs[k], sizes[k], 10 + k, &r, &stats));
+    TEST_ASSERT(stats.chunksResident >= 1);   // beside it: what did not change is copied
+    TEST_ASSERT(bmLiveMasterApply(&m, 10 + k, BM_LIVE_HOT, NULL, &st));
+    TEST_ASSERT(st.result == BM_LIVE_OK);
+    TEST_ASSERT(!bmLiveWaiting(&s_live));
+    TEST_ASSERT(s_live.active.pData != before);
+    // At one end or the other.
+    TEST_ASSERT(s_live.active.pData == s_pool || s_live.active.pData + sizes[k] + 4 > s_pool + poolSize);
+    TEST_ASSERT(memcmp(s_live.active.pData, packs[k], sizes[k]) == 0);
+  }
+  bmLinkMasterFree(&m);
+}
+
+// Two packs that do not fit together: the arriving one is written over the running one. The
+// game holds still from the first packet on, and plays on in the same room afterwards.
+static void testAPackTooLargeToGoBesideReplacesTheRunningOne(void)
+{
+  BmLinkMaster m;
+  uint32_t poolSize = (s_levelSize + s_variantSize / 2) & ~3u;
+  startWith(&m, poolSize, true);
+  for (int i = 0; i < 1500 && s_game.roomChanges == 0; i++) frame();
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
+  BmLiveRemote r;
+  TEST_ASSERT(bmLiveMasterHello(&m, &r));
+  TEST_ASSERT(r.hello.contentCapacity < s_variantSize && r.hello.poolCapacity >= s_variantSize);
+  BmLivePushStats stats;
+  uint32_t frameBefore = s_game.frame;
+  TEST_ASSERT(bmLiveMasterPushPack(&m, s_variant, s_variantSize, 7, &r, &stats));
+  TEST_ASSERT(stats.chunksResident == 0);   // nothing of the old one can be kept
+  TEST_ASSERT(bmLiveWaiting(&s_live));
+  frameBefore = s_game.frame;
+  for (int i = 0; i < 30; i++) frame();
+  TEST_ASSERT(s_game.frame == frameBefore);  // it holds still meanwhile
+  BmLiveStatus st;
+  TEST_ASSERT(bmLiveMasterApply(&m, 7, BM_LIVE_HOT, NULL, &st));
+  TEST_ASSERT(st.result == BM_LIVE_OK);
+  TEST_ASSERT(!bmLiveWaiting(&s_live));
+  TEST_ASSERT(s_live.active.pData == s_pool && memcmp(s_pool, s_variant, s_variantSize) == 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
+  for (int i = 0; i < 60; i++) frame();
+  TEST_ASSERT(s_game.frame > frameBefore);
+
   bmLinkMasterFree(&m);
 }
 
@@ -386,6 +464,8 @@ int main(int argc, char **argv)
   RUN_TEST(testStateGetAndPut);
   RUN_TEST(testRestartInAnotherRoom);
   RUN_TEST(testFailedTransferLeavesTheGameAlone);
+  RUN_TEST(testPacksTakeTurnsAtTheEndsOfThePool);
+  RUN_TEST(testAPackTooLargeToGoBesideReplacesTheRunningOne);
   RUN_TEST(testPushWithBitErrors);
   RUN_TEST(testPpuSnapshot);
   RUN_TEST(testScriptsArePushedLive);

@@ -70,7 +70,18 @@ SECTIONS
   } > ewram AT> ewram
   __ewram_lma = LOADADDR(.ewram);
 
-  .sbss (NOLOAD) : ALIGN(4)
+  /* The embedded pack last of what is loaded, and the content pool right after it: once
+     another pack arrives over the link, the room of the embedded one is used again. */
+  .bm_pack : ALIGN(4)
+  {
+    __bm_pool_start = .;
+    KEEP(*(.bm_pack))
+    . = ALIGN(4);
+  } > ewram
+
+  /* Zeroed EWRAM data at the top of EWRAM, so that the pool and the heap are one piece below
+     it (and a multiboot image does not carry it). */
+  .sbss ((ORIGIN(ewram) + LENGTH(ewram) - SIZEOF(.sbss)) & ~15) (NOLOAD) :
   {
     __sbss_start = .;
     *(.sbss .sbss.*)
@@ -78,12 +89,17 @@ SECTIONS
     __sbss_end = .;
   } > ewram
 
-  /* What is left of EWRAM and IWRAM belongs to the engine's heaps. */
-  __ewram_heap_start = ALIGN(__sbss_end, 4);
-  __ewram_heap_end = ORIGIN(ewram) + LENGTH(ewram);
+  /* Between: the engine's EWRAM heap (__bm_ewram_heap_size, 4 KB unless the image says
+     otherwise), and below it the content pool for packs (src/link/live.h). IWRAM's rest is the
+     IWRAM heap. */
+  PROVIDE(__bm_ewram_heap_size = 4K);
+  __ewram_heap_end = ADDR(.sbss);
+  __ewram_heap_start = __ewram_heap_end - __bm_ewram_heap_size;
+  __bm_pool_end = __ewram_heap_start;
   __iwram_heap_start = ALIGN(__bss_end, 4);
   __iwram_heap_end = __sp_usr - __sp_usr_size;
 
+  ASSERT(__bm_pool_start <= __bm_pool_end, "EWRAM overflows: no room left for the content pool and the heap")
   ASSERT(__iwram_heap_start <= __iwram_heap_end, "IWRAM overflows into the stack")
 
   /DISCARD/ : { *(.ARM.attributes) *(.comment) }

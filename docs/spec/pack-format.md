@@ -46,7 +46,7 @@ chunk formats named in section 3.
   fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
 - **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the
   profile (GBA: 1024); 15 background palette banks (the 16th is the UI's); a pack pushed over the link has at most 512 chunks
-  and must fit the runtime's content buffer ([link-protocol.md](link-protocol.md) §3).
+  and must fit the runtime's content pool ([runtime-abi.md](runtime-abi.md) §0).
 - **Sharing**: tiles are merged (with flips) per area and palettes are packed per area.
   Identical assets are not merged across chunks, and nothing decides between global, area
   and room level: sprites, songs and scripts are always global.

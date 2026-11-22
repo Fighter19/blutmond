@@ -18,7 +18,7 @@
 #include "pack.h"
 #include "state.h"
 
-#define BM_LIVE_RUNTIME_VERSION 1
+#define BM_LIVE_RUNTIME_VERSION 2
 #define BM_LIVE_MAX_CHUNKS 512
 #define BM_LIVE_STATE_CAPACITY 2048
 
@@ -41,7 +41,7 @@ typedef enum BmLiveResult {
   BM_LIVE_OK = 0,
   BM_LIVE_ERROR_TRANSFER,     // unknown transfer, or chunks missing
   BM_LIVE_ERROR_CRC,          // the assembled pack does not match its checksum
-  BM_LIVE_ERROR_TOO_LARGE,    // does not fit into a content buffer
+  BM_LIVE_ERROR_TOO_LARGE,    // larger than the content pool
   BM_LIVE_ERROR_PACK,         // the game refused the pack
   BM_LIVE_ERROR_STATE,        // state data of another layout
   BM_LIVE_ERROR_UNSUPPORTED,  // mode not available yet
@@ -57,6 +57,10 @@ typedef struct BmLiveHooks
   /// kept, the current room reloaded around the player). `pPack` stays valid until the next
   /// successful call.
   bool (*usePack)(void *pContext, const BmPack *pPack, BmLiveMode mode, const char *roomId);
+  /// The running pack is about to be overwritten by the one arriving (it does not fit beside
+  /// it): from now on nothing may read it, until usePack gives a new one. Keep in RAM what a
+  /// later reload needs of the old pack. NULL: such a pack is refused as too large.
+  void (*releasePack)(void *pContext);
   /// After state was loaded: rebuild what is derived (bmGameAfterLoad).
   bool (*afterStateLoad)(void *pContext);
   /// Current frame, room and coarse player position for STATUS.
@@ -79,13 +83,16 @@ typedef struct BmLive
   BmLinkSlave slave;
   BmLiveHooks hooks;
 
-  // Two content buffers; the active pack is in one of them or elsewhere (ROM).
-  uint8_t *pBuffers[2];
-  uint32_t capacity;
-  BmPack active;
-  int8_t activeBuffer;        // -1: the active pack is not in a content buffer
+  // The content pool: packs that arrive are placed in it (placePack). The running pack is at
+  // one end of it, or outside (ROM, an embedded pack of a cartridge); an arriving one goes to
+  // the free end, so the free space is never split. Two packs that do not fit together: the
+  // arriving one overwrites the running one, which is released first (packReleased).
+  uint8_t *pPool;
+  uint32_t poolSize;
+  BmPack active;              // size 0 while released
+  bool packReleased;          // no pack to run: the game holds still (bmLiveWaiting)
 
-  // Pack transfer into the buffer that is not active.
+  // Pack transfer into the place placePack found.
   uint32_t transferId;
   uint32_t totalSize;
   uint8_t *pStaging;
@@ -148,9 +155,13 @@ typedef struct BmLive
   uint32_t applied, chunksCopied, chunksReceived;
 } BmLive;
 
-/// `pBuffers` are two buffers of `capacity` bytes for packs; `pPack` is the pack running now.
-void bmLiveInit(BmLive *pLive, const BmLiveHooks *pHooks, uint8_t *pBuffer0, uint8_t *pBuffer1, uint32_t capacity,
-                const BmPack *pPack);
+/// `pPool` is `poolSize` bytes for packs that arrive (4-byte aligned); `pPack` is the pack
+/// running now, which may lie at the start or the end of the pool (a multiboot image's
+/// embedded pack) or anywhere outside it.
+void bmLiveInit(BmLive *pLive, const BmLiveHooks *pHooks, uint8_t *pPool, uint32_t poolSize, const BmPack *pPack);
+
+/// The largest pack that can arrive while the running one stays.
+uint32_t bmLiveRoomBeside(const BmLive *pLive);
 
 /// Starts listening on the serial port.
 void bmLiveStart(BmLive *pLive);
@@ -164,6 +175,13 @@ void bmLiveFrame(BmLive *pLive);
 
 /// True while a PPU snapshot is being sent. The game should stand still meanwhile (skip its
 /// frame, keep calling bmLiveFrame), so the snapshot shows one moment and not a mix of frames.
+/// True while there is no pack to run (it was released for one arriving): the game must hold
+/// still and read nothing of its pack.
+static inline bool bmLiveWaiting(const BmLive *pLive)
+{
+  return pLive->packReleased;
+}
+
 static inline bool bmLiveCapturing(const BmLive *pLive)
 {
   return pLive->snapshotOffset < pLive->snapshotEnd;
@@ -257,13 +275,14 @@ typedef struct BmLiveHello
   uint16_t protocolVersion, runtimeVersion;
   uint16_t abiMajor, abiMinor;
   uint32_t profile;
-  uint32_t contentCapacity;
+  uint32_t contentCapacity;   // the largest pack it takes while the running one stays
   uint32_t activeSize;
   uint32_t activeCrc;
   uint32_t chunkCount;        // chunks of the active pack
   uint32_t hashCount;         // pairs that follow (may be fewer than chunkCount)
+  uint32_t poolCapacity;      // the largest pack it takes at all, overwriting the running one
 } BmLiveHello;
-#define BM_LIVE_HELLO_SIZE 32
+#define BM_LIVE_HELLO_SIZE 36
 #define BM_LIVE_HELLO_MAX_HASHES ((BM_LINK_MAX_PAYLOAD - BM_LIVE_HELLO_SIZE) / 8)
 
 /// STATUS: kind (0 report, 1 answer to APPLY), result, mode, then transfer id, frame, room,

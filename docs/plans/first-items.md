@@ -193,8 +193,7 @@ Attachments in the free slots, with a lifetime:
 | Objects at once | room objects + 2 knives + 1 bolt + 1 flask | pool of 16 |
 | Icons | 30 | 120 tiles, loaded as shown |
 
-The demo pack stays under the 48 KB a multiboot GBA can take if the third room is small;
-if not, the content buffers are the first thing to revisit (HARDWARE.md §1).
+A multiboot GBA takes packs up to about 140 KB (one content pool, runtime-abi.md §0).
 
 ## 11. Steps
 

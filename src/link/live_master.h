@@ -28,7 +28,9 @@ typedef struct BmLivePushStats
 bool bmLiveMasterHello(BmLinkMaster *pMaster, BmLiveRemote *pRemote);
 
 /// Sends the pack's table of contents and the chunks `pRemote` does not list (all of them if
-/// `pRemote` is NULL). Nothing changes on the runtime until bmLiveMasterApply.
+/// `pRemote` is NULL, or the pack is too large to go beside the running one there). Nothing
+/// changes on the runtime until bmLiveMasterApply, unless the pack must overwrite the running
+/// one: the runtime then holds still from the first packet until a pack is applied.
 bool bmLiveMasterPushPack(BmLinkMaster *pMaster, const uint8_t *pPack, uint32_t size, uint32_t transferId,
                           const BmLiveRemote *pRemote, BmLivePushStats *pStats);
 

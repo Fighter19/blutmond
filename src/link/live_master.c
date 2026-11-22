@@ -32,6 +32,9 @@ bool bmLiveMasterPushPack(BmLinkMaster *m, const uint8_t *pPack, uint32_t size, 
   BmLivePushStats stats = { 0 };
   if (bmPackOpen(&pack, pPack, size, true) != BM_PACK_OK) return false;
   uint8_t buf[BM_LINK_MAX_PAYLOAD];
+  // Too large to arrive beside the running pack: it is written over it, and the runtime
+  // cannot keep any of its chunks.
+  if (r != NULL && size > r->hello.contentCapacity) r = NULL;
 
   // Table of contents: header and entries as one stream, split into parts.
   uint32_t count = bmPackChunkCount(&pack);

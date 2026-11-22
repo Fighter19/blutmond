@@ -460,9 +460,10 @@ int main(int argc, char **argv)
       if (!bmLiveMasterHello(&m, &remote)) { failed = 1; break; }
       haveRemote = true;
       const BmLiveHello *h = &remote.hello;
-      printf("runtime %u, protocol %u, ABI %u.%u, profile %.4s, pack %u bytes (crc %08X, %u chunks), content buffers %u bytes\n",
+      printf("runtime %u, protocol %u, ABI %u.%u, profile %.4s, pack %u bytes (crc %08X, %u chunks), room for a pack %u bytes beside it, %u over it\n",
              h->runtimeVersion, h->protocolVersion, h->abiMajor, h->abiMinor, (const char *)&h->profile,
-             (unsigned)h->activeSize, (unsigned)h->activeCrc, (unsigned)h->chunkCount, (unsigned)h->contentCapacity);
+             (unsigned)h->activeSize, (unsigned)h->activeCrc, (unsigned)h->chunkCount, (unsigned)h->contentCapacity,
+             (unsigned)h->poolCapacity);
     }
     else if (strcmp(cmd, "ping") == 0)
     {
