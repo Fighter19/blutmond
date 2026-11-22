@@ -334,6 +334,43 @@ void SoundPanel::bind(Control &root, Context &ui)
   volume_ = number("snd_volume", 0, 255, [this](int v) { if (auto *i = instrument()) i->volume = v; });
   pan_ = number("snd_pan", -64, 63, [this](int v) { if (auto *i = instrument()) i->pan = v; });
   root_ = number("snd_root", 0, 127, [this](int v) { if (auto *i = instrument()) i->root = v; });
+  layer_ = number("snd_layer", 0, 15, [this](int v) { if (auto *i = instrument()) i->layer = v; });
+  // The preview's intensity: which layers are heard, fading as in the game.
+  intensity_ = root.findAs<SpinBox>("snd_intensity");
+  intensity_->minValue = 0;
+  intensity_->maxValue = 15;
+  intensity_->decimals = 0;
+  intensity_->setValue(15, false);
+  intensity_->valueChanged.connect([this](double v) {
+    previewIntensity_ = std::clamp(int(v), 0, 15);
+    bmSoundSetIntensity(&sound_, uint8_t(previewIntensity_));
+    refreshTrackList();
+  });
+  root.findAs<Button>("snd_fade")->clicked.connect([this] { bmSoundFadeMusic(&sound_, 0, 120, true); });
+  mute_ = root.findAs<CheckBox>("snd_mute");
+  solo_ = root.findAs<CheckBox>("snd_solo");
+  mute_->toggled.connect([this](bool on) {
+    if (updating_ || !loaded_ || roll_->track < 0) return;
+    muted_.resize(song_.tracks.size(), false);
+    muted_[size_t(roll_->track)] = on;
+    recook();
+    refreshTrackList();
+  });
+  solo_->toggled.connect([this](bool on) {
+    if (updating_ || !loaded_ || roll_->track < 0) return;
+    soloTrack_ = on ? roll_->track : -1;
+    recook();
+    refreshTrackList();
+  });
+  speakText_ = root.findAs<LineEdit>("snd_speak_text");
+  speakText_->setText("Who wakes me under the blood moon?");
+  root.findAs<Button>("snd_speak")->clicked.connect([this] {
+    if (cooked_.empty()) return;
+    speaking_.clear();
+    const std::string &t = speakText_->text();
+    for (size_t i = 0; i < t.size();) speaking_ += char32_t(ose::ui::decodeUtf8(t, i));
+    speakAt_ = 0;
+  });
   auto note = [this]() -> song::Note * {
     if (!loaded_ || roll_->track < 0 || size_t(roll_->track) >= song_.tracks.size()) return nullptr;
     auto &notes = song_.tracks[size_t(roll_->track)].notes;
@@ -389,6 +426,7 @@ void SoundPanel::bind(Control &root, Context &ui)
     roll_->selected = -1;
     showInstrument();
     showNote();
+    showTrackFlags();
   });
   trackName_->submitted.connect([this](const std::string &name) {
     song::Instrument *in = instrument();
@@ -421,6 +459,9 @@ void SoundPanel::bind(Control &root, Context &ui)
   root.findAs<Button>("snd_track_remove")->clicked.connect([this] {
     if (!loaded_ || song_.tracks.size() <= 1 || roll_->track < 0 || size_t(roll_->track) >= song_.tracks.size()) return;
     int inst = song_.tracks[size_t(roll_->track)].instrument;
+    if (size_t(roll_->track) < muted_.size()) muted_.erase(muted_.begin() + roll_->track);
+    if (soloTrack_ == roll_->track) soloTrack_ = -1;
+    else if (soloTrack_ > roll_->track) soloTrack_--;
     song_.tracks.erase(song_.tracks.begin() + roll_->track);
     // Its instrument goes with it unless another track uses it.
     bool used = std::any_of(song_.tracks.begin(), song_.tracks.end(), [&](const song::Track &t) { return t.instrument == inst; });
@@ -465,6 +506,8 @@ void SoundPanel::open(const std::string &path)
 {
   if (dirty_) save();
   play(false);
+  muted_.clear();
+  soloTrack_ = -1;
   try
   {
     song_ = song::load(path);
@@ -486,18 +529,71 @@ void SoundPanel::open(const std::string &path)
   fill();
 }
 
+void SoundPanel::resetEngine()
+{
+  bmSoundInit(&sound_, nullptr, echo_.data());
+  bmSoundSetIntensity(&sound_, uint8_t(previewIntensity_));
+}
+
+song::Song SoundPanel::previewSong() const
+{
+  song::Song s = song_;
+  for (size_t i = 0; i < s.tracks.size(); i++)
+  {
+    bool muted = soloTrack_ >= 0 ? int(i) != soloTrack_ : i < muted_.size() && muted_[i];
+    if (muted) s.tracks[i].notes.clear();
+  }
+  return s;
+}
+
+std::string SoundPanel::trackLabel(size_t i) const
+{
+  const song::Track &t = song_.tracks[i];
+  const song::Instrument *in = t.instrument >= 0 && size_t(t.instrument) < song_.instruments.size() ? &song_.instruments[size_t(t.instrument)] : nullptr;
+  std::string label = t.name + "  (" + (in ? in->wave : std::string("?")) + ", " + std::to_string(t.notes.size()) + " notes";
+  if (in && in->layer != 0) label += ", layer " + std::to_string(in->layer);
+  label += ")";
+  if (in && in->layer > previewIntensity_) label += "  not heard at intensity " + std::to_string(previewIntensity_);
+  if (soloTrack_ == int(i)) label += "  SOLO";
+  else if (soloTrack_ < 0 && i < muted_.size() && muted_[i]) label += "  muted";
+  return label;
+}
+
+void SoundPanel::refreshTrackList()
+{
+  updating_ = true;
+  for (size_t i = 0; i < song_.tracks.size() && i < tracks_->items.size(); i++) tracks_->items[i].text = trackLabel(i);
+  updating_ = false;
+}
+
+void SoundPanel::showTrackFlags()
+{
+  updating_ = true;
+  int t = roll_->track;
+  mute_->setPressed(t >= 0 && size_t(t) < muted_.size() && muted_[size_t(t)]);
+  solo_->setPressed(t >= 0 && t == soloTrack_);
+  updating_ = false;
+}
+
 void SoundPanel::recook()
 {
   // The engine reads the song data in place: it starts over on the new data, at the same place.
   bool wasPlaying = playing_;
   int which = song_.effect ? 1 : 0;
   uint32_t tick = sound_.players[which].tick;
-  bmSoundInit(&sound_, nullptr, echo_.data());
+  resetEngine();
   cooked_.clear();
   cost_ = song::Cost{};
   if (!loaded_) return;
   Report report;
   cooked_ = song::chunk(song_, 0, report, &cost_);
+  // The preview without muted tracks; the numbers stay those of the whole song.
+  bool filtered = soloTrack_ >= 0 || std::find(muted_.begin(), muted_.end(), true) != muted_.end();
+  if (filtered && !cooked_.empty())
+  {
+    Report ignored;
+    cooked_ = song::chunk(previewSong(), 0, ignored, nullptr);
+  }
   std::string problem;
   for (const ReportEntry &e : report.entries)
     if (e.level != ReportEntry::Level::Info && problem.empty()) problem = e.message;
@@ -534,11 +630,9 @@ void SoundPanel::fill()
 {
   updating_ = true;
   tracks_->items.clear();
-  for (const song::Track &t : song_.tracks)
-  {
-    std::string wave = t.instrument >= 0 && size_t(t.instrument) < song_.instruments.size() ? song_.instruments[size_t(t.instrument)].wave : "?";
-    tracks_->items.push_back({t.name + "  (" + wave + ", " + std::to_string(t.notes.size()) + " notes)", "music", {}, {}, {}, {}});
-  }
+  muted_.resize(song_.tracks.size(), false);
+  if (soloTrack_ >= int(song_.tracks.size())) soloTrack_ = -1;
+  for (size_t i = 0; i < song_.tracks.size(); i++) tracks_->items.push_back({trackLabel(i), "music", {}, {}, {}, {}});
   tracks_->selected = roll_->track;
   bpm_->setValue(song_.bpm, false);
   bars_->setValue(std::max(1, song_.length / 96), false);
@@ -564,7 +658,7 @@ void SoundPanel::showInstrument()
   updating_ = true;
   song::Instrument *in = instrument();
   bool have = in != nullptr;
-  for (SpinBox *s : {attack_, decay_, sustain_, release_, volume_, pan_, root_}) s->disabled = !have;
+  for (SpinBox *s : {attack_, decay_, sustain_, release_, volume_, pan_, root_, layer_}) s->disabled = !have;
   if (have)
   {
     trackName_->setText(in->name);
@@ -580,6 +674,7 @@ void SoundPanel::showInstrument()
     volume_->setValue(in->volume, false);
     pan_->setValue(in->pan, false);
     root_->setValue(in->root, false);
+    layer_->setValue(in->layer, false);
     sampleLoop_->setPressed(in->loop);
     bool isSample = in->wave == "sample";
     sample_->disabled = root_->disabled = sampleLoop_->disabled = !isSample;
@@ -611,15 +706,8 @@ void SoundPanel::edited()
   dirty_ = true;
   saveTimer_ = 0;
   recook();
-  // The track list shows note counts and waves.
-  updating_ = true;
-  for (size_t i = 0; i < song_.tracks.size() && i < tracks_->items.size(); i++)
-  {
-    const song::Track &t = song_.tracks[i];
-    std::string wave = t.instrument >= 0 && size_t(t.instrument) < song_.instruments.size() ? song_.instruments[size_t(t.instrument)].wave : "?";
-    tracks_->items[i].text = t.name + "  (" + wave + ", " + std::to_string(t.notes.size()) + " notes)";
-  }
-  updating_ = false;
+  // The track list shows note counts, waves and layers.
+  refreshTrackList();
 }
 
 void SoundPanel::save()
@@ -640,12 +728,12 @@ void SoundPanel::play(bool on)
 {
   if (on && !cooked_.empty())
   {
-    bmSoundInit(&sound_, nullptr, echo_.data());
+    resetEngine();
     playing_ = bmSoundPlayData(&sound_, cooked_.data(), uint32_t(cooked_.size()), song_.effect);
   }
   else
   {
-    bmSoundInit(&sound_, nullptr, echo_.data());
+    resetEngine();
     playing_ = false;
   }
 }
@@ -699,7 +787,7 @@ void SoundPanel::newSong()
 // Keeps a few frames of sound queued at the sound card, mixed by the engine itself.
 void SoundPanel::mixAhead(float dt)
 {
-  bool sounding = playing_;
+  bool sounding = playing_ || speakAt_ < speaking_.size();
   for (const BmSoundVoice &v : sound_.voices) sounding = sounding || v.active;
   if (!sounding) return;
   if (!audioTried_)
@@ -730,6 +818,16 @@ void SoundPanel::mixAhead(float dt)
   for (int f = 0; f < frames; f++)
   {
     int8_t left[BM_SOUND_FRAME_SAMPLES], right[BM_SOUND_FRAME_SAMPLES], both[2 * BM_SOUND_FRAME_SAMPLES];
+    // Speak: a letter a frame; every second one (a letter or digit) plays the effect, a little
+    // higher or lower by the letter, as a speaker's voice does in a dialogue (runtime-core.md §6).
+    if (speakAt_ < speaking_.size())
+    {
+      size_t n = speakAt_++;
+      char32_t c = speaking_[n];
+      bool letter = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c >= 0xC0;
+      if ((n & 1) == 0 && letter && bmSoundPlayData(&sound_, cooked_.data(), uint32_t(cooked_.size()), true))
+        sound_.players[1].transpose = int8_t(int(uint32_t(c) * 7u % 5u) - 2);
+    }
     bmSoundFrame(&sound_, left, right, BM_SOUND_FRAME_SAMPLES);
     for (int i = 0; i < BM_SOUND_FRAME_SAMPLES; i++)
     {

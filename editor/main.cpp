@@ -7,7 +7,7 @@
 // Run (F6) plays all rooms: on the PC in the game's window, or on a GBA over the Xboo cable
 // (editor/runner.h). With "Live" on, every cook while it runs is pushed in as a hot reload.
 //
-//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--target pc|gba] [--frames N --screenshot out.ppm] [--tab N] [--action name] [--room N] [--record Name] [--object-menu N]
+//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--target pc|gba] [--frames N --screenshot out.ppm] [--tab N] [--action name] [--room N] [--open file] [--record Name] [--object-menu N]
 //            [--game path] [--bmlink path] [--gba-image path] [--xboo device] [--reset none|xboo]
 //            [--port N] [--gba-rom path]
 //
@@ -377,6 +377,9 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
             <CheckBox id="snd_effect" text="Sound effect"/>
             <Label text="Echo ms"/><SpinBox id="snd_echo" min-size="48 0"/>
             <Label text="Feedback"/><SpinBox id="snd_feedback" min-size="48 0"/>
+            <Label text="Intensity" tooltip="Dynamic music: instruments of layer 1-15 are heard while the intensity is at least their layer (music_intensity in scripts)"/>
+            <SpinBox id="snd_intensity" min-size="40 0" tooltip="Preview: which layers are heard (they fade in and out as in the game)"/>
+            <Button id="snd_fade" text="Fade out" tooltip="Preview: the music fades away as in fade_music(0, 120) or a room with music none"/>
             <Label id="snd_info" text="" clip-text="1"/>
           </Flow></PanelContainer>
           <HSplit expand="1" fixed="270">
@@ -384,6 +387,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
               <Label text="Tracks" bold="1"/>
               <Scroll min-size="0 110"><ItemList id="snd_tracks"/></Scroll>
               <HBox><Button id="snd_track_add" text="Add track"/><Button id="snd_track_remove" text="Remove"/></HBox>
+              <HBox><CheckBox id="snd_mute" text="Mute"/><CheckBox id="snd_solo" text="Solo"/><Label text="(the preview only)" dim="1"/></HBox>
               <Label text="Instrument of the track" bold="1"/>
               <HBox><Label text="Name"/><LineEdit id="snd_track_name" expand="1"/></HBox>
               <HBox><Label text="Wave"/><OptionButton id="snd_wave" expand="1"/><Button id="snd_test" text="Test"/></HBox>
@@ -396,8 +400,11 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
                 <Label text="Release"/><SpinBox id="snd_release" expand="1"/>
                 <Label text="Volume"/><SpinBox id="snd_volume" expand="1"/>
                 <Label text="Pan"/><SpinBox id="snd_pan" expand="1"/>
+                <Label text="Layer" tooltip="0: always heard; 1-15: heard from that music intensity on"/><SpinBox id="snd_layer" expand="1"/>
               </Grid>
-              <Label text="Times in frames (1/60 s); sustain and volume 0-255; pan -64 to 63" wrap="1" dim="1"/>
+              <Label text="Times in frames (1/60 s); sustain and volume 0-255; pan -64 to 63; layer 0 always, 1-15 from that intensity" wrap="1" dim="1"/>
+              <Label text="A voice (a sound effect): try it on a line" bold="1"/>
+              <HBox><LineEdit id="snd_speak_text" expand="1"/><Button id="snd_speak" text="Speak" tooltip="Plays the effect with every second letter, pitched by the letter, a letter a frame: as a speaker's voice in a dialogue"/></HBox>
               <Label text="What it costs" bold="1"/>
               <Label id="snd_voices" text="" clip-text="1"/><ProgressBar id="snd_voices_bar"/>
               <Label id="snd_cpu" text="" clip-text="1"/><ProgressBar id="snd_cpu_bar"/>
@@ -1170,6 +1177,7 @@ int main(int argc, char **argv)
   std::string openRecord;   // --record: the Data tab with this record
   int objectMenu = -1;      // --object-menu: the context menu of this object of the room
   int startRoom = -1;       // --room: the project's room shown first
+  std::string openPath;     // --open: a sprite, script, song or record file in its tab
   RunTarget startTarget = RunTarget::Pc;
   RunSettings run;
 #ifdef BM_EDITOR_GAME
@@ -1197,6 +1205,7 @@ int main(int argc, char **argv)
     else if (std::strcmp(argv[i], "--action") == 0 && i + 1 < argc) actions.push_back(argv[++i]);
     else if (std::strcmp(argv[i], "--record") == 0 && i + 1 < argc) openRecord = argv[++i];
     else if (std::strcmp(argv[i], "--room") == 0 && i + 1 < argc) startRoom = std::atoi(argv[++i]);
+    else if (std::strcmp(argv[i], "--open") == 0 && i + 1 < argc) openPath = argv[++i];
     else if (std::strcmp(argv[i], "--object-menu") == 0 && i + 1 < argc) objectMenu = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--target") == 0 && i + 1 < argc) startTarget = std::strcmp(argv[++i], "gba") == 0 ? RunTarget::Gba : RunTarget::Pc;
     else if (std::strncmp(argv[i], "--", 2) == 0 && i + 1 < argc && run.set(argv[i] + 2, argv[i + 1])) i++;
@@ -1270,6 +1279,17 @@ int main(int argc, char **argv)
   for (const std::string &a : actions)
     if (!app.ui().actions().run(a)) std::fprintf(stderr, "no action %s\n", a.c_str());
   if (startRoom >= 0 && editor.projectPanel.roomPicked) editor.projectPanel.roomPicked(startRoom);
+  if (!openPath.empty())
+  {
+    // In the tab that edits it, as a pick in the Project panel does.
+    std::string p = std::filesystem::absolute(openPath).lexically_normal().string(), ext = std::filesystem::path(p).extension().string();
+    auto &pp = editor.projectPanel;
+    if (ext == ".bmsprite" && pp.spritePicked) pp.spritePicked(p);
+    else if (ext == ".ms" && pp.scriptPicked) pp.scriptPicked(p);
+    else if (ext == ".bmsong" && pp.songPicked) pp.songPicked(p);
+    else if (ext == ".bmdata" && pp.dataPicked) pp.dataPicked(p);
+    else std::fprintf(stderr, "cannot open %s here\n", openPath.c_str());
+  }
   if (!openRecord.empty())
   {
     if (editor.dataPanel.openRecord(openRecord)) editor.showTab(5);

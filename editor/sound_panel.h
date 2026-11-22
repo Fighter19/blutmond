@@ -98,6 +98,13 @@ private:
   void edited();
   void save();
   void play(bool on);
+  /// The preview engine anew (play, recook): with the intensity chosen.
+  void resetEngine();
+  /// The song as the preview plays it: without the muted tracks (or only the solo one).
+  song::Song previewSong() const;
+  void showTrackFlags();
+  std::string trackLabel(size_t track) const;   // name, wave, notes, layer, muted/solo
+  void refreshTrackList();
   void mixAhead(float dt);
   song::Instrument *instrument();
 
@@ -120,7 +127,14 @@ private:
   ose::ui::SpinBox *bpm_ = nullptr, *bars_ = nullptr, *echo_ms_ = nullptr, *feedback_ = nullptr;
   ose::ui::SpinBox *attack_ = nullptr, *decay_ = nullptr, *sustain_ = nullptr, *release_ = nullptr, *volume_ = nullptr, *pan_ = nullptr, *root_ = nullptr;
   ose::ui::SpinBox *velocity_ = nullptr, *length_ = nullptr;
-  ose::ui::CheckBox *loop_ = nullptr, *effect_ = nullptr, *sampleLoop_ = nullptr;
+  ose::ui::CheckBox *loop_ = nullptr, *effect_ = nullptr, *sampleLoop_ = nullptr, *mute_ = nullptr, *solo_ = nullptr;
+  ose::ui::SpinBox *layer_ = nullptr, *intensity_ = nullptr;
+  ose::ui::LineEdit *speakText_ = nullptr;
+  int previewIntensity_ = 15;
+  std::vector<bool> muted_;         // per track, for the preview
+  int soloTrack_ = -1;
+  std::u32string speaking_;         // a line being spoken by the effect (Speak)
+  size_t speakAt_ = 0;
   ose::ui::Button *play_ = nullptr;
   ose::ui::Label *info_ = nullptr, *voices_ = nullptr, *cpu_ = nullptr, *size_ = nullptr;
   ose::ui::ProgressBar *voicesBar_ = nullptr, *cpuBar_ = nullptr, *sizeBar_ = nullptr;
