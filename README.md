@@ -116,7 +116,11 @@ changes, so it can run next to Tiled.
   New sprite makes one from an image of the project; the sheet shows its frames (Slice cuts it
   by a grid), with rectangle, anchor and hitbox per frame; animations are lists of steps (a
   frame shown for a number of game frames). The preview plays from the cooked sprite and shows
-  the hardware sprite pieces and what the sprite costs. Edits are saved to the `.bmsprite`
+  the hardware sprite pieces and what the sprite costs. Boxes (hurt, hit, guard): the list
+  shows the frame's own and those it gets from the sprite; Scope moves one between the frame
+  and the whole sprite. In the preview a click selects a box, a drag inside moves it, a drag at
+  an edge or corner resizes it, a drag where there is none draws a new one (pressing in the
+  preview stops the animation at the frame being edited). Edits are saved to the `.bmsprite`
   file and, with Live on, pushed into the running game.
 - **Script** (centre tab): the project's Mondskript files
   ([docs/spec/mondskript.md](docs/spec/mondskript.md)) in a code editor. All scripts are

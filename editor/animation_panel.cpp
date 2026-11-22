@@ -91,6 +91,133 @@ void SheetView::draw(Canvas &c)
 
 // --- AnimPreview -------------------------------------------------------------------------
 
+ose::Vec2 AnimPreview::anchor() const
+{
+  // The anchor sits at three quarters of the height, so figures stand on a line.
+  return {rect_.x + rect_.w * 0.5f, rect_.y + rect_.h * 0.75f};
+}
+
+int AnimPreview::hit(ose::Vec2 p, int *pEdges) const
+{
+  *pEdges = 0;
+  if (!editable || !showBoxes) return -1;
+  Vec2 a = anchor();
+  const float grab = 5;
+  // The selected box first (it may lie under another), then the last drawn.
+  std::vector<int> order;
+  if (selectedBox >= 0 && size_t(selectedBox) < editBoxes.size()) order.push_back(selectedBox);
+  for (int i = int(editBoxes.size()) - 1; i >= 0; i--)
+    if (i != selectedBox) order.push_back(i);
+  for (int i : order)
+  {
+    const sprite::Box &b = editBoxes[size_t(i)].box;
+    float x0 = a.x + b.x * zoom, y0 = a.y + b.y * zoom, x1 = x0 + b.w * zoom, y1 = y0 + b.h * zoom;
+    if (p.x < x0 - grab || p.x > x1 + grab || p.y < y0 - grab || p.y > y1 + grab) continue;
+    int edges = 0;
+    if (std::abs(p.x - x0) <= grab) edges |= Left;
+    else if (std::abs(p.x - x1) <= grab) edges |= Right;
+    if (std::abs(p.y - y0) <= grab) edges |= Top;
+    else if (std::abs(p.y - y1) <= grab) edges |= Bottom;
+    if (edges == 0 && (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1)) continue;
+    *pEdges = edges ? edges : Move;
+    return i;
+  }
+  return -1;
+}
+
+ose::ui::Cursor AnimPreview::cursor(ose::Vec2 p) const
+{
+  int edges = 0;
+  int mode = drag_ >= 0 ? dragMode_ : (hit(p, &edges), edges);
+  if (mode & (Left | Right)) return (mode & (Top | Bottom)) ? Cursor::Move : Cursor::ResizeH;
+  if (mode & (Top | Bottom)) return Cursor::ResizeV;
+  if (mode & Move) return Cursor::Move;
+  return editable && showBoxes ? Cursor::Crosshair : Cursor::Arrow;
+}
+
+bool AnimPreview::event(const InputEvent &e)
+{
+  switch (e.type)
+  {
+  case InputEvent::Type::MouseDown:
+  {
+    if (e.button != MouseButton::Left) return false;
+    if (pressed) pressed();   // stops playing: the boxes belong to the frame shown now
+    if (!editable || !showBoxes) return true;
+    int edges = 0;
+    drag_ = hit(e.pos, &edges);
+    dragMode_ = drag_ >= 0 ? edges : Draw;
+    dragFrom_ = e.pos;
+    dragged_ = false;
+    if (drag_ >= 0)
+    {
+      dragStart_ = editBoxes[size_t(drag_)].box;
+      if (boxSelected) boxSelected(drag_);
+    }
+    else
+    {
+      Vec2 a = anchor();
+      dragStart_ = {int(std::floor((e.pos.x - a.x) / zoom)), int(std::floor((e.pos.y - a.y) / zoom)), 0, 0};
+    }
+    return true;
+  }
+  case InputEvent::Type::MouseMove:
+  {
+    if (drag_ < 0 && dragMode_ != Draw) return false;
+    int dx = int(std::lround((e.pos.x - dragFrom_.x) / zoom)), dy = int(std::lround((e.pos.y - dragFrom_.y) / zoom));
+    if (dx == 0 && dy == 0 && !dragged_) return true;
+    dragged_ = true;
+    sprite::Box b = dragStart_;
+    if (dragMode_ == Draw)
+    {
+      // From where it went down to the pointer, in whole pixels, at least 1 x 1.
+      int x1 = b.x + dx, y1 = b.y + dy;
+      b = {std::min(b.x, x1), std::min(b.y, y1), std::max(1, std::abs(x1 - b.x)), std::max(1, std::abs(y1 - b.y))};
+      drawing_ = b;
+      return true;
+    }
+    if (dragMode_ & Move)
+    {
+      b.x += dx;
+      b.y += dy;
+    }
+    if (dragMode_ & Left)
+    {
+      int x1 = b.x + b.w;
+      b.x = std::min(b.x + dx, x1 - 1);
+      b.w = x1 - b.x;
+    }
+    if (dragMode_ & Right) b.w = std::max(1, b.w + dx);
+    if (dragMode_ & Top)
+    {
+      int y1 = b.y + b.h;
+      b.y = std::min(b.y + dy, y1 - 1);
+      b.h = y1 - b.y;
+    }
+    if (dragMode_ & Bottom) b.h = std::max(1, b.h + dy);
+    b.x = std::clamp(b.x, -128, 127);
+    b.y = std::clamp(b.y, -128, 127);
+    b.w = std::clamp(b.w, 1, 255);
+    b.h = std::clamp(b.h, 1, 255);
+    editBoxes[size_t(drag_)].box = b;
+    if (boxChanged) boxChanged(drag_, b, false);
+    return true;
+  }
+  case InputEvent::Type::MouseUp:
+  {
+    if (drag_ >= 0 && dragged_ && boxChanged) boxChanged(drag_, editBoxes[size_t(drag_)].box, true);
+    if (dragMode_ == Draw && dragged_ && drawing_.w > 0 && boxDrawn) boxDrawn(drawing_);
+    bool any = drag_ >= 0 || dragMode_ == Draw;
+    drag_ = -1;
+    dragMode_ = 0;
+    drawing_ = {};
+    return any;
+  }
+  default:
+    return false;
+  }
+}
+
 void AnimPreview::draw(Canvas &c)
 {
   checker(c, rect_, 16);
@@ -106,15 +233,30 @@ void AnimPreview::draw(Canvas &c)
     for (const sprite::Piece &p : f.pieces) c.border({ax + p.dx * zoom, ay + p.dy * zoom, p.w * zoom, p.h * zoom}, {0.2f, 1, 1, 0.8f}, 1);
   if (showHitbox && f.hitbox.w > 0)
     c.border({ax + f.hitbox.x * zoom, ay + f.hitbox.y * zoom, f.hitbox.w * zoom, f.hitbox.h * zoom}, {1, 0.25f, 0.25f, 1}, 2);
+  // The boxes: the list's while they belong to the frame shown (they can be edited), else the
+  // cooked frame's.
+  std::vector<EditBox> shown = editBoxes;
+  if (!editable)
+  {
+    shown.clear();
+    for (const sprite::NamedBox &b : f.boxes) shown.push_back({b.box, b.kind});
+  }
   if (showBoxes)
-    for (size_t i = 0; i < f.boxes.size(); i++)
+    for (size_t i = 0; i < shown.size(); i++)
     {
-      const sprite::NamedBox &b = f.boxes[i];
+      const EditBox &b = shown[i];
       Color col = b.kind == sprite::BoxKind::Hit ? Color{1, 0.2f, 0.2f, 1} : b.kind == sprite::BoxKind::Guard ? Color{0.3f, 0.5f, 1, 1} : Color{0.2f, 0.9f, 0.3f, 1};
       Rect r{ax + b.box.x * zoom, ay + b.box.y * zoom, b.box.w * zoom, b.box.h * zoom};
       c.rect(r, {col.x, col.y, col.z, 0.18f});
-      c.border(r, col, int(i) == selectedBox ? 3.0f : 1.5f);
+      bool selected = editable && int(i) == selectedBox;
+      c.border(r, col, selected ? 3.0f : 1.5f);
+      if (selected)
+        // Handles at the corners: drag them to resize.
+        for (float hx : {r.x, r.x + r.w})
+          for (float hy : {r.y, r.y + r.h}) c.rect({hx - 3, hy - 3, 6, 6}, col);
     }
+  if (drawing_.w > 0)
+    c.border({ax + drawing_.x * zoom, ay + drawing_.y * zoom, drawing_.w * zoom, drawing_.h * zoom}, {1, 1, 1, 0.9f}, 1.5f);
   c.line({ax - 6, ay}, {ax + 6, ay}, {1, 0.9f, 0.2f, 1}, 2);
   c.line({ax, ay - 6}, {ax, ay + 6}, {1, 0.9f, 0.2f, 1}, 2);
   c.popClip();
@@ -155,6 +297,49 @@ void AnimationPanel::bind(Control &root, Renderer &renderer)
   }
   boxes_ = root.findAs<ItemList>("anim_boxes");
   boxSprite_ = root.findAs<CheckBox>("anim_box_sprite");
+  boxScope_ = root.findAs<OptionButton>("anim_box_scope");
+  boxScope_->setItems({"This frame", "The whole sprite"});
+  boxScope_->itemSelected.connect([this](int i) {
+    if (!updating_) setBoxScope(i == 1);
+  });
+  // With the mouse in the preview (AnimPreview).
+  preview_->pressed = [this] {
+    if (!playing_ || !loaded_ || sheet_->selected < 0) return;
+    playing_ = false;
+    preview_->frame = sheet_->selected;
+  };
+  preview_->boxSelected = [this](int i) {
+    boxes_->selected = i;
+    fillBoxes();
+  };
+  preview_->boxChanged = [this](int i, sprite::Box box, bool done) {
+    sprite::NamedBox *b = listedBox(i);
+    if (b == nullptr) return;
+    b->box = box;
+    if (done) boxEdited();
+    else
+    {
+      // Only the numbers while dragging; cooked and saved when it is let go.
+      updating_ = true;
+      box_[0]->setValue(box.x, false);
+      box_[1]->setValue(box.y, false);
+      box_[2]->setValue(box.w, false);
+      box_[3]->setValue(box.h, false);
+      updating_ = false;
+    }
+  };
+  preview_->boxDrawn = [this](sprite::Box box) {
+    std::vector<sprite::NamedBox> *list = boxList();
+    if (!list) return;
+    sprite::NamedBox b;
+    b.kind = sprite::BoxKind(std::max(0, std::min(2, boxKind_->selected())));
+    b.name = b.kind == sprite::BoxKind::Hit ? "blade" : b.kind == sprite::BoxKind::Guard ? "guard" : "";
+    b.box = box;
+    if (!boxSprite_->pressed) warnOverride(b.kind);
+    list->push_back(b);
+    boxes_->selected = int(list->size()) - 1;
+    boxEdited();
+  };
   boxKind_ = root.findAs<OptionButton>("anim_box_kind");
   boxName_ = root.findAs<LineEdit>("anim_box_name");
   static const char *boxIds[4] = {"anim_bx", "anim_by", "anim_bw", "anim_bh"};
@@ -240,6 +425,7 @@ void AnimationPanel::bind(Control &root, Renderer &renderer)
     b.name = b.kind == sprite::BoxKind::Hit ? "blade" : b.kind == sprite::BoxKind::Guard ? "guard" : "";
     b.box = sprite_.hitbox.w > 0 ? sprite_.hitbox : sprite::Box{-8, -16, 16, 16};
     if (b.kind == sprite::BoxKind::Hit) b.box = {6, -18, 16, 6};   // in front of the figure
+    if (!boxSprite_->pressed) warnOverride(b.kind);
     list->push_back(b);
     // Selected (in the frame's list its own boxes come first).
     boxes_->selected = int(list->size()) - 1;
@@ -630,6 +816,8 @@ void AnimationPanel::update(float dt)
 {
   if (dirty_ && (saveTimer_ += dt) > 0.4f) save();
   play_->text = playing_ ? "Pause" : "Play";
+  // The boxes can be changed with the mouse while the frame they belong to is shown.
+  preview_->editable = loaded_ && !playing_ && preview_->frame == sheet_->selected;
   int a = currentAnim();
   if (!playing_ || a < 0 || sprite_.animations[size_t(a)].steps.empty()) return;
   const sprite::Animation &an = sprite_.animations[size_t(a)];
@@ -707,15 +895,57 @@ void AnimationPanel::fillBoxes()
     boxKind_->select(int(b->kind), false);
     boxName_->setText(b->name);
   }
-  // The preview marks the box being edited (when the frame shown has it).
-  preview_->selectedBox = -1;
-  if (b && preview_->cooked && size_t(preview_->frame) < preview_->cooked->frames.size())
+  // The preview shows these boxes (to change them with the mouse) and marks the one selected.
+  preview_->editBoxes.clear();
+  for (const ListedBox &e : listed_)
   {
-    const auto &shown = preview_->cooked->frames[size_t(preview_->frame)].boxes;
-    for (size_t i = 0; i < shown.size(); i++)
-      if (shown[i] == *b) preview_->selectedBox = int(i);
+    const sprite::NamedBox &nb = e.sprites ? sprite_.boxes[e.index] : f->boxes[e.index];
+    preview_->editBoxes.push_back({nb.box, nb.kind});
   }
+  preview_->selectedBox = boxes_->selected;
+  // Its scope: this frame's own, or the sprite's (for every frame without its own of the kind).
+  boxScope_->disabled = b == nullptr || f == nullptr;
+  if (b) boxScope_->select(listed_[size_t(boxes_->selected)].sprites ? 1 : 0, false);
   updating_ = false;
+}
+
+void AnimationPanel::warnOverride(sprite::BoxKind kind)
+{
+  sprite::Frame *f = currentFrame();
+  if (f == nullptr || !log) return;
+  if (std::any_of(f->boxes.begin(), f->boxes.end(), [&](const sprite::NamedBox &b) { return b.kind == kind; })) return;
+  std::string hidden;
+  for (const sprite::NamedBox &b : sprite_.boxes)
+    if (b.kind == kind) hidden += (hidden.empty() ? "" : ", ") + (b.name.empty() ? std::string(sprite::boxKindName(kind)) : b.name);
+  if (!hidden.empty())
+    log("frame " + std::to_string(sheet_->selected) + " has its own " + sprite::boxKindName(kind) + " boxes now: the sprite's (" + hidden +
+            ") no longer apply to it",
+        false);
+}
+
+void AnimationPanel::setBoxScope(bool sprites)
+{
+  sprite::Frame *f = currentFrame();
+  int i = boxes_->selected;
+  if (f == nullptr || listedBox(i) == nullptr || listed_[size_t(i)].sprites == sprites) return;
+  ListedBox e = listed_[size_t(i)];
+  if (!sprites) warnOverride(sprite_.boxes[e.index].kind);
+  std::vector<sprite::NamedBox> &from = e.sprites ? sprite_.boxes : f->boxes;
+  std::vector<sprite::NamedBox> &to = sprites ? sprite_.boxes : f->boxes;
+  sprite::NamedBox moved = from[e.index];
+  from.erase(from.begin() + long(e.index));
+  to.push_back(moved);
+  // Selected again where it is now (in the sprite's list, or the frame's own at its end).
+  boxSprite_->setPressed(boxSprite_->pressed && sprites);
+  fillBoxes();
+  for (size_t k = 0; k < listed_.size(); k++)
+    if (listed_[k].sprites == sprites && listed_[k].index == to.size() - 1) boxes_->selected = int(k);
+  if (log)
+    log(std::string("box ") + sprite::boxKindName(moved.kind) + (moved.name.empty() ? "" : " " + moved.name) +
+            (sprites ? ": now the sprite's, for every frame without its own " + std::string(sprite::boxKindName(moved.kind)) + " boxes"
+                     : ": now frame " + std::to_string(sheet_->selected) + "'s own (other frames do not have it any more)"),
+        false);
+  boxEdited();
 }
 
 void AnimationPanel::boxEdited()

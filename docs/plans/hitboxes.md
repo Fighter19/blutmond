@@ -2,9 +2,11 @@
 
 Status: step 1 built: boxes in the sprite file and in `SPRT` version 2
 ([../spec/sprite-format.md](../spec/sprite-format.md)), read by the runtime
-(`bmSpriteSheetBoxes`); the Animation tab lists the boxes of a frame or of the sprite, adds,
-deletes and edits them by their numbers and draws them over the frame. Not yet: boxes on an
-animation, drawing boxes with the mouse, copying them to other frames, onion skin (section 7).
+(`bmSpriteSheetBoxes`); the Animation tab lists the boxes a frame has (its own and the
+sprite's it gets), adds, deletes and edits them by their numbers or with the mouse in the
+preview (select, move, resize at edges and corners, draw a new one), and moves a box between
+the frame and the whole sprite (its scope). Not yet: boxes on an animation, copying them to
+other frames, onion skin (section 7).
 Step 2 built ([../spec/runtime-core.md](../spec/runtime-core.md) §10, `src/world/hits.c`):
 `arm`, `disarm`, `hit_box`, teams, the decision step once a frame, the struck list,
 invulnerability, `hit(amount)` and `struck(amount)`; health for the player and objects. The

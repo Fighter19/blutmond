@@ -44,12 +44,33 @@ public:
 };
 
 /// One cooked frame, enlarged, with the anchor, the hitbox and the hardware sprite pieces.
+/// Its boxes can be changed with the mouse: a click selects one, a drag inside moves it, a drag
+/// at an edge or a corner resizes it, a drag where there is none draws a new one.
 class AnimPreview : public ose::ui::Control
 {
 public:
   const char *typeName() const override { return "AnimPreview"; }
   ose::Vec2 computeMinSize() override { return {200, 200}; }
   void draw(ose::ui::Canvas &c) override;
+  bool event(const ose::ui::InputEvent &e) override;
+  ose::ui::Cursor cursor(ose::Vec2 p) const override;
+
+  /// The boxes of the boxes list, in its order (frame pixels from the anchor): drawn instead of
+  /// the cooked frame's while `editable` (the frame shown is the one they belong to).
+  struct EditBox
+  {
+    sprite::Box box;
+    sprite::BoxKind kind = sprite::BoxKind::Hurt;
+  };
+  std::vector<EditBox> editBoxes;
+  bool editable = false;
+  /// The mouse went down on the preview: the panel stops playing and shows the frame edited.
+  std::function<void()> pressed;
+  std::function<void(int)> boxSelected;
+  /// A box was moved or resized (`done`: the mouse let go: save it).
+  std::function<void(int, sprite::Box, bool done)> boxChanged;
+  /// A box was drawn where there was none.
+  std::function<void(sprite::Box)> boxDrawn;
 
   struct FrameImage
   {
@@ -62,6 +83,16 @@ public:
   float zoom = 4;
   bool showHitbox = true, showPieces = true, showBoxes = true;
   int selectedBox = -1;   // drawn thicker: the box being edited
+
+private:
+  enum { Left = 1, Top = 2, Right = 4, Bottom = 8, Move = 16, Draw = 32 };
+  ose::Vec2 anchor() const;
+  /// The box under a point (screen) and which of its edges, or -1.
+  int hit(ose::Vec2 p, int *pEdges) const;
+  int drag_ = -1, dragMode_ = 0;
+  ose::Vec2 dragFrom_;
+  sprite::Box dragStart_, drawing_;
+  bool dragged_ = false;
 };
 
 void registerAnimationControls();
@@ -93,6 +124,11 @@ private:
   /// The box of the list's entry `i`: one of the frame's own, or one of the sprite's (also
   /// listed for a frame that has no box of that kind itself: it is the frame's too).
   sprite::NamedBox *listedBox(int i);
+  /// Moves the selected box to the sprite's boxes or to the frame's own (its scope).
+  void setBoxScope(bool sprites);
+  /// Before a frame gets a box of its own of `kind`: says which of the sprite's boxes it no
+  /// longer has then (a frame with its own boxes of a kind has none of the sprite's of it).
+  void warnOverride(sprite::BoxKind kind);
   void fillBoxes();
   void boxEdited();
   int currentAnim() const;
@@ -125,6 +161,7 @@ private:
   ose::ui::ItemList *boxes_ = nullptr;
   ose::ui::CheckBox *boxSprite_ = nullptr;
   ose::ui::OptionButton *boxKind_ = nullptr;
+  ose::ui::OptionButton *boxScope_ = nullptr;
   ose::ui::SpinBox *box_[4] = {};
   ose::ui::LineEdit *boxName_ = nullptr;
 };
