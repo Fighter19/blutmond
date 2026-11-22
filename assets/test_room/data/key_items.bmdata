@@ -1,0 +1,13 @@
+# Key items: what doors ask for and pickups give (give_item, has_item). A record's key is the
+# hash of its name, so has_item(#coin) finds the record coin.
+table KeyItem
+
+record coin {
+  title = "Coin"
+  description = "A gold coin."
+}
+
+record Key {
+  title = "Key"
+  description = "Opens a door somewhere."
+}

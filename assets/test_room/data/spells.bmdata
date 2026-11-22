@@ -1,0 +1,55 @@
+# Spells (first-items.md §4). Cost in mana; frames: how long it lasts.
+table Spell
+
+record Ember {
+  title = "Ember"
+  description = "A bolt of fire."
+  price = 100
+  cost = 4
+  power = 5
+  element = Fire
+  frames = 60
+  behaviour = SpellBolt
+}
+
+record FrostShard {
+  title = "Frost Shard"
+  description = "A bolt of ice that freezes what it strikes."
+  price = 120
+  cost = 5
+  power = 3
+  element = Ice
+  frames = 60
+  behaviour = SpellBolt
+}
+
+record Ward {
+  title = "Ward"
+  description = "Halves the harm taken for a while."
+  price = 150
+  cost = 8
+  frames = 300
+  behaviour = SpellEffect
+}
+
+record Mend {
+  title = "Mend"
+  description = "Heals over a short time."
+  price = 160
+  cost = 10
+  power = 12
+  element = Holy
+  frames = 60
+  behaviour = SpellEffect
+}
+
+record BloodMoon {
+  title = "Blood Moon"
+  description = "Strikes everything around."
+  price = 400
+  cost = 15
+  power = 8
+  element = Holy
+  frames = 6
+  behaviour = SpellNova
+}

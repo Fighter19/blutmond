@@ -1,0 +1,49 @@
+# Consumables (first-items.md §6).
+table Consumable
+
+record Potion {
+  title = "Potion"
+  description = "Restores 15 health."
+  price = 20
+  max_stack = 9
+  health = 15
+}
+
+record LargePotion {
+  title = "Large Potion"
+  description = "Restores 40 health."
+  price = 60
+  max_stack = 5
+  health = 40
+}
+
+record ManaVial {
+  title = "Mana Vial"
+  description = "Restores 15 mana."
+  price = 30
+  max_stack = 9
+  mana = 15
+}
+
+record Antidote {
+  title = "Antidote"
+  description = "Cures poison."
+  price = 15
+  max_stack = 9
+  cures = #Poison
+}
+
+record FireFlask {
+  title = "Fire Flask"
+  description = "Thrown in an arc; burns where it lands."
+  price = 40
+  max_stack = 5
+  behaviour = UseThrow
+}
+
+record ReturnFeather {
+  title = "Return Feather"
+  description = "Back to the last save point."
+  price = 80
+  behaviour = UseReturn
+}

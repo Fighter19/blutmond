@@ -1,0 +1,66 @@
+# Armour (first-items.md §7).
+table Armour
+
+record LeatherCap {
+  title = "Leather Cap"
+  price = 30
+  slot = Head
+  stats.defence = 1
+}
+
+record IronHelm {
+  title = "Iron Helm"
+  price = 120
+  slot = Head
+  stats.defence = 3
+}
+
+record TravellersCoat {
+  title = "Traveller's Coat"
+  description = "What everyone starts with."
+  price = 40
+  slot = Body
+  stats.defence = 2
+}
+
+record ChainMail {
+  title = "Chain Mail"
+  description = "Strong, and a little slow."
+  price = 250
+  slot = Body
+  stats.defence = 5
+  behaviour = ArmourHeavy
+}
+
+record EmberCloak {
+  title = "Ember Cloak"
+  description = "Fire does half the harm."
+  price = 200
+  slot = Body
+  stats.defence = 2
+  resists = Fire
+}
+
+record LuckyCoin {
+  title = "Lucky Coin"
+  price = 100
+  slot = Accessory
+  stats.luck = 3
+}
+
+record BloodRing {
+  title = "Blood Ring"
+  description = "More strength, less life."
+  price = 150
+  slot = Accessory
+  stats.attack = 2
+  stats.max_health = -5
+}
+
+record ThornBand {
+  title = "Thorn Band"
+  description = "What strikes you is struck back."
+  price = 180
+  slot = Accessory
+  behaviour = ArmourThorns
+}

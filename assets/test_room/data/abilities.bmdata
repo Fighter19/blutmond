@@ -1,0 +1,35 @@
+# Abilities (first-items.md §5): always active once found.
+table Ability
+
+record DoubleJump {
+  title = "Double Jump"
+  description = "One more jump in the air."
+  stats.air_jumps = 1
+}
+
+record Dash {
+  title = "Dash"
+  description = "R: a quick dash."
+  stats.dash = 1
+  behaviour = AbilityDash
+}
+
+record WallJump {
+  title = "Wall Jump"
+  description = "Slide down walls and jump off them."
+  stats.wall_slide = 1
+  behaviour = AbilityWallJump
+}
+
+record GroundPound {
+  title = "Ground Pound"
+  description = "Down and B in the air: strike the ground."
+  stats.ground_pound = 1
+  behaviour = AbilityPound
+}
+
+record SecondWind {
+  title = "Second Wind"
+  description = "Once in every room, a blow that would end you leaves you standing."
+  behaviour = AbilitySecondWind
+}

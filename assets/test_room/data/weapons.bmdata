@@ -1,0 +1,67 @@
+# Weapons (first-items.md §3). Reach in pixels, startup and recovery in frames.
+table Weapon
+
+record ShortSword {
+  title = "Short Sword"
+  description = "A plain blade. The weapon everyone starts with."
+  price = 50
+  attack = 3
+  reach = 18
+  startup = 4
+  recovery = 10
+}
+
+record Dagger {
+  title = "Dagger"
+  description = "Short and quick."
+  price = 40
+  attack = 2
+  reach = 12
+  startup = 2
+  recovery = 5
+}
+
+record GreatAxe {
+  title = "Great Axe"
+  description = "Slow and heavy; strikes from above as well."
+  price = 180
+  attack = 7
+  reach = 22
+  startup = 12
+  recovery = 18
+  swing = #Overhead
+  behaviour = WeaponOverhead
+}
+
+record ChainWhip {
+  title = "Chain Whip"
+  description = "Reaches far, a little late."
+  price = 150
+  attack = 3
+  reach = 44
+  startup = 7
+  recovery = 12
+  swing = #Whip
+  behaviour = WeaponWhip
+}
+
+record ThrowingKnives {
+  title = "Throwing Knives"
+  description = "Two in the air at most."
+  price = 120
+  attack = 2
+  startup = 5
+  recovery = 8
+  swing = #Throw
+  behaviour = WeaponThrow
+}
+
+record FlameBrand : ShortSword {
+  title = "Flame Brand"
+  description = "A short sword that burns what it strikes."
+  price = 300
+  attack = 5
+  element = Fire
+  behaviour = FlameSwing
+  stats.attack = 2
+}

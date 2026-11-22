@@ -1,5 +1,6 @@
 // Game tests on the cooked test level (path to the pack as the first argument).
 #include "autopilot.h"
+#include "data.h"
 #include "device.h"
 #include "game.h"
 #include "hal_host.h"
@@ -215,6 +216,50 @@ static void testAPickupStaysTaken(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+static uint16_t stringIdOf(const char *text);
+
+// The item tables of first-items.md §3 to §7 in the cooked test level: every table there, the
+// numbers as the plan has them, a record copied from another with its changes.
+static void testTheItemTables(void)
+{
+  start();
+  static const struct { const char *table; uint16_t records; } tables[] = {
+    { "Weapon", 6 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 6 }, { "Armour", 8 }, { "KeyItem", 2 } };
+  for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++)
+  {
+    BmDataTable t;
+    TEST_ASSERT(bmDataFindTable(&s_pack, stringIdOf(tables[i].table), &t) && t.recordCount == tables[i].records);
+  }
+  // Read through scripts' runtime calls, as WeaponSwing will: record_get(table, key, field).
+  BmDataTable w;
+  TEST_ASSERT(bmDataFindTable(&s_pack, stringIdOf("Weapon"), &w));
+  int32_t attack = -1, reach = -1, element = -1, bonus = -1;
+  for (uint16_t f = 0; f < w.fieldCount; f++)
+  {
+    BmDataField d = bmDataTableField(&w, f);
+    const char *n = bmPackString(&s_pack, d.name);
+    uint32_t key = 2166136261u;
+    for (const char *c = "FlameBrand"; *c; c++) key = (key ^ (uint8_t)*c) * 16777619u;
+    const uint8_t *r = bmDataRecordOrDefaults(&w, key);
+    if (strcmp(n, "attack") == 0) attack = bmDataRead(&w, r, d.offset, (BmDataType)d.type);
+    if (strcmp(n, "reach") == 0) reach = bmDataRead(&w, r, d.offset, (BmDataType)d.type);
+    if (strcmp(n, "element") == 0) element = bmDataRead(&w, r, d.offset, (BmDataType)d.type);
+    if (strcmp(n, "stats") == 0) bonus = bmDataRead(&w, r, (uint16_t)(d.offset + 4), BM_DATA_SHORT);   // stats.attack
+  }
+  TEST_ASSERT(attack == 5 && reach == 18 && element == 1 && bonus == 2);   // reach from ShortSword
+}
+
+static uint16_t stringIdOf(const char *text)
+{
+  for (uint32_t id = 0; id < 0xFFFF; id++)
+  {
+    const char *s = bmPackString(&s_pack, (uint16_t)id);
+    if (s == NULL) break;
+    if (strcmp(s, text) == 0) return (uint16_t)id;
+  }
+  return 0xFFFF;
+}
+
 static uint16_t stringId(const char *text)
 {
   for (uint32_t id = 0; id < 0xFFFF; id++)
@@ -346,6 +391,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheBatChasesHitsAndGoesHome);
   RUN_TEST(testAPickupStaysTaken);
   RUN_TEST(testAnAttachmentMakesThePlayerJumpHigher);
+  RUN_TEST(testTheItemTables);
   RUN_TEST(testTheRoomsAttachmentsComeAndGoWithTheRoom);
   free(s_data);
   free(s_windData);

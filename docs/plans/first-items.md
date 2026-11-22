@@ -1,6 +1,11 @@
 # Plan: the first weapons, spells, abilities, consumables and armour
 
-Status: plan, nothing built. Milestone M15 in [../PLAN.md](../PLAN.md).
+Status: step 1 built: the structures of section 2 and every record of sections 3 to 7 are in
+the test project (`assets/test_room/data`: `items.ms` and one `.bmdata` file per table), cooked
+into the pack. Not yet as the plan has it: the roles (`role item, equip(...)`, they come
+with structures.md step 4), the Data tab (structures.md step 5), icons and sounds; the
+scripts the `behaviour` fields name do not exist yet. Armour names its slot with an enum
+`EquipSlot` instead of a byte. Steps 2 to 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 
