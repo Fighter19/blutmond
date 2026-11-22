@@ -41,6 +41,10 @@ Keys: arrows to move, X or Space is A (jump), Z is B, A and S are L and R, Retur
 Backspace is Select, F11 full screen, Escape ends. Gamepads work. The window keeps a save game
 in a file and listens for the link on `127.0.0.1:7414`.
 
+Holding L and R and pressing Select shows or hides the debug overlay (room, game frame,
+position, health, and on the GBA how much of the frame the game took); `--overlay` shows it
+from the start.
+
 Without a window (for tests and scripts): `--frames N`, `--headless`, `--autoplay`,
 `--snapshot-at N file`, `--load file`, `--listen PORT`, `--follow`, `--until-frame N`,
 `--realtime`, `--random-keys N`. The comment at the top of `apps/game/main.c` describes them.

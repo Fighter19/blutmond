@@ -1,8 +1,8 @@
 class Jab extends Attachment;
 
 // A strike without a weapon or a drawing, for trying hits out (docs/plans/hitboxes.md): the
-// Attack button makes a rectangle `Reach` pixels ahead of the player for 3 frames. Nothing in
-// the test level attaches it; a script does with attach(slot, #Jab).
+// Attack button makes a rectangle `Reach` pixels ahead of the player for 3 frames. Cooked only
+// into the test pack with wind (tests/test_game.c attaches it), not into the test level.
 
 var int Reach = 20;
 var int Damage = 2;

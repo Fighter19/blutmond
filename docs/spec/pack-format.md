@@ -39,13 +39,13 @@ chunk formats named in section 3.
 - **Rooms** are numbered by the order of their `ROOM` chunks in the table, from 0. Room 0 is
   where a new game starts.
 - **What the cooker writes**, in this order: per area `VLAY`, `PALE`, `TILE`, then per room of
-  the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `SONG`, every `MODB`,
-  optionally `MODN`, every `DTAB`, and `STRS`.
+  the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `SONG`, every `FONT`,
+  every `MODB`, optionally `MODN`, every `DTAB`, and `STRS`.
 - **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `PALE`, `TILE`, `SPRT`, `SONG`,
-  `MODB`, `MODN`, `DTAB`, `STRS`. `VLAY` is written but not read; where things go in video memory is
+  `FONT`, `MODB`, `MODN`, `DTAB`, `STRS`. `VLAY` is written but not read; where things go in video memory is
   fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
 - **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the
-  profile (GBA: 1024); 16 palette banks; a pack pushed over the link has at most 512 chunks
+  profile (GBA: 1024); 15 background palette banks (the 16th is the UI's); a pack pushed over the link has at most 512 chunks
   and must fit the runtime's content buffer ([link-protocol.md](link-protocol.md) §3).
 - **Sharing**: tiles are merged (with flips) per area and palettes are packed per area.
   Identical assets are not merged across chunks, and nothing decides between global, area
@@ -234,9 +234,36 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `MODB` | script module: classes, variables, states, functions and bytecode ([mondskript.md](mondskript.md) §11); one per class, in the order of the scripts' file names |
 | `MODN` | the same scripts as machine code for one machine, one image with a module per `MODB`, with the list of addresses to patch when it is loaded ([mondskript.md](mondskript.md) §12); optional |
 | `DTAB` | the records of one structure, read in place ([data-format.md](data-format.md) §3) |
+| `FONT` | one font, section 3.1 |
 | `WRLD` | world map: rooms, positions, door links, map screen data |
 
 Readers MUST skip chunk types they do not know.
+
+### 3.1 Fonts
+
+A font is an image of glyph cells and a file `name.bmfont` next to it:
+
+```xml
+<font version="1" image="font.png" cell_w="8" cell_h="8" first="32" count="95"/>
+```
+
+Cells are read row by row from the top left of the image; cell i is character `first + i`
+(1 to 255). Bright opaque pixels (alpha and luminance from 128) are the ink, the rest is
+background; a drawn shadow is ignored, the runtime adds its own. The font's name is the file's
+stem. The chunk (category graphics):
+
+```
+u16 name            string id
+u8  cell_w, cell_h  8 and 8 (8 x 16 is allowed in the file; the runtime reads 8 x 8 only)
+u8  first, count
+u16 0
+u8  rows[count * cell_h]   per glyph one byte per row: bit x set = ink at pixel x
+```
+
+The runtime (`src/ui/ui.h`) makes two 4 bpp tiles of each glyph: ink colour 1, a shadow
+(colour 2) where the pixel above left is ink and the pixel is not, the ground transparent or
+the frame's inside (colour 3). The engine's font is `assets/engine/font.bmfont`, drawn by
+`tools/make_engine_font.py`.
 
 ## 4. Compression
 

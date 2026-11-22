@@ -6,7 +6,16 @@ GBA (DMA 0 and 3, an H-blank interrupt), `bmWindow*`, `bmBlendSet` and `bmVideoS
 in `video.h`; the scene `scene_effects` matches between the PC and mGBA
 ([../spec/gba-backend.md](../spec/gba-backend.md) §5 and §7). There is no shader PPU yet (the
 PC game draws the software PPU's picture), so "the shader PPU" of section 2 is still to do
-when there is one. Steps 2 to 6 are open. Milestone M13 in [../PLAN.md](../PLAN.md).
+when there is one. Step 2 built: the font asset (`.bmfont`, `FONT`,
+[../spec/pack-format.md](../spec/pack-format.md) §3.1) and the engine's font, the UI layer
+(`src/ui/ui.h`: background 3, character block 2, screen block 25, palette bank 15; frames,
+labels, numbers, text with placeholders `{0}`-`{7}` wrapped at spaces), and the debug overlay
+in the game (L + R + Select, `--overlay`); the same picture on the PC and in mGBA. Where it
+differs from sections 2 and 3: the font chunk is 1 bit per pixel and the runtime draws the
+shadow (the test level's pack has to fit the 48 KB a multiboot GBA gives a pushed pack, and
+had less than a kilobyte to spare); the UI keeps its map as one byte per cell for the 20
+visible rows; no canvas, no darkening behind frames yet. Steps 3 to 6 are open. Milestone M13
+in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

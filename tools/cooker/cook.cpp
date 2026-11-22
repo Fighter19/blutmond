@@ -8,6 +8,7 @@
 #include "native_module.h"
 #include "overrides.h"
 #include "song_asset.h"
+#include "font_asset.h"
 #include "sprite_asset.h"
 
 #include <algorithm>
@@ -907,6 +908,27 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       Bytes b;
       b.data = song::chunk(s, strings.id(s.name), report);
       if (!b.data.empty()) add(writer, BM_CHUNK_SONG, s.effect ? BM_CATEGORY_SFX : BM_CATEGORY_MUSIC, 0, b);
+    }
+    catch (const std::exception &e)
+    {
+      report.error("does-not-fit", path, e.what());
+    }
+  }
+  // Fonts, one chunk each.
+  std::set<std::string> fontNames;
+  for (const std::string &path : options.fonts)
+  {
+    try
+    {
+      font::Font f = font::load(path);
+      if (!fontNames.insert(f.name).second)
+      {
+        report.error("does-not-fit", path, "font name '" + f.name + "' is used twice");
+        continue;
+      }
+      Bytes b;
+      b.data = font::chunk(f, strings.id(f.name));
+      add(writer, BM_CHUNK_FONT, BM_CATEGORY_GRAPHICS, 0, b);
     }
     catch (const std::exception &e)
     {

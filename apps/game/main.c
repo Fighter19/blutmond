@@ -25,7 +25,7 @@
 //   keyboard or gamepad (apps/game/host_window.h); without a pack it plays the test level.
 //   The window keeps the save game in a file and listens for the live link on 127.0.0.1:7414
 //   (bmlink --tcp, the editor's Run button). Options:
-//   --frames N  --autoplay  --trace  --snapshot-at N file  --load file  --headless  --window
+//   --frames N  --autoplay  --overlay  --trace  --snapshot-at N file  --load file  --headless  --window
 //   --scale N  --listen PORT  --no-listen  --save file  --no-save  --sound-check file
 //   --follow  (wait for another device's keys: bmlink mirror)  --until-frame N  --realtime
 //   --random-keys N  (keys change at random every N frames on average)
@@ -40,6 +40,7 @@
 #include "game_live.h"
 #include "live.h"
 #include "native.h"
+#include "overlay.h"
 #include "hal.h"
 #include "pack.h"
 #include "physical_device.h"
@@ -206,6 +207,10 @@ static uint32_t stateCrc(void)
   return bmCrc32(0, buffer, bmStateWrite(blocks, 1, BM_STATE_SNAPSHOT, buffer, sizeof(buffer)));
 }
 
+#ifndef BM_OVERLAY
+#  define BM_OVERLAY 0
+#endif
+static bool s_overlay = BM_OVERLAY;   // the debug overlay from the start (L + R + Select toggles it)
 static uint32_t s_snapshotFrame = BM_SNAPSHOT_FRAME;
 static bool s_waitForMirror;   // --follow: do not play until another device's keys arrive
 #ifdef BM_PLATFORM_HOST
@@ -232,6 +237,7 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
   BmLiveHooks hooks = bmGameLiveHooks(&s_gameLive);
   bmLiveInit(&s_live, &hooks, s_content[0], s_content[1], BM_LIVE_CONTENT_SIZE, &s_pack);
   bmLiveStart(&s_live);
+  bmOverlayInit(&s_pack, s_overlay);
 
   uint32_t lastVideoFrame = bmVideoWaitFrame();
   uint32_t catchUp = 0;
@@ -351,6 +357,7 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
     uint32_t lines = (uint32_t)(bmHalVideoLine() + 228 - 160) % 228;
     if (lines > bm_game_stats.loadPeak) bm_game_stats.loadPeak = lines;
     bm_game_stats.loadTotal += lines;
+    bmOverlayFrame(&s_game, keys, lines);
     bm_game_stats.nativeCalls = bm_native_calls;
     bm_game_stats.scriptCycles = bm_script_cycles;
     bm_game_stats.scriptErrors = bm_script_errors;
@@ -518,6 +525,7 @@ int main(int argc, char **argv)
     else if (strcmp(argv[i], "--no-save") == 0) save = false;
     else if (strcmp(argv[i], "--sound-check") == 0 && i + 1 < argc) soundCheckPath = argv[++i];
     else if (strcmp(argv[i], "--autoplay") == 0) autoplay = true;
+    else if (strcmp(argv[i], "--overlay") == 0) s_overlay = true;
     else if (strcmp(argv[i], "--follow") == 0) s_waitForMirror = true;
     else if (strcmp(argv[i], "--realtime") == 0) s_realtime = true;
     else if (strcmp(argv[i], "--random-keys") == 0 && i + 1 < argc) s_randomKeys = (uint32_t)atoi(argv[++i]);

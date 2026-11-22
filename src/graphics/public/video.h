@@ -40,6 +40,9 @@ void bmVideoInit(void);
 /// Shows or hides background layers (bit n = BG n) and sprites.
 void bmVideoSetLayers(uint8_t bgMask, bool sprites);
 
+/// Shows or hides one background layer, leaving the others as they are.
+void bmVideoShowBg(uint8_t bg, bool shown);
+
 /// Sprite tile mapping: true = 1D (tiles of a sprite follow each other), false = 2D.
 void bmVideoSetSpriteMapping1D(bool oneDimensional);
 

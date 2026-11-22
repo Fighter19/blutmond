@@ -5,6 +5,7 @@
 #include "game.h"
 #include "hal_host.h"
 #include "physical_device.h"
+#include "ui.h"
 #include "video.h"
 
 #include "test.h"
@@ -369,7 +370,10 @@ static void testTheRoomsAttachmentsComeAndGoWithTheRoom(void)
 // hears of it (struck), the target too (hit), and health runs out into a new start.
 static void testAHitStrikesOnce(void)
 {
-  startWith(s_data, s_size, "test_room_2");
+  // Jab is in the pack with wind (only there): without the wind, the room is the test level's.
+  if (s_windData == NULL) return;
+  startWith(s_windData, s_windSize, "test_room_2");
+  bmAttachmentsDetach(&s_game, BM_ATTACH_ROOM_FIRST);
   int dummy = actorOfClass("Dummy");
   TEST_ASSERT(dummy >= 0 && s_game.actors.health[dummy] == 999);
   const int32_t *dummyFields = &s_game.actors.fields[dummy * BM_SCRIPT_MAX_FIELDS];   // Hits, LastDamage
@@ -521,6 +525,61 @@ static void testTheSwordDefeatsTheBat(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// ui.md step 2: the UI layer with the engine's font from the pack: frames, labels on them,
+// numbers, placeholders and wrapped text.
+static void testTheUiLayer(void)
+{
+  start();
+  static BmUi ui;
+  TEST_ASSERT(bmUiInit(&ui, &s_pack, "nothing") == BM_ERROR_NOT_FOUND && !ui.ready);
+  TEST_ASSERT(bmUiInit(&ui, &s_pack, "font") == BM_SUCCESS && ui.ready);
+  TEST_ASSERT(ui.first == 32 && ui.count == 95);
+  // Glyph tiles start at 16, the copies on a frame's inside after them; the frame is 1 to 9.
+  const uint8_t A = (uint8_t)(16 + 'A' - 32), AOnFill = (uint8_t)(A + 95);
+  bmUiLabel(&ui, 0, 0, "A");
+  TEST_ASSERT(ui.map[0] == A);
+  bmUiFrame(&ui, 2, 2, 6, 4);
+  TEST_ASSERT(ui.map[2 * 32 + 2] == 1 && ui.map[2 * 32 + 3] == 2 && ui.map[3 * 32 + 3] == 5 && ui.map[5 * 32 + 7] == 9);
+  bmUiLabel(&ui, 3, 3, "AA\nA");
+  TEST_ASSERT(ui.map[3 * 32 + 3] == AOnFill && ui.map[3 * 32 + 4] == AOnFill && ui.map[4 * 32 + 3] == AOnFill);
+  bmUiLabel(&ui, 20, 0, "\x7f");                          // not in the font: '?'
+  TEST_ASSERT(ui.map[20] == 16 + '?' - 32);
+  // Numbers: right-aligned, minus sign, stars when too long.
+  char row[8];
+  bmUiNumber(&ui, 0, 10, -42, 5);
+  for (int i = 0; i < 5; i++) row[i] = (char)(ui.map[10 * 32 + i] - 16 + 32);
+  row[5] = 0;
+  TEST_ASSERT(strcmp(row, "  -42") == 0);
+  bmUiNumber(&ui, 0, 10, 123456, 3);
+  for (int i = 0; i < 3; i++) row[i] = (char)(ui.map[10 * 32 + i] - 16 + 32);
+  row[3] = 0;
+  TEST_ASSERT(strcmp(row, "***") == 0);
+  // Placeholders: numbers and texts of the pack, {{ for a brace, unknown ones left out.
+  char text[64];
+  BmUiArg args[2] = { bmUiNumberArg(-7), bmUiTextArg(stringId("Dagger")) };
+  TEST_ASSERT(bmUiFormat(&s_pack, text, sizeof(text), "{1} x{0} {{ok} {5}", args, 2) == 16 && strcmp(text, "Dagger x-7 {ok} ") == 0);
+  TEST_ASSERT(bmUiFormat(&s_pack, text, 5, "{1} x{0}", args, 2) == 4 && strcmp(text, "Dagg") == 0);
+  // Wrapped at spaces: "A plain blade. The weapon everyone starts with." in 12 x 3 cells.
+  bmUiClear(&ui);
+  int rows = bmUiText(&ui, 1, 12, 12, 3, stringId("A plain blade. The weapon everyone starts with."), NULL, 0);
+  TEST_ASSERT(rows == 3);
+  char lines[3][13];
+  for (int y = 0; y < 3; y++)
+  {
+    for (int x = 0; x < 12; x++) lines[y][x] = ui.map[(12 + y) * 32 + 1 + x] ? (char)(ui.map[(12 + y) * 32 + 1 + x] - 16 + 32) : '_';
+    lines[y][12] = 0;
+  }
+  TEST_ASSERT(strcmp(lines[0], "A plain ____") == 0 || strcmp(lines[0], "A plain_____") == 0);
+  TEST_ASSERT(strncmp(lines[1], "blade. The", 10) == 0 && strncmp(lines[2], "weapon", 6) == 0);
+  // Present: background 3 shown, the map in screen block 25 with palette bank 15.
+  bmUiShow(&ui, true);
+  bmUiPresent(&ui);
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  TEST_ASSERT(ppu->regs[BM_PPU_DISPCNT / 2] & BM_PPU_DISPCNT_BG(3));
+  uint16_t e = (uint16_t)(ppu->vram[25 * 0x800 + (12 * 32 + 1) * 2] | ppu->vram[25 * 0x800 + (12 * 32 + 1) * 2 + 1] << 8);
+  TEST_ASSERT(e == (uint16_t)(A | 15 << 12) && ui.dirtyRows == 0);
+}
+
 static uint8_t *readFile(const char *path, uint32_t *pSize)
 {
   FILE *f = fopen(path, "rb");
@@ -556,6 +615,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheRoomsAttachmentsComeAndGoWithTheRoom);
   RUN_TEST(testAHitStrikesOnce);
   RUN_TEST(testTheSwordDefeatsTheBat);
+  RUN_TEST(testTheUiLayer);
   free(s_data);
   free(s_windData);
   return TEST_RESULT();

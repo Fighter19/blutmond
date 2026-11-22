@@ -39,6 +39,7 @@ enum {
   BM_CHUNK_SONG = BM_FOURCC('S', 'O', 'N', 'G'),
   BM_CHUNK_MODN = BM_FOURCC('M', 'O', 'D', 'N'),   // native script module (src/script/native.h)
   BM_CHUNK_DTAB = BM_FOURCC('D', 'T', 'A', 'B'),   // records of one structure (src/data/data.h)
+  BM_CHUNK_FONT = BM_FOURCC('F', 'O', 'N', 'T'),   // glyphs of a font (src/ui/ui.h)
 };
 
 /// Storage layout (header flags bits 0-3), docs/spec/pack-format.md §2.6.

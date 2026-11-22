@@ -65,6 +65,7 @@ public:
   void setSongs(std::vector<std::string> paths) { songs_ = std::move(paths); }
   /// Record files (.bmdata) that go into the level pack.
   void setData(std::vector<std::string> paths) { data_ = std::move(paths); }
+  void setFonts(std::vector<std::string> paths) { fonts_ = std::move(paths); }
   /// True if a room file changed on disk since the last cook (for hot reload).
   bool changedOnDisk() const;
   /// True if a record file changed on disk since the last call (the first call only notes
@@ -95,7 +96,7 @@ private:
   void analyse();
 
   std::vector<std::string> rooms_;
-  std::vector<std::string> sprites_, scripts_, songs_, data_;
+  std::vector<std::string> sprites_, scripts_, songs_, data_, fonts_;
   std::map<std::string, std::filesystem::file_time_type> dataTimes_;
   int current_ = -1;
   std::string profile_ = "gba";

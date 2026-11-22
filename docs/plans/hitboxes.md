@@ -8,8 +8,8 @@ animation, drawing boxes with the mouse, copying them to other frames, onion ski
 Step 2 built ([../spec/runtime-core.md](../spec/runtime-core.md) §10, `src/world/hits.c`):
 `arm`, `disarm`, `hit_box`, teams, the decision step once a frame, the struck list,
 invulnerability, `hit(amount)` and `struck(amount)`; health for the player and objects. The
-bat's bite is an armed box now, and the test level has a training dummy and a `Jab`
-attachment that strikes with a rectangle. Where it differs from sections 3 and 4: 8 hits at a
+bat's bite is an armed box now, the test level has a training dummy, and a `Jab` attachment
+(`tests/scripts/jab.ms`, in the test pack with wind only) strikes with a rectangle. Where it differs from sections 3 and 4: 8 hits at a
 time, not 16; the struck list is a bit per figure (every figure, not 6); `hit_box(reach,
 frames, damage)` is a rectangle ahead of the figure over its body's height (a script call
 takes at most 3 arguments), not one placed by numbers; events carry only the amount, not the

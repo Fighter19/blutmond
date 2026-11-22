@@ -747,6 +747,7 @@ struct Editor
     std::vector<std::string> songs = songPaths(projectPanel.catalog());
     project.setSongs(songs);
     project.setData(dataPaths(projectPanel.catalog()));
+    project.setFonts(fontPaths(projectPanel.catalog()));
     soundPanel.setSongs(songs);
     if (!songs.empty()) soundPanel.songDir = std::filesystem::path(songs[0]).parent_path().string();
     else if (!projectPanel.file().assetDirs.empty())

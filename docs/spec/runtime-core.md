@@ -248,6 +248,9 @@ size)`). The screen is 240 x 160.
   use the chunk's tile numbers unchanged.
 - Layer *i* (at most 3) is background *i*: character block 0, size 512 x 256, screen blocks
   `26 + 2i` and `26 + 2i + 1`, the priority from the `ROOM` chunk.
+- Background 3 belongs to the UI layer (`src/ui/ui.h`): character block 2, screen block 25,
+  priority 0, background palette bank 15, shown only while the UI shows something. Rooms use
+  palette banks 0 to 14.
 
 **Map streaming.** A layer's map can be larger than the 64 x 32 cells of its two screen
 blocks, so only a window around the screen is kept there, as a ring:

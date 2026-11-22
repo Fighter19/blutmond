@@ -46,9 +46,9 @@ set(BM_TEST_LEVEL_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/high_jump.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/dummy.ms
-  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/jab.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/weapon_swing.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/weapon_stand.ms
+  ${PROJECT_SOURCE_DIR}/assets/engine/font.bmfont
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/items.ms
@@ -65,7 +65,7 @@ set(BM_TEST_LEVEL_ASSETS
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
-file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c)
+file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c src/ui/*.c)
 set(BM_LINK_SOURCES src/link/link.c src/link/live.c src/link/multiboot.c src/link/transfer.c src/link/link_master.c src/link/live_master.c src/ppu/ppu_snapshot_part.c)
 set(BM_SCRIPT_SOURCES src/script/vm.c src/script/native.c)
 set(BM_SOUND_SOURCES src/sound/sound.c)
@@ -83,7 +83,7 @@ endif()
 add_library(blutmond STATIC ${BM_CORE_SOURCES} ${BM_GRAPHICS_SOURCES} ${BM_PACK_SOURCES} ${BM_WORLD_SOURCES} ${BM_LINK_SOURCES}
   ${BM_SCRIPT_SOURCES} ${BM_SOUND_SOURCES} ${BM_DATA_SOURCES} ${BM_HAL_SOURCES})
 target_include_directories(blutmond
-  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu src/pack src/world src/link src/script src/sound src/data ${BM_HAL_DIR}
+  PUBLIC src/core/public src/graphics/public src/hal/public src/ppu src/pack src/world src/ui src/link src/script src/sound src/data ${BM_HAL_DIR}
   PRIVATE src/core/private)
 target_compile_options(blutmond PRIVATE ${BM_WARNINGS})
 if(BM_PLATFORM STREQUAL "gba")
@@ -209,8 +209,14 @@ if(BM_PLATFORM STREQUAL "gba")
 
   # game_send: the autoplaying game that, at frame 800 (in the second room), brings the GBA on the other end of the
   # cable to where it is (tests). The cartridge game does the same on Select + Start.
-  foreach(variant game game_autoplay game_autoplay_native game_send)
-    bm_add_gba_image(${variant} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
+  # game_overlay: the autoplaying game with the debug overlay on (tests).
+  foreach(variant game game_autoplay game_autoplay_native game_send game_overlay)
+    bm_add_gba_image(${variant} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c apps/game/overlay.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
+    if(variant STREQUAL "game_overlay")
+      foreach(target ${BM_GBA_TARGETS})
+        target_compile_definitions(${target} PRIVATE BM_OVERLAY=1)
+      endforeach()
+    endif()
     if(variant STREQUAL "game" OR variant STREQUAL "game_send")
       # Only cartridge images can boot another GBA: the images they send are in their ROM.
       target_sources(${variant} PRIVATE ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_transfer.S)
@@ -270,7 +276,7 @@ else()
     elseif(app STREQUAL "room_viewer")
       add_executable(${app} apps/room_viewer/main.c)
     elseif(app STREQUAL "game")
-      add_executable(${app} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c apps/game/host_link.c)
+      add_executable(${app} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c apps/game/host_link.c apps/game/overlay.c)
       find_package(Threads REQUIRED)
       target_link_libraries(${app} PRIVATE Threads::Threads)
     else()
@@ -298,7 +304,7 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_script PRIVATE ${BM_WARNINGS})
 
   add_library(bm_cooker STATIC
-    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp src/sound/sound.c src/pack/pack.c src/data/data.c)
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp tools/cooker/font_asset.cpp src/sound/sound.c src/pack/pack.c src/data/data.c)
   target_include_directories(bm_cooker PUBLIC tools/cooker src/pack src/sound src/data src/core/public PRIVATE third_party/stb)
   target_link_libraries(bm_cooker PUBLIC bm_script)
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST PRIVATE "BM_NATIVE_INCLUDE_DIR=\"${PROJECT_SOURCE_DIR}/src/script\"")
@@ -551,7 +557,8 @@ if(BM_PLATFORM STREQUAL "host")
   set_tests_properties(make_wind_room PROPERTIES FIXTURES_SETUP wind_room)
   add_test(NAME cook_test_level_wind
     COMMAND bmcook --profile gba -o ${cooked}/test_level_wind_gba.bmpk
-      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${cooked}/room2_wind.tmx ${BM_TEST_LEVEL_ASSETS} ${PROJECT_SOURCE_DIR}/tests/scripts/wind.ms)
+      ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${cooked}/room2_wind.tmx ${BM_TEST_LEVEL_ASSETS} ${PROJECT_SOURCE_DIR}/tests/scripts/wind.ms
+      ${PROJECT_SOURCE_DIR}/tests/scripts/jab.ms)
   set_tests_properties(cook_test_level_wind PROPERTIES FIXTURES_REQUIRED wind_room FIXTURES_SETUP test_level_wind)
   add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk ${cooked}/test_level_wind_gba.bmpk)
   set_tests_properties(test_game PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_wind")
@@ -579,7 +586,7 @@ if(BM_PLATFORM STREQUAL "host")
       ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmsprite ${PROJECT_SOURCE_DIR}/assets/test_room/bat.bmsprite
       ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bat.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms ${cooked}/door.ms
       ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/high_jump.ms
-      ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/dummy.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/jab.ms
+      ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/dummy.ms ${PROJECT_SOURCE_DIR}/assets/engine/font.bmfont
       ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/weapon_swing.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/weapon_stand.ms
       ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.ms ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.bmdata
       ${PROJECT_SOURCE_DIR}/assets/test_room/data/items.ms ${PROJECT_SOURCE_DIR}/assets/test_room/data/weapons.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/consumables.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/key_items.bmdata
@@ -715,6 +722,19 @@ if(BM_PLATFORM STREQUAL "host")
           COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --diff ${out}/${image}_diff.ppm)
         set_tests_properties(game_matches_${image} PROPERTIES FIXTURES_REQUIRED "game_host;game_${image}")
       endforeach()
+
+      # The debug overlay (the UI layer's first user) at game frame 1000: the same on the GBA as
+      # on the PC, but for the frame time, which only the GBA measures (its digits are left out).
+      add_test(NAME overlay_host
+        COMMAND game ${cooked}/test_level_gba.bmpk --autoplay --overlay --frames 1000 ${out}/overlay_host.ppm)
+      set_tests_properties(overlay_host PROPERTIES FIXTURES_REQUIRED test_level_pack FIXTURES_SETUP overlay_host)
+      add_test(NAME overlay_gba
+        COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/game_overlay.gba --frames 1300 --until ${BM_GBA_BUILD_DIR}/game_overlay.elf:bm_game_stats+24=1000
+          --ppm ${out}/overlay_gba.ppm --check ${BM_GBA_BUILD_DIR}/game_overlay.elf:bm_game_stats+8=0)
+      set_tests_properties(overlay_gba PROPERTIES FIXTURES_SETUP overlay_gba)
+      add_test(NAME overlay_matches
+        COMMAND ${compare} ${out}/overlay_host.ppm ${out}/overlay_gba.ppm --ignore 184 24 207 31 --diff ${out}/overlay_diff.ppm)
+      set_tests_properties(overlay_matches PROPERTIES FIXTURES_REQUIRED "overlay_host;overlay_gba")
 
       # Save states move between the platforms (docs/spec/state.md):
       #  - the GBA's snapshot at game frame 300 must be byte for byte the host's;

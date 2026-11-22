@@ -25,7 +25,7 @@ struct Profile
 {
   std::string name;
   uint32_t fourcc = 0;
-  int bgPaletteBanks = 16;     // banks of 16 colours for 4 bpp backgrounds
+  int bgPaletteBanks = 15;     // banks of 16 colours for 4 bpp backgrounds (on the GBA the 16th is the UI's)
   int maxTiles = 1024;         // tile numbers a map entry can address
   int maxLayers4bpp = 4;       // backgrounds with 16-colour tiles
   TileFormat tileFormat = TileFormat::GbaLinear4bpp;
@@ -81,6 +81,8 @@ struct CookOptions
   std::vector<std::string> songs;
   /// Records (.bmdata, data_asset.h) of the structures the scripts declare.
   std::vector<std::string> data;
+  /// Fonts (.bmfont, font_asset.h).
+  std::vector<std::string> fonts;
   /// If set: the scripts are also compiled to native code with this GCC for the profile's
   /// machine (mondskript.md §12) and packed as a MODN chunk next to the bytecode.
   std::string nativeCompiler;

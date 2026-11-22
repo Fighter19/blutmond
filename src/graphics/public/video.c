@@ -62,6 +62,15 @@ void bmVideoSetLayers(uint8_t bgMask, bool sprites)
   writeDispcnt();
 }
 
+void bmVideoShowBg(uint8_t bg, bool shown)
+{
+  if (bg >= BM_BG_COUNT) return;
+  uint16_t was = s_dispcnt;
+  if (shown) s_dispcnt |= BM_PPU_DISPCNT_BG(bg);
+  else s_dispcnt &= (uint16_t)~BM_PPU_DISPCNT_BG(bg);
+  if (s_dispcnt != was) writeDispcnt();
+}
+
 void bmVideoSetSpriteMapping1D(bool oneDimensional)
 {
   if (oneDimensional)
