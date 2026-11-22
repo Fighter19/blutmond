@@ -165,8 +165,8 @@ static void bindObjectSprites(BmGame *g)
     }
     // A door's panel (effects.h): the sprite its `panel` property names, and where it stands.
     const char *panel = g->objects[i].kind == BM_OBJECT_DOOR ? bmGameObjectProperty(g, &g->objects[i], "panel") : NULL;
-    const char *dir = panel != NULL ? bmGameObjectProperty(g, &g->objects[i], "direction") : NULL;
-    g->objectDoorSide[i] = (uint8_t)(dir == NULL ? 0 : strcmp(dir, "east") == 0 ? 1 : strcmp(dir, "west") == 0 ? 2 : 0);
+    const char *dir = g->objects[i].kind == BM_OBJECT_DOOR ? bmGameObjectProperty(g, &g->objects[i], "direction") : NULL;
+    g->objectDoorSide[i] = (uint8_t)(dir == NULL ? 3 : strcmp(dir, "north") == 0 ? 0 : strcmp(dir, "east") == 0 ? 1 : strcmp(dir, "west") == 0 ? 2 : 3);
     if (panel != NULL)
     {
       // The floor under the door's middle (from its top to 32 px below it), else its bottom.
@@ -1054,6 +1054,14 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   for (uint16_t i = 0; i < g->objectCount; i++)
   {
     const BmObjectView *o = &g->objects[i];
+    // A door in the back wall (direction north) is gone through with Up, standing in it. A
+    // scripted one hears touch() again then (it decides: a key it needs).
+    bool backWall = o->kind == BM_OBJECT_DOOR && g->objectDoorSide[i] == 0;
+    if (backWall && (pressed & BM_KEY_UP) && o->w != 0 && overlaps(px - hw, py - h, hw * 2, h, o->x, o->y, o->w, o->h))
+    {
+      for (uint8_t k = 0; k < g->actors.count; k++)
+        if (g->actors.object[k] == i) g->actors.touching[k] = 0;
+    }
     if (bmActorsOwnObject(g, i)) continue;  // its script decides what happens
     if (o->kind == BM_OBJECT_SAVE_POINT)
     {
@@ -1075,7 +1083,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
       respawn(g);
       break;
     }
-    if (g->doorCooldown == 0 && g->doorSeq == 0)
+    if (g->doorCooldown == 0 && g->doorSeq == 0 && (!backWall || (pressed & BM_KEY_UP)))
     {
       useDoor(g, i);
       break;
@@ -1091,10 +1099,12 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   {
     uint16_t index = (uint16_t)(g->actors.pendingDoor - 1);
     g->actors.pendingDoor = 0;
-    if (g->doorCooldown == 0 && index < g->objectCount) useDoor(g, index);
+    // A door in the back wall only with Up (touch() as the player walks in does nothing).
+    bool backWall = index < g->objectCount && g->objectDoorSide[index] == 0;
+    if (g->doorCooldown == 0 && index < g->objectCount && (!backWall || (pressed & BM_KEY_UP))) useDoor(g, index);
   }
   // Through the door being walked through, when the walk is over or skipped.
-  if (g->doorSeq != 0 && (doorSkip || g->doorTimer >= (g->objectDoorSide[g->doorSeq - 1] != 0 ? DOOR_WALK_FRAMES : DOOR_FACING_FRAMES)))
+  if (g->doorSeq != 0 && (doorSkip || g->doorTimer >= (g->objectDoorSide[g->doorSeq - 1] == 1 || g->objectDoorSide[g->doorSeq - 1] == 2 ? DOOR_WALK_FRAMES : DOOR_FACING_FRAMES)))
   {
     BmObjectView door = g->objects[g->doorSeq - 1];
     g->doorSeq = 0;

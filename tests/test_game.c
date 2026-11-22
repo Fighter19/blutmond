@@ -1245,9 +1245,12 @@ static void testDoorsOpenAsThePlayerWalksThrough(void)
   bmBodyPlace(&s_game.player, o->x - 10, 160);
   frames(2, 0);
   TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)door) == 0 && s_game.doorSeq == 0);
-  // In it: it opens while the player stands (a door in the back wall), then the next room.
+  // In it: a door in the back wall waits for Up; then it opens while the player stands, then
+  // the next room.
   bmBodyPlace(&s_game.player, o->x + 16, 160);
-  frames(1, 0);
+  frames(10, 0);
+  TEST_ASSERT(s_game.doorSeq == 0 && strcmp(bmGameRoomId(&s_game), "debug_lobby") == 0);
+  frames(1, BM_KEY_UP);
   TEST_ASSERT(s_game.doorSeq == door + 1);
   frames(5, BM_KEY_RIGHT);   // the buttons are not the game's meanwhile
   int32_t half = bmEffectsDoorOpening(&s_game, (uint16_t)door);

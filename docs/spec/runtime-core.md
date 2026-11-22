@@ -62,7 +62,10 @@ L 512.
    - `KillZone` (needs a width and a height): on overlap respawn, and stop looking at
      objects.
    - `Door` (needs a width and a height): on overlap, if `doorCooldown == 0`, **go through**
-     it (section 6) and stop looking at objects. If the cooldown is not 0 the door is skipped
+     it (section 6) and stop looking at objects. A door with `direction` north (in the back
+     wall) only when Up is pressed this frame; for a scripted one, Up pressed while the player
+     overlaps it makes it hear `touch()` again this frame, and its `enter_door` counts only
+     with Up pressed this frame. If the cooldown is not 0 the door is skipped
      and the next object is looked at.
    - Other classes: nothing.
 8. **Scripted objects** (section 8). Then, if one of them called `enter_door` and
@@ -142,8 +145,12 @@ stands the player still (friction) as before.
 y]`, but the feet are its top: everything below is mirrored (jumping goes down, the gravity and
 the fastest fall point up, a "floor" is the underside of anything solid from below, found
 pixel by pixel from the feet up to where they get to; the head's check is at the box's bottom;
-walls are checked from step height below the feet). No ladders, no jump-through platforms, no
-dropping through, and no safe position is noted. Placing the body (a door, a teleport, a
+walls are checked from step height below the feet). Jump-through platforms work mirrored: as
+a floor counts only by its top, a platform counts only by its underside (a platform pixel with
+none below it, `bmCollisionSolidPlatform`), and only from the feet on (not from step height
+past them), not while `dropThrough`; standing under one with nothing solid from below above
+the feet, Up (toward the feet) + jump drops through it. No ladders, and no safe position is
+noted. Placing the body (a door, a teleport, a
 respawn) ends it; so does leaving the room above its top by 64 (a respawn). The sprite is drawn
 upside down with its anchor at the box's top.
 
@@ -166,11 +173,12 @@ Gravity and the fastest fall, in air and in water, come from the room (`ROOM` ch
 
 `approach(v, target, step)` moves `v` toward `target` by at most `step`.
 
-**Floor sensors** are the two columns `px - 5` and `px + 4`; `findFloor(yFrom, yTo, jt)` is
+**Floor sensors** are the two columns `px - 6` and `px + 5`, the box's outermost (inset ones
+let a jump onto a block's corner sink into it); `findFloor(yFrom, yTo, jt)` is
 the smaller `floor()` of the two (none if both are none).
 
-**Wall test** `wall(x, feet)`: `solid(x, y)` for `y = feet - 9`, then every 7 pixels upward
-while `y > feet - 28`; and for `y = feet - 27`.
+**Wall test** `wall(x, feet)`: `solid(x, y)` for `y = feet - 9` (in the air `feet - 1`: no
+stepping up there), then every 7 pixels upward while `y > feet - 28`; and for `y = feet - 27`.
 
 One step, with `px = INT(x)`, `feet = INT(y)` and `wasOnGround = onGround` taken at the
 start:
@@ -204,7 +212,7 @@ start:
    cell`, `nx = FIX(cellX - 6)` moving right or `FIX(cellX + cell + 6)` moving left; `vx = 0`.
    `x = nx`, `px = INT(x)`.
 8. **Up and down.** `ny = y + vy`.
-   - `vy < 0`: `head = INT(ny) - 28`. For the columns `px - 5`, `px`, `px + 4` in this order:
+   - `vy < 0`: `head = INT(ny) - 28`. For the columns `px - 6`, `px`, `px + 5` in this order:
      if `solid(column, head)`: `ny = FIX((floorDiv(head, cell) + 1) * cell + 28)`, `vy = 0`,
      stop looking. In any case `onGround = false`.
    - `vy >= 0`: `newFeet = INT(ny)`. `from = wasOnGround ? feet - 8 : feet`.

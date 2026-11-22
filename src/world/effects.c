@@ -170,7 +170,7 @@ uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
     int32_t c = isin((uint32_t)(angle + 64)), sn = isin((uint32_t)angle);
     // A point u along the panel: x = u cos a, and for a door in a side wall, whose depth shows,
     // + u 0.4 sin a; times the scale. Only scaled in x: the bottom stays on the ground.
-    int32_t xs = (c * 256 + (side != 0 ? sn * DEPTH_X : 0)) / 64 * scale / 256;
+    int32_t xs = (c * 256 + (side == 1 || side == 2 ? sn * DEPTH_X : 0)) / 64 * scale / 256;
     int32_t sx = hx - g->room.cameraX, sy = g->objectDoorGround[i] - g->room.cameraY;
     uint8_t n = bmSpriteSheetDrawSheared(s, bmAnimFrameAt(s, 0, g->frame), sx, sy, xs, 0, scale, matrix, 1,
                                          (uint8_t)(firstOam + used), (uint8_t)(maxOam - used));
@@ -178,7 +178,7 @@ uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
     used = (uint8_t)(used + n);
     // Behind a door in the back wall, the dark of the opening (the panel's frame 1): after the
     // panel in OAM, so behind it.
-    if (side == 0 && s->frameCount > 1 && matrix < 32 && used < maxOam)
+    if (side != 1 && side != 2 && s->frameCount > 1 && matrix < 32 && used < maxOam)
     {
       n = bmSpriteSheetDrawSheared(s, 1, sx, sy, scale, 0, scale, matrix, 1, (uint8_t)(firstOam + used), (uint8_t)(maxOam - used));
       if (n != 0) matrix++;

@@ -59,6 +59,10 @@ uint8_t bmShapeHeight(uint8_t cellByte0, int32_t lx);
 /// Returns INT32_MAX if there is none.
 int32_t bmCollisionFloor(const BmCollision *pCollision, int32_t x, int32_t yFrom, int32_t yTo, bool jumpThrough);
 
+/// True if the pixel is part of a platform solid only on top (a jump-through cell). With
+/// gravity flipped its underside is stood on (body.c).
+bool bmCollisionSolidPlatform(const BmCollision *pCollision, int32_t x, int32_t y);
+
 /// True if the pixel blocks sideways or upward movement (walls, ceilings).
 bool bmCollisionSolidSides(const BmCollision *pCollision, int32_t x, int32_t y);
 

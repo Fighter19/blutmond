@@ -51,12 +51,12 @@ static int32_t floorDiv(int32_t v, int32_t d)
   return v >= 0 ? v / d : -((-v + d - 1) / d);
 }
 
-// Topmost floor under the body's feet sensors (left and right edge, inset by one pixel).
+// Topmost floor under the body's feet sensors (the box's left and right column).
 static int32_t findFloor(const BmBody *b, const BmBodyParams *p, const BmCollision *c, int32_t yFrom, int32_t yTo, bool jumpThrough)
 {
   int32_t x = BM_FIX_INT(b->x);
   int32_t best = INT32_MAX;
-  int32_t columns[2] = { x - p->halfWidth + 1, x + p->halfWidth - 2 };
+  int32_t columns[2] = { x - p->halfWidth, x + p->halfWidth - 1 };
   for (int i = 0; i < 2; i++)
   {
     int32_t f = bmCollisionFloor(c, columns[i], yFrom, yTo, jumpThrough);
@@ -66,17 +66,23 @@ static int32_t findFloor(const BmBody *b, const BmBodyParams *p, const BmCollisi
 }
 
 // Flipped: the lowest ceiling over the feet (now on top) for the two sensors, scanning from
-// yFrom up to yTo (yTo <= yFrom): the y just below the first solid pixel, or INT32_MIN.
-static int32_t findCeiling(const BmBody *b, const BmBodyParams *p, const BmCollision *c, int32_t yFrom, int32_t yTo)
+// yFrom up to yTo (yTo <= yFrom): the y just below the first solid pixel, or INT32_MIN. With
+// `jumpThrough` the platforms solid only on top count too (their underside, as a floor is
+// their top the usual way up).
+static int32_t findCeiling(const BmBody *b, const BmBodyParams *p, const BmCollision *c, int32_t yFrom, int32_t yTo, bool jumpThrough)
 {
   int32_t x = BM_FIX_INT(b->x);
   int32_t best = INT32_MIN;
-  int32_t columns[2] = { x - p->halfWidth + 1, x + p->halfWidth - 2 };
+  int32_t columns[2] = { x - p->halfWidth, x + p->halfWidth - 1 };
   for (int i = 0; i < 2; i++)
   {
     for (int32_t y = yFrom - 1; y >= yTo - 1; y--)
     {
-      if (!bmCollisionSolidSides(c, columns[i], y)) continue;
+      // A platform only by its underside (its last row): passing through it from inside, the
+      // body does not catch in it (as a floor counts only by its top).
+      if (!bmCollisionSolidSides(c, columns[i], y) &&
+          !(jumpThrough && bmCollisionSolidPlatform(c, columns[i], y) && !bmCollisionSolidPlatform(c, columns[i], y + 1)))
+        continue;
       if (y + 1 > best) best = y + 1;
       break;
     }
@@ -84,10 +90,12 @@ static int32_t findCeiling(const BmBody *b, const BmBodyParams *p, const BmColli
   return best;
 }
 
-// Wall check for a column: from just past step height to the head (s: 1, or -1 flipped).
-static bool wallAt(const BmCollision *c, int32_t x, int32_t feet, const BmBodyParams *p, int32_t s)
+// Wall check for a column: from just past step height to the head (s: 1, or -1 flipped). In
+// the air there is no stepping up: from the feet (else a diagonal jump moves the body into a
+// block's top corner, up to step height, before the floor is found under it).
+static bool wallAt(const BmCollision *c, int32_t x, int32_t feet, const BmBodyParams *p, int32_t s, bool onGround)
 {
-  for (int32_t k = p->stepHeight + 1; k < p->height; k += 7)
+  for (int32_t k = onGround ? p->stepHeight + 1 : 1; k < p->height; k += 7)
   {
     if (bmCollisionSolidSides(c, x, feet - s * k)) return true;
   }
@@ -160,8 +168,10 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     // Jumping (with coyote time and a jump buffer); down + jump drops through platforms.
     if (b->jumpBuffer && (wasOnGround || b->coyote))
     {
-      bool onJumpThroughOnly = !b->flipped && wasOnGround && findFloor(b, p, c, feet, feet, false) == INT32_MAX;
-      if (in.dy > 0 && onJumpThroughOnly)
+      // Toward the feet (down; up with gravity flipped) and jump: through the platform.
+      bool onJumpThroughOnly = wasOnGround && (b->flipped ? findCeiling(b, p, c, feet, feet, false) == INT32_MIN
+                                                          : findFloor(b, p, c, feet, feet, false) == INT32_MAX);
+      if (s * in.dy > 0 && onJumpThroughOnly)
       {
         b->dropThrough = 8;
       }
@@ -196,7 +206,7 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
   {
     int32_t nPx = BM_FIX_INT(nx);
     int32_t edge = b->vx > 0 ? nPx + p->halfWidth - 1 : nPx - p->halfWidth;
-    if (wallAt(c, edge, feet, p, s))
+    if (wallAt(c, edge, feet, p, s, wasOnGround))
     {
       int32_t cellX = floorDiv(edge, cs) * cs;
       nx = b->vx > 0 ? (bm_fix)(cellX - p->halfWidth) * 256 : (bm_fix)(cellX + cs + p->halfWidth) * 256;
@@ -215,7 +225,7 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     if (b->vy > 0)
     {
       int32_t head = BM_FIX_INT(ny) + p->height - 1;
-      int32_t columns[3] = { px - p->halfWidth + 1, px, px + p->halfWidth - 2 };
+      int32_t columns[3] = { px - p->halfWidth, px, px + p->halfWidth - 1 };
       for (int i = 0; i < 3; i++)
       {
         if (bmCollisionSolidSides(c, columns[i], head))
@@ -233,7 +243,13 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
       int32_t newFeet = BM_FIX_INT(ny);
       int32_t from = wasOnGround ? feet + p->stepHeight : feet;
       int32_t to = newFeet - (wasOnGround ? p->snapDistance : 0);
-      int32_t ceiling = findCeiling(b, p, c, from, to);
+      // Platforms only count when the feet were not past them yet (as a jump-through floor).
+      int32_t ceiling = findCeiling(b, p, c, from, to, false);
+      if (!b->dropThrough)
+      {
+        int32_t jt = findCeiling(b, p, c, feet, to, true);
+        if (jt != INT32_MIN && jt > ceiling) ceiling = jt;
+      }
       if (ceiling != INT32_MIN)
       {
         ny = (bm_fix)ceiling * 256;
@@ -250,7 +266,7 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
   else if (b->vy < 0)
   {
     int32_t head = BM_FIX_INT(ny) - p->height;
-    int32_t columns[3] = { px - p->halfWidth + 1, px, px + p->halfWidth - 2 };
+    int32_t columns[3] = { px - p->halfWidth, px, px + p->halfWidth - 1 };
     for (int i = 0; i < 3; i++)
     {
       if (bmCollisionSolidSides(c, columns[i], head))

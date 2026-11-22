@@ -166,6 +166,85 @@ static void testJumpThroughPlatforms(void)
   TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 112);
 }
 
+// Whether a solid pixel (blocking sideways) lies inside the body's box.
+static bool insideSolid(const BmBody *b)
+{
+  int32_t x = BM_FIX_INT(b->x), feet = BM_FIX_INT(b->y);
+  for (int32_t y = feet - s_params.height; y < feet; y++)
+    for (int32_t px = x - s_params.halfWidth; px < x + s_params.halfWidth; px++)
+      if (bmCollisionSolidSides(&s_coll, px, y)) return true;
+  return false;
+}
+
+// Jumping diagonally onto a block (and against its side): the body never ends up inside it, at
+// any frame, from many starting places.
+static void testDiagonalJumpsNeverSinkIntoABlock(void)
+{
+  static const char *map[GH] = {
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+    "..........######",
+    "..........######",
+    "################",
+  };
+  build(map);
+  int bad = 0;
+  for (int start = 60; start < 150; start += 3)
+  {
+    for (int hold = 0; hold < 12; hold += 3)
+    {
+      BmBody b;
+      bmBodyPlace(&b, start, 112);
+      run(&b, 2, NONE);
+      for (int f = 0; f < 70; f++)
+      {
+        BmBodyInput in = { 1, 0, f == hold, f >= hold && f < hold + 20, false };
+        bmBodyStep(&b, &s_params, &s_coll, &s_room, in);
+        if (insideSolid(&b)) { if (bad == 0) printf("    inside: start %d hold %d frame %d at %d,%d v %d,%d ground %d\n", start, hold, f, (int)BM_FIX_INT(b.x), (int)BM_FIX_INT(b.y), (int)b.vx, (int)b.vy, b.onGround); bad++; break; }
+      }
+    }
+  }
+  TEST_ASSERT(bad == 0);
+}
+
+// Gravity flipped: a platform (solid only on top) is stood on from below and passed going the
+// other way; up (toward the feet) + jump drops through it, as down + jump does the usual way.
+static void testPlatformsWorkWithGravityFlipped(void)
+{
+  static const char *map[GH] = {
+    "################",
+    "................",
+    "................",
+    "....======......",
+    "................",
+    "................",
+    "................",
+    "################",
+  };
+  build(map);
+  BmBody b;
+  bmBodyPlace(&b, 104, 112);
+  b.flipped = true;
+  run(&b, 60, NONE);
+  // Under the platform: the feet (the box's top) at its underside, y 64.
+  TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 64 + s_params.height);
+  // A jump (down, away from it) through the empty space and back onto it.
+  run(&b, 1, (BmBodyInput){0, 0, true, true, false});
+  run(&b, 80, (BmBodyInput){0, 0, false, true, false});
+  TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 64 + s_params.height);
+  // Up + jump: through it, up to the ceiling (its underside at y 16).
+  run(&b, 1, (BmBodyInput){0, -1, true, true, false});
+  run(&b, 60, NONE);
+  TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 16 + s_params.height);
+  // From the ceiling a jump goes down past the platform and comes back up onto its underside.
+  run(&b, 1, (BmBodyInput){0, 0, true, true, false});
+  run(&b, 80, (BmBodyInput){0, 0, false, true, false});
+  TEST_ASSERT(b.onGround && BM_FIX_INT(b.y) == 64 + s_params.height);
+}
+
 static void testLadderClimbAndStandOnTop(void)
 {
   const char *rows[GH] = { "................", "................", "................", "...H............",
@@ -214,6 +293,8 @@ int main(void)
   RUN_TEST(testStepsUpHalfBlocks);
   RUN_TEST(testJumpHeightAndCeiling);
   RUN_TEST(testJumpThroughPlatforms);
+  RUN_TEST(testDiagonalJumpsNeverSinkIntoABlock);
+  RUN_TEST(testPlatformsWorkWithGravityFlipped);
   RUN_TEST(testLadderClimbAndStandOnTop);
   RUN_TEST(testWaterSlowsTheFall);
   RUN_TEST(testDamageMaterialReported);

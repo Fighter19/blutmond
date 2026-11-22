@@ -62,7 +62,7 @@ what the player has now. The debug lobby has a Dagger and both charms lying abou
 
 Doors with a `panel` property (a sprite) open in a 3D look only as the player goes through
 them: touching a side door, the player walks on through it while it swings into the room, a
-door in the back wall opens in front of the player; then the next room, where the door closes
+door in the back wall opens in front of the player when Up is pressed in it; then the next room, where the door closes
 behind. A, B or Start skips the walk. The panel is an affine sprite, scaled horizontally about
 its hinge, standing on the ground. All doors of the test level have one (`door_panel`).
 

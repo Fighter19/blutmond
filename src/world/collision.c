@@ -140,6 +140,17 @@ bool bmCollisionSolidSides(const BmCollision *pCollision, int32_t x, int32_t y)
   return fromTop ? ly < h : ly >= cs - h;
 }
 
+bool bmCollisionSolidPlatform(const BmCollision *pCollision, int32_t x, int32_t y)
+{
+  int32_t cs = pCollision->cellSize;
+  int32_t cx = floorDiv(x, cs), cy = floorDiv(y, cs);
+  uint8_t b0, material;
+  bmCollisionCell(pCollision, cx, cy, &b0, &material);
+  if (!(b0 & BM_CELL_SOLID_TOP) || (b0 & BM_CELL_SOLID_SIDES) || (b0 & 15) == BM_SHAPE_EMPTY || (b0 & BM_CELL_VFLIP)) return false;
+  int32_t h = scaledHeight(pCollision, b0, x);
+  return y - cy * cs >= cs - h;
+}
+
 uint8_t bmCollisionMaterial(const BmCollision *pCollision, int32_t x, int32_t y)
 {
   uint8_t b0, material;
