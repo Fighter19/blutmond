@@ -22,6 +22,19 @@ bm_irq_handler:
     ldrne   r3, [r2]
     addne   r3, r3, #1
     strne   r3, [r2]
+    tst     r1, #2                  @ H-blank: the third line table (hal_gba.c)
+    beq     1f
+    ldrh    r3, [r0, #6]            @ VCOUNT: the line just drawn
+    cmp     r3, #160
+    bcs     1f                      @ not in the vertical blank
+    ldr     r2, =bm_hal_line2
+    ldr     r12, [r2]               @ the register
+    cmp     r12, #0
+    beq     1f
+    add     r3, r2, r3, lsl #1
+    ldrh    r3, [r3, #10]           @ values[line + 1] (values start at offset 8)
+    strh    r3, [r12]
+1:
     tst     r1, #0x80               @ serial?
     bxeq    lr
     @ The link handler is C: run it in system mode on the user stack (the IRQ stack is

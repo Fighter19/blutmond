@@ -13,8 +13,10 @@
 //
 // Supported in this version: mode 0 (four regular backgrounds, 4 and 8 bpp, all sizes,
 // scrolling, flips, palette banks, priorities), regular sprites (all sizes, 4 and 8 bpp, 1D and
-// 2D mapping, flips, priorities), forced blank and per-line register values. Not yet: affine
-// backgrounds and sprites, bitmap modes, windows, blending, mosaic.
+// 2D mapping, flips, priorities, semi-transparent and OBJ-window sprites), windows (WIN0, WIN1,
+// the OBJ window, outside), colour effects (alpha blending, brightening, darkening), forced
+// blank and per-line register values. Not yet: affine backgrounds and sprites, bitmap modes,
+// mosaic.
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -34,7 +36,26 @@ enum {
   BM_PPU_BG0CNT = 0x08,  // BGnCNT  = 0x08 + 2n
   BM_PPU_BG0HOFS = 0x10, // BGnHOFS = 0x10 + 4n
   BM_PPU_BG0VOFS = 0x12, // BGnVOFS = 0x12 + 4n
+  BM_PPU_WIN0H = 0x40,   // left << 8 | right (exclusive)
+  BM_PPU_WIN1H = 0x42,
+  BM_PPU_WIN0V = 0x44,   // top << 8 | bottom (exclusive)
+  BM_PPU_WIN1V = 0x46,
+  BM_PPU_WININ = 0x48,   // WIN0 in bits 0-5, WIN1 in bits 8-13
+  BM_PPU_WINOUT = 0x4A,  // outside in bits 0-5, the OBJ window in bits 8-13
+  BM_PPU_BLDCNT = 0x50,  // first targets 0-5, effect 6-7, second targets 8-13
+  BM_PPU_BLDALPHA = 0x52,// EVA 0-4, EVB 8-12 (sixteenths, at most 16)
+  BM_PPU_BLDY = 0x54,    // EVY 0-4
 };
+
+// Bits of a window's control (WININ, WINOUT) and of the blend targets: BG0-3, OBJ, and
+// (windows) colour effects on / (targets) the backdrop.
+#define BM_PPU_WIN_BG(n) (1u << (n))
+#define BM_PPU_WIN_OBJ 0x10
+#define BM_PPU_WIN_EFFECTS 0x20
+#define BM_PPU_BLD_BACKDROP 0x20
+#define BM_PPU_BLD_ALPHA (1u << 6)
+#define BM_PPU_BLD_BRIGHTEN (2u << 6)
+#define BM_PPU_BLD_DARKEN (3u << 6)
 
 #define BM_PPU_BGCNT(n) (BM_PPU_BG0CNT + 2 * (n))
 #define BM_PPU_BGHOFS(n) (BM_PPU_BG0HOFS + 4 * (n))
@@ -46,9 +67,13 @@ enum {
 #define BM_PPU_DISPCNT_FORCED_BLANK 0x0080
 #define BM_PPU_DISPCNT_BG(n) (0x0100 << (n))
 #define BM_PPU_DISPCNT_OBJ 0x1000
+#define BM_PPU_DISPCNT_WIN0 0x2000
+#define BM_PPU_DISPCNT_WIN1 0x4000
+#define BM_PPU_DISPCNT_OBJWIN 0x8000
 
-/// Number of registers that can change per line (HDMA channels on the GBA).
-#define BM_PPU_LINE_TABLES 1
+/// Number of registers that can change per line (on the GBA: H-blank DMA channels 0 and 3,
+/// and an H-blank interrupt for the third).
+#define BM_PPU_LINE_TABLES 3
 
 typedef struct BmPpuLineTable
 {

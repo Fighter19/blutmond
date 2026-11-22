@@ -198,7 +198,12 @@ VramAnalysis analyseVideo(const BmPpuState &s)
       a.objColours += s.palette[256 + i] != 0;
     }
   for (int t = 0; t < BM_PPU_LINE_TABLES; t++)
-    if (s.lineTables[t].reg != 0xFFFF) a.lineTableReg = s.lineTables[t].reg;
+    if (s.lineTables[t].reg != 0xFFFF)
+    {
+      if (a.lineTableReg < 0) a.lineTableReg = s.lineTables[t].reg;
+      a.lineTablesUsed++;
+      a.lineTableRegs += std::string(a.lineTableRegs.empty() ? "" : ", ") + "0x" + hex(uint32_t(s.lineTables[t].reg), 2);
+    }
 
   // Budgets.
   int mapUnits = 0, tileUnits = 0, otherUnits = 0, objUnits = 0, objOther = 0;
@@ -240,8 +245,8 @@ VramAnalysis analyseVideo(const BmPpuState &s)
   a.budgets.push_back({"OBJ palette banks", popcount(a.objBanks), 16, "", std::to_string(a.objColours) + " colours set"});
   a.budgets.push_back({"Sprite time, worst line", worst, kSpriteCyclesPerLine, "cycles",
                        "line " + std::to_string(worstLine) + (linesOver ? ", " + std::to_string(linesOver) + " lines drop sprites" : std::string())});
-  a.budgets.push_back({"Line tables", a.lineTableReg >= 0 ? 1 : 0, BM_PPU_LINE_TABLES, "",
-                       a.lineTableReg >= 0 ? "register 0x" + hex(uint32_t(a.lineTableReg), 2) : std::string()});
+  a.budgets.push_back({"Line tables", a.lineTablesUsed, BM_PPU_LINE_TABLES, "",
+                       a.lineTablesUsed ? std::string(a.lineTablesUsed > 1 ? "registers " : "register ") + a.lineTableRegs : std::string()});
   if (linesOver) a.notes.push_back(std::to_string(linesOver) + " lines need more sprite time than the hardware has; sprites drop out there");
   return a;
 }

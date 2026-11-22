@@ -72,7 +72,9 @@ struct VramAnalysis
   std::vector<int8_t> unitBank;               // bank a unit is shown with (-1: unknown, 16: 8 bpp)
   uint16_t bgBanks = 0, objBanks = 0;         // palette banks in use
   int bgColours = 0, objColours = 0;          // non-zero palette entries
-  int lineTableReg = -1;                      // register driven by the line table, or -1
+  int lineTableReg = -1;                      // register driven by the first line table in use, or -1
+  int lineTablesUsed = 0;
+  std::string lineTableRegs;                  // their registers: "0x10, 0x54"
   int spriteCycles[BM_PPU_HEIGHT] = {};       // OBJ rendering cost per line
   int overlaps = 0;
   std::vector<Budget> budgets;

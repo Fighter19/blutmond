@@ -33,9 +33,9 @@ the hardware. A back end for another machine translates.
 | `bmHalVideoReadReg(offset)` | the copy (most GBA video registers cannot be read back) |
 | `bmHalVramWrite(offset, data, size)` | copies into video memory; offset and size even |
 | `bmHalOamWrite(first, data, count)` | copies halfwords into the sprite table; call in the vertical blank |
-| `bmHalVideoWaitVBlank()` | waits for the next vertical blank, restarts the line table, swaps the sound buffers; returns the count of vertical blanks so far, so a missed frame shows as a gap |
+| `bmHalVideoWaitVBlank()` | waits for the next vertical blank, restarts the line tables, swaps the sound buffers; returns the count of vertical blanks so far, so a missed frame shows as a gap |
 | `bmHalVideoLine()` | the line being drawn, 0-227; 160 and up is the vertical blank |
-| `bmHalLineTableSet(slot, reg, values)` | from the next frame on, register `reg` gets `values[y]` on line y (160 values, copied); `NULL` switches it off. One slot |
+| `bmHalLineTableSet(slot, reg, values)` | from the next frame on, register `reg` gets `values[y]` on line y (160 values, copied); `NULL` switches it off. Three slots (0 to 2) |
 | `bmHalVideoSnapshotPart(offset, out, size)` | the video state as a snapshot (section 6), piecewise; returns the total size |
 | `bmHalInputKeys()` | the buttons held, as bits: A 1, B 2, Select 4, Start 8, Right 16, Left 32, Up 64, Down 128, R 256, L 512 |
 | `bmHalSaveRead/Write(offset, data, size)` | the save memory, 32 KB |
@@ -79,21 +79,29 @@ script interpreter's loop, the wait loops of the serial master.
 ## 4. Interrupts, video, sound, input, save
 
 **Interrupts.** The handler's address goes to 0x03007FFC. Enabled: vertical blank (`DISPSTAT`
-bit 3, `IE` bit 0) and, while the link listens, serial (`IE` bit 7). The handler (`irq.S`,
-ARM, in IWRAM) acknowledges what is pending and enabled in `IF` and in the BIOS's copy at
-0x03007FF8, counts vertical blanks, and for a serial interrupt switches to system mode with
-interrupts off and calls the C handler on the user stack.
+bit 3, `IE` bit 0), while line-table slot 2 is in use horizontal blank (`DISPSTAT` bit 4, `IE`
+bit 1), and while the link listens serial (`IE` bit 7). The handler (`irq.S`, ARM, in IWRAM)
+acknowledges what is pending and enabled in `IF` and in the BIOS's copy at 0x03007FF8, counts
+vertical blanks, writes slot 2's next value at a horizontal blank, and for a serial interrupt
+switches to system mode with interrupts off and calls the C handler on the user stack.
 
-**Waiting for a frame** is the BIOS call 0x05 (VBlankIntrWait). After it: the line table is
+**Waiting for a frame** is the BIOS call 0x05 (VBlankIntrWait). After it: the line tables are
 restarted and the sound buffers are swapped.
 
 **Video.** `DISPCNT = 0` at start. Register writes go to the hardware and to the copy. Video
 memory is written 16 bits at a time. Palette values are masked with 0x7FFF.
 
-**Line table.** DMA 0: line 0's value is written directly at the vertical blank, and then at
-every horizontal blank one value is copied to the register: source the table from entry 1,
-destination fixed, count 1, control = enable + start at horizontal blank + repeat. The table
-has 161 entries (the last one doubled), because the last horizontal blank reads one more.
+**Line tables.** Three slots. In each, line 0's value is written directly at the vertical
+blank; then the value of the next line is written at every horizontal blank. Each table has
+161 entries (the last one doubled), because the last horizontal blank reads one more.
+
+- Slots 0 and 1: DMA 0 and DMA 3 (DMA 1 and 2 are the sound's): source the table from entry
+  1, destination fixed, count 1, control = enable + start at horizontal blank + repeat. They
+  cost no processor time.
+- Slot 2: the horizontal-blank interrupt. The handler reads `VCOUNT` (the line just drawn);
+  below 160 it writes entry `VCOUNT + 1` of the table `bm_hal_line2` (a pointer to the
+  register, then the 161 values, in IWRAM) to the register. About 160 short interrupts a
+  frame; while the serial handler runs (interrupts off) a line can keep the previous value.
 
 **Sound.** Two channels of signed 8-bit samples, 18,157 per second, exactly 304 per frame.
 
@@ -154,12 +162,12 @@ between words is a loop of four cycles per turn in IWRAM.
 ## 6. The video snapshot (`BMPS`)
 
 What `bmHalVideoSnapshotPart` gives and the editor's Graphics tab and `bm_ppu_render` read.
-Little endian, 100,778 bytes with one line table:
+Little endian, 101,422 bytes with three line tables (a reader takes any number):
 
 | Offset | Content |
 |---|---|
 | 0 | `BMPS` |
-| 4 | u16 version (1), u16 number of line tables (1) |
+| 4 | u16 version (1), u16 number of line tables (3) |
 | 8 | 0x60 bytes: the video registers 0x00-0x5F as last written |
 | 0x68 | 0x18000 bytes of video memory |
 | 0x18068 | 512 x u16 palette |
@@ -168,7 +176,19 @@ Little endian, 100,778 bytes with one line table:
 
 ## 7. The PC back end
 
-`src/hal/host/`: the same interface over arrays, drawn by the software PPU. Save memory is a
+`src/hal/host/`: the same interface over arrays, drawn by the software PPU (`src/ppu/`): mode 0
+backgrounds, regular sprites, windows and colour effects as GBATEK describes them. Windows: the
+control of window 0 where it covers, else window 1, else the OBJ window (pixels of sprites in
+OBJ-window mode), else the outside; without a window everything shows. Colour effects work on
+the front pixel and the one behind it, in 5 bits per channel: alpha `min(31, (a * eva + b *
+evb) >> 4)` where the one behind is a second target, brighten `c + ((31 - c) * evy >> 4)`,
+darken `c - (c * evy >> 4)`, weights above 16 counting as 16. A semi-transparent sprite is
+alpha-blended with a second target behind it even where BLDCNT names another effect or a
+window has effects off, and is otherwise a first target. mGBA, which the tests compare with,
+computes effects in 8 bits per channel (results one level apart), blends a semi-transparent
+sprite with the colour the effect gave the layer behind it, darkens or brightens sprites that
+are no target while the OBJ window is on and differs from a window in having effects, and
+draws no window one pixel wide on its first line; the test scene keeps out of those cases. Save memory is a
 buffer the program reads from and writes to a file. Sound buffers are handed to SDL. The
 serial port is a function another thread or a test calls with a word; `bmHalCycles` is 0;
 nothing can be debugged or reset through it.

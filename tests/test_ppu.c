@@ -162,6 +162,167 @@ static void testLineTableChangesScrollPerLine(void)
   TEST_ASSERT(line[0] == 0x1111 && line[5] == 0x001F);
 }
 
+// A full-screen BG0 of tile 1 (solid green, priority 1) and BG1 of tile 1 in bank 1 (index 2
+// of bank 1, priority 2), for the window and blending tests.
+static void twoLayers(void)
+{
+  setUp();
+  setTile4(32, solid2);
+  s.palette[16 + 2] = 0x7C00;   // bank 1, index 2: blue
+  uint16_t *map8 = (uint16_t *)(void *)&s.vram[8 * 0x800];
+  uint16_t *map9 = (uint16_t *)(void *)&s.vram[9 * 0x800];
+  for (int i = 0; i < 32 * 32; i++)
+  {
+    map8[i] = 1;
+    map9[i] = 1 | (1 << 12);
+  }
+  bmPpuSetReg(&s, BM_PPU_BGCNT(0), (uint16_t)((8 << 8) | 1));
+  bmPpuSetReg(&s, BM_PPU_BGCNT(1), (uint16_t)((9 << 8) | 2));
+  for (int i = 0; i < 128; i++) s.oam[i * 4] = 0x0200;
+}
+
+static void testWindowsChooseLayers(void)
+{
+  twoLayers();
+  // Window 0: x 10..20, lines 5..9, only BG1. Window 1 (behind it): x 15..30, all lines, nothing.
+  // Outside: both.
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, BM_PPU_DISPCNT_BG(0) | BM_PPU_DISPCNT_BG(1) | BM_PPU_DISPCNT_WIN0 | BM_PPU_DISPCNT_WIN1);
+  bmPpuSetReg(&s, BM_PPU_WIN0H, (10 << 8) | 20);
+  bmPpuSetReg(&s, BM_PPU_WIN0V, (5 << 8) | 10);
+  bmPpuSetReg(&s, BM_PPU_WIN1H, (15 << 8) | 30);
+  bmPpuSetReg(&s, BM_PPU_WIN1V, (0 << 8) | 160);
+  bmPpuSetReg(&s, BM_PPU_WININ, BM_PPU_WIN_BG(1) | (0 << 8));
+  bmPpuSetReg(&s, BM_PPU_WINOUT, BM_PPU_WIN_BG(0) | BM_PPU_WIN_BG(1));
+  bmPpuRenderLine(&s, 5, line);
+  TEST_ASSERT(line[9] == 0x03E0 && line[10] == 0x7C00 && line[19] == 0x7C00);   // BG0 outside, BG1 in window 0
+  TEST_ASSERT(line[20] == 0x1111 && line[29] == 0x1111 && line[30] == 0x03E0);  // window 1: the backdrop
+  bmPpuRenderLine(&s, 10, line);
+  TEST_ASSERT(line[10] == 0x03E0 && line[15] == 0x1111);                        // below window 0: window 1 at 15
+  // A window whose left is right of its right wraps around: 230..240 and 0..5.
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, BM_PPU_DISPCNT_BG(0) | BM_PPU_DISPCNT_BG(1) | BM_PPU_DISPCNT_WIN0);
+  bmPpuSetReg(&s, BM_PPU_WIN0H, (230 << 8) | 5);
+  bmPpuRenderLine(&s, 6, line);
+  TEST_ASSERT(line[4] == 0x7C00 && line[5] == 0x03E0 && line[229] == 0x03E0 && line[230] == 0x7C00 && line[239] == 0x7C00);
+  // A right edge past the screen counts as its edge.
+  bmPpuSetReg(&s, BM_PPU_WIN0H, (200 << 8) | 250);
+  bmPpuRenderLine(&s, 6, line);
+  TEST_ASSERT(line[199] == 0x03E0 && line[200] == 0x7C00 && line[239] == 0x7C00 && line[0] == 0x03E0);
+}
+
+static void testObjWindow(void)
+{
+  twoLayers();
+  // An 8x8 sprite in OBJ window mode at (40, 0) whose left column is set: there only BG1 shows,
+  // and the sprite itself is not drawn.
+  setTile4(0x10000, leftColumn);
+  s.palette[256 + 1] = 0x7FFF;
+  s.oam[0] = (uint16_t)(0 | (2 << 10));
+  s.oam[1] = 40;
+  s.oam[2] = 0;
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, BM_PPU_DISPCNT_BG(0) | BM_PPU_DISPCNT_BG(1) | BM_PPU_DISPCNT_OBJ | BM_PPU_DISPCNT_OBJWIN);
+  bmPpuSetReg(&s, BM_PPU_WINOUT, (BM_PPU_WIN_BG(0) | BM_PPU_WIN_BG(1) | BM_PPU_WIN_OBJ) | (BM_PPU_WIN_BG(1) << 8));
+  bmPpuRenderLine(&s, 3, line);
+  TEST_ASSERT(line[39] == 0x03E0 && line[40] == 0x7C00 && line[41] == 0x03E0);
+  // Window 0 wins over the OBJ window.
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, bmPpuReg(&s, BM_PPU_DISPCNT) | BM_PPU_DISPCNT_WIN0);
+  bmPpuSetReg(&s, BM_PPU_WIN0H, (0 << 8) | 100);
+  bmPpuSetReg(&s, BM_PPU_WIN0V, (0 << 8) | 160);
+  bmPpuSetReg(&s, BM_PPU_WININ, 0);
+  bmPpuRenderLine(&s, 3, line);
+  TEST_ASSERT(line[40] == 0x1111);
+}
+
+static void testBlending(void)
+{
+  twoLayers();
+  s.palette[2] = (uint16_t)(20 << 5);         // BG0: green 20
+  s.palette[16 + 2] = (uint16_t)(10 | 30 << 10);   // BG1: red 10, blue 30
+  uint16_t layers = BM_PPU_DISPCNT_BG(0) | BM_PPU_DISPCNT_BG(1);
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, layers);
+  // Alpha: BG0 over BG1, 12/16 and 8/16, each channel at most 31.
+  bmPpuSetReg(&s, BM_PPU_BLDCNT, BM_PPU_WIN_BG(0) | BM_PPU_BLD_ALPHA | (BM_PPU_WIN_BG(1) << 8));
+  bmPpuSetReg(&s, BM_PPU_BLDALPHA, 12 | (8 << 8));
+  bmPpuRenderLine(&s, 0, line);
+  TEST_ASSERT(line[0] == (uint16_t)(5 | (15 << 5) | (15 << 10)));   // (0*12+10*8)/16, (20*12)/16, (30*8)/16
+  // Weights above 16 count as 16: 20 + 0 green, 10 red, 30 blue -> min(31, ...).
+  bmPpuSetReg(&s, BM_PPU_BLDALPHA, 31 | (31 << 8));
+  bmPpuRenderLine(&s, 0, line);
+  TEST_ASSERT(line[0] == (uint16_t)(10 | (20 << 5) | (30 << 10)));
+  // No second target right behind: no blending.
+  bmPpuSetReg(&s, BM_PPU_BLDCNT, BM_PPU_WIN_BG(0) | BM_PPU_BLD_ALPHA | (BM_PPU_BLD_BACKDROP << 8));
+  bmPpuRenderLine(&s, 0, line);
+  TEST_ASSERT(line[0] == (uint16_t)(20 << 5));
+  // Brighten by 8/16: green 20 + (11 * 8) / 16 = 25, the others 0 + 31 * 8 / 16 = 15.
+  bmPpuSetReg(&s, BM_PPU_BLDCNT, BM_PPU_WIN_BG(0) | BM_PPU_BLD_BRIGHTEN);
+  bmPpuSetReg(&s, BM_PPU_BLDY, 8);
+  bmPpuRenderLine(&s, 0, line);
+  TEST_ASSERT(line[0] == (uint16_t)(15 | (25 << 5) | (15 << 10)));
+  // Darken by 4/16: 20 - 20 * 4 / 16 = 15. Only first targets: BG1 shown alone stays as it is.
+  bmPpuSetReg(&s, BM_PPU_BLDCNT, BM_PPU_WIN_BG(0) | BM_PPU_BLD_DARKEN);
+  bmPpuSetReg(&s, BM_PPU_BLDY, 4);
+  bmPpuRenderLine(&s, 0, line);
+  TEST_ASSERT(line[0] == (uint16_t)(15 << 5));
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, BM_PPU_DISPCNT_BG(1));
+  bmPpuRenderLine(&s, 0, line);
+  TEST_ASSERT(line[0] == (uint16_t)(10 | 30 << 10));
+  // A window without effects: none there.
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, layers | BM_PPU_DISPCNT_WIN0);
+  bmPpuSetReg(&s, BM_PPU_WIN0H, (0 << 8) | 10);
+  bmPpuSetReg(&s, BM_PPU_WIN0V, (0 << 8) | 160);
+  bmPpuSetReg(&s, BM_PPU_WININ, BM_PPU_WIN_BG(0) | BM_PPU_WIN_BG(1));
+  bmPpuSetReg(&s, BM_PPU_WINOUT, BM_PPU_WIN_BG(0) | BM_PPU_WIN_BG(1) | BM_PPU_WIN_EFFECTS);
+  bmPpuRenderLine(&s, 0, line);
+  TEST_ASSERT(line[0] == (uint16_t)(20 << 5) && line[10] == (uint16_t)(15 << 5));
+}
+
+static void testSemiTransparentSprite(void)
+{
+  twoLayers();
+  s.palette[16 + 2] = (uint16_t)(10 | 30 << 10);
+  setTile4(0x10000, solid2);
+  s.palette[256 + 2] = 0x7FFF;
+  // An 8x8 semi-transparent sprite at (0, 0) in front of BG1 (BG0 off). BLDCNT names no first
+  // target and no effect: it blends all the same where BG1 is a second target.
+  s.oam[0] = (uint16_t)(1 << 10);
+  s.oam[1] = 0;
+  s.oam[2] = 0;
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, BM_PPU_DISPCNT_BG(1) | BM_PPU_DISPCNT_OBJ);
+  bmPpuSetReg(&s, BM_PPU_BLDCNT, BM_PPU_WIN_BG(1) << 8);
+  bmPpuSetReg(&s, BM_PPU_BLDALPHA, 8 | (8 << 8));
+  bmPpuRenderLine(&s, 0, line);
+  TEST_ASSERT(line[0] == (uint16_t)(20 | 15 << 5 | 30 << 10));   // (31 + 10) / 2, 31 / 2, (31 + 30) / 2
+  TEST_ASSERT(line[8] == (uint16_t)(10 | 30 << 10));
+  // Without a second target behind it, it is a first target of the effect: darkened by 8/16.
+  bmPpuSetReg(&s, BM_PPU_BLDCNT, BM_PPU_BLD_DARKEN);
+  bmPpuSetReg(&s, BM_PPU_BLDY, 8);
+  bmPpuRenderLine(&s, 0, line);
+  TEST_ASSERT(line[0] == (uint16_t)(16 | 16 << 5 | 16 << 10));
+}
+
+static void testThreeLineTables(void)
+{
+  twoLayers();
+  // Slot 0: BG0 scrolled, slot 1: BLDY, slot 2: WIN0H; all at once, each line its own.
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, BM_PPU_DISPCNT_BG(0) | BM_PPU_DISPCNT_WIN0);
+  bmPpuSetReg(&s, BM_PPU_WIN0V, 160);
+  bmPpuSetReg(&s, BM_PPU_WININ, BM_PPU_WIN_BG(0) | BM_PPU_WIN_EFFECTS);
+  bmPpuSetReg(&s, BM_PPU_BLDCNT, BM_PPU_WIN_BG(0) | BM_PPU_BLD_DARKEN);
+  s.palette[2] = (uint16_t)(16 << 5);
+  s.lineTables[0].reg = BM_PPU_BGHOFS(0);
+  s.lineTables[1].reg = BM_PPU_BLDY;
+  s.lineTables[2].reg = BM_PPU_WIN0H;
+  for (int y = 0; y < BM_PPU_HEIGHT; y++)
+  {
+    s.lineTables[0].values[y] = (uint16_t)y;
+    s.lineTables[1].values[y] = (uint16_t)(y % 17);
+    s.lineTables[2].values[y] = (uint16_t)(y < 100 ? y : 100);
+  }
+  bmPpuRenderLine(&s, 8, line);
+  TEST_ASSERT(line[0] == (uint16_t)(8 << 5) && line[7] == (uint16_t)(8 << 5) && line[8] == 0x1111);   // 16 - 16 * 8 / 16
+  bmPpuRenderLine(&s, 16, line);
+  TEST_ASSERT(line[0] == 0 && line[15] == 0 && line[16] == 0x1111);
+}
+
 static void testSnapshotRoundTrip(void)
 {
   setUp();
@@ -170,6 +331,8 @@ static void testSnapshotRoundTrip(void)
   s.oam[511] = 0x1234;
   s.lineTables[0].reg = BM_PPU_BGVOFS(2);
   s.lineTables[0].values[159] = 77;
+  s.lineTables[2].reg = BM_PPU_BLDY;
+  s.lineTables[2].values[3] = 9;
   static uint8_t buffer[200 * 1024];
   TEST_ASSERT(bmPpuSnapshotSize() <= sizeof(buffer));
   bmPpuSnapshotWrite(&s, buffer);
@@ -191,6 +354,11 @@ int main(void)
   RUN_TEST(testSpriteInFrontAndFlipped);
   RUN_TEST(testSpriteWrapsAtScreenEdges);
   RUN_TEST(testLineTableChangesScrollPerLine);
+  RUN_TEST(testWindowsChooseLayers);
+  RUN_TEST(testObjWindow);
+  RUN_TEST(testBlending);
+  RUN_TEST(testSemiTransparentSprite);
+  RUN_TEST(testThreeLineTables);
   RUN_TEST(testSnapshotRoundTrip);
   return TEST_RESULT();
 }

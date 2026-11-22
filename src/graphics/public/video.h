@@ -75,6 +75,12 @@ typedef enum BmSpriteShape {
   BM_SPRITE_TALL = 2,
 } BmSpriteShape;
 
+typedef enum BmSpriteMode {
+  BM_SPRITE_NORMAL = 0,
+  BM_SPRITE_SEMI_TRANSPARENT = 1,
+  BM_SPRITE_OBJ_WINDOW = 2,
+} BmSpriteMode;
+
 typedef struct BmSprite
 {
   int16_t x, y;
@@ -87,11 +93,53 @@ typedef struct BmSprite
   bool colors256;
   bool hflip, vflip;
   bool visible;
+  /// What the sprite is: drawn normally, semi-transparent (blended with what is behind it with
+  /// the blend weights, bmBlendSet), or a part of the OBJ window (drawn not at all).
+  BmSpriteMode mode;
 } BmSprite;
 
 /// Sets a sprite in the shadow OAM; it appears after the next bmVideoWaitFrame().
 BmResult bmSpriteSet(uint8_t index, const BmSprite *pSprite);
 void bmSpriteHide(uint8_t index);
+
+// --- Windows and colour effects -------------------------------------------------------------
+//
+// Layers are named by bits: BG n is bit n, sprites BM_LAYER_OBJ, the backdrop BM_LAYER_BACKDROP
+// (only as a blend target). A window's layer mask may also have BM_LAYER_EFFECTS: colour
+// effects happen there.
+
+#define BM_LAYER_BG(n) (1u << (n))
+#define BM_LAYER_OBJ 0x10u
+#define BM_LAYER_BACKDROP 0x20u
+#define BM_LAYER_EFFECTS 0x20u
+
+/// Window 0 or 1 covers [left, right) x [top, bottom) (screen pixels; 0 to 240 and 0 to 160).
+/// A window whose left is beyond its right wraps around the screen's edge.
+void bmWindowSet(uint8_t window, uint8_t left, uint8_t top, uint8_t right, uint8_t bottom);
+
+/// Which windows are on: bit 0 window 0, bit 1 window 1, bit 2 the OBJ window (made of the
+/// sprites in BM_SPRITE_OBJ_WINDOW mode). With none on, every layer shows everywhere.
+void bmWindowEnable(uint8_t mask);
+
+/// What shows inside window 0, inside window 1, outside all windows and in the OBJ window
+/// (masks of BM_LAYER_*). Window 0 wins over window 1, both over the OBJ window.
+void bmWindowLayers(uint8_t inside0, uint8_t inside1, uint8_t outside, uint8_t objWindow);
+
+typedef enum BmBlendEffect {
+  BM_BLEND_NONE = 0,
+  BM_BLEND_ALPHA = 1,     // first * eva/16 + second * evb/16, where a second target is below
+  BM_BLEND_BRIGHTEN = 2,  // first towards white by evy/16
+  BM_BLEND_DARKEN = 3,    // first towards black by evy/16
+} BmBlendEffect;
+
+/// Colour effect on the front layer where it is one of `first` (BM_LAYER_* mask); alpha blending
+/// needs one of `second` right behind it. Weights in sixteenths, 0 to 16.
+void bmBlendSet(BmBlendEffect effect, uint8_t first, uint8_t second, uint8_t eva, uint8_t evb, uint8_t evy);
+
+/// A register (byte offset, ppu.h) that takes the value `pValues[y]` on line y, in line-table
+/// slot 0 to 2 (BM_HAL_LINE_TABLES), from the next frame on; NULL switches the slot off.
+/// bmBgSetLineScrollX uses slot 0.
+BmResult bmVideoSetLineTable(uint8_t slot, uint16_t reg, const uint16_t *pValues);
 
 /// Waits for the next frame and copies the shadow OAM to the hardware.
 uint32_t bmVideoWaitFrame(void);

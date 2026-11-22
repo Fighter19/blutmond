@@ -16,10 +16,19 @@ extern volatile uint32_t bm_vblank_count;
 extern void bm_irq_handler(void);
 static bool s_irqReady;
 
-// Line table: register offset and its values. One extra entry because the H-blank DMA of the
-// last line reads one value past the end.
-static uint16_t s_lineReg = 0xFFFF;
-static uint16_t s_lineValues[GBA_SCREEN_HEIGHT + 1] BM_EWRAM_BSS;
+// Line tables: register offset and values per slot. One extra entry because the H-blank
+// transfer of the last line reads one value past the end. Slots 0 and 1 are fed by H-blank
+// DMA (channels 0 and 3), slot 2 by the H-blank interrupt (irq.S), which reads bm_hal_line2:
+// the register's address, then the values.
+static uint16_t s_lineReg[BM_HAL_LINE_TABLES] = { 0xFFFF, 0xFFFF, 0xFFFF };
+static uint16_t s_lineValues[2][GBA_SCREEN_HEIGHT + 1] BM_EWRAM_BSS;
+typedef struct LineTable2
+{
+  volatile uint16_t *pReg;
+  uint32_t reserved;
+  uint16_t values[GBA_SCREEN_HEIGHT + 1];
+} LineTable2;
+LineTable2 bm_hal_line2 BM_IWRAM_DATA = { 0, 0, { 0 } };
 
 const char *bmHalPlatformName(void)
 {
@@ -70,19 +79,28 @@ uint16_t bmHalPaletteRead(uint16_t index)
   return index < BM_HAL_PALETTE_SIZE ? GBA_PALETTE[index] : 0;
 }
 
-static void restartLineTable(void)
+static void restartLineTables(void)
 {
-  GBA_REG_DMA0CNT_H = 0;
-  if (s_lineReg == 0xFFFF)
-  {
-    return;
-  }
   // Line 0 gets its value now; every H-blank then copies the value for the next line.
-  GBA_REG16(s_lineReg) = s_lineValues[0];
-  GBA_REG_DMA0SAD = (uint32_t)&s_lineValues[1];
-  GBA_REG_DMA0DAD = GBA_IO + s_lineReg;
-  GBA_REG_DMA0CNT_L = 1;
-  GBA_REG_DMA0CNT_H = GBA_DMA_ENABLE | GBA_DMA_START_HBLANK | GBA_DMA_REPEAT | GBA_DMA_DEST_FIXED;
+  GBA_REG_DMA0CNT_H = 0;
+  if (s_lineReg[0] != 0xFFFF)
+  {
+    GBA_REG16(s_lineReg[0]) = s_lineValues[0][0];
+    GBA_REG_DMA0SAD = (uint32_t)&s_lineValues[0][1];
+    GBA_REG_DMA0DAD = GBA_IO + s_lineReg[0];
+    GBA_REG_DMA0CNT_L = 1;
+    GBA_REG_DMA0CNT_H = GBA_DMA_ENABLE | GBA_DMA_START_HBLANK | GBA_DMA_REPEAT | GBA_DMA_DEST_FIXED;
+  }
+  GBA_REG_DMA3CNT_H = 0;
+  if (s_lineReg[1] != 0xFFFF)
+  {
+    GBA_REG16(s_lineReg[1]) = s_lineValues[1][0];
+    GBA_REG_DMA3SAD = (uint32_t)&s_lineValues[1][1];
+    GBA_REG_DMA3DAD = GBA_IO + s_lineReg[1];
+    GBA_REG_DMA3CNT_L = 1;
+    GBA_REG_DMA3CNT_H = GBA_DMA_ENABLE | GBA_DMA_START_HBLANK | GBA_DMA_REPEAT | GBA_DMA_DEST_FIXED;
+  }
+  if (s_lineReg[2] != 0xFFFF) GBA_REG16(s_lineReg[2]) = bm_hal_line2.values[0];
 }
 
 uint16_t bmHalVideoLine(void)
@@ -162,7 +180,7 @@ uint32_t bmHalVideoWaitVBlank(void)
   // BIOS VBlankIntrWait: halts the CPU until the next VBlank interrupt. The returned count
   // comes from the interrupt handler, so missed frames show up as gaps.
   __asm__ volatile("swi 0x05" ::: "r0", "r1", "r2", "r3", "memory");
-  restartLineTable();
+  restartLineTables();
   swapAudio();
   return bm_vblank_count;
 }
@@ -187,7 +205,8 @@ uint16_t bmHalVideoReadReg(uint16_t offset)
 uint32_t bmHalVideoSnapshotPart(uint32_t offset, uint8_t *pOut, uint32_t size)
 {
   BmPpuSnapshotSource source = {
-    s_regs, (const volatile uint8_t *)GBA_VRAM, GBA_PALETTE, GBA_OAM, { s_lineReg }, { s_lineValues },
+    s_regs, (const volatile uint8_t *)GBA_VRAM, GBA_PALETTE, GBA_OAM, { s_lineReg[0], s_lineReg[1], s_lineReg[2] },
+    { s_lineValues[0], s_lineValues[1], bm_hal_line2.values },
   };
   return bmPpuSnapshotPart(&source, offset, pOut, size);
 }
@@ -220,22 +239,42 @@ void bmHalOamWrite(uint32_t first, const uint16_t *pData, uint32_t count)
 
 void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues)
 {
-  if (slot != 0)
+  if (slot >= BM_HAL_LINE_TABLES)
   {
     return;
   }
   if (pValues == NULL || reg >= BM_PPU_REG_SIZE)
   {
-    s_lineReg = 0xFFFF;
-    GBA_REG_DMA0CNT_H = 0;
+    s_lineReg[slot] = 0xFFFF;
+    if (slot == 0) GBA_REG_DMA0CNT_H = 0;
+    if (slot == 1) GBA_REG_DMA3CNT_H = 0;
+    if (slot == 2)
+    {
+      GBA_REG_IE &= (uint16_t)~GBA_IRQ_HBLANK;
+      GBA_REG_DISPSTAT &= (uint16_t)~GBA_DISPSTAT_HBLANK_IRQ;
+      bm_hal_line2.pReg = 0;
+    }
     return;
+  }
+  uint16_t *pTo = slot == 2 ? bm_hal_line2.values : s_lineValues[slot];
+  if (slot == 2)
+  {
+    // Not while the interrupt reads them: from the next frame on, as the DMA slots.
+    GBA_REG_IE &= (uint16_t)~GBA_IRQ_HBLANK;
   }
   for (uint32_t y = 0; y < GBA_SCREEN_HEIGHT; y++)
   {
-    s_lineValues[y] = pValues[y];
+    pTo[y] = pValues[y];
   }
-  s_lineValues[GBA_SCREEN_HEIGHT] = pValues[GBA_SCREEN_HEIGHT - 1];
-  s_lineReg = reg;
+  pTo[GBA_SCREEN_HEIGHT] = pValues[GBA_SCREEN_HEIGHT - 1];
+  s_lineReg[slot] = reg;
+  if (slot == 2)
+  {
+    initInterrupts();
+    bm_hal_line2.pReg = &GBA_REG16(reg);
+    GBA_REG_DISPSTAT |= GBA_DISPSTAT_HBLANK_IRQ;
+    GBA_REG_IE |= GBA_IRQ_HBLANK;
+  }
 }
 
 uint16_t bmHalInputKeys(void)

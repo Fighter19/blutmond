@@ -1,6 +1,12 @@
 # Plan: menus and UI
 
-Status: plan, nothing built. Milestone M13 in [../PLAN.md](../PLAN.md).
+Status: step 1 built: windows (two, the OBJ window, outside) and colour effects (alpha,
+brighten, darken, semi-transparent sprites) in the software PPU, three line-table slots on the
+GBA (DMA 0 and 3, an H-blank interrupt), `bmWindow*`, `bmBlendSet` and `bmVideoSetLineTable`
+in `video.h`; the scene `scene_effects` matches between the PC and mGBA
+([../spec/gba-backend.md](../spec/gba-backend.md) §5 and §7). There is no shader PPU yet (the
+PC game draws the software PPU's picture), so "the shader PPU" of section 2 is still to do
+when there is one. Steps 2 to 6 are open. Milestone M13 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

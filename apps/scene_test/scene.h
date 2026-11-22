@@ -11,3 +11,8 @@
 /// through a line table. Everything is generated in code. The scene is static, so every frame
 /// after the first shows the same picture on every platform.
 void sceneSetup(bool lineTable);
+
+/// On top of the scene: windows and colour effects, with all three line tables (the wave on
+/// slot 0, a darkening gradient on slot 1, the shape of window 1 on slot 2) and a
+/// semi-transparent sprite.
+void sceneEffects(void);

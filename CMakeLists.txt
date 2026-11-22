@@ -140,6 +140,11 @@ if(BM_PLATFORM STREQUAL "gba")
   foreach(target ${BM_GBA_TARGETS})
     target_compile_definitions(${target} PRIVATE BM_SCENE_LINE_TABLE=0)
   endforeach()
+  # The scene with windows, colour effects and all three line tables.
+  bm_add_gba_image(scene_effects ${BM_SCENE_SOURCES})
+  foreach(target ${BM_GBA_TARGETS})
+    target_compile_definitions(${target} PRIVATE BM_SCENE_EFFECTS=1)
+  endforeach()
 
   # Host tools (the cooker) for building packs during the GBA build. Either point
   # BM_HOST_TOOLS_DIR at a host build directory, or they are built here automatically.
@@ -658,6 +663,16 @@ if(BM_PLATFORM STREQUAL "host")
       # the GBA image of the same scene running in mGBA, pixel for pixel.
       add_test(NAME scene_render_host COMMAND scene_test ${out}/scene_host.ppm)
       set_tests_properties(scene_render_host PROPERTIES FIXTURES_SETUP scene_host)
+      add_test(NAME scene_effects_render_host COMMAND scene_test --effects ${out}/scene_effects_host.ppm)
+      set_tests_properties(scene_effects_render_host PROPERTIES FIXTURES_SETUP scene_effects_host)
+      foreach(image scene_effects scene_effects_mb)
+        add_test(NAME scene_render_${image}
+          COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 60 --ppm ${out}/${image}.ppm)
+        set_tests_properties(scene_render_${image} PROPERTIES FIXTURES_SETUP scene_${image})
+        add_test(NAME scene_matches_${image}
+          COMMAND ${compare} ${out}/scene_effects_host.ppm ${out}/${image}.ppm --tolerance 1 --diff ${out}/${image}_diff.ppm)
+        set_tests_properties(scene_matches_${image} PROPERTIES FIXTURES_REQUIRED "scene_effects_host;scene_${image}")
+      endforeach()
       foreach(image scene_test scene_test_mb)
         add_test(NAME scene_render_${image}
           COMMAND bm_mgba_run ${BM_GBA_BUILD_DIR}/${image}.gba --frames 60 --ppm ${out}/${image}.ppm)

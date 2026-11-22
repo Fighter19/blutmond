@@ -44,6 +44,7 @@ typedef struct LinePixel
   uint16_t color;
   uint8_t priority;
   bool opaque;
+  bool semiTransparent;   // sprites: alpha blended whenever a second target is below
 } LinePixel;
 
 // Background n of a mode 0 screen, one line.
@@ -87,7 +88,7 @@ static void renderTextBg(const BmPpuState *pState, const uint16_t *regs, int n, 
       continue;
     }
     uint16_t paletteIndex = bpp8 ? index : (uint16_t)(((entry >> 12) << 4) | index);
-    out[x] = (LinePixel){ pState->palette[paletteIndex] & 0x7FFF, priority, true };
+    out[x] = (LinePixel){ pState->palette[paletteIndex] & 0x7FFF, priority, true, false };
   }
 }
 
@@ -100,7 +101,8 @@ static const uint8_t s_objSizes[3][4][2] = {
 
 // Regular (non-affine) sprites, one line. Per pixel the sprite with the lowest OAM index wins;
 // its priority is then compared with the backgrounds (as on the GBA).
-static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, LinePixel out[BM_PPU_WIDTH])
+// Sprites in OBJ window mode draw nothing; where they have a pixel, `objWindow` is set.
+static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, LinePixel out[BM_PPU_WIDTH], bool objWindow[BM_PPU_WIDTH])
 {
   bool map1D = (regs[BM_PPU_DISPCNT / 2] & BM_PPU_DISPCNT_OBJ_1D) != 0;
 
@@ -119,7 +121,8 @@ static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, Li
       continue;  // hidden
     }
     int shape = (a0 >> 14) & 3;
-    if (shape == 3)
+    int objMode = (a0 >> 10) & 3;   // 0 normal, 1 semi-transparent, 2 OBJ window
+    if (shape == 3 || objMode == 3)
     {
       continue;
     }
@@ -148,7 +151,7 @@ static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, Li
     for (int col = 0; col < w; col++)
     {
       int x = sx + col;
-      if (x < 0 || x >= BM_PPU_WIDTH || out[x].opaque)
+      if (x < 0 || x >= BM_PPU_WIDTH || (objMode != 2 && out[x].opaque))
       {
         continue;
       }
@@ -165,10 +168,46 @@ static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, Li
       {
         continue;
       }
+      if (objMode == 2)
+      {
+        objWindow[x] = true;
+        continue;
+      }
       uint16_t paletteIndex = (uint16_t)(256 + (bpp8 ? index : ((bank << 4) | index)));
-      out[x] = (LinePixel){ pState->palette[paletteIndex] & 0x7FFF, priority, true };
+      out[x] = (LinePixel){ pState->palette[paletteIndex] & 0x7FFF, priority, true, objMode == 1 };
     }
   }
+}
+
+// Whether x (or y) lies in a window's range: from `from` to `to` (exclusive), wrapping
+// around when `from` > `to`; `to` beyond the screen counts as its edge (GBATEK).
+static bool inRange(int v, int from, int to, int size)
+{
+  if (to > size) to = size;
+  return from <= to ? v >= from && v < to : v >= from || v < to;
+}
+
+static uint16_t blendAlpha(uint16_t a, uint16_t b, int eva, int evb)
+{
+  uint16_t out = 0;
+  for (int shift = 0; shift <= 10; shift += 5)
+  {
+    int c = (((a >> shift) & 31) * eva + ((b >> shift) & 31) * evb) >> 4;
+    out = (uint16_t)(out | ((c > 31 ? 31 : c) << shift));
+  }
+  return out;
+}
+
+static uint16_t blendBrightness(uint16_t a, int evy, bool brighten)
+{
+  uint16_t out = 0;
+  for (int shift = 0; shift <= 10; shift += 5)
+  {
+    int c = (a >> shift) & 31;
+    c = brighten ? c + (((31 - c) * evy) >> 4) : c - ((c * evy) >> 4);
+    out = (uint16_t)(out | (c << shift));
+  }
+  return out;
 }
 
 void bmPpuRenderLine(const BmPpuState *pState, int y, uint16_t out[BM_PPU_WIDTH])
@@ -212,29 +251,83 @@ void bmPpuRenderLine(const BmPpuState *pState, int y, uint16_t out[BM_PPU_WIDTH]
   }
 
   LinePixel obj[BM_PPU_WIDTH];
+  bool objWindow[BM_PPU_WIDTH];
   memset(obj, 0, sizeof(obj));
+  memset(objWindow, 0, sizeof(objWindow));
   if (dispcnt & BM_PPU_DISPCNT_OBJ)
   {
-    renderObjs(pState, regs, y, obj);
+    renderObjs(pState, regs, y, obj, objWindow);
   }
+
+  // Windows: per pixel, which layers show and whether colour effects apply. WIN0 before WIN1
+  // before the OBJ window before the outside; without any window everything shows.
+  bool windows = (dispcnt & (BM_PPU_DISPCNT_WIN0 | BM_PPU_DISPCNT_WIN1 | BM_PPU_DISPCNT_OBJWIN)) != 0;
+  bool inWin[2] = { false, false };
+  for (int w = 0; w < 2; w++)
+  {
+    uint16_t v = regs[(BM_PPU_WIN0V + 2 * w) / 2];
+    inWin[w] = (dispcnt & (BM_PPU_DISPCNT_WIN0 << w)) && inRange(y, v >> 8, v & 0xFF, BM_PPU_HEIGHT);
+  }
+  uint16_t winIn = regs[BM_PPU_WININ / 2], winOut = regs[BM_PPU_WINOUT / 2];
+
+  uint16_t bldcnt = regs[BM_PPU_BLDCNT / 2];
+  int effect = (bldcnt >> 6) & 3;
+  uint16_t first = bldcnt & 0x3F, second = (bldcnt >> 8) & 0x3F;
+  uint16_t alpha = regs[BM_PPU_BLDALPHA / 2];
+  int eva = alpha & 31, evb = (alpha >> 8) & 31, evy = regs[BM_PPU_BLDY / 2] & 31;
+  if (eva > 16) eva = 16;
+  if (evb > 16) evb = 16;
+  if (evy > 16) evy = 16;
 
   for (int x = 0; x < BM_PPU_WIDTH; x++)
   {
-    // Lower priority value is in front. Sprites win against backgrounds of the same priority,
-    // lower-numbered backgrounds win against higher-numbered ones.
-    int bestPriority = 4;
-    uint16_t color = backdrop;
-    for (int n = 3; n >= 0; n--)
+    uint8_t control = 0x3F;
+    if (windows)
     {
-      if (bg[n][x].opaque && bg[n][x].priority <= bestPriority)
+      control = winOut & 0x3F;
+      if ((dispcnt & BM_PPU_DISPCNT_OBJWIN) && objWindow[x]) control = (winOut >> 8) & 0x3F;
+      for (int w = 1; w >= 0; w--)
       {
-        bestPriority = bg[n][x].priority;
-        color = bg[n][x].color;
+        uint16_t h = regs[(BM_PPU_WIN0H + 2 * w) / 2];
+        if (inWin[w] && inRange(x, h >> 8, h & 0xFF, BM_PPU_WIDTH)) control = (winIn >> (8 * w)) & 0x3F;
       }
     }
-    if (obj[x].opaque && obj[x].priority <= bestPriority)
+
+    // The two front layers. Lower priority value is in front; sprites win against
+    // backgrounds of the same priority, lower-numbered backgrounds against higher-numbered
+    // ones. Layer numbers: 0-3 backgrounds, 4 sprites, 5 the backdrop.
+    static const uint8_t order[5] = { 4, 0, 1, 2, 3 };
+    int top = 5, below = 5;
+    uint16_t topColor = backdrop, belowColor = backdrop;
+    bool objShown = obj[x].opaque && (control & BM_PPU_WIN_OBJ);
+    for (int p = 0; p < 4 && below == 5; p++)
     {
-      color = obj[x].color;
+      for (int i = 0; i < 5 && below == 5; i++)
+      {
+        int n = order[i];
+        bool shown = n == 4 ? objShown && obj[x].priority == p
+                            : bg[n][x].opaque && bg[n][x].priority == p && (control & BM_PPU_WIN_BG(n));
+        if (!shown) continue;
+        uint16_t c = n == 4 ? obj[x].color : bg[n][x].color;
+        if (top == 5) { top = n; topColor = c; }
+        else { below = n; belowColor = c; }
+      }
+    }
+
+    uint16_t color = topColor;
+    bool effects = (control & BM_PPU_WIN_EFFECTS) != 0;
+    bool secondBelow = (second >> below) & 1;
+    // A semi-transparent sprite blends with a second target behind it whatever BLDCNT and
+    // the window say (as mGBA has it; GBATEK does not say for windows).
+    if (top == 4 && obj[x].semiTransparent && secondBelow)
+    {
+      color = blendAlpha(topColor, belowColor, eva, evb);
+    }
+    // Otherwise it counts as a first target (GBATEK: always one).
+    else if (effects && (((first >> top) & 1) || (top == 4 && obj[x].semiTransparent)))
+    {
+      if (effect == 1 && secondBelow) color = blendAlpha(topColor, belowColor, eva, evb);
+      else if (effect == 2 || effect == 3) color = blendBrightness(topColor, evy, effect == 2);
     }
     out[x] = color;
   }

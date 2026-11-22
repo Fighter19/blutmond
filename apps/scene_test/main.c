@@ -18,6 +18,9 @@
 #  include <string.h>
 #endif
 
+#ifndef BM_SCENE_EFFECTS
+#  define BM_SCENE_EFFECTS 0
+#endif
 #ifndef BM_SCENE_LINE_TABLE
 #  define BM_SCENE_LINE_TABLE 1
 #endif
@@ -60,16 +63,19 @@ int main(int argc, char **argv)
   g_defaultDevice = device;
 
   bool lineTable = BM_SCENE_LINE_TABLE;
+  bool effects = BM_SCENE_EFFECTS;
 #ifdef BM_PLATFORM_HOST
   const char *out = NULL;
   for (int i = 1; i < argc; i++)
   {
     if (strcmp(argv[i], "--no-line-table") == 0) lineTable = false;
+    else if (strcmp(argv[i], "--effects") == 0) effects = true;
     else out = argv[i];
   }
 #endif
 
   sceneSetup(lineTable);
+  if (effects) sceneEffects();
 
 #ifdef BM_PLATFORM_HOST
   bmVideoWaitFrame();

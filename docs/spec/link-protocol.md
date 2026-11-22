@@ -209,7 +209,7 @@ All values little endian.
 | `RESET` | empty. 20 frames later (so the acknowledgement gets out) the device starts over ([gba-backend.md](gba-backend.md) §4) |
 | `INPUT` | section 10 |
 | `LOG` | text, no terminator |
-| `PPU_SNAPSHOT` M → S | u32 offset, u32 length (0: to the end) of the runtime's video state as a PPU snapshot (`BMPS`, [gba-backend.md](gba-backend.md) §6; 100,778 bytes) |
+| `PPU_SNAPSHOT` M → S | u32 offset, u32 length (0: to the end) of the runtime's video state as a PPU snapshot (`BMPS`, [gba-backend.md](gba-backend.md) §6; 101,422 bytes) |
 | `PPU_SNAPSHOT` S → M | u32 offset, u32 total size, then data (at most 1016 bytes). The runtime sends the parts at frame boundaries, as many per frame as its send buffers take; the registers are the values last written (the GBA HAL keeps copies, most video registers are write-only) |
 
 The master does not wait for chunk-level answers: a pack transfer is `HELLO` (to learn which

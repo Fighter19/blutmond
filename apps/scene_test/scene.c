@@ -4,6 +4,7 @@
  */
 #include "scene.h"
 
+#include "ppu.h"
 #include "video.h"
 
 #include <string.h>
@@ -281,6 +282,41 @@ static void loadSprites(void)
   s = base; s.shape = BM_SPRITE_WIDE; s.size = 1; s.tile = 4; s.x = 150; s.y = 110; bmSpriteSet(10, &s);
   s = base; s.colors256 = true; s.tile = 12; s.x = 180; s.y = 40; bmSpriteSet(11, &s);
   s.vflip = true; s.x = 200;                                 bmSpriteSet(12, &s);
+}
+
+void sceneEffects(void)
+{
+  // Colour effect: darkening of BG2 and the backdrop, stronger towards the bottom (BLDY per
+  // line, slot 1). The semi-transparent sprite blends half and half with BG1. (Not with a layer
+  // that is also darkened: mGBA, which this scene is compared with, blends with its darkened
+  // colour, the GBA with its own.)
+  bmBlendSet(BM_BLEND_DARKEN, BM_LAYER_BG(2) | BM_LAYER_BACKDROP, BM_LAYER_BG(1), 8, 8, 0);
+  uint16_t evy[160];
+  for (int y = 0; y < 160; y++) evy[y] = (uint16_t)(y / 10);
+  bmVideoSetLineTable(1, BM_PPU_BLDY, evy);
+
+  // Window 0: a rectangle where everything shows plain (no effects). Window 1: a diamond,
+  // its left and right edge per line (slot 2), with only BG2 and the sprites. Outside:
+  // everything, with effects. No OBJ window here: with one on, mGBA (the reference this scene
+  // is compared with) darkens sprites that are no blend target wherever a window's effects
+  // differ from the OBJ window's; tests/test_ppu.c checks the OBJ window.
+  bmWindowSet(0, 30, 50, 130, 120);
+  bmWindowSet(1, 0, 20, 0, 110);
+  uint16_t win1h[160];
+  for (int y = 0; y < 160; y++)
+  {
+    int d = y < 20 || y >= 110 ? -1 : 1 + (y < 65 ? y - 20 : 109 - y);   // 3 pixels at the tips
+    win1h[y] = d < 0 ? 0 : (uint16_t)(((190 - d) << 8) | (190 + d + 1));
+  }
+  bmVideoSetLineTable(2, BM_PPU_WIN1H, win1h);
+  const uint8_t all = BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2) | BM_LAYER_OBJ;
+  bmWindowLayers(all, BM_LAYER_BG(2) | BM_LAYER_OBJ, all | BM_LAYER_EFFECTS, 0);
+  bmWindowEnable(3);
+
+  // The arrow in front of the overlapping pair is semi-transparent.
+  BmSprite s = { .shape = BM_SPRITE_SQUARE, .size = 1, .tile = 0, .visible = true, .x = 120, .y = 60,
+                 .mode = BM_SPRITE_SEMI_TRANSPARENT };
+  bmSpriteSet(4, &s);
 }
 
 void sceneSetup(bool lineTable)

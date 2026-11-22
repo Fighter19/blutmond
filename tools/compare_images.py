@@ -4,10 +4,13 @@
 colour depth). Exits with 1 and reports the differences if they are not equal.
 
   compare_images.py <a.ppm> <b.ppm> [--diff out.ppm] [--changed-in X0 Y0 X1 Y1] [--ignore X0 Y0 X1 Y1]
+                    [--tolerance N]
 
 With --changed-in the images must differ, and only inside that box (inclusive): for checking
 that a live reload changed exactly what it should. --ignore leaves a box out of the comparison
-(something that animates between the two pictures).
+(something that animates between the two pictures). --tolerance lets each channel differ by up
+to N of its 32 levels: for colour effects, which mGBA computes with 8 bits per channel and the
+GBA (and the software PPU) with 5, so results can be one level apart.
 """
 import sys
 
@@ -46,6 +49,11 @@ def main():
         i = args.index("--changed-in")
         box = tuple(int(v) for v in args[i + 1:i + 5])
         del args[i:i + 5]
+    tolerance = 0
+    if "--tolerance" in args:
+        i = args.index("--tolerance")
+        tolerance = int(args[i + 1])
+        del args[i:i + 2]
     ignore = None
     if "--ignore" in args:
         i = args.index("--ignore")
@@ -64,7 +72,7 @@ def main():
     for i in range(0, wa * ha * 3, 3):
         pa = tuple(v >> 3 for v in a[i:i + 3])
         pb = tuple(v >> 3 for v in b[i:i + 3])
-        if pa != pb:
+        if any(abs(x - y) > tolerance for x, y in zip(pa, pb)):
             diffs.append(i // 3)
             out[i:i + 3] = b"\xff\x00\xff"
         else:

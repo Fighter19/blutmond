@@ -34,6 +34,8 @@ void bmVideoInit(void)
     bmHalVideoWriteReg(BM_PPU_BGHOFS(bg), 0);
     bmHalVideoWriteReg(BM_PPU_BGVOFS(bg), 0);
   }
+  // No windows, no colour effects.
+  for (uint16_t reg = BM_PPU_WIN0H; reg <= BM_PPU_BLDY; reg += 2) bmHalVideoWriteReg(reg, 0);
   for (uint32_t i = 0; i < BM_HAL_LINE_TABLES; i++)
   {
     bmHalLineTableSet(i, 0, NULL);
@@ -176,13 +178,47 @@ BmResult bmSpriteSet(uint8_t index, const BmSprite *pSprite)
   else
   {
     a[0] = (uint16_t)(((uint16_t)pSprite->y & 0xFF) | (pSprite->colors256 ? 0x2000 : 0) |
-                      ((unsigned)pSprite->shape << 14));
+                      (((unsigned)pSprite->mode & 3) << 10) | ((unsigned)pSprite->shape << 14));
     a[1] = (uint16_t)(((uint16_t)pSprite->x & 0x1FF) | (pSprite->hflip ? 0x1000 : 0) |
                       (pSprite->vflip ? 0x2000 : 0) | ((unsigned)pSprite->size << 14));
     a[2] = (uint16_t)((pSprite->tile & 0x3FF) | ((pSprite->priority & 3) << 10) |
                       ((pSprite->paletteBank & 15) << 12));
   }
   s_oamDirty = true;
+  return BM_SUCCESS;
+}
+
+void bmWindowSet(uint8_t window, uint8_t left, uint8_t top, uint8_t right, uint8_t bottom)
+{
+  if (window > 1) return;
+  bmHalVideoWriteReg((uint16_t)(BM_PPU_WIN0H + 2 * window), (uint16_t)(left << 8 | right));
+  bmHalVideoWriteReg((uint16_t)(BM_PPU_WIN0V + 2 * window), (uint16_t)(top << 8 | bottom));
+}
+
+void bmWindowEnable(uint8_t mask)
+{
+  s_dispcnt &= (uint16_t)~(BM_PPU_DISPCNT_WIN0 | BM_PPU_DISPCNT_WIN1 | BM_PPU_DISPCNT_OBJWIN);
+  s_dispcnt |= (uint16_t)((mask & 7u) << 13);
+  writeDispcnt();
+}
+
+void bmWindowLayers(uint8_t inside0, uint8_t inside1, uint8_t outside, uint8_t objWindow)
+{
+  bmHalVideoWriteReg(BM_PPU_WININ, (uint16_t)((inside0 & 0x3F) | ((inside1 & 0x3F) << 8)));
+  bmHalVideoWriteReg(BM_PPU_WINOUT, (uint16_t)((outside & 0x3F) | ((objWindow & 0x3F) << 8)));
+}
+
+void bmBlendSet(BmBlendEffect effect, uint8_t first, uint8_t second, uint8_t eva, uint8_t evb, uint8_t evy)
+{
+  bmHalVideoWriteReg(BM_PPU_BLDCNT, (uint16_t)((first & 0x3F) | (((unsigned)effect & 3) << 6) | ((second & 0x3F) << 8)));
+  bmHalVideoWriteReg(BM_PPU_BLDALPHA, (uint16_t)((eva > 16 ? 16 : eva) | ((evb > 16 ? 16 : evb) << 8)));
+  bmHalVideoWriteReg(BM_PPU_BLDY, (uint16_t)(evy > 16 ? 16 : evy));
+}
+
+BmResult bmVideoSetLineTable(uint8_t slot, uint16_t reg, const uint16_t *pValues)
+{
+  if (slot >= BM_HAL_LINE_TABLES || (pValues != NULL && reg >= BM_PPU_REG_SIZE)) return BM_ERROR_INVALID_ARGUMENT;
+  bmHalLineTableSet(slot, reg, pValues);
   return BM_SUCCESS;
 }
 

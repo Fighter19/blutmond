@@ -83,8 +83,11 @@ uint16_t bmHalInputKeys(void);
 void bmHalSaveRead(uint32_t offset, void *pData, uint32_t size);
 void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size);
 
-/// Number of line tables (registers that can take a new value on every line).
-#define BM_HAL_LINE_TABLES 1
+/// Number of line tables (registers that can take a new value on every line). On the GBA
+/// slots 0 and 1 are H-blank DMA (channels 0 and 3) and cost nothing; slot 2 is an H-blank
+/// interrupt: about 160 short interrupts a frame, and a line can keep the previous value when
+/// another interrupt (the link) is being handled at that moment.
+#define BM_HAL_LINE_TABLES 3
 
 /// Gives register `reg` the value `pValues[y]` on line y, from the next frame on.
 /// `pValues` must hold BM_HAL_SCREEN_HEIGHT entries; the HAL keeps its own copy.
