@@ -1,12 +1,23 @@
 class Bat extends Actor;
 
 // Hangs where it was placed until the player comes near, then chases them. When the player
-// gets away, or after it has bitten them, it flies home and sleeps again.
+// gets away, after it has bitten them or when it is struck, it flies home and sleeps again;
+// struck often enough it is defeated (until the room is entered again).
 
 // Its numbers come from its kind, a record of data/enemies.bmdata; a bat placed in Tiled can
 // be given another kind with the property Kind.
 var(Combat) record<Enemy> Kind = #Bat;
 var int Tired;
+
+event spawn() {
+  health = Kind.health;
+}
+
+// Struck by the player: it flies home, or it is gone once its health is.
+event hit(int amount) {
+  if health <= 0 { gotostate Defeated; }
+  else { gotostate Returning; }
+}
 
 state Sleeping {
   event tick() {
@@ -51,6 +62,12 @@ state Resting {
 begin:
   sleep(90);
   gotostate Sleeping;
+}
+
+state Defeated {
+begin:
+  disarm(#bite);
+  hide();
 }
 
 defaultproperties {

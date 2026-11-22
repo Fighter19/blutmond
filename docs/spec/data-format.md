@@ -92,8 +92,11 @@ A reader MUST refuse a chunk whose sizes do not add up, whose record size is not
   other records, or a record that was removed, never makes a script read something undefined;
 - a value is read by offset and type and widened to 32 bits (signed types sign-extended).
 
-The pack is looked at on every read: after a hot reload of a changed table the next read sees
-the new values.
+A table once found is remembered (four at a time) for that pack: the same place, size and
+checksum. A pack pushed over the link has another checksum, so after a hot reload of a changed
+table the next read sees the new values.
+- `equip(slot, record)` finds the table of a record of any structure by its key, and in it the
+  first field of type `attach`: the script that comes with the record (first-items.md).
 
 ## 5. Records in scripts
 

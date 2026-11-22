@@ -4,6 +4,8 @@
 
 enum Element { None, Fire, Ice, Holy }
 enum EquipSlot { Head, Body, Accessory }
+// The player's stats (first-items.md §1), read with stat(Stat.Attack).
+enum Stat { MaxHealth, MaxMana, Attack, Defence, Luck, AirJumps, Dash, WallSlide, GroundPound }
 
 struct Item {
   text   title;

@@ -16,7 +16,9 @@ built too: the map properties `attach` and `Class.variable`, 4 room slots, `room
 `attached()`, which happens on every entry. Of step 5, hit boxes, health and `hit`/`struck`
 are built ([hitboxes.md](hitboxes.md) step 2): `health` and `team` are variables of every
 object, the player's health is a value of the engine (30) until stats give it; `spawn` and
-messages are open. The rest of steps 4 to 8 is open. Milestone M14 in [../PLAN.md](../PLAN.md).
+messages are open. From section 3 `owner_lock`, `owner_play_anim` and `owner_busy` are built
+(for the player), and equipping a record attaches its script with the record (`equip`, for
+first-items.md step 2). The rest of steps 4 to 8 is open. Milestone M14 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

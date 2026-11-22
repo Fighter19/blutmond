@@ -47,6 +47,8 @@ set(BM_TEST_LEVEL_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/high_jump.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/dummy.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/jab.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/weapon_swing.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/weapon_stand.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/items.ms
@@ -566,6 +568,7 @@ if(BM_PLATFORM STREQUAL "host")
       ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bat.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms ${cooked}/door.ms
       ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/high_jump.ms
       ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/dummy.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/jab.ms
+      ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/weapon_swing.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/weapon_stand.ms
       ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.ms ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.bmdata
       ${PROJECT_SOURCE_DIR}/assets/test_room/data/items.ms ${PROJECT_SOURCE_DIR}/assets/test_room/data/weapons.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/consumables.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/key_items.bmdata
       ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong
@@ -763,7 +766,7 @@ if(BM_PLATFORM STREQUAL "host")
         add_test(NAME gdb_session_script_breakpoint
           COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/gdb_session.py $<TARGET_FILE:bmlink>
             ${BM_GBA_BUILD_DIR}/game_autoplay_native.gba ${BM_GBA_BUILD_DIR}/game_autoplay_native.elf
-            ${BM_GBA_BUILD_DIR}/test_level_native.elf assets/test_room/scripts/bat.ms 13)
+            ${BM_GBA_BUILD_DIR}/test_level_native.elf assets/test_room/scripts/bat.ms 24)
         set_tests_properties(gdb_session_script_breakpoint PROPERTIES TIMEOUT 120)
       endif()
       # GBA to GBA (docs/spec/link-protocol.md section 9), two emulated GBAs joined by a cable.
@@ -772,23 +775,23 @@ if(BM_PLATFORM STREQUAL "host")
       # and a GBA that runs nothing but the bootstrap (it gets the runtime through it first).
       # The other side then reports the sender's room and position; the sender plays on.
       set(send ${BM_GBA_BUILD_DIR}/game_send.elf:bm_game_stats)
-      # The receiving GBA also carries the sender's inventory afterwards (the coin the autopilot
-      # took in the first room): bm_game_stats+92 counts the things carried, +96 is the CRC of
-      # the inventory's keys and amounts.
+      # The receiving GBA also carries the sender's inventory afterwards (the coin and the Short
+      # Sword the autopilot took in the first room): bm_game_stats+92 counts the kinds of things
+      # carried, +96 is the CRC of the inventory's keys and amounts.
       add_test(NAME gba_to_gba_state
         COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/game.gba --frames 1500 --until a ${send}+24=1000
           --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=0 --check a ${send}+8=0 --check a ${send}+12=1
           --check a ${send}+64 --check a ${send}+68
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+28=1
-          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+92=1
-          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+96=140279927)
+          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+92=2
+          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+96=2982369528)
       add_test(NAME gba_to_gba_boot
         COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/bootstrap_mb.gba --frames 1500 --until a ${send}+24=1000
           --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=2 --check a ${send}+8=0 --check a ${send}+12=1
           --check a ${send}+64 --check a ${send}+80 --check a ${send}+68
           --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+28=1
-          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+92=1
-          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+96=140279927)
+          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+92=2
+          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+96=2982369528)
 
       # The PC game plays along with the GBA (docs/spec/link-protocol.md section 10): the GBA's
       # keys for each frame, mirrored by bmlink; the states are compared every 64 frames.

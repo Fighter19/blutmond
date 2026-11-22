@@ -51,6 +51,15 @@ struct BmGame;
 /// `lifetime` frames (0: until detached). False if there is no such class or slot.
 bool bmAttachmentsAttach(struct BmGame *pGame, uint8_t slot, uint16_t className, uint16_t lifetime);
 
+/// Equips the record `key` in equipment slot `slot` (0 to 7; key 0 empties it): the class
+/// its `attach` field names goes into the attachment slot of the same number, with its first
+/// record<S> variable set to the record. False if the player has none of it or the slot is not
+/// one; nothing changes then.
+bool bmAttachmentsEquip(struct BmGame *pGame, uint8_t slot, uint32_t key);
+
+/// Attaches again what is equipped (after a save game was read: attachments are not in it).
+void bmAttachmentsEquipAll(struct BmGame *pGame);
+
 /// Detaches what is in `slot` (it gets `detached()` first).
 void bmAttachmentsDetach(struct BmGame *pGame, uint8_t slot);
 

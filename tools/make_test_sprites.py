@@ -5,7 +5,8 @@
 usage: make_test_sprites.py <assets/test_room>
 
 The player is 16x32 with the anchor at the feet; the animations are the ones the engine's
-player looks for (idle, run, jump, fall, climb). Everything here is drawn by this script, so
+player looks for (idle, run, jump, fall, climb) and the weapons' swing (slash, 32 wide). The
+bat's mouth, below the middle of its body, is its hit box `bite`. Everything here is drawn by this script, so
 the test assets stay free of third-party art.
 """
 import os
@@ -25,6 +26,8 @@ PALETTE = {
     '8': (107, 66, 140, 255),   # bat body
     '9': (66, 41, 99, 255),     # bat wings
     'a': (255, 231, 99, 255),   # bat eyes
+    'b': (214, 222, 239, 255),  # blade
+    'c': (156, 107, 41, 255),   # hilt
 }
 
 HEAD = [
@@ -89,6 +92,22 @@ PLAYER_FRAMES = [
     player_frame(TORSO_ARMS_UP_R, legs(0, 0, lift_l=3)),             # 9 climb
 ]
 
+def slash_frame(torso, blade):
+    """32x32: the player on the left 16 columns, a sword drawn by `blade` (x, y, colour)."""
+    rows = [list(r + "." * 16) for r in player_frame(torso, legs(-2, 2))]
+    for x, y, c in blade:
+        rows[y][x] = c
+    return ["".join(r) for r in rows]
+
+
+# Raised behind the head, straight ahead at shoulder height, down in front.
+SLASH_FRAMES = [
+    slash_frame(TORSO_ARMS_UP_L, [(3, 7, 'c')] + [(3, y, 'b') for y in range(1, 7)] + [(2, 7, 'c'), (4, 7, 'c')]),
+    slash_frame(TORSO, [(13, 13, '3'), (14, 13, 'c'), (14, 12, 'c'), (14, 14, 'c')] + [(x, 13, 'b') for x in range(15, 29)] + [(29, 13, 'b')]
+                + [(x, 12, 'b') for x in range(16, 28)]),
+    slash_frame(TORSO, [(13, 15, 'c')] + [(13 + i, 16 + i, 'b') for i in range(1, 9)]),
+]
+
 BAT_FRAMES = [
     [
         "................", "................", "9..............9", "99............99",
@@ -115,12 +134,18 @@ def sheet(frames, columns, w, h):
     return img
 
 
-def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations):
+def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=()):
+    """`boxes`: sprite-wide boxes (kind, name, x, y, w, h); `extra`: frames of other sizes
+    after the regular ones, as (x, y, w, h, ax, ay)."""
     out = ['<?xml version="1.0" encoding="UTF-8"?>', '<sprite version="1" image="%s">' % image]
     out.append(' <hitbox x="%d" y="%d" w="%d" h="%d"/>' % hitbox)
+    for kind, name, bx, by, bw, bh in boxes:
+        out.append(' <box kind="%s" name="%s" x="%d" y="%d" w="%d" h="%d"/>' % (kind, name, bx, by, bw, bh))
     for i in range(frames):
         out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>'
                    % ((i % columns) * w, (i // columns) * h, w, h, anchor[0], anchor[1]))
+    for f in extra:
+        out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>' % f)
     for name, loop, steps in animations:
         out.append(' <animation name="%s" loop="%d">' % (name, 1 if loop else 0))
         for frame, duration in steps:
@@ -133,18 +158,26 @@ def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations):
 
 def main():
     out = sys.argv[1]
-    sheet(PLAYER_FRAMES, 8, 16, 32).save(os.path.join(out, "player.png"))
+    img = sheet(PLAYER_FRAMES, 8, 16, 32)
+    # The swing's frames are 32 wide, after the climb frames in the second row.
+    for i, frame in enumerate(SLASH_FRAMES):
+        for y in range(32):
+            for x in range(32):
+                img.putpixel((32 + i * 32 + x, 32 + y), PALETTE[frame[y][x]])
+    img.save(os.path.join(out, "player.png"))
+    extra = [(32 + i * 32, 32, 32, 32, 8, 32) for i in range(len(SLASH_FRAMES))]
     sprite_file(os.path.join(out, "player.bmsprite"), "player.png", len(PLAYER_FRAMES), 8, 16, 32, (8, 32), (-5, -30, 10, 30), [
         ("idle", True, [(0, 40), (1, 40)]),
         ("run", True, [(2, 6), (3, 6), (4, 6), (5, 6)]),
         ("jump", False, [(6, 1)]),
         ("fall", False, [(7, 1)]),
         ("climb", True, [(8, 10), (9, 10)]),
-    ])
+        ("slash", False, [(10, 4), (11, 4), (12, 8)]),
+    ], extra=extra)
     sheet(BAT_FRAMES, 2, 16, 16).save(os.path.join(out, "bat.png"))
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [
         ("idle", True, [(0, 8), (1, 8)]),
-    ])
+    ], boxes=[("hit", "bite", -3, -4, 6, 4)])
 
 
 if __name__ == "__main__":

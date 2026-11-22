@@ -17,10 +17,26 @@ uint16_t bmAutopilotKeys(BmAutopilot *a, const BmGame *g)
   int32_t hw = g->playerParams.halfWidth;
   const char *room = bmGameRoomId(g);
 
-  // In the second room: walk in a little, then stand still.
+  // In the second room: wait below the bat, and fight it when it comes near: turn to it and
+  // swing every 8 frames (only does something with a weapon equipped).
   if (room && strcmp(room, "test_room_2") == 0)
   {
-    return ++a->idle < 40 ? BM_KEY_RIGHT : 0;
+    a->idle++;
+    const BmActors *t = &g->actors;
+    for (uint8_t i = 0; t->hasModule && i < t->count; i++)
+    {
+      if (strcmp(g->objects[t->object[i]].className, "Bat") != 0 || t->hidden[i] || t->health[i] <= 0) continue;
+      int32_t dx = BM_FIX_INT(t->x[i]) - x, dy = BM_FIX_INT(t->y[i]) - feet;
+      if (dx >= -40 && dx <= 40 && dy >= -48 && dy <= 8 && BM_FIX_INT(t->y[i]) > BM_FIX_INT(t->homeY[i]) + 4)
+      {
+        if ((dx < 0) != (b->facing < 0) && dx != 0) return dx < 0 ? BM_KEY_LEFT : BM_KEY_RIGHT;
+        return (a->idle & 7) == 0 ? BM_KEY_B : 0;
+      }
+      // Its place to wait: a little left of where it hangs.
+      int32_t wait = BM_FIX_INT(t->homeX[i]) - 36;
+      return x < wait - 4 ? BM_KEY_RIGHT : x > wait + 4 ? BM_KEY_LEFT : 0;
+    }
+    return 0;
   }
 
   // Ladders: climb while on one and not yet on top.

@@ -62,7 +62,11 @@ typedef enum BmScriptType {
   X(room_detach,        VOID, 1, INT,  VOID, VOID, 0) \
   X(arm,                VOID, 3, NAME, INT,  ENUM, 0) \
   X(disarm,             VOID, 1, NAME, VOID, VOID, 0) \
-  X(hit_box,            VOID, 3, INT,  INT,  INT,  0)
+  X(hit_box,            VOID, 3, INT,  INT,  INT,  0) \
+  X(equip,              BOOL, 2, INT,  RECORD, VOID, 0) \
+  X(owner_lock,         VOID, 1, INT,  VOID, VOID, 0) \
+  X(owner_play_anim,    VOID, 1, NAME, VOID, VOID, 0) \
+  X(owner_busy,         BOOL, 0, VOID, VOID, VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -85,6 +89,14 @@ typedef enum BmScriptType {
 // ending, or the figure being struck; hit_box is a hit without a drawing: a rectangle from the
 // figure's anchor `reach` pixels ahead, as high as its body, for `frames` frames. From an
 // attachment the figure is the player.
+//
+// equip(slot, record): puts a record the player owns into equipment slot 0 to 7 (0: empties
+// it); the script its first `attach` field names is attached in the player's attachment slot of
+// the same number, its first record<S> variable set to the record. False if the player has none.
+// owner_lock(frames), owner_play_anim(#anim), owner_busy(): an attachment's actions on the
+// player (attachable-scripts.md §3): no walking or jumping for that many frames; an animation
+// of the player's sprite that the engine does not replace until the lock is over (or, without a
+// lock, until it ends); whether a lock is on. Nothing from an object.
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {

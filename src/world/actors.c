@@ -326,6 +326,23 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     else bmHitsArm(g, source, slot, 0xFFFF, args[2], 0, args[0], args[1]);
     break;
   }
+  case BM_SCRIPT_API_equip:
+  {
+    uint8_t current = a->current, slot = a->currentSlot;
+    *result = args[0] >= 0 && args[0] < BM_INVENTORY_EQUIP && bmAttachmentsEquip(g, (uint8_t)args[0], (uint32_t)args[1]);
+    a->current = current;
+    a->currentSlot = slot;
+    break;
+  }
+  case BM_SCRIPT_API_owner_lock:
+  case BM_SCRIPT_API_owner_play_anim:
+  case BM_SCRIPT_API_owner_busy:
+    // Only the player's attachments act on their owner.
+    if (i != BM_ACTORS_OWNER) break;
+    if (api == BM_SCRIPT_API_owner_busy) *result = g->lockTimer != 0;
+    else if (api == BM_SCRIPT_API_owner_lock) g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
+    else bmGamePlayPlayerAnim(g, (uint16_t)args[0]);
+    break;
   case BM_SCRIPT_API_impulse:
     g->player.vx += args[0];
     g->player.vy += args[1];
@@ -1039,7 +1056,7 @@ static void applyRoomValues(BmGame *g, uint8_t slot, uint8_t c, BmVmInstance *in
   }
 }
 
-static bool attachKey(BmGame *g, uint8_t slot, uint32_t key, uint16_t lifetime)
+static bool attachKey(BmGame *g, uint8_t slot, uint32_t key, uint16_t lifetime, uint32_t record)
 {
   BmActors *a = &g->actors;
   BmAttachments *t = &g->attachments;
@@ -1050,6 +1067,19 @@ static bool attachKey(BmGame *g, uint8_t slot, uint32_t key, uint16_t lifetime)
   BmVmInstance inst;
   bmVmInstanceInit(&a->modules[a->classModule[(uint8_t)c]], &inst, a->classInModule[(uint8_t)c]);
   if (slot >= BM_ATTACH_ROOM_FIRST) applyRoomValues(g, slot, (uint8_t)c, &inst);
+  if (record != 0)
+  {
+    // Equipped: its first record<S> variable is the record it came with.
+    const BmVmModule *m = &a->modules[a->classModule[(uint8_t)c]];
+    for (uint8_t f = 0; f < bmVmClassFieldCount(m, a->classInModule[(uint8_t)c]); f++)
+    {
+      uint8_t type;
+      bmVmClassField(m, a->classInModule[(uint8_t)c], f, NULL, &type, NULL, NULL);
+      if (type != BM_SCRIPT_RECORD) continue;
+      inst.fields[f] = (int32_t)record;
+      break;
+    }
+  }
   t->classKey[slot] = key;
   t->cls[slot] = c;
   t->occupied |= (uint16_t)(1u << slot);
@@ -1061,7 +1091,26 @@ static bool attachKey(BmGame *g, uint8_t slot, uint32_t key, uint16_t lifetime)
 
 bool bmAttachmentsAttach(BmGame *g, uint8_t slot, uint16_t className, uint16_t lifetime)
 {
-  return attachKey(g, slot, hashName(bmPackString(g->pPack, className)), lifetime);
+  return attachKey(g, slot, hashName(bmPackString(g->pPack, className)), lifetime, 0);
+}
+
+bool bmAttachmentsEquip(BmGame *g, uint8_t slot, uint32_t key)
+{
+  if (slot >= BM_INVENTORY_EQUIP || slot >= BM_ATTACH_PLAYER_SLOTS) return false;
+  if (key != 0 && bmInventoryCount(&g->inventory, key) == 0) return false;
+  g->inventory.equipped[slot] = key;
+  BmDataTable table;
+  const uint8_t *record;
+  uint16_t behaviour = key != 0 && bmDataFindRecord(g->pPack, key, &table, &record) ? bmDataRecordBehaviour(&table, record) : BM_DATA_NONE_ID;
+  const char *cls = behaviour != BM_DATA_NONE_ID ? bmPackString(g->pPack, behaviour) : NULL;
+  if (cls == NULL || !attachKey(g, slot, hashName(cls), 0, key)) bmAttachmentsDetach(g, slot);
+  return true;
+}
+
+void bmAttachmentsEquipAll(BmGame *g)
+{
+  for (uint8_t s = 0; s < BM_INVENTORY_EQUIP && s < BM_ATTACH_PLAYER_SLOTS; s++)
+    if (g->inventory.equipped[s] != 0) bmAttachmentsEquip(g, s, g->inventory.equipped[s]);
 }
 
 void bmAttachmentsDetach(BmGame *g, uint8_t slot)
@@ -1146,7 +1195,7 @@ void bmAttachmentsEnterRoom(BmGame *g)
     {
       uint32_t h = 2166136261u;
       for (const char *q = p; q < last; q++) h = (h ^ (uint8_t)*q) * 16777619u;
-      if (attachKey(g, slot, h, 0)) slot++;
+      if (attachKey(g, slot, h, 0, 0)) slot++;
       else bm_script_errors++;   // not an Attachment class of this pack
     }
     p = end;

@@ -55,6 +55,13 @@ bool bmDataTableOpen(BmDataTable *pTable, const uint8_t *pData, uint32_t size);
 /// The table of the structure with this name (string id) in the pack.
 bool bmDataFindTable(const BmPack *pPack, uint16_t structure, BmDataTable *pTable);
 
+/// The table that holds the record with this key, and the record (any structure).
+bool bmDataFindRecord(const BmPack *pPack, uint32_t key, BmDataTable *pTable, const uint8_t **ppRecord);
+
+/// The value of a record's first field of type `attach` (a class's name as a string id), or
+/// BM_DATA_NONE_ID: the script that comes with it when it is equipped.
+uint16_t bmDataRecordBehaviour(const BmDataTable *pTable, const uint8_t *pRecord);
+
 BmDataField bmDataTableField(const BmDataTable *pTable, uint16_t index);
 uint32_t bmDataRecordKey(const BmDataTable *pTable, uint16_t index);
 uint16_t bmDataRecordName(const BmDataTable *pTable, uint16_t index);

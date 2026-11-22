@@ -63,6 +63,8 @@ typedef struct BmGame
   uint32_t frame;
   uint16_t keysPrevious;
   uint16_t hurtTimer;
+  uint16_t lockTimer;              // frames the player cannot walk or jump (owner_lock)
+  uint8_t animHeld;                // 1: a script's animation plays (owner_play_anim); 2: until the lock ends
   int16_t health;                  // the player's; at 0 they start again at the last safe place
   uint16_t doorCooldown;
   uint32_t deaths, roomChanges, hurts, saves;
@@ -102,6 +104,10 @@ void bmGameHurtPlayer(BmGame *pGame, int32_t damage);
 /// hit(amount) to their attachments. At 0 health they start again with all of it. False if
 /// they could not be struck.
 bool bmGameStrikePlayer(BmGame *pGame, int32_t amount, int32_t fromX);
+
+/// Plays the player's animation named `name` (string id) for a script: the engine does not
+/// choose another until the lock is over (or, without a lock, until it has finished).
+void bmGamePlayPlayerAnim(BmGame *pGame, uint16_t name);
 
 /// Number of objects in the current room and access to one of them.
 uint16_t bmGameObjectCount(const BmGame *pGame);

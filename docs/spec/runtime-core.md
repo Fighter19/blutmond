@@ -44,7 +44,9 @@ L 512.
 1. `frame += 1`. `pressed = keys & ~keysPrevious`; `keysPrevious = keys`.
 2. Player input: `dx = Right - Left`, `dy = Down - Up` (each 0 or 1), jump pressed = A in
    `pressed`, jump held = A in `keys`.
-3. **Body step** (section 5). It returns events.
+3. The player's attachments (`press`/`release`, `tick`, state code). If `lockTimer != 0`:
+   `dx = 0`, jump not pressed, `lockTimer -= 1`. **Body step** (section 5). It returns
+   events.
 4. Decrement `hurtTimer`, `doorCooldown`, `saveCooldown` if not 0.
 5. If the body jumped: play the effect `jump`.
 6. If it touched a death material: **respawn** (section 6). Else if a damage material:
@@ -63,7 +65,9 @@ L 512.
 8. **Scripted objects** (section 8). Then, if one of them called `enter_door` and
    `doorCooldown == 0`, go through that door.
 9. If `INT(player.y) > room height + 64`: respawn.
-10. Player animation (section 9).
+10. Player animation (section 9). If `animHeld` is 2 and `lockTimer == 0`, or 1 and the
+    animation finished, `animHeld = 0`. While `animHeld != 0` the animation only ticks;
+    otherwise the engine chooses it from the body.
 11. **Hits** (section 10).
 12. Camera (section 7), sprites (section 9), sound ([sound-format.md](sound-format.md)).
 
@@ -225,8 +229,8 @@ start:
   than those named here are ignored.
 - At most 64 objects of a room are read; further ones do not exist for the runtime.
 - **Save game**: the `save` fields of the state ([state.md](state.md)) at offset 0 of the
-  save memory. Loading one sets `vx = vy = 0` and enters the stored room with the scripted
-  objects fresh.
+  save memory. Loading one sets `vx = vy = 0`, enters the stored room with the scripted
+  objects fresh, and equips again (`equip`) what each equipment slot holds.
 
 ## 7. Camera and the room on screen
 
@@ -336,6 +340,10 @@ value is dropped and counts as a script error.
 | 36 | `arm(box, damage, element)` | starts a hit of this figure with its hit boxes named `box` (section 10); arming the same name again replaces it with a new hit |
 | 37 | `disarm(box)` | ends this figure's hits with that box name |
 | 38 | `hit_box(reach, frames, damage)` | starts a hit of this figure with a rectangle `reach` (0..255) pixels ahead for `frames` (1..65535) frames |
+| 39 | `equip(slot, record)` | slot 0 to 7, record 0 empties it: false if the player has none of the record (nothing changes). Else `equipped[slot] = record`; the class its first field of type `attach` names (its table found by the key among all `DTAB` chunks) is attached in the player's slot of the same number, its first variable of type record set to the record before `attached()`; without such a class the slot is emptied |
+| 40 | `owner_lock(frames)` | from a player's attachment: `lockTimer = frames` (0..65535) |
+| 41 | `owner_play_anim(name)` | from a player's attachment: the player's sheet's animation of that name from its start; `animHeld = 2` if `lockTimer != 0`, else 1. Unknown: nothing |
+| 42 | `owner_busy()` | from a player's attachment: `lockTimer != 0` |
 
 `arm`, `disarm` and `hit_box` from one of the player's attachments act for the player and
 remember the slot; from a room's attachment they do nothing.

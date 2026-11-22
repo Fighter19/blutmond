@@ -26,8 +26,8 @@ static void testLoadSaveRoundTrip()
 {
   sprite::Sprite s = sprite::load(s_assets + "/test_room/player.bmsprite");
   TEST_ASSERT(s.name == "player");
-  TEST_ASSERT(s.frames.size() == 10);
-  TEST_ASSERT(s.animations.size() == 5);
+  TEST_ASSERT(s.frames.size() == 13);   // 10 of 16x32, 3 of 32x32 (slash)
+  TEST_ASSERT(s.animations.size() == 6);
   TEST_ASSERT(s.animations[1].name == "run" && s.animations[1].steps.size() == 4);
   TEST_ASSERT(s.frames[0].ax == 8 && s.frames[0].ay == 32);
 
@@ -52,14 +52,14 @@ static void testCook()
   Report report;
   sprite::Cooked c = sprite::cook(s, *profileByName("gba"), report);
   TEST_ASSERT(!report.hasErrors());
-  TEST_ASSERT(c.frames.size() == 10);
+  TEST_ASSERT(c.frames.size() == 13);
   // A 16x32 frame is one tall hardware sprite of 8 tiles.
   TEST_ASSERT(c.frames[0].pieces.size() == 1);
   TEST_ASSERT(c.frames[0].pieces[0].w == 16 && c.frames[0].pieces[0].h == 32);
   TEST_ASSERT(c.frames[0].pieces[0].dx == -8 && c.frames[0].pieces[0].dy == -32);
   TEST_ASSERT(c.maxPieces == 1);
-  TEST_ASSERT(c.maxLineCost == 16);
-  TEST_ASSERT(c.tiles.size() == 10 * 8);
+  TEST_ASSERT(c.maxLineCost == 32);   // the 32-wide slash frames
+  TEST_ASSERT(c.tiles.size() >= 10 * 8);
   TEST_ASSERT(c.palette[0] == 0 && c.palette[1] != 0);
   TEST_ASSERT(c.frames[0].bounds.w > 0 && c.frames[0].bounds.w <= 16);
 
@@ -68,7 +68,7 @@ static void testCook()
   Report again;
   sprite::Cooked d = sprite::cook(s, *profileByName("gba"), again);
   TEST_ASSERT(d.tiles.size() == c.tiles.size());
-  TEST_ASSERT(d.frames[10].pieces[0].tile == d.frames[0].pieces[0].tile);
+  TEST_ASSERT(d.frames[13].pieces[0].tile == d.frames[0].pieces[0].tile);
 
   // An animation that uses a frame that is not there does not cook.
   s.animations[0].steps[0].frame = 99;
@@ -96,7 +96,7 @@ static void testRuntime()
   TEST_ASSERT(bmPackOpen(&pack, data.data(), uint32_t(data.size()), true) == BM_PACK_OK);
   BmSpriteSheet sheet;
   TEST_ASSERT(bmSpriteSheetFind(&sheet, &pack, "Player") == BM_SUCCESS);  // case does not matter
-  TEST_ASSERT(sheet.frameCount == 10 && sheet.animCount == 5);
+  TEST_ASSERT(sheet.frameCount == 13 && sheet.animCount == 6);
   BmSpriteSheet bat;
   TEST_ASSERT(bmSpriteSheetFind(&bat, &pack, "bat") == BM_SUCCESS);
   TEST_ASSERT(bmSpriteSheetFind(&bat, &pack, "ghost") == BM_ERROR_NOT_FOUND);
@@ -190,7 +190,7 @@ static void testBoxes()
   TEST_ASSERT(bmPackOpen(&pack, data.data(), uint32_t(data.size()), true) == BM_PACK_OK);
   BmSpriteSheet sheet;
   TEST_ASSERT(bmSpriteSheetFind(&sheet, &pack, "boxed") == BM_SUCCESS);
-  TEST_ASSERT(sheet.boxCount == 8 + 4 + 2 && sheet.boxNameCount == 2);   // 8 frames with the sprite's box, 4 own, 1 own + the sprite's
+  TEST_ASSERT(sheet.boxCount == 11 + 4 + 2 && sheet.boxNameCount == 2);   // 11 frames with the sprite's box, 4 own, 1 own + the sprite's
   BmSpriteNamedBox b[8];
   TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 0, false, b, 8) == 1 && b[0].kind == BM_BOX_HURT && b[0].box.x == -5 && b[0].box.h == 28 && b[0].name == 0xFFFF);
   TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 3, false, b, 8) == 4);

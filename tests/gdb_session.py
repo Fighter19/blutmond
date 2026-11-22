@@ -87,8 +87,9 @@ def main():
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     stats = image_elf + ":bm_game_stats"
-    # Play into the second room (where the bat is), debug, then play on to the end.
-    link = subprocess.Popen([bmlink, "--mgba", image, "run", "760", "hello", "gdb", str(port), "run", "700",
+    # Play into the second room (where the bat is, still asleep: the autopilot walks up to it and
+    # wakes it some 90 frames after coming in), debug, then play on to the end.
+    link = subprocess.Popen([bmlink, "--mgba", image, "run", "640", "hello", "gdb", str(port), "run", "820",
                              "check", stats + "+8=0", "check", stats + "+12=1", "check", stats + "+56=0", "check", stats + "+24"])
     try:
         gdb = Gdb(port)

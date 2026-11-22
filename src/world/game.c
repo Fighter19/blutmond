@@ -247,9 +247,25 @@ static void loadSprites(BmGame *g)
 
 
 // Picks the player's animation from what the body does and advances it by one frame.
+void bmGamePlayPlayerAnim(BmGame *g, uint16_t name)
+{
+  if (g->playerSheet < 0) return;
+  int32_t anim = bmSpriteSheetAnim(&g->sheets[g->playerSheet], g->pPack, bmPackString(g->pPack, name));
+  if (anim < 0) return;
+  bmAnimPlay(&g->playerAnim, (uint8_t)anim, true);
+  g->animHeld = g->lockTimer != 0 ? 2 : 1;
+}
+
 static void animatePlayer(BmGame *g)
 {
   if (g->playerSheet < 0) return;
+  // A script's animation holds until its lock is over, or until it has finished.
+  if (g->animHeld != 0 && (g->animHeld == 2 ? g->lockTimer == 0 : g->playerAnim.finished != 0)) g->animHeld = 0;
+  if (g->animHeld != 0)
+  {
+    bmAnimTick(&g->sheets[g->playerSheet], &g->playerAnim);
+    return;
+  }
   const BmBody *p = &g->player;
   int which = BM_PLAYER_ANIM_IDLE;
   bool advance = true;
@@ -502,6 +518,13 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   };
   // Attachments first: what they decide this frame moves the player this frame.
   bmAttachmentsFrame(g, keys, previous);
+  // A lock (a swing) takes walking and jumping away; set this frame, it already counts.
+  if (g->lockTimer != 0)
+  {
+    in.dx = 0;
+    in.jumpPressed = false;
+    g->lockTimer--;
+  }
   uint32_t events = bmBodyStep(&g->player, &g->playerParams, &g->collision, &g->physics, in);
   bmAttachmentsBodyEvents(g, events);
   if (g->hurtTimer) g->hurtTimer--;
@@ -603,6 +626,8 @@ static const BmStateField s_gameFields[] = {
   F(frame, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   F(keysPrevious, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(hurtTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(lockTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(animHeld, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(health, BM_TYPE_S16, BM_STATE_SAVE | BM_STATE_LINK),
   F(doorCooldown, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(saveCooldown, BM_TYPE_U16, BM_STATE_TRANSIENT),
@@ -716,5 +741,8 @@ bool bmGameReadSaveGame(BmGame *g)
   // Only the `save` fields are read; everything else stays as bmGameStart left it.
   if (bmStateRead(&block, 1, buffer, sizeof(buffer)) != BM_STATE_OK) return false;
   g->player.vx = g->player.vy = 0;
-  return afterLoad(g, true) == BM_SUCCESS;
+  if (afterLoad(g, true) != BM_SUCCESS) return false;
+  // Attachments are not in a save game: what is equipped brings its own again.
+  bmAttachmentsEquipAll(g);
+  return true;
 }

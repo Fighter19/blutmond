@@ -91,6 +91,8 @@ In serialisation order. Count is the array length.
 | `frame` | u32 |  | snapshot |
 | `keysPrevious` | u16 |  | snapshot |
 | `hurtTimer` | u16 |  | snapshot |
+| `lockTimer` | u16 |  | snapshot |
+| `animHeld` | u8 |  | snapshot |
 | `health` | s16 |  | save link |
 | `doorCooldown` | u16 |  | snapshot |
 | `saveCooldown` | u16 |  | transient |
@@ -146,7 +148,7 @@ In serialisation order. Count is the array length.
 | `hits.struck` | u16 | 8 | snapshot |
 
 Sizes with this table: a save game is 569 bytes of payload, a link transfer 426, a snapshot
-1752 (1756 with the autopilot); each plus the 16-byte header. Attachment slots 0 to 7 are the
+1755 (1759 with the autopilot); each plus the 16-byte header. Attachment slots 0 to 7 are the
 player's, 8 to 11 the room's. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).
 

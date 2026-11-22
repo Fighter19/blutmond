@@ -53,15 +53,68 @@ bool bmDataTableOpen(BmDataTable *pTable, const uint8_t *pData, uint32_t size)
   return true;
 }
 
+// Tables found lately: looking one up walks the pack's chunks and checks the table, too slow to
+// do for every record a script reads (several each frame). An entry holds for one pack: the
+// same place, size and checksum; a pack pushed over the link has another checksum.
+#define CACHE_SIZE 4
+static struct
+{
+  const uint8_t *pPackData;
+  uint32_t packSize, packCrc;
+  uint16_t structure;
+  BmDataTable table;
+} s_cache[CACHE_SIZE];
+static uint8_t s_cacheNext;
+
 bool bmDataFindTable(const BmPack *pPack, uint16_t structure, BmDataTable *pTable)
 {
+  for (uint8_t i = 0; i < CACHE_SIZE; i++)
+  {
+    if (s_cache[i].pPackData == pPack->pData && s_cache[i].pPackData != NULL && s_cache[i].packSize == pPack->size &&
+        s_cache[i].packCrc == pPack->header.crc32 && s_cache[i].structure == structure)
+    {
+      *pTable = s_cache[i].table;
+      return true;
+    }
+  }
   for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, 0); c >= 0; c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, (uint32_t)c + 1))
   {
     uint32_t size = 0;
     const uint8_t *p = bmPackChunkData(pPack, (uint32_t)c, &size);
-    if (p != NULL && size >= 2 && rd16(p) == structure) return bmDataTableOpen(pTable, p, size);
+    if (p == NULL || size < 2 || rd16(p) != structure) continue;
+    if (!bmDataTableOpen(pTable, p, size)) return false;
+    s_cache[s_cacheNext].pPackData = pPack->pData;
+    s_cache[s_cacheNext].packSize = pPack->size;
+    s_cache[s_cacheNext].packCrc = pPack->header.crc32;
+    s_cache[s_cacheNext].structure = structure;
+    s_cache[s_cacheNext].table = *pTable;
+    s_cacheNext = (uint8_t)((s_cacheNext + 1) % CACHE_SIZE);
+    return true;
   }
   return false;
+}
+
+bool bmDataFindRecord(const BmPack *pPack, uint32_t key, BmDataTable *pTable, const uint8_t **ppRecord)
+{
+  for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, 0); key != 0 && c >= 0; c = bmPackFindChunk(pPack, BM_CHUNK_DTAB, (uint32_t)c + 1))
+  {
+    uint32_t size = 0;
+    const uint8_t *p = bmPackChunkData(pPack, (uint32_t)c, &size);
+    if (p == NULL || !bmDataTableOpen(pTable, p, size)) continue;
+    *ppRecord = bmDataRecord(pTable, key);
+    if (*ppRecord != NULL) return true;
+  }
+  return false;
+}
+
+uint16_t bmDataRecordBehaviour(const BmDataTable *pTable, const uint8_t *pRecord)
+{
+  for (uint16_t f = 0; f < pTable->fieldCount; f++)
+  {
+    BmDataField field = bmDataTableField(pTable, f);
+    if (field.type == BM_DATA_ATTACH) return (uint16_t)bmDataRead(pTable, pRecord, field.offset, BM_DATA_ATTACH);
+  }
+  return BM_DATA_NONE_ID;
 }
 
 BmDataField bmDataTableField(const BmDataTable *pTable, uint16_t index)

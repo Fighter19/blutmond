@@ -350,6 +350,7 @@ def write_tmx(path):
         ("Door", "exit_east", W * T - 16, 48, 16, 32, False, [("target_room", "test_room_2"), ("target_door", "exit_west"), ("direction", "east")]),
         ("SavePoint", "save", 400, 160, 0, 0, True, []),
         ("Pickup", "heart", 250, 112, 0, 0, True, [("item", "heart_max_up"), ("persistent", "true")]),
+        ("WeaponStand", "sword", 80, 160, 0, 0, True, []),
     ]
     oid = 1
     for otype, name, x, y, w, h, point, props in objects:
@@ -425,7 +426,9 @@ def write_room2(path):
     objects = [
         ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "test_room"), ("target_door", "exit_east"), ("direction", "west")]),
         ("CameraZone", "room", 0, 0, w * T, h * T, False, []),
-        ("Bat", "bat", 200, 80, 0, 0, True, []),
+        ("Bat", "bat", 200, 104, 0, 0, True, []),
+        ("Dummy", "dummy", 96, 160, 0, 0, True, []),
+        ("WeaponStand", "dagger", 400, 160, 0, 0, True, [("Gives", "Dagger")]),
     ]
     oid = 1
     for otype, name, x, y, ow, oh, point, props in objects:

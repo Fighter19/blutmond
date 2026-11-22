@@ -2,10 +2,17 @@
 
 Status: step 1 built: the structures of section 2 and every record of sections 3 to 7 are in
 the test project (`assets/test_room/data`: `items.ms` and one `.bmdata` file per table), cooked
-into the pack. Not yet as the plan has it: the roles (`role item, equip(...)`, they come
+into the pack. Step 2 built: `WeaponSwing` (`assets/test_room/scripts/weapon_swing.ms`) for the
+Short Sword and the Dagger, each on a `WeaponStand` (the sword near the start, the dagger in
+the second room) that gives and equips it; a `slash` animation for the player (32 wide); the
+training dummy (no drawing and no number yet); the bat with 4 health from its record, struck
+back home and defeated after two strikes of the sword. The autopilot fights the bat, so the
+recorded play-through of the tests (host and mGBA, the same picture and state) now contains the
+fight. Equipping is `equip(slot, record)` from a script, not yet through roles and a menu; the
+weapon slot is 0. Not yet as the plan has it: the roles (`role item, equip(...)`, they come
 with structures.md step 4), the Data tab (structures.md step 5), icons and sounds; the
-scripts the `behaviour` fields name do not exist yet. Armour names its slot with an enum
-`EquipSlot` instead of a byte. Steps 2 to 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
+scripts the other `behaviour` fields name do not exist yet. Armour names its slot with an enum
+`EquipSlot` instead of a byte. Steps 3 to 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

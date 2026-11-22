@@ -433,6 +433,94 @@ static void testAHitStrikesOnce(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+static uint32_t keyOf(const char *name)
+{
+  uint32_t h = 2166136261u;
+  for (; *name; name++) h = (h ^ (uint8_t)*name) * 16777619u;
+  return h;
+}
+
+// first-items.md step 2: the Short Sword from its stand near the start, equipped with its
+// script; it strikes the dummy for its attack after its startup, holds the player still while
+// it swings and defeats the bat with two strikes; the Dagger replaces it; a save game brings
+// the equipped weapon's script back.
+static void testTheSwordDefeatsTheBat(void)
+{
+  start();
+  const BmAttachments *t = &s_game.attachments;
+  const uint32_t sword = keyOf("ShortSword"), dagger = keyOf("Dagger");
+  int stand = actorOfClass("WeaponStand");
+  TEST_ASSERT(stand >= 0);
+  bmBodyPlace(&s_game.player, 80, 160);
+  frames(5, 0);
+  TEST_ASSERT(s_game.actors.hidden[stand] && bmInventoryCount(&s_game.inventory, sword) == 1);
+  TEST_ASSERT(s_game.inventory.equipped[0] == sword && t->classKey[0] == keyOf("WeaponSwing") && t->cls[0] >= 0);
+  const int32_t *swing = &t->fields[0];   // Item, Swings, Strikes
+  TEST_ASSERT((uint32_t)swing[0] == sword);
+
+  // Through the door into the second room.
+  bmBodyPlace(&s_game.player, 990, 80);
+  frames(30, BM_KEY_RIGHT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
+  int dummy = actorOfClass("Dummy"), bat = actorOfClass("Bat");
+  TEST_ASSERT(dummy >= 0 && bat >= 0 && s_game.actors.health[bat] == 4);
+  const int32_t *dummyFields = &s_game.actors.fields[dummy * BM_SCRIPT_MAX_FIELDS];   // Hits, LastDamage
+
+  // A swing at the dummy: nothing during the startup, then the Short Sword's 3; the player
+  // stands still while it lasts, then walks again.
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[dummy]) - 14, 160);
+  s_game.player.facing = 1;
+  frames(30, 0);
+  int32_t x0 = s_game.player.x;
+  frames(1, BM_KEY_B | BM_KEY_RIGHT);
+  TEST_ASSERT(swing[1] == 1 && s_game.lockTimer != 0 && dummyFields[0] == 0);
+  frames(3, BM_KEY_RIGHT);
+  TEST_ASSERT(dummyFields[0] == 0);
+  frames(1, BM_KEY_RIGHT);
+  TEST_ASSERT(dummyFields[0] == 1 && dummyFields[1] == 3 && swing[2] == 1);
+  TEST_ASSERT(s_game.player.x == x0);
+  frames(10, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.lockTimer == 0);
+  frames(10, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.player.x > x0);
+
+  // The bat: the autopilot's way of fighting (turn to it, swing) until it is defeated.
+  bmBodyPlace(&s_game.player, 180, 160);
+  BmAutopilot pilot = { .idle = 100 };
+  int frame = 0;
+  for (; frame < 900 && !s_game.actors.hidden[bat]; frame++)
+  {
+    bmVideoWaitFrame();
+    bmGameFrame(&s_game, bmAutopilotKeys(&pilot, &s_game));
+  }
+  printf("    bat defeated after %d frames, %d swings, player health %d\n", frame, (int)swing[1], (int)s_game.health);
+  TEST_ASSERT(s_game.actors.hidden[bat] && s_game.actors.health[bat] <= 0 && strcmp(stateOf(bat), "Defeated") == 0);
+  TEST_ASSERT(swing[2] == 3);   // the dummy once, the bat twice
+
+  // The Dagger from its stand replaces the sword in the weapon slot: same script, its numbers.
+  frames(40, 0);
+  bmBodyPlace(&s_game.player, 400, 160);
+  frames(5, 0);
+  TEST_ASSERT(s_game.inventory.equipped[0] == dagger && (uint32_t)swing[0] == dagger && swing[1] == 0);
+  TEST_ASSERT(bmInventoryCount(&s_game.inventory, sword) == 1);
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[dummy]) - 10, 160);
+  s_game.player.facing = 1;
+  frames(30, 0);
+  frames(1, BM_KEY_B);
+  frames(2, 0);
+  TEST_ASSERT(dummyFields[0] == 2 && dummyFields[1] == 2);
+
+  // A save game holds what is equipped; reading it attaches its script again.
+  TEST_ASSERT(bmGameWriteSaveGame(&s_game));
+  bmAttachmentsEquip(&s_game, 0, 0);
+  TEST_ASSERT(t->classKey[0] == 0 && s_game.inventory.equipped[0] == 0);
+  TEST_ASSERT(bmGameReadSaveGame(&s_game));
+  TEST_ASSERT(s_game.inventory.equipped[0] == dagger && t->classKey[0] == keyOf("WeaponSwing") && (uint32_t)swing[0] == dagger);
+  // Only what the player owns can be equipped.
+  TEST_ASSERT(!bmAttachmentsEquip(&s_game, 0, keyOf("GreatAxe")) && s_game.inventory.equipped[0] == dagger);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 static uint8_t *readFile(const char *path, uint32_t *pSize)
 {
   FILE *f = fopen(path, "rb");
@@ -467,6 +555,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheItemTables);
   RUN_TEST(testTheRoomsAttachmentsComeAndGoWithTheRoom);
   RUN_TEST(testAHitStrikesOnce);
+  RUN_TEST(testTheSwordDefeatsTheBat);
   free(s_data);
   free(s_windData);
   return TEST_RESULT();

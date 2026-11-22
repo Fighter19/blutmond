@@ -257,7 +257,33 @@ while (20 frames, the player 60), its own hits end and it gets `hit(amount)`; th
 attachment that made the hit gets `struck(amount)`. An object has the variables `health`
 (struck only while above 0; 0 at the start, so a script that wants to be struck sets it) and
 `team` (0, the enemies, by default; the player is 1). From an attachment of the player, the
-figure is the player. Not yet: guard boxes, the element and the target's defence in the
+figure is the player.
+
+**Equipment and the player's actions.** `equip(slot, record)` puts a record the player owns in
+an equipment slot (0 to 7); the class named by the record's first `attach` field is attached in
+the player's attachment slot of the same number, with its first `record<S>` variable set to
+the record, so one script serves several weapons:
+
+```
+class WeaponSwing extends Attachment;
+var record<Weapon> Item;
+event press(name button) { if button == #Attack && !owner_busy() { gotostate Swing; } }
+state Swing { begin:
+  owner_lock(Item.startup + Item.recovery);
+  owner_play_anim(Item.swing);
+  sleep(Item.startup);
+  hit_box(Item.reach, 3, Item.attack + stat(Stat.Attack));
+  sleep(Item.recovery);
+  gotostate Ready;
+}
+```
+
+`owner_lock(frames)` takes walking and jumping from the player for that many frames,
+`owner_play_anim(#anim)` plays an animation of the player's sprite that the engine keeps until
+the lock is over (or, without one, until it ends), `owner_busy()` says whether a lock is on;
+from an object they do nothing. A save game keeps what is equipped and attaches it again.
+
+Not yet for hits: guard boxes, the element and the target's defence in the
 damage, the target in `struck`, projectiles ([../plans/hitboxes.md](../plans/hitboxes.md)).
 
 ### Structures
