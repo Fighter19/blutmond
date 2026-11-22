@@ -79,6 +79,7 @@
     <property name="target_room" value="debug_lobby" />
     <property name="target_door" value="to_debug_spotlight" />
     <property name="direction" value="west" />
+    <property name="panel" value="door_panel" />
    </properties>
   </object>
  </objectgroup>

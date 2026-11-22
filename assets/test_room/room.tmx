@@ -127,6 +127,7 @@
     <property name="target_room" value="test_room_2" />
     <property name="target_door" value="exit_west" />
     <property name="direction" value="east" />
+    <property name="panel" value="door_panel" />
    </properties>
   </object>
   <object id="5" name="save" type="SavePoint" x="400" y="160">

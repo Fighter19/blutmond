@@ -40,8 +40,8 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,23,23,24,0,0,0,0,23,23,24,0,0,0,0,23,23,24,0,0,0,0,23,23,24,0,0,0,0,0,0,0,
-0,0,0,0,0,23,0,24,0,0,0,0,23,0,24,0,0,0,0,23,0,24,0,0,0,0,23,0,24,0,0,0,0,0,0,0,
+0,0,0,0,23,24,23,24,0,0,0,23,24,23,24,0,0,0,23,24,23,24,0,0,0,23,24,23,24,0,0,0,0,0,0,0,
+0,0,0,0,23,0,0,24,0,0,0,23,0,0,24,0,0,0,23,0,0,24,0,0,0,23,0,0,24,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -59,8 +59,8 @@
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-0,0,0,0,0,34,34,34,0,0,0,0,34,34,34,0,0,0,0,34,34,34,0,0,0,0,34,34,34,0,0,0,0,0,0,0,
-0,0,0,0,0,34,0,34,0,0,0,0,34,0,34,0,0,0,0,34,0,34,0,0,0,0,34,0,34,0,0,0,0,0,0,0,
+0,0,0,0,34,34,34,34,0,0,0,34,34,34,34,0,0,0,34,34,34,34,0,0,0,34,34,34,34,0,0,0,0,0,0,0,
+0,0,0,0,34,0,0,34,0,0,0,34,0,0,34,0,0,0,34,0,0,34,0,0,0,34,0,0,34,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -81,32 +81,36 @@
     <property name="Y" value="160" />
    </properties>
   </object>
-  <object id="3" name="to_debug_wave" type="Door" x="88" y="112" width="16" height="48">
+  <object id="3" name="to_debug_wave" type="Door" x="80" y="112" width="32" height="48">
    <properties>
     <property name="target_room" value="debug_wave" />
     <property name="target_door" value="exit_west" />
     <property name="direction" value="north" />
+    <property name="panel" value="door_panel" />
    </properties>
   </object>
-  <object id="4" name="to_debug_spotlight" type="Door" x="200" y="112" width="16" height="48">
+  <object id="4" name="to_debug_spotlight" type="Door" x="192" y="112" width="32" height="48">
    <properties>
     <property name="target_room" value="debug_spotlight" />
     <property name="target_door" value="exit_west" />
     <property name="direction" value="north" />
+    <property name="panel" value="door_panel" />
    </properties>
   </object>
-  <object id="5" name="to_debug_pulse" type="Door" x="312" y="112" width="16" height="48">
+  <object id="5" name="to_debug_pulse" type="Door" x="304" y="112" width="32" height="48">
    <properties>
     <property name="target_room" value="debug_pulse" />
     <property name="target_door" value="exit_west" />
     <property name="direction" value="north" />
+    <property name="panel" value="door_panel" />
    </properties>
   </object>
-  <object id="6" name="to_debug_gradient" type="Door" x="424" y="112" width="16" height="48">
+  <object id="6" name="to_debug_gradient" type="Door" x="416" y="112" width="32" height="48">
    <properties>
     <property name="target_room" value="debug_gradient" />
     <property name="target_door" value="exit_west" />
     <property name="direction" value="north" />
+    <property name="panel" value="door_panel" />
    </properties>
   </object>
  </objectgroup>

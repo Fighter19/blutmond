@@ -992,6 +992,33 @@ static void testTheDebugLobby(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// Doors with a panel open as the player comes near (drawn as affine sprites, sheared).
+static void testDoorPanelsOpenNearby(void)
+{
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_lobby") == BM_SUCCESS);
+  frames(2, 0);
+  int door = -1;
+  for (uint16_t i = 0; i < s_game.objectCount; i++)
+    if (s_game.objects[i].name != NULL && strcmp(s_game.objects[i].name, "to_debug_wave") == 0) door = i;
+  TEST_ASSERT(door >= 0 && s_game.objectSheet[door] >= 0);   // its `panel`, door_panel
+  const BmObjectView *o = &s_game.objects[door];
+  int32_t y = o->y + o->h - 1;
+  bmBodyPlace(&s_game.player, o->x - 80, y);
+  TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)door) == 0);
+  bmBodyPlace(&s_game.player, o->x - 40, y);
+  int32_t half = bmEffectsDoorOpening(&s_game, (uint16_t)door);
+  TEST_ASSERT(half > 0 && half < 256);
+  bmBodyPlace(&s_game.player, o->x - 8, y);
+  TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)door) == 256);
+  // Far above it: shut.
+  bmBodyPlace(&s_game.player, o->x, o->y - 40);
+  TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)door) == 0);
+  // The lobby's doors on screen are drawn (a sprite of 32x32 and one of 32x16 each).
+  bmBodyPlace(&s_game.player, 40, y);
+  frames(1, 0);
+  TEST_ASSERT(bmEffectsDrawDoors(&s_game, 0, 128) >= 2);
+}
+
 // A line of dialogue appears a letter a frame; A shows the rest at once, the next A closes
 // the box. Drawn again after the layer was cleared (a menu, a state), as far as it had come.
 static void testALineAppearsLetterByLetter(void)
@@ -1121,6 +1148,7 @@ int main(int argc, char **argv)
   RUN_TEST(testKnockbackAndFlash);
   RUN_TEST(testADropFallsAndIsTaken);
   RUN_TEST(testTheDebugLobby);
+  RUN_TEST(testDoorPanelsOpenNearby);
   RUN_TEST(testALineAppearsLetterByLetter);
   RUN_TEST(testTheBossIsDefeated);
   free(s_data);

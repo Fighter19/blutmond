@@ -76,6 +76,7 @@
     <property name="target_room" value="test_room" />
     <property name="target_door" value="exit_east" />
     <property name="direction" value="west" />
+    <property name="panel" value="door_panel" />
    </properties>
   </object>
   <object id="2" name="room" type="CameraZone" x="0" y="0" width="512" height="192" />
@@ -96,6 +97,7 @@
     <property name="target_room" value="boss_hall" />
     <property name="target_door" value="exit_west" />
     <property name="direction" value="east" />
+    <property name="panel" value="door_panel" />
    </properties>
   </object>
  </objectgroup>

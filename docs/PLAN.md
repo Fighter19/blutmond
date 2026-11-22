@@ -163,9 +163,9 @@ Raster effects in the editor (wave, heat shimmer, per-line parallax, backdrop gr
 spotlight via windows, "mode 7" floor) are generators that fill this table. The developer can
 also edit the table directly as curves.
 
-Affine effects on single objects, such as the door from SceneLoaderGBA that opens by scaling
-in X, are tables computed by the packer (at build time, like the compile-time tables there)
-and played back per frame.
+Affine effects on single objects: door panels (`panel` on a `Door`) turn about their hinge
+with a matrix of scale in X and shear in Y per frame, from the player's distance
+([spec/runtime-core.md](spec/runtime-core.md) §12).
 
 ### Running it on each target
 
@@ -818,7 +818,7 @@ dependencies and an order that works.
 | # | State |
 |---|---|
 | M0 | done: HAL, host and GBA builds, fixed core, tests in mGBA |
-| M1 | done for mode 0: backgrounds (4/8 bpp, all sizes, flips, banks, priorities), regular sprites, palettes, three line tables (DMA 0 and 3 in H-blank mode, an H-blank interrupt), windows and colour effects (with M13 step 1), software PPU, PPU snapshots; the test scene matches between the software PPU and mGBA pixel for pixel, the effects scene within one colour level. Still open from M1's scope: affine backgrounds and sprites, bitmap modes, mosaic |
+| M1 | done for mode 0: backgrounds (4/8 bpp, all sizes, flips, banks, priorities), regular sprites, palettes, three line tables (DMA 0 and 3 in H-blank mode, an H-blank interrupt), windows and colour effects (with M13 step 1), software PPU, PPU snapshots; the test scene matches between the software PPU and mGBA pixel for pixel, the effects scene within one colour level. Affine sprites (double size too) since the doors. Still open from M1's scope: affine backgrounds, bitmap modes, mosaic |
 | M2 | done: pack format (reader/writer, CRC), cooker `bmcook` (Tiled import, 8x8 tile dedup with flips, palette packer per area, colour matrix option, collision and objects, change report), GBA and SNES profiles, room loader with map streaming; the own test room (assets/test_room) shows the same on host and in mGBA, and cooks for SNES with a report |
 | M3 | done on the desktop: ose-ui split out of OpenSE (own repository) with a GLES 2 / WebGL 1 renderer, SDL3 layer and the classic theme; editor `bmeditor` with room view (runtime-rendered, collision and object overlays, camera), GBA screen, palette banks, tiles, hardware budget, report, GBA/SNES profile and reload on change. The browser build is set up (CI job in ose-ui) but not yet run |
 | M4 | done for playing: collision grid with height profiles (all shapes, flips, jump-through, materials), platformer physics (walls above step height, slopes with snapping, steps, jump-through and drop-through, ladders with a jump-through top, water, coyote time, jump buffer, jump cut), player sprite, camera with CameraZone, KillZone and falling respawn on the last safe ground, damage knockback, Door room changes, placeholders for script classes, VBlank interrupt and frame counter. The test level (two rooms) is played by an autopilot on the host and on the GBA with the same result: no deaths, one room change, at most 4 missed frames (only while the next room loads). Not yet: editing rooms inside bmeditor (Tiled is used), pushing between bodies, ceiling-slope deflection, conveyors, ice, bounce, mud, moving platforms, VRAM tile streaming for very large rooms, faster room loading (DMA) |

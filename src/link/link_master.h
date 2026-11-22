@@ -54,7 +54,7 @@ typedef struct BmLinkMaster
   bool started;            // the session with the slave has begun (sequence numbers agreed)
 
   uint32_t pollTimeout;    // polls to wait for an answer (default 400)
-  uint32_t maxResyncs;     // per flush before giving up (default 8)
+  uint32_t maxResyncs;     // in a row (no packet got through between them) before giving up (default 8)
 
   // Adaptive delay: lowered after `cleanWindowsToLower` clean windows, raised after errors.
   bool adaptive;

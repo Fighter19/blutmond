@@ -91,6 +91,7 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/moon_bat.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/fireball.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/drop.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/door_panel.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/start_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/equipment_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/items_menu.ms

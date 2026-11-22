@@ -223,6 +223,48 @@ uint8_t bmSpriteSheetDrawBank(const BmSpriteSheet *s, uint16_t frame, int32_t x,
   return used;
 }
 
+// x * f / 256, rounded to the nearest (halves away from zero).
+static int32_t mulRound(int32_t x, int32_t f)
+{
+  int32_t p = x * f;
+  return p >= 0 ? (p + 128) >> 8 : -((-p + 128) >> 8);
+}
+
+uint8_t bmSpriteSheetDrawSheared(const BmSpriteSheet *s, uint16_t frame, int32_t x, int32_t y, int32_t xs, int32_t ys, int32_t vs,
+                                 uint8_t matrix, uint8_t priority, uint8_t firstOam, uint8_t maxOam)
+{
+  if (frame >= s->frameCount || matrix >= 32) return 0;
+  if (xs > -16 && xs < 16) xs = xs < 0 ? -16 : 16;
+  vs = vs < 64 ? 64 : vs > 512 ? 512 : vs;
+  // Screen to texture: the inverse of [xs 0; ys vs] / 256.
+  bmSpriteSetMatrix(matrix, (int16_t)(65536 / xs), 0, (int16_t)(-ys * 65536 / xs / vs), (int16_t)(65536 / vs));
+  static const uint8_t widths[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
+  static const uint8_t heights[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
+  const uint8_t *fr = s->pFrames + frame * FRAME_SIZE;
+  uint16_t first = bmRead16(fr);
+  uint8_t used = 0;
+  for (uint8_t i = 0; i < fr[2] && used < maxOam; i++)
+  {
+    const uint8_t *pc = s->pPieces + (first + i) * PIECE_SIZE;
+    uint8_t shape = pc[2] & 3, size = (pc[2] >> 2) & 3;
+    if (shape > 2) continue;
+    int32_t w = widths[shape][size], h = heights[shape][size];
+    // The piece's centre, from the anchor, moved as the frame is; the box (2w x 2h) around it.
+    int32_t u = (int8_t)pc[0] + w / 2, v = (int8_t)pc[1] + h / 2;
+    int32_t cx = x + mulRound(u, xs), cy = y + mulRound(u, ys) + mulRound(v, vs);
+    int32_t sx = cx - w, sy = cy - h;
+    if (sx <= -2 * w || sx >= BM_HAL_SCREEN_WIDTH || sy <= -2 * h || sy >= BM_HAL_SCREEN_HEIGHT) continue;
+    BmSprite sprite = {
+      .x = (int16_t)sx, .y = (int16_t)sy, .shape = (BmSpriteShape)shape, .size = size,
+      .tile = (uint16_t)(s->tileBase + bmRead16(pc + 4)), .paletteBank = s->bank, .priority = priority,
+      .visible = true, .affine = (uint8_t)(matrix + 1),
+    };
+    bmSpriteSet((uint8_t)(firstOam + used), &sprite);
+    used++;
+  }
+  return used;
+}
+
 BmSpriteBox bmSpriteSheetHitbox(const BmSpriteSheet *s, uint16_t frame, bool hflip)
 {
   BmSpriteBox box = { 0, 0, 0, 0 };

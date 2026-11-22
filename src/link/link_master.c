@@ -313,7 +313,11 @@ bool bmLinkMasterFlush(BmLinkMaster *m)
       if (!answered) pollOrAck(m);
     }
 
-    if (progress != 0) pop(m, progress);
+    if (progress != 0)
+    {
+      pop(m, progress);
+      resyncs = 0;   // the link works again: only resyncs one after the other count
+    }
     if (busy)
     {
       // The slave works through what it has; give it time, this is not an error.

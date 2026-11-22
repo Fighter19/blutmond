@@ -12,10 +12,11 @@
 // which is the platform-neutral description of the "virtual PPU" used everywhere in Blutmond.
 //
 // Supported in this version: mode 0 (four regular backgrounds, 4 and 8 bpp, all sizes,
-// scrolling, flips, palette banks, priorities), regular sprites (all sizes, 4 and 8 bpp, 1D and
-// 2D mapping, flips, priorities, semi-transparent and OBJ-window sprites), windows (WIN0, WIN1,
+// scrolling, flips, palette banks, priorities), regular and affine sprites (all sizes, 4 and
+// 8 bpp, 1D and 2D mapping, flips, double size, priorities, semi-transparent and OBJ-window
+// sprites), windows (WIN0, WIN1,
 // the OBJ window, outside), colour effects (alpha blending, brightening, darkening), forced
-// blank and per-line register values. Not yet: affine backgrounds and sprites, bitmap modes,
+// blank and per-line register values. Not yet: affine backgrounds, bitmap modes,
 // mosaic.
 
 #include <stdbool.h>

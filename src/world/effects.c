@@ -10,6 +10,7 @@
 #include "screens.h"
 #include "hal.h"
 #include "ppu.h"
+#include "sprite.h"
 #include "video.h"
 
 // sin(2 pi i / 256) * 64 for the first quarter; the rest by symmetry.
@@ -116,6 +117,73 @@ int32_t bmEffectsWaveAt(const BmGame *g, int32_t y)
   // 0 to amp, never less: the hardware map has columns to spare only right of the screen (the
   // room streams 32 columns from the camera's), so the picture may only be pulled left.
   return amp * (isin((uint32_t)(y * 4 + (int32_t)g->frame * speed)) + 64) / 128;
+}
+
+// Depth in the oblique view: a pixel of depth is drawn 0.4 px right and 0.4 px up.
+#define DEPTH_X 102
+#define DEPTH_Y 102
+// Doors: shut from this far (px between the player and the door), open from DOOR_OPEN.
+#define DOOR_SHUT 64
+#define DOOR_OPEN 16
+
+int32_t bmEffectsDoorOpening(const BmGame *g, uint16_t object)
+{
+  if (object >= g->objectCount) return 0;
+  const BmObjectView *o = &g->objects[object];
+  int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
+  int32_t dx = px < o->x ? o->x - px : px > o->x + o->w ? px - o->x - o->w : 0;
+  // Only from about its height: a door above or below stays shut.
+  if (py < o->y || py > o->y + o->h + 16) return 0;
+  if (dx >= DOOR_SHUT) return 0;
+  if (dx <= DOOR_OPEN) return 256;
+  return (DOOR_SHUT - dx) * 256 / (DOOR_SHUT - DOOR_OPEN);
+}
+
+uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
+{
+  uint8_t used = 0, matrix = 0;
+  for (uint16_t i = 0; i < g->objectCount && used < maxOam && matrix < 32; i++)
+  {
+    const BmObjectView *o = &g->objects[i];
+    if (o->kind != BM_OBJECT_DOOR || g->objectSheet[i] < 0) continue;
+    // Off screen (with room for a panel swung open): nothing to do.
+    int32_t ox = o->x - g->room.cameraX, oy = o->y - g->room.cameraY;
+    if (ox + o->w < -64 || ox > BM_HAL_SCREEN_WIDTH + 64 || oy + o->h < 0 || oy > BM_HAL_SCREEN_HEIGHT + 64) continue;
+    const BmSpriteSheet *s = &g->sheets[g->objectSheet[i]];
+    BmSpriteBox box = bmSpriteSheetHitbox(s, 0, false);
+    int32_t ph = box.h, pw = box.h > 0 ? box.w : 32;
+    int32_t scale = ph > 0 ? o->h * 256 / ph : 256;   // the panel as tall as the door
+    int32_t open = bmEffectsDoorOpening(g, i);
+    // The panel's angle from the screen's x axis (256 to a turn), its hinge on screen.
+    int32_t angle, hx;
+    int32_t closedWidth = pw * scale / 256 * DEPTH_X / 256;
+    uint8_t side = g->objectDoorSide[i];
+    if (side == 1)
+    {
+      angle = 64 - open * 56 / 256;   // along the depth, out to the right
+      hx = o->x + o->w - closedWidth;
+    }
+    else if (side == 2)
+    {
+      angle = 64 + open * 56 / 256;   // along the depth, out to the left
+      hx = o->x + o->w - closedWidth;
+    }
+    else
+    {
+      angle = open * 52 / 256;        // facing the screen, away into the depth
+      hx = o->x;
+    }
+    int32_t c = isin((uint32_t)(angle + 64)), sn = isin((uint32_t)angle);
+    // A point u along the panel: x = u (cos a + 0.4 sin a), y = -u 0.4 sin a; times the scale.
+    int32_t xs = (c * 256 + sn * DEPTH_X) / 64 * scale / 256;
+    int32_t ys = -(sn * DEPTH_Y / 64) * scale / 256;
+    int32_t sx = hx - g->room.cameraX, sy = o->y + o->h - g->room.cameraY;
+    uint8_t n = bmSpriteSheetDrawSheared(s, bmAnimFrameAt(s, 0, g->frame), sx, sy, xs, ys, scale, matrix, 1,
+                                         (uint8_t)(firstOam + used), (uint8_t)(maxOam - used));
+    if (n != 0) matrix++;
+    used = (uint8_t)(used + n);
+  }
+  return used;
 }
 
 #define ROOM_LAYERS (BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2))

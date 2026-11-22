@@ -343,6 +343,53 @@ static void testSnapshotRoundTrip(void)
   TEST_ASSERT(!bmPpuSnapshotRead(&copy, buffer, bmPpuSnapshotSize()));
 }
 
+// Affine sprites (double size): an 8x8 sprite whose left column is coloured, in a 16x16 box
+// at (10, 20), so its centre is (18, 28).
+static void setAffine(int16_t pa, int16_t pb, int16_t pc, int16_t pd)
+{
+  setUp();
+  setTile4(0x10000, leftColumn);
+  s.palette[256 + 1] = 0x0123;
+  for (int i = 0; i < 128; i++) s.oam[i * 4] = 0x0200;
+  s.oam[0] = (uint16_t)(20 | 0x0300);   // affine, double size
+  s.oam[1] = 10;                        // matrix 0
+  s.oam[2] = 0;
+  s.oam[3] = (uint16_t)pa; s.oam[7] = (uint16_t)pb; s.oam[11] = (uint16_t)pc; s.oam[15] = (uint16_t)pd;
+  bmPpuSetReg(&s, BM_PPU_DISPCNT, BM_PPU_DISPCNT_OBJ | BM_PPU_DISPCNT_OBJ_1D);
+}
+
+static void testAffineSpriteIdentity(void)
+{
+  // Where the regular sprite would be: x 14..21, lines 24..31.
+  setAffine(256, 0, 0, 256);
+  bmPpuRenderLine(&s, 24, line);
+  TEST_ASSERT(line[14] == 0x0123 && line[13] == 0x1111 && line[15] == 0x1111);
+  bmPpuRenderLine(&s, 31, line);
+  TEST_ASSERT(line[14] == 0x0123);
+  bmPpuRenderLine(&s, 23, line);
+  TEST_ASSERT(line[14] == 0x1111);
+  bmPpuRenderLine(&s, 32, line);
+  TEST_ASSERT(line[14] == 0x1111);
+}
+
+static void testAffineSpriteScaleAndShear(void)
+{
+  // Twice as wide: the column is two pixels, from the box's left (x 10, 11).
+  setAffine(128, 0, 0, 256);
+  bmPpuRenderLine(&s, 28, line);
+  TEST_ASSERT(line[10] == 0x0123 && line[11] == 0x0123 && line[12] == 0x1111);
+  // Sheared (texture y = dx + dy): the left column moves down by 4 lines.
+  setAffine(256, 0, 256, 256);
+  bmPpuRenderLine(&s, 24, line);
+  TEST_ASSERT(line[14] == 0x1111);
+  bmPpuRenderLine(&s, 28, line);
+  TEST_ASSERT(line[14] == 0x0123);
+  bmPpuRenderLine(&s, 35, line);
+  TEST_ASSERT(line[14] == 0x0123);
+  bmPpuRenderLine(&s, 36, line);
+  TEST_ASSERT(line[14] == 0x1111);
+}
+
 int main(void)
 {
   RUN_TEST(testForcedBlankIsWhite);
@@ -353,6 +400,8 @@ int main(void)
   RUN_TEST(testPriorities);
   RUN_TEST(testSpriteInFrontAndFlipped);
   RUN_TEST(testSpriteWrapsAtScreenEdges);
+  RUN_TEST(testAffineSpriteIdentity);
+  RUN_TEST(testAffineSpriteScaleAndShear);
   RUN_TEST(testLineTableChangesScrollPerLine);
   RUN_TEST(testWindowsChooseLayers);
   RUN_TEST(testObjWindow);

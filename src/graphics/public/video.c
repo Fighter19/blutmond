@@ -190,6 +190,12 @@ BmResult bmSpriteSet(uint8_t index, const BmSprite *pSprite)
                       (((unsigned)pSprite->mode & 3) << 10) | ((unsigned)pSprite->shape << 14));
     a[1] = (uint16_t)(((uint16_t)pSprite->x & 0x1FF) | (pSprite->hflip ? 0x1000 : 0) |
                       (pSprite->vflip ? 0x2000 : 0) | ((unsigned)pSprite->size << 14));
+    if (pSprite->affine != 0)
+    {
+      // Affine, double size; the matrix number where the flips were.
+      a[0] |= 0x0300;
+      a[1] = (uint16_t)(((uint16_t)pSprite->x & 0x1FF) | (((unsigned)(pSprite->affine - 1) & 31) << 9) | ((unsigned)pSprite->size << 14));
+    }
     a[2] = (uint16_t)((pSprite->tile & 0x3FF) | ((pSprite->priority & 3) << 10) |
                       ((pSprite->paletteBank & 15) << 12));
   }
@@ -229,6 +235,17 @@ BmResult bmVideoSetLineTable(uint8_t slot, uint16_t reg, const uint16_t *pValues
   if (slot >= BM_HAL_LINE_TABLES || (pValues != NULL && reg >= BM_PPU_REG_SIZE)) return BM_ERROR_INVALID_ARGUMENT;
   bmHalLineTableSet(slot, reg, pValues);
   return BM_SUCCESS;
+}
+
+void bmSpriteSetMatrix(uint8_t matrix, int16_t pa, int16_t pb, int16_t pc, int16_t pd)
+{
+  if (matrix >= 32) return;
+  uint16_t *m = &s_oam[matrix * 16 + 3];
+  m[0] = (uint16_t)pa;
+  m[4] = (uint16_t)pb;
+  m[8] = (uint16_t)pc;
+  m[12] = (uint16_t)pd;
+  s_oamDirty = true;
 }
 
 void bmSpriteHide(uint8_t index)

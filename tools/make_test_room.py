@@ -348,7 +348,7 @@ def write_tmx(path):
         ("PlayerStart", "start", 40, 160, 0, 0, True, [("facing", "right")]),
         ("CameraZone", "room", 0, 0, W * T, H * T, False, []),
         ("KillZone", "pits", 0, H * T, W * T, 16, False, [("respawn", "last_ground")]),
-        ("Door", "exit_east", W * T - 16, 48, 16, 32, False, [("target_room", "test_room_2"), ("target_door", "exit_west"), ("direction", "east")]),
+        ("Door", "exit_east", W * T - 16, 48, 16, 32, False, [("target_room", "test_room_2"), ("target_door", "exit_west"), ("direction", "east"), ("panel", "door_panel")]),
         ("SavePoint", "save", 400, 160, 0, 0, True, []),
         ("Pickup", "heart", 250, 112, 0, 0, True, [("item", "heart_max_up"), ("persistent", "true")]),
         ("WeaponStand", "sword", 80, 160, 0, 0, True, []),
@@ -449,12 +449,12 @@ def write_room2(path):
         for x in (28, 29, 30, 31):
             main_layer[y][x] = gid("stone" if (x + y) % 2 else "stone2")
     objects = [
-        ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "test_room"), ("target_door", "exit_east"), ("direction", "west")]),
+        ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "test_room"), ("target_door", "exit_east"), ("direction", "west"), ("panel", "door_panel")]),
         ("CameraZone", "room", 0, 0, w * T, h * T, False, []),
         ("Bat", "bat", 200, 104, 0, 0, True, []),
         ("Dummy", "dummy", 96, 160, 0, 0, True, []),
         ("WeaponStand", "dagger", 400, 160, 0, 0, True, [("Gives", "Dagger")]),
-        ("Door", "exit_east", w * T - 16, 80, 16, 48, False, [("target_room", "boss_hall"), ("target_door", "exit_west"), ("direction", "east")]),
+        ("Door", "exit_east", w * T - 16, 80, 16, 48, False, [("target_room", "boss_hall"), ("target_door", "exit_west"), ("direction", "east"), ("panel", "door_panel")]),
     ]
     write_small_room(path, "test_room_2", "test", w, h, main_layer, objects)
 
@@ -477,7 +477,7 @@ def write_boss_hall(path):
     for x in list(range(6, 10)) + list(range(20, 24)):
         main_layer[6][x] = gid("platform")
     objects = [
-        ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "test_room_2"), ("target_door", "exit_east"), ("direction", "west")]),
+        ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "test_room_2"), ("target_door", "exit_east"), ("direction", "west"), ("panel", "door_panel")]),
         ("CameraZone", "room", 0, 0, w * T, h * T, False, []),
         ("MoonBat", "vesper", 200, 40, 0, 0, True, []),
     ]
@@ -507,13 +507,14 @@ def write_debug_lobby(path):
     for _, _, _, x in DEBUG_ROOMS:
         tx = x // T
         for y in range(5, 7):
-            main_layer[y][tx - 1] = gid("stone")
+            main_layer[y][tx - 2] = gid("stone")
             main_layer[y][tx + 1] = gid("stone2")
+        main_layer[5][tx - 1] = gid("stone2")
         main_layer[5][tx] = gid("stone")
     objects = [("CameraZone", "room", 0, 0, w * T, h * T, False, []),
                ("Teleporter", "home", 520, 160, 0, 0, True, [("Room", "test_room"), ("X", "40"), ("Y", "160")])]
     for room, _, _, x in DEBUG_ROOMS:
-        objects.append(("Door", "to_" + room, x - 8, 112, 16, 48, False, [("target_room", room), ("target_door", "exit_west"), ("direction", "north")]))
+        objects.append(("Door", "to_" + room, x - 16, 112, 32, 48, False, [("target_room", room), ("target_door", "exit_west"), ("direction", "north"), ("panel", "door_panel")]))
     write_small_room(path, "debug_lobby", "debug", w, h, main_layer, objects, props=[("title", "Debug lobby")])
 
 
@@ -526,7 +527,7 @@ def write_debug_room(path, room, title, effect):
     for y in range(7, 10):
         main_layer[y][14] = gid("stone" if y % 2 else "stone2")
     objects = [("CameraZone", "room", 0, 0, w * T, h * T, False, []),
-               ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "debug_lobby"), ("target_door", "to_" + room), ("direction", "west")])]
+               ("Door", "exit_west", 0, 112, 16, 48, False, [("target_room", "debug_lobby"), ("target_door", "to_" + room), ("direction", "west"), ("panel", "door_panel")])]
     write_small_room(path, room, "debug", w, h, main_layer, objects, props=[("title", title), ("effect", effect)])
 
 

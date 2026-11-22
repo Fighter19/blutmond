@@ -112,11 +112,8 @@ static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, Li
     uint16_t a1 = pState->oam[i * 4 + 1];
     uint16_t a2 = pState->oam[i * 4 + 2];
 
-    if (a0 & 0x0100)
-    {
-      continue;  // affine: not supported yet
-    }
-    if (a0 & 0x0200)
+    bool affine = (a0 & 0x0100) != 0;
+    if (!affine && (a0 & 0x0200))
     {
       continue;  // hidden
     }
@@ -130,10 +127,13 @@ static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, Li
     int w = s_objSizes[shape][sizeIndex][0];
     int h = s_objSizes[shape][sizeIndex][1];
 
+    // Affine: the box is twice the size with double size (bit 9), the matrix per pixel.
+    bool doubleSize = affine && (a0 & 0x0200) != 0;
+    int bw = doubleSize ? 2 * w : w, bh = doubleSize ? 2 * h : h;
     int sy = a0 & 0xFF;
-    if (sy >= BM_PPU_HEIGHT) sy -= 256;
+    if (sy + bh > 256) sy -= 256;   // wraps above the screen (as the GBA's 8-bit Y)
     int row = y - sy;
-    if (row < 0 || row >= h)
+    if (row < 0 || row >= bh)
     {
       continue;
     }
@@ -141,6 +141,36 @@ static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, Li
     if (sx >= 256) sx -= 512;
 
     bool bpp8 = (a0 & 0x2000) != 0;
+    if (affine)
+    {
+      const uint16_t *mat = &pState->oam[((a1 >> 9) & 31) * 16 + 3];
+      int32_t pa = (int16_t)mat[0], pb = (int16_t)mat[4], pc = (int16_t)mat[8], pd = (int16_t)mat[12];
+      uint32_t tile = a2 & 0x3FF;
+      uint8_t priority = (a2 >> 10) & 3;
+      uint16_t bank = (a2 >> 12) & 15;
+      int32_t dy = row - bh / 2;
+      for (int col = 0; col < bw; col++)
+      {
+        int x = sx + col;
+        if (x < 0 || x >= BM_PPU_WIDTH || (objMode != 2 && out[x].opaque)) continue;
+        int32_t dx = col - bw / 2;
+        int32_t tx = ((pa * dx + pb * dy) >> 8) + w / 2, ty = ((pc * dx + pd * dy) >> 8) + h / 2;
+        if (tx < 0 || tx >= w || ty < 0 || ty >= h) continue;
+        uint32_t tileStep = bpp8 ? 2u : 1u;
+        uint32_t rowStride = map1D ? (uint32_t)(w / 8) * tileStep : 32u;
+        uint32_t t = tile + (uint32_t)(ty / 8) * rowStride + (uint32_t)(tx / 8) * tileStep;
+        uint8_t index = tilePixel(pState, OBJ_VRAM_BASE + (t & 0x3FF) * 32u, bpp8, tx & 7, ty & 7);
+        if (index == 0) continue;
+        if (objMode == 2)
+        {
+          objWindow[x] = true;
+          continue;
+        }
+        uint16_t paletteIndex = (uint16_t)(256 + (bpp8 ? index : ((bank << 4) | index)));
+        out[x] = (LinePixel){ pState->palette[paletteIndex] & 0x7FFF, priority, true, objMode == 1 };
+      }
+      continue;
+    }
     bool hflip = (a1 & 0x1000) != 0;
     bool vflip = (a1 & 0x2000) != 0;
     uint32_t tile = a2 & 0x3FF;

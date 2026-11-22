@@ -73,6 +73,14 @@ uint8_t bmSpriteSheetDraw(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x
 uint8_t bmSpriteSheetDrawBank(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x, int32_t y, bool hflip, uint8_t priority,
                               uint8_t bank, uint8_t firstOam, uint8_t maxOam);
 
+/// Draws frame `frame` sheared and scaled about its anchor at (x, y): a point (u, v) of the
+/// frame from the anchor appears at (x + u * xs / 256, y + (u * ys + v * vs) / 256). The pieces
+/// are affine sprites (double size: each may grow to twice its size) sharing the matrix
+/// `matrix` (0..31), which this sets; |xs| is at least 16 (1/16), `vs` 64 to 512. Returns the
+/// OAM entries used.
+uint8_t bmSpriteSheetDrawSheared(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x, int32_t y, int32_t xs, int32_t ys, int32_t vs,
+                                 uint8_t matrix, uint8_t priority, uint8_t firstOam, uint8_t maxOam);
+
 /// The frame's hitbox relative to the anchor (mirrored with `hflip`).
 BmSpriteBox bmSpriteSheetHitbox(const BmSpriteSheet *pSheet, uint16_t frame, bool hflip);
 

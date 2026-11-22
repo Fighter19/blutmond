@@ -72,10 +72,11 @@ BM_IWRAM_CODE BmLinkRxEvent bmLinkRxWord(BmLinkRx *rx, uint32_t word, uint8_t *p
     uint8_t low = (uint8_t)word;
     if (type == 0x41 || type == 0x4E)
     {
-      *pSeq = (uint8_t)(word >> 8);
-      if (type == 0x41 && low == 0) return BM_LINK_RX_ACK;
-      if (type == 0x4E && low == 0) return BM_LINK_RX_NAK;
-      if (type == 0x4E && low == 1) return BM_LINK_RX_BUSY;
+      uint8_t seq = (uint8_t)(word >> 8);
+      *pSeq = seq;
+      if ((low & 0xFE) != BM_LINK_SEQ_CHECK(seq)) return BM_LINK_RX_NOISE;   // a bit flipped
+      if (type == 0x41 && (low & 1) == 0) return BM_LINK_RX_ACK;
+      if (type == 0x4E) return (low & 1) ? BM_LINK_RX_BUSY : BM_LINK_RX_NAK;
       return BM_LINK_RX_NOISE;
     }
     if (type == 0x4D) return BM_LINK_RX_NOISE;

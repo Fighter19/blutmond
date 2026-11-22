@@ -119,6 +119,7 @@ typedef struct BmGame
   int8_t playerSheet;                          // -1: the built-in figure
   int8_t playerAnims[BM_PLAYER_ANIM_COUNT];
   int8_t objectSheet[BM_GAME_MAX_OBJECTS];     // sheet named like the object's class, or -1
+  uint8_t objectDoorSide[BM_GAME_MAX_OBJECTS]; // a door's panel: 0 north, 1 east, 2 west (effects.h)
   uint16_t builtinTile;                        // where the built-in graphics start
   BmAnimState playerAnim;
   // Scripted objects of the room (docs/spec/mondskript.md).

@@ -162,6 +162,15 @@ static void bindObjectSprites(BmGame *g)
       }
       if (*a == 0 && *b == 0) g->objectSheet[i] = (int8_t)k;
     }
+    // A door's panel (effects.h): the sprite its `panel` property names, and where it stands.
+    const char *panel = g->objects[i].kind == BM_OBJECT_DOOR ? bmGameObjectProperty(g, &g->objects[i], "panel") : NULL;
+    const char *dir = panel != NULL ? bmGameObjectProperty(g, &g->objects[i], "direction") : NULL;
+    g->objectDoorSide[i] = (uint8_t)(dir == NULL ? 0 : strcmp(dir, "east") == 0 ? 1 : strcmp(dir, "west") == 0 ? 2 : 0);
+    for (uint8_t k = 0; panel != NULL && k < g->sheetCount; k++)
+    {
+      const char *name = bmPackString(g->pPack, g->sheets[k].nameId);
+      if (name != NULL && strcmp(name, panel) == 0) g->objectSheet[i] = (int8_t)k;
+    }
   }
 }
 
@@ -330,6 +339,7 @@ static void updateSprites(BmGame *g)
   }
 
   next = (uint8_t)(next + bmActorsDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
+  next = (uint8_t)(next + bmEffectsDrawDoors(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
 
   // Other objects: the sprite named like their class (its first animation, until scripts play
   // animations), or a placeholder frame for classes without graphics.

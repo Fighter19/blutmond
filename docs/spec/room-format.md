@@ -313,7 +313,7 @@ Objects live in the `objects` layer.
 | Class | Shape | Properties |
 |---|---|---|
 | `PlayerStart` | point | `facing` (`left`, `right`) |
-| `Door` | rectangle | `target_room`, `target_door` (object name in the target room), `direction` (`north`, `south`, `east`, `west`) |
+| `Door` | rectangle | `target_room`, `target_door` (object name in the target room), `direction` (`north`, `south`, `east`, `west`), `panel` (a sprite: the door is drawn as a panel that swings open as the player comes near, [runtime-core.md](runtime-core.md) §12) |
 | `CameraZone` | rectangle | camera bounds while the player is inside; `lock_x`, `lock_y` (bool) |
 | `KillZone` | rectangle | `respawn` (`last_ground`, `checkpoint`) |
 | `Trigger` | rectangle | `event` (`on_enter`, `on_leave`, `on_use`), `call` (script expression), `once` (bool) |

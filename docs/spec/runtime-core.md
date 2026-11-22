@@ -484,11 +484,12 @@ the sheet's first tile + the piece's tile; palette bank = the sheet's; priority 
 2. Scripted objects in order, unless hidden: their frame at `(INT(x), INT(y))`, mirrored when
    `facing < 0`. Without a sheet, and only for objects without width and height: the
    placeholder at `(INT(x) - 8, INT(y) - 16)`.
-3. Unscripted objects of other classes and `SavePoint`s with a class name: with a sheet named
+3. Door panels (section 12, "Doors"): affine sprites.
+4. Unscripted objects of other classes and `SavePoint`s with a class name: with a sheet named
    like the class, animation 0 at time `frame` (the frame whose step contains `frame modulo
    the animation's total duration`), never mirrored; else the placeholder at `(x - 8, y)` for
    an object with a size, `(x - 8, y - 16)` for a point.
-4. The rest are hidden.
+5. The rest are hidden.
 
 ## 10. Hits
 
@@ -603,6 +604,24 @@ lasts: at 64 the screens close; it counts down; `lockTimer` and `hurtTimer` are 
 `roomChanges += 1`; placed keeping `facing`; `doorCooldown = 20`; the camera follows). Shown
 in place of the room's effect: the wave at 8 px times the phase (0 at the ends, 1 at 32), speed
 6, and the room brightened up to 14 by the phase.
+
+**Doors** (`bmEffectsDrawDoors`): a `Door` with the property `panel` (a sprite's name, its
+anchor the hinge at the bottom left, its hitbox the panel's size, frame 0's) is drawn as a
+panel turning about a vertical hinge, in an oblique view: a pixel of depth is drawn 0.4 px
+right and 0.4 px up (102/256 each). How open it is, `open` 0..256, follows the player's
+distance `d` (px from the player's x to the door's rectangle, 0 inside): 256 within 16, 0 from
+64 on, in between `(64 - d) * 256 / 48`; 0 if the player's feet are above the door's top or
+more than 16 below its bottom. The panel's angle `a` from the screen's x axis (256 to a turn):
+`direction` east `64 - open * 56 / 256` (closed along the depth in the side wall, open swung
+out to the right), west `64 + open * 56 / 256`, else `open * 52 / 256` (closed facing the
+screen, open turned away into the depth). A point `u` along the panel and `v` up it is drawn
+at `hinge + (u (cos a + 0.4 sin a), -u 0.4 sin a + v)`, all times `scale` = the door's height /
+the panel's: a scale in x and a shear in y, which an affine sprite's matrix does. The hinge is
+at the door's bottom, at its left for north doors and `closed width` (`panel width * scale *
+0.4`) left of its right edge for east and west. Each door's pieces share a matrix (the doors in
+object order, matrices from 0), double size, priority 1. Doors more than 64 px off screen are
+skipped. The panel's sprite is the `panel` property's (bound when the room's sprites are); the
+direction is read then too.
 
 **Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has
 it and the player has none (the menu does not open then). The test level's mirror teleports to

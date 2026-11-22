@@ -113,6 +113,31 @@ static bool sendAndCheck(Wire *w, BmLinkMaster *m, uint32_t count, uint32_t seed
   return ok;
 }
 
+// An answer with one bit flipped anywhere is noise, never another answer: a sequence number
+// taken wrongly would release packets the other side does not have.
+static void testAnswersAreChecked(void)
+{
+  BmLinkPacket buffer;
+  BmLinkRx rx;
+  bmLinkRxInit(&rx, &buffer);
+  for (uint32_t seq = 0; seq < 256; seq++)
+  {
+    const uint32_t words[3] = { BM_LINK_ACK(seq), BM_LINK_NAK(seq), BM_LINK_BUSY(seq) };
+    const BmLinkRxEvent kinds[3] = { BM_LINK_RX_ACK, BM_LINK_RX_NAK, BM_LINK_RX_BUSY };
+    for (int k = 0; k < 3; k++)
+    {
+      uint8_t got = 0;
+      TEST_ASSERT(bmLinkRxWord(&rx, words[k], &got) == kinds[k] && got == seq);
+      for (int bit = 1; bit < 16; bit++)
+      {
+        uint8_t other = 0;
+        BmLinkRxEvent e = bmLinkRxWord(&rx, words[k] ^ (1u << bit), &other);
+        TEST_ASSERT(e == BM_LINK_RX_NOISE);
+      }
+    }
+  }
+}
+
 static void testCleanTransfer(void)
 {
   Wire w;
@@ -236,6 +261,7 @@ static void testNoSlave(void)
 
 int main(void)
 {
+  RUN_TEST(testAnswersAreChecked);
   RUN_TEST(testCleanTransfer);
   RUN_TEST(testSlaveToMaster);
   RUN_TEST(testBitErrorsAndMisses);

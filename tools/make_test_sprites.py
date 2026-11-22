@@ -38,6 +38,10 @@ PALETTE = {
     'k': (222, 160, 120, 255),  # skin, shade
     'l': (120, 20, 36, 255),    # hair, shade
     'm': (130, 10, 24, 255),    # coat, shade
+    'n': (96, 60, 36, 255),     # door planks, dark
+    'o': (128, 84, 50, 255),    # door planks
+    'p': (88, 92, 104, 255),    # iron
+    'q': (150, 156, 170, 255),  # iron, light
 }
 
 HEAD = [
@@ -223,6 +227,31 @@ def face(kind):
     return ["".join(r) for r in rows]
 
 
+def door_panel():
+    """A door of planks, 32 x 48, with two iron bands, studs and a ring: its left edge is the
+    hinge (the anchor at the bottom left)."""
+    rows = []
+    for y in range(48):
+        row = ""
+        for x in range(32):
+            if x == 0 or x == 31 or y == 0 or y == 47:
+                c = '7'
+            elif y in (8, 9, 38, 39):
+                c = 'q' if y in (8, 38) else 'p'
+                if x % 6 == 3 and y in (8, 38):
+                    c = 'b'                       # a stud
+            elif x % 8 == 0:
+                c = 'n'                           # the gap between planks
+            else:
+                c = 'o' if (x // 8 + y // 12) % 2 == 0 or (x + y) % 7 else 'n'
+            row += c
+        rows.append(row)
+    # The ring, right of the middle.
+    for dy, dx in ((22, 25), (23, 24), (23, 26), (24, 24), (24, 26), (25, 25)):
+        rows[dy] = rows[dy][:dx] + 'p' + rows[dy][dx + 1:]
+    return rows
+
+
 def sheet(frames, columns, w, h):
     rows = (len(frames) + columns - 1) // columns
     img = Image.new("RGBA", (columns * w, rows * h), (0, 0, 0, 0))
@@ -295,6 +324,10 @@ def main():
         sprite_file(os.path.join(out, kind + "_face.bmsprite"), kind + "_face.png", 1, 1, 32, 32, (0, 0), (0, 0, 32, 32), [
             ("neutral", True, [(0, 60)]),
         ])
+    sheet([door_panel()], 1, 32, 48).save(os.path.join(out, "door_panel.png"))
+    sprite_file(os.path.join(out, "door_panel.bmsprite"), "door_panel.png", 1, 1, 32, 48, (0, 48), (0, -48, 32, 48), [
+        ("idle", True, [(0, 60)]),
+    ])
     sheet(BAG_FRAMES, 2, 16, 16).save(os.path.join(out, "drop.png"))
     sprite_file(os.path.join(out, "drop.bmsprite"), "drop.png", len(BAG_FRAMES), 2, 16, 16, (8, 13), (-5, -9, 10, 9), [
         ("idle", True, [(0, 20), (1, 20)]),

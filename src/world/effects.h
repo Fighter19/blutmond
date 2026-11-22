@@ -55,6 +55,17 @@ void bmEffectsFrame(struct BmGame *pGame);
 /// the effect (or a teleport) wants them. Also after a state was loaded.
 void bmEffectsPresent(struct BmGame *pGame);
 
+/// Doors with a panel (the sprite their `panel` property names, its anchor the hinge at the
+/// bottom): drawn as if turning about the hinge in an oblique view (depth drawn up and to the
+/// right), with an affine sprite's scale and shear. Closed far from the player, open near:
+/// `direction` east and west doors stand in the side wall, edge-on, and swing out of the room;
+/// others (north) face the screen and swing away into the depth. Scaled to the door's height.
+/// Returns the OAM entries used, from `firstOam`.
+uint8_t bmEffectsDrawDoors(struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
+
+/// How open a door is for the player where they are: 0 closed to 256 open.
+int32_t bmEffectsDoorOpening(const struct BmGame *pGame, uint16_t object);
+
 /// How far the wave pulls the room's backgrounds left on screen line `y` now, 0 to
 /// BM_EFFECT_WAVE_MAX (the player's sprite sways with it).
 int32_t bmEffectsWaveAt(const struct BmGame *pGame, int32_t y);

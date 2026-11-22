@@ -14,17 +14,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define BM_LINK_PROTOCOL_VERSION 2   // 2: state in parts (STATE_DATA, STATE_PUT)
+#define BM_LINK_PROTOCOL_VERSION 3   // 2: state in parts (STATE_DATA, STATE_PUT); 3: checked answers
 
 #define BM_LINK_WORD_POLL 0x424D504Cu  // "BMPL", master: give me your next word
 #define BM_LINK_WORD_IDLE 0x424D4944u  // "BMID", slave: nothing to send
 #define BM_LINK_WORD_SYNC 0x53594E43u  // "SYNC", after four 0xFFFFFFFF
 #define BM_LINK_WORD_SESSION 0x53455353u  // "SESS", after four 0xFFFFFFFF: a new master, sequence numbers from 0
 #define BM_LINK_WORD_FILL 0xFFFFFFFFu
-#define BM_LINK_ACK(seq) (0x42410000u | ((uint32_t)(uint8_t)(seq) << 8))
-#define BM_LINK_NAK(seq) (0x424E0000u | ((uint32_t)(uint8_t)(seq) << 8))
+// Answers: the sequence number in bits 8-15 and a check of it in bits 1-7 (its bits 0-6
+// inverted, and 0x55 more if bit 7 is set), so that a flipped bit in either is noticed (a wrong
+// sequence number taken for true loses packets for good).
+#define BM_LINK_SEQ_CHECK(seq) ((uint32_t)(((~(uint32_t)(seq) & 0x7Fu) ^ (((uint32_t)(seq) & 0x80u) ? 0x55u : 0u)) << 1))
+#define BM_LINK_ACK(seq) (0x42410000u | ((uint32_t)(uint8_t)(seq) << 8) | BM_LINK_SEQ_CHECK((uint8_t)(seq)))
+#define BM_LINK_NAK(seq) (0x424E0000u | ((uint32_t)(uint8_t)(seq) << 8) | BM_LINK_SEQ_CHECK((uint8_t)(seq)))
 // NAK with bit 0 set: the receiver was busy (not an error); `seq` is expected next.
-#define BM_LINK_BUSY(seq) (0x424E0001u | ((uint32_t)(uint8_t)(seq) << 8))
+#define BM_LINK_BUSY(seq) (BM_LINK_NAK(seq) | 1u)
 
 #define BM_LINK_MAX_PAYLOAD 1024
 #define BM_LINK_WINDOW 16

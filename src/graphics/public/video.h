@@ -99,11 +99,20 @@ typedef struct BmSprite
   /// What the sprite is: drawn normally, semi-transparent (blended with what is behind it with
   /// the blend weights, bmBlendSet), or a part of the OBJ window (drawn not at all).
   BmSpriteMode mode;
+  /// 0: a regular sprite. n (1..32): an affine sprite drawn with matrix n - 1
+  /// (bmSpriteSetMatrix), double size: the OAM box is 2w x 2h around the same centre as the
+  /// regular sprite at x, y would have, `x`, `y` its top left. No flips (the matrix has them).
+  uint8_t affine;
 } BmSprite;
 
 /// Sets a sprite in the shadow OAM; it appears after the next bmVideoWaitFrame().
 BmResult bmSpriteSet(uint8_t index, const BmSprite *pSprite);
 void bmSpriteHide(uint8_t index);
+
+/// Affine matrix 0..31 in the shadow OAM: screen to texture, 8.8 fixed point. For a pixel at
+/// (dx, dy) from the sprite's centre the texture's pixel is (pa dx + pb dy, pc dx + pd dy) from
+/// the texture's centre.
+void bmSpriteSetMatrix(uint8_t matrix, int16_t pa, int16_t pb, int16_t pc, int16_t pd);
 
 // --- Windows and colour effects -------------------------------------------------------------
 //
