@@ -70,7 +70,8 @@ L 512.
    - Other classes: nothing.
 8. **Scripted objects** (section 8). Then, if one of them called `enter_door` and
    `doorCooldown == 0`, go through that door.
-9. If `INT(player.y) > room height + 64`: respawn.
+9. If `INT(player.y) > room height + 64`: respawn. Then the cell of the world map the player
+   is in is explored ([world-format.md](world-format.md) §4).
 10. Player animation (section 9). If `animHeld` is 2 and `lockTimer == 0`, or 1 and the
     animation finished, `animHeld = 0`. While `animHeld != 0` the animation only ticks;
     otherwise the engine chooses it from the body.
@@ -595,8 +596,10 @@ instead of its sheet's bank.
 background palette bank 15, 30 x 20 cells of 8 x 8. Tiles: 0 empty, 1-9 a frame's pieces, 10-18
 a gauge cell from empty to full in eighths (red), 19-27 the same in the second gauge colour
 (blue), 32-255 a cache of glyphs (pack-format.md §3.1), each
-on a transparent ground or on a frame's inside; a glyph is made when it is drawn, a tile no cell
-shows is taken again when the cache is full. Texts are shown in the language chosen. The layer
+on a transparent ground or on a frame's inside, and of the world map's cells (world-format.md
+§4); a glyph is made when it is drawn, a tile no cell shows is taken again when the cache is
+full. Palette: 1 ink, 2 its shadow, 3 a frame's inside, 4 and 5 its border, 6-8 the gauges, 9-13
+the map's colours. Texts are shown in the language chosen. The layer
 is presentation: not in the state. After a state is loaded it is cleared and hidden, the blend
 switched off, the dialogue box drawn again if `dialogue != 0`, and the screens redraw.
 
@@ -613,7 +616,8 @@ switched off.
 layer is presented): unless the debug overlay is shown (it takes the place), a frame of 13 x 4
 cells at (0, 0) with `HP` at (1, 1) and `MP` at (1, 2), gauges of 5 cells at (4, 1) (health of
 the most, red) and (4, 2) (mana of the most, blue) and the numbers in 3 cells at (9, 1) and
-(9, 2), drawn again only where a value changed; the layer is shown. When the layer was cleared
+(9, 2), drawn again only where a value changed, and the world map's small map at (23, 0) if
+the pack's map has one ([world-format.md](world-format.md) §4); the layer is shown. When the layer was cleared
 (a state loaded, the last screen closed, the overlay hidden) all of it is drawn again.
 `give(record, n)` and `give_item(name)` that add something set `pickupSound`: at the start of
 the next frame (after `returnPending`) the effect `pickup` plays, if the pack has it.

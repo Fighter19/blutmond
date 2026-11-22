@@ -43,6 +43,7 @@
 #include "runner.h"
 #include "script_panel.h"
 #include "data_panel.h"
+#include "world_panel.h"
 #include "sound_panel.h"
 #include "ui/containers.h"
 #include "ui/lists.h"
@@ -474,6 +475,32 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
             </HSplit>
           </HSplit>
         </VBox>
+        <VBox title="World" separation="0">
+          <PanelContainer theme-type="Toolbar"><Flow>
+            <Button id="world_new" text="New world map" tooltip="A world map for the project: the first room at the start, the others placed by their doors"/>
+            <CheckBox id="world_minimap" text="Small map in the HUD"/>
+            <Label text="Cell"/><SpinBox id="world_cell_w" min-size="56 0" tooltip="Pixels of a room across that make one cell of the map"/>
+            <Label text="x"/><SpinBox id="world_cell_h" min-size="56 0" tooltip="Pixels of a room down that make one cell of the map"/>
+            <Label id="world_status" text="" clip-text="1"/>
+          </Flow></PanelContainer>
+          <HSplit expand="1" fixed-end="320">
+            <WorldView id="world_view" expand="1"/>
+            <PanelContainer min-width="220"><VBox>
+              <Label text="Rooms" bold="1"/>
+              <Scroll expand="1" min-size="0 120"><ItemList id="world_rooms"/></Scroll>
+              <Label id="world_room" text="No room selected" wrap="1"/>
+              <CheckBox id="world_hidden" text="Not on the map (hidden)"/>
+              <Flow>
+                <Button id="world_put" text="Put on the map" tooltip="A room that is not on the map: next to it, to be dragged where it belongs"/>
+                <Button id="world_doors" text="Place by its doors" tooltip="The room is placed next to the room its door leads from, as the cooker does"/>
+                <Button id="world_fix_all" text="Fix all where they are" tooltip="Rooms placed by their doors keep their places even when a door changes"/>
+              </Flow>
+              <Label text="Problems" bold="1"/>
+              <Scroll min-size="0 90"><ItemList id="world_warnings"/></Scroll>
+              <Label text="Orange: doors; red line: a door whose room is not next to it on the map; green line: a door inside a room (back wall)" wrap="1" dim="1"/>
+            </VBox></PanelContainer>
+          </HSplit>
+        </VBox>
       </TabContainer>
       <HSplit ratio="0.5">
         <PanelContainer><VBox>
@@ -538,6 +565,7 @@ struct Editor
   ScriptPanel scriptPanel;
   DataPanel dataPanel;
   SoundPanel soundPanel;
+  WorldPanel worldPanel;
   Label *status = nullptr, *camera = nullptr;
   Label *hwTiles = nullptr, *hwBanks = nullptr, *hwMaps = nullptr, *hwLayers = nullptr, *hwPack = nullptr;
   ProgressBar *hwTilesBar = nullptr, *hwBanksBar = nullptr, *hwMapsBar = nullptr;
@@ -783,6 +811,9 @@ struct Editor
     dataPanel.setFiles(dataPaths(projectPanel.catalog()), scripts, sprites);
     project.setFonts(fontPaths(projectPanel.catalog()));
     project.setLanguages(languagePaths(projectPanel.catalog()));
+    project.setWorld(worldPath(projectPanel.catalog()));
+    worldPanel.setWorld(worldPath(projectPanel.catalog()));
+    if (!projectPanel.file().assetDirs.empty()) worldPanel.newWorldDir = projectPanel.file().assetDirs[0];
     soundPanel.setSongs(songs);
     if (!songs.empty()) soundPanel.songDir = std::filesystem::path(songs[0]).parent_path().string();
     else if (!projectPanel.file().assetDirs.empty())
@@ -872,6 +903,7 @@ struct Editor
   {
     std::string current = project.currentRoom() >= 0 ? project.rooms()[size_t(project.currentRoom())] : std::string();
     project.setRooms(projectPanel.file().rooms);
+    worldPanel.setRooms(project.rooms());
     for (size_t i = 0; i < project.rooms().size(); i++)
       if (project.rooms()[i] == current) project.selectRoom(int(i));
     projectPanel.showRoom(project.currentRoom());
@@ -964,6 +996,7 @@ struct Editor
     ui.actions().add({"asset.delete", "Delete asset...", "trash", "", "", [this] { projectPanel.deleteSelected(); }, nullptr, nullptr});
     registerGraphicsControls();
     registerAnimationControls();
+    registerWorldControls();
     registerControlType("CodeEdit", [] { return std::make_unique<CodeEdit>(); });
     registerControlType("PianoRoll", [] { return std::make_unique<PianoRoll>(); });
     ui.actions().add({"song.new", "New song or sound effect...", "music", "", "", [this] { soundPanel.newSong(); }, nullptr, nullptr});
@@ -1040,6 +1073,13 @@ struct Editor
       projectPanel.refresh();
       spritesChanged();
     };
+    worldPanel.bind(*root, ui);
+    worldPanel.log = projectPanel.log;
+    worldPanel.changed = [this] { pushLive(); };
+    worldPanel.created = [this] {
+      projectPanel.refresh();
+      spritesChanged();
+    };
     soundPanel.bind(*root, ui);
     soundPanel.log = projectPanel.log;
     soundPanel.changed = [this] { pushLive(); };
@@ -1094,6 +1134,7 @@ struct Editor
     };
     projectPanel.setProject(projectFile);
     project.setRooms(projectFile.rooms);
+    worldPanel.setRooms(project.rooms());
     spritesChanged();
     projectPanel.showRoom(project.currentRoom());
     auto *profile = root->findAs<OptionButton>("profile");
@@ -1118,6 +1159,7 @@ struct Editor
     scriptPanel.update(dt);
     dataPanel.update(dt);
     soundPanel.update(dt);
+    worldPanel.update(dt);
     reloadTimer += dt;
     if (reloadTimer > 1.0f)
     {

@@ -1,24 +1,25 @@
 class StartMenu extends Screen;
 
 // The Start menu (docs/plans/ui.md §1): the player's status, and the pages Equipment, Items,
-// Commands and System. Up and Down choose, A opens a page, B or Start close the menu. The engine opens the
+// Commands, Map and System. Up and Down choose, A opens a page, B or Start close the menu. The engine opens the
 // class of this name when Start is pressed.
 
 var int Choice;
 
 event opened() {
-  ui_frame(1, 1, 12, 12);
+  ui_frame(1, 1, 12, 14);
   ui_label(3, 2, "Equipment");
   ui_label(3, 4, "Items");
   ui_label(3, 6, "Commands");
-  ui_label(3, 8, "System");
-  ui_label(3, 10, "Close");
+  ui_label(3, 8, "Map");
+  ui_label(3, 10, "System");
+  ui_label(3, 12, "Close");
   cursor();
   status();
 }
 
 function cursor() {
-  for i in 0..5 { ui_label(2, 2 + i * 2, " "); }
+  for i in 0..6 { ui_label(2, 2 + i * 2, " "); }
   ui_label(2, 2 + Choice * 2, ">");
 }
 
@@ -38,19 +39,20 @@ function status() {
 
 event press(name b) {
   if b == #Up {
-    Choice = (Choice + 4) % 5;
+    Choice = (Choice + 5) % 6;
     cursor();
   }
   if b == #Down {
-    Choice = (Choice + 1) % 5;
+    Choice = (Choice + 1) % 6;
     cursor();
   }
   if b == #A {
     if Choice == 0 { open_screen(#EquipmentMenu); }
     if Choice == 1 { open_screen(#ItemsMenu); }
     if Choice == 2 { open_screen(#CommandsMenu); }
-    if Choice == 3 { open_screen(#SystemMenu); }
-    if Choice == 4 { close_screen(); }
+    if Choice == 3 { open_screen(#MapMenu); }
+    if Choice == 4 { open_screen(#SystemMenu); }
+    if Choice == 5 { close_screen(); }
   }
   if b == #B || b == #Start { close_screen(); }
 }

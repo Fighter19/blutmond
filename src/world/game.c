@@ -529,6 +529,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   if (fresh) bmAttachmentsEnterRoom(g);
   bmActorsVerifyInUse(g);   // the rest of the scripts is verified in spare time (main.c)
   enterRoomSound(g);
+  bmMapEnterRoom(g);
   return bmRoomShow(&g->room, 0, 0);
 }
 
@@ -802,6 +803,7 @@ static void hudFrame(BmGame *g)
 {
   BmUi *ui = &g->ui;
   if (!ui->ready) return;
+  bool whole = g->hudDirty;
   if (g->hudDirty)
   {
     g->hudDirty = false;
@@ -829,6 +831,8 @@ static void hudFrame(BmGame *g)
       bmUiNumber(ui, 9, 2, now[2], 3);
     }
     for (int i = 0; i < 4; i++) g->hudShown[i] = now[i];
+    // The small map at the top right (map.h), if the game's map has one.
+    bmMapHud(g, whole);
     bmUiShow(ui, true);
   }
   // The notice, unless the dialogue box is where it goes.
@@ -1194,6 +1198,8 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     respawn(g);
   }
 
+  // The cell the player is in now is explored (map.h).
+  bmMapFrame(g);
   animatePlayer(g);
   // Scripts and animations have had their turn: who is struck.
   bmHitsFrame(g);
@@ -1264,6 +1270,9 @@ static const BmStateField s_gameFields[] = {
   F(noticeText, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(noticeCount, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(noticeTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  // The world map: what the player has seen of it.
+  BM_STATE_ARRAY(BmGame, mapExplored, BM_TYPE_U8, BM_STATE_SAVE | BM_STATE_LINK, BM_MAP_MAX_CELLS / 8),
+  BM_STATE_ARRAY(BmGame, mapRevealed, BM_TYPE_U8, BM_STATE_SAVE | BM_STATE_LINK, BM_MAP_MAX_ROOMS / 8),
   F(savedRoom, BM_TYPE_U32, BM_STATE_SAVE),
   F(savedX, BM_TYPE_S32, BM_STATE_SAVE),
   F(savedY, BM_TYPE_S32, BM_STATE_SAVE),

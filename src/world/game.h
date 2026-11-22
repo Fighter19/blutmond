@@ -11,6 +11,7 @@
 #include "attachments.h"
 #include "screens.h"
 #include "inventory.h"
+#include "map.h"
 #include "actors.h"
 #include "body.h"
 #include "collision.h"
@@ -122,6 +123,11 @@ typedef struct BmGame
   bool noticeDrawn;
   uint8_t noticeWidth;             // cells of the notice on screen, 0 none
   int16_t hudShown[4];             // health, its most, mana, its most as last drawn
+  // The world map (map.h): the cells explored and the rooms revealed (save game), and what the
+  // map's view of the pack and the HUD's small map are (not state).
+  uint8_t mapExplored[BM_MAP_MAX_CELLS / 8];
+  uint8_t mapRevealed[BM_MAP_MAX_ROOMS / 8];
+  BmMap map;
   // Where the last save point was (the Return Feather goes there).
   uint32_t savedRoom;
   int32_t savedX, savedY;

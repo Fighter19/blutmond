@@ -320,7 +320,11 @@ event press(name b) {
 The UI calls draw on the UI layer in 8 x 8 cells (30 x 20): `ui_frame(x, y, w, h)`,
 `ui_label(x, y, text)`, `ui_number(x, y, value, digits)`, `ui_text(x, y, w, text)` (wrapped),
 `ui_gauge(x, y, w, percent)`, `ui_clear(x, y, w, h)`, `ui_show(on)`. Any script may use them
-(the boss's health bar is drawn by the boss). Texts are shown in the language chosen
+(the boss's health bar is drawn by the boss). The world map ([world-format.md](world-format.md)
+§4): `ui_map(x, y, w, h)` draws it into w x h cells, centred on the player, whose cell blinks
+with the game frame (a map screen calls it again every few frames); `map_percent()` is how much
+of it is explored; `map_reveal(#room_id)` shows a room's cells without exploring them (false if
+the room is not on the map). Texts are shown in the language chosen
 (`language()`, `set_language(i)`, `language_count()`, `language_name(i)`;
 [pack-format.md](pack-format.md) §3.2). For equipment and items: `equipped(slot)`,
 `record_text(record, #field)` and `record_int(record, #field)` (a field of a record of any

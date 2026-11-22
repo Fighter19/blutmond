@@ -14,6 +14,7 @@ extern "C" {
 #include "font_asset.h"
 #include "lang_asset.h"
 #include "sprite_asset.h"
+#include "world_asset.h"
 
 #include <algorithm>
 #include <cmath>
@@ -104,6 +105,28 @@ uint32_t add(BmPackWriter &w, uint32_t id, BmChunkCategory category, uint16_t gr
 {
   return bmPackWriterAdd(&w, id, category, group, b.data.data(), uint32_t(b.data.size()));
 }
+
+// Level data that is the same as an earlier room's (rooms made from the same map: the debug
+// rooms) is not written again: the room refers to the earlier chunk, which stays in the group
+// of the room that came first (pack-format.md §2).
+struct SharedChunks
+{
+  std::map<std::pair<uint32_t, std::vector<uint8_t>>, uint32_t> index;
+  uint32_t savedBytes = 0;
+  uint32_t add(BmPackWriter &w, uint32_t id, BmChunkCategory category, uint16_t group, const Bytes &b)
+  {
+    auto key = std::make_pair(id, b.data);
+    auto it = index.find(key);
+    if (it != index.end())
+    {
+      savedBytes += uint32_t(b.data.size());
+      return it->second;
+    }
+    uint32_t chunk = bm::add(w, id, category, group, b);
+    index[key] = chunk;
+    return chunk;
+  }
+};
 
 class StringTable
 {
@@ -723,12 +746,7 @@ Bytes objectsChunk(const tmx::Map &map, StringTable &strings, Report &report, ui
 
 std::string roomIdOf(const tmx::Map &map)
 {
-  std::string id = map.property("room_id");
-  if (!id.empty()) return id;
-  size_t slash = map.path.find_last_of("/\\");
-  std::string file = slash == std::string::npos ? map.path : map.path.substr(slash + 1);
-  size_t dot = file.find_last_of('.');
-  return dot == std::string::npos ? file : file.substr(0, dot);
+  return world::roomIdOf(map);
 }
 
 }  // namespace
@@ -779,6 +797,11 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
   BmPackWriter writer;
   bmPackWriterInit(&writer, profile.fourcc, options.layout);
   StringTable strings;
+  // The pack's room index of each room id (the order of the ROOM chunks: by area), and the
+  // area group, for the world map.
+  std::map<std::string, uint16_t> roomPackIndex;
+  std::map<std::string, uint8_t> roomArea;
+  SharedChunks shared;
 
   // The string table (group 0) is written last, once all names are known; the runtime finds
   // it by its chunk id.
@@ -837,8 +860,8 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       if (room->layers.size() > 3)
         report.error("layers", map.path, "a room can have at most 3 graphics layers (it has " + std::to_string(room->layers.size()) + ")");
       for (const GraphicsLayer &gl : room->layers)
-        layerChunks.emplace_back(&gl, add(writer, BM_CHUNK_TMAP, BM_CATEGORY_LEVEL, roomGroup, mapChunk(gl, area, profile)));
-      uint32_t collChunk = add(writer, BM_CHUNK_COLL, BM_CATEGORY_LEVEL, roomGroup, collisionChunk(map, report));
+        layerChunks.emplace_back(&gl, shared.add(writer, BM_CHUNK_TMAP, BM_CATEGORY_LEVEL, roomGroup, mapChunk(gl, area, profile)));
+      uint32_t collChunk = shared.add(writer, BM_CHUNK_COLL, BM_CATEGORY_LEVEL, roomGroup, collisionChunk(map, report));
       uint16_t objectCount = 0;
       uint32_t objsChunk = add(writer, BM_CHUNK_OBJS, BM_CATEGORY_OBJECTS, roomGroup, objectsChunk(map, strings, report, objectCount));
 
@@ -888,6 +911,8 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       r.u16(paleChunk);
       r.u16(tileChunkIndex);
       r.align4();
+      roomArea[room->id] = uint8_t(areaGroup);
+      roomPackIndex[room->id] = uint16_t(roomPackIndex.size());
       add(writer, BM_CHUNK_ROOM, BM_CATEGORY_LEVEL, roomGroup, r);
     }
   }
@@ -1156,6 +1181,46 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       }
       if (!l.path.empty()) report.info("text", l.path, "language " + l.code + ": " + std::to_string(entries.size()) + " texts translated");
       add(writer, BM_CHUNK_LANG, BM_CATEGORY_TEXT, 0, b);
+    }
+  }
+  if (shared.savedBytes != 0)
+    report.info("shared", "project", std::to_string(shared.savedBytes) + " bytes of maps and collision are the same as another room's and stored once");
+  // The world map (world_asset.h): where the rooms lie, their walls and doors.
+  if (!options.world.empty())
+  {
+    try
+    {
+      world::World w = world::load(options.world);
+      std::vector<world::RoomInfo> infos;
+      for (const RoomWork &room : rooms) infos.push_back(world::roomInfo(*room.map, room.id));
+      world::Layout l = world::layout(w, infos);
+      for (const world::RoomEntry &e : w.rooms)
+        if (!roomPackIndex.count(e.id)) report.info("world", options.world, "room '" + e.id + "' is not part of this cook");
+      for (const world::Layout::Problem &p : l.warnings) report.warning("world", options.world + " room '" + p.room + "'", p.message);
+      for (const world::PlacedRoom &p : l.rooms)
+        if (p.automatic)
+          report.info("world", options.world + " room '" + p.id + "'",
+                      "placed by its doors at " + std::to_string(p.x) + ", " + std::to_string(p.y));
+      for (const std::string &id : l.unplaced)
+      {
+        const world::RoomEntry *e = w.find(id);
+        if (e == nullptr || !e->hidden) report.info("world", options.world + " room '" + id + "'", "not on the map (no door leads to it from the map)");
+      }
+      if (l.rooms.size() > world::MAX_ROOMS)
+        report.error("does-not-fit", options.world, std::to_string(l.rooms.size()) + " rooms on the map, at most " + std::to_string(world::MAX_ROOMS));
+      if (l.cellCount() > world::MAX_CELLS)
+        report.error("does-not-fit", options.world, std::to_string(l.cellCount()) + " map cells, at most " + std::to_string(world::MAX_CELLS));
+      for (const world::PlacedRoom &p : l.rooms)
+        if (p.w > 255 || p.h > 255) report.error("does-not-fit", options.world + " room '" + p.id + "'", "more than 255 cells across");
+      Bytes b;
+      b.data = world::chunk(l, roomPackIndex, roomArea);
+      report.info("world", options.world, std::to_string(l.rooms.size()) + " rooms, " + std::to_string(l.cellCount()) + " cells, " +
+                  std::to_string(b.data.size()) + " bytes");
+      add(writer, BM_CHUNK_WRLD, BM_CATEGORY_LEVEL, 0, b);
+    }
+    catch (const std::exception &e)
+    {
+      report.error("does-not-fit", options.world, e.what());
     }
   }
   add(writer, BM_CHUNK_STRS, BM_CATEGORY_TEXT, 0, strings.chunk());

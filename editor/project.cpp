@@ -158,6 +158,7 @@ bool Project::cookLevel(const std::string &path, std::string *pError) const
     options.data = data_;
     options.fonts = fonts_;
     options.languages = languages_;
+    options.world = world_;
     Report report;
     std::vector<uint8_t> pack = bm::cook(maps, options, report);
     for (const auto &e : report.entries)

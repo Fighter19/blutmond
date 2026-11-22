@@ -68,6 +68,9 @@ public:
   void setData(std::vector<std::string> paths) { data_ = std::move(paths); }
   void setFonts(std::vector<std::string> paths) { fonts_ = std::move(paths); }
   void setLanguages(std::vector<std::string> paths) { languages_ = std::move(paths); }
+  /// The world map (.bmworld; empty: none) that goes into the level pack.
+  void setWorld(std::string path) { world_ = std::move(path); }
+  const std::string &world() const { return world_; }
   /// True if a room file changed on disk since the last cook (for hot reload).
   bool changedOnDisk() const;
   /// True if a record file changed on disk since the last call (the first call only notes
@@ -99,6 +102,7 @@ private:
 
   std::vector<std::string> rooms_;
   std::vector<std::string> sprites_, scripts_, songs_, data_, fonts_, languages_;
+  std::string world_;
   std::map<std::string, std::filesystem::file_time_type> dataTimes_;
   int current_ = -1;
   std::string profile_ = "gba";

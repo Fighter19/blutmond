@@ -59,7 +59,8 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/consumables.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong
-  ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong)
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/world.bmworld)
 set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/boss_hall.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_lobby.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_wave.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_spotlight.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_pulse.tmx
@@ -102,6 +103,7 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/items_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/system_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/screens/commands_menu.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/screens/map_menu.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/commands.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/command_strike.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/command_absorb.ms
@@ -360,7 +362,7 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_script PRIVATE ${BM_WARNINGS})
 
   add_library(bm_cooker STATIC
-    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp tools/cooker/font_asset.cpp tools/cooker/lang_asset.cpp src/sound/sound.c src/pack/pack.c src/data/data.c)
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp tools/cooker/font_asset.cpp tools/cooker/lang_asset.cpp tools/cooker/world_asset.cpp src/sound/sound.c src/pack/pack.c src/data/data.c)
   target_include_directories(bm_cooker PUBLIC tools/cooker src/pack src/sound src/data src/core/public PRIVATE third_party/stb)
   target_link_libraries(bm_cooker PUBLIC bm_script)
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST PRIVATE "BM_NATIVE_INCLUDE_DIR=\"${PROJECT_SOURCE_DIR}/src/script\"")
@@ -401,7 +403,7 @@ if(BM_PLATFORM STREQUAL "host")
     endif()
     add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
       editor/dialogs.cpp editor/credits.cpp editor/data_panel.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
-      editor/code_edit.cpp editor/script_panel.cpp editor/sound_panel.cpp ${CMAKE_BINARY_DIR}/generated/build_version.c)
+      editor/code_edit.cpp editor/script_panel.cpp editor/sound_panel.cpp editor/world_panel.cpp ${CMAKE_BINARY_DIR}/generated/build_version.c)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
     # The commit and build date for Help > Version: looked at in every build, rewritten when the
     # commit changes (cmake/version.cmake).
@@ -526,6 +528,11 @@ if(BM_PLATFORM STREQUAL "host")
   target_include_directories(test_project PRIVATE tests)
   target_compile_options(test_project PRIVATE ${BM_WARNINGS})
   add_test(NAME test_project COMMAND test_project ${PROJECT_SOURCE_DIR}/assets ${CMAKE_CURRENT_BINARY_DIR}/test-output/project)
+  add_executable(test_world tests/test_world.cpp)
+  target_link_libraries(test_world PRIVATE bm_cooker)
+  target_include_directories(test_world PRIVATE tests)
+  target_compile_options(test_world PRIVATE ${BM_WARNINGS})
+  add_test(NAME test_world COMMAND test_world ${CMAKE_CURRENT_BINARY_DIR}/test-output/world)
   add_executable(test_data tests/test_data.cpp)
   target_link_libraries(test_data PRIVATE bm_cooker blutmond)
   target_include_directories(test_data PRIVATE tests)
@@ -693,6 +700,11 @@ if(BM_PLATFORM STREQUAL "host")
     add_test(NAME editor_object_menu
       COMMAND bmeditor --frames 3 --screenshot ${cooked}/editor_menu.ppm --room 2 --object-menu 2 ${PROJECT_SOURCE_DIR}/assets/test.bmproj)
     set_tests_properties(editor_data_tab editor_object_menu PROPERTIES FAIL_REGULAR_EXPRESSION "no record|no object"
+      ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;EGL_PLATFORM=surfaceless;GALLIUM_DRIVER=llvmpipe;ASAN_OPTIONS=detect_leaks=0")
+    # The World tab: the test level's rooms on the map (the layout loads, the world file is read).
+    add_test(NAME editor_world_tab
+      COMMAND bmeditor --frames 3 --screenshot ${cooked}/editor_world.ppm --tab 6 ${PROJECT_SOURCE_DIR}/assets/test.bmproj)
+    set_tests_properties(editor_world_tab PROPERTIES FAIL_REGULAR_EXPRESSION "layout:|not a world file|world version"
       ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;EGL_PLATFORM=surfaceless;GALLIUM_DRIVER=llvmpipe;ASAN_OPTIONS=detect_leaks=0")
   endif()
 

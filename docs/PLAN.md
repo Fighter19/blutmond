@@ -720,7 +720,8 @@ half done. Where the windows stand:
 | State | state map (M5) |
 | Hardware | the Graphics tab: VRAM, OAM, palettes, budgets, from the preview or the running game; CPU profiler zones are open |
 | Build & run | Run on the PC and on the GBA, Live |
-| World map, Live link, Debugger | open |
+| World map | the World tab: rooms on the grid, placed by hand or by their doors, walls, doors, links and problems ([spec/world-format.md](spec/world-format.md)); the game's map screen and HUD map come from it. Ability gates are open |
+| Live link, Debugger | open |
 
 ## 16. Showing hardware limits in the editor
 
@@ -837,6 +838,7 @@ dependencies and an order that works.
 | Browser | the editor and the PC game build with Emscripten (WebGL 1, SDL3's port) and are published on GitHub Pages; Export downloads the `.gba` file; Run plays the project in a frame of the editor's page and Live sends every cook into it as a `module` reload. Running on a GBA, Sync and file dialogs need the desktop editor ([USAGE.md](USAGE.md) §10) |
 | M12 | steps 1 to 3 of 5: enums and structures in Mondskript; record files (`.bmdata`) cooked into `DTAB` chunks, read in place by `src/data`; `record<S>` in scripts with field access and `for x in records(S)` ([spec/data-format.md](spec/data-format.md)); the inventory (64 kinds up to 255 each, equipment and quick slots, 16 stat values) in the save game and the link state, `give`/`take`/`item_count`/`stat` for scripts; state transfer in parts (protocol version 2). The test level's bat takes its numbers from an `Enemy` record; the snapshot with the inventory is identical on host and mGBA, and a GBA brought to where another one is carries the inventory. Roles, equipment and the Data tab are open ([plans/structures.md](plans/structures.md)) |
 | Editor | project file (`.bmproj`) with a project panel: rooms (new, add, remove) and assets (usage per room, unused ones, import by dialog or drop, open, delete); palette tweaks as colour overrides next to the source images, per profile, applied by the cooker and pushed live; graphics inspector on the editor's preview or on the running game (`PPU_SNAPSHOT` over the link, PC and GBA): VRAM map, overlaps, backgrounds, OAM, palettes, sprite time per line, budgets |
+| M11 | in part: the browser game (row Browser) and the world map ([spec/world-format.md](spec/world-format.md)): a `.bmworld` file places rooms on a grid of screens, rooms without a place follow their doors; the cooker writes walls and doors per cell into a `WRLD` chunk; the game keeps the explored cells in the save game, draws a small map in the HUD and the whole map on a Map page (`ui_map`, `map_percent`, `map_reveal`); the editor's World tab places the rooms. The same on the PC and the GBA (the autoplay pictures include the small map). With it the cooker stores a room's maps and collision only once when another room has the same (22 KB less in the test level, which the multiboot image needed). Open: the shader PPU, ability gates on the map, map stations as an engine class |
 
 ## 20. Risks, decisions, open questions
 

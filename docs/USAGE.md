@@ -65,6 +65,13 @@ Down-Fwd, Fwd + B for the Short Sword's Lunge), and a charm worn gives its comma
 weapon (the Crimson Charm absorbs blood, the Moon Charm flips gravity). While attacking the player cannot walk, but a run's speed fades rather than stopping, and in the air the player steers; each weapon's record says otherwise if wanted (`ground_move`, `air_move` in the Data tab). Up + B strikes above, Down + B sweeps low, and in the air stabs downwards (bouncing off what it hits). Start, Commands lists
 what the player has now. The debug lobby has a Dagger and both charms lying about to try them.
 
+**The map**: the top right corner shows the rooms around the player as cells of a map, one
+cell a screen, with their walls and doors (orange); the room the player is in is lighter, the
+yellow square is where they are. Only cells the player has been in are shown; the save game
+keeps them. Start, Map shows all of it and how much of it is explored. Where the rooms lie
+comes from the project's world map (the World tab of the editor, section 3); a room that is
+not on it (the debug rooms) has no small map.
+
 Doors with a `panel` property (a sprite) open in a 3D look only as the player goes through
 them: touching a side door, the player walks on through it while it swings into the room, a
 door in the back wall opens in front of the player when Up is pressed in it; then the next room, where the door closes
@@ -108,8 +115,17 @@ commit they were built from.
   (`-DBM_GBA_BUILD_DIR`), `gba-rom` in `editor.conf` or `--gba-rom file`. On the command line
   the same is `build/bmexport build-gba/game.gba level.bmpk out.gba`. For real hardware the
   logo is still missing from the header (section 4): `tools/gbafix.py out.gba --logo FILE`.
-- The tabs (Room, Animation, Script, Sound, Graphics, Data, and Project and State on the left)
-  are described in the [README](../README.md).
+- The tabs (Room, Animation, Script, Sound, Graphics, Data, World, and Project and State on
+  the left) are described in the [README](../README.md).
+- **World**: the world map ([spec/world-format.md](spec/world-format.md)). The rooms lie on a
+  grid of screens as the game's map shows them; rooms without a place of their own are put
+  next to the room their door leads from (drawn lighter, "(doors)"). Drag a room to give it a
+  place, drag the ground to look around, turn the wheel to zoom. The list on the right has
+  every room: hide one from the map (debug rooms), put one that is not on the map next to it,
+  give one back to its doors. "Fix all where they are" writes every place into the file. A
+  red line marks a door whose room is not next to it on the map. New world map makes the file
+  for a project that has none. Changes are saved at once and, with Live, the running game's map
+  changes.
 - **Data**: the records of the project, a table at a time (items, enemies, speakers, lines of
   dialogue). A record's fields are a form: texts and numbers are typed (Enter or leaving the
   field saves), enums, records, sprites and yes/no are chosen; a field the record does not set

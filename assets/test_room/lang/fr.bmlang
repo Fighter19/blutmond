@@ -79,6 +79,7 @@ language fr "Français"
 # Menus
 "Equipment" = "Équipement"
 "Items" = "Objets"
+"Map" = "Carte"
 "System" = "Système"
 "Close" = "Fermer"
 "Health" = "Vie"

@@ -43,6 +43,7 @@ Rules:
 | New sprite | writes a `.bmsprite` next to an image: one frame per grid cell that has pixels, an `idle` animation ([sprite-format.md](sprite-format.md)) |
 | New script | writes a `.ms` file with a class from a template ([mondskript.md](mondskript.md)) |
 | New song | writes a `.bmsong` with one instrument and one track, as music or as a sound effect ([sound-format.md](sound-format.md)) |
+| New world map | writes `world.bmworld` into the first asset folder: the first room at (0, 0), the others placed by their doors ([world-format.md](world-format.md)). The first `.bmworld` in the asset folders is the project's world map; the World tab edits it |
 | Delete asset | deletes the file and its `.bmasset`; refused while a room of the project uses it |
 
 The project file is saved after every change to its room list.

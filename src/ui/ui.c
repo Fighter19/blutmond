@@ -56,13 +56,17 @@ static void gaugeTile(uint8_t out[TILE_BYTES], int eighths, uint8_t fill)
 
 static void loadFixedTiles(void)
 {
-  static const BmColor palette[9] = {
+  static const BmColor palette[14] = {
     { 0 }, { 0x7FFF }, { (uint16_t)(5 | 5 << 5 | 6 << 10) }, { (uint16_t)(3 | 4 << 5 | 10 << 10) },
     { (uint16_t)(26 | 26 << 5 | 28 << 10) }, { (uint16_t)(8 | 9 << 5 | 14 << 10) },
     { (uint16_t)(28 | 6 << 5 | 6 << 10) }, { (uint16_t)(6 | 2 << 5 | 4 << 10) },
     { (uint16_t)(6 | 14 << 5 | 30 << 10) },
+    // The map: a room explored, the room the player is in, one revealed only, a door, the marker.
+    { (uint16_t)(4 | 8 << 5 | 20 << 10) }, { (uint16_t)(8 | 16 << 5 | 28 << 10) },
+    { (uint16_t)(9 | 9 << 5 | 11 << 10) }, { (uint16_t)(30 | 18 << 5 | 4 << 10) },
+    { (uint16_t)(31 | 28 << 5 | 6 << 10) },
   };
-  bmPaletteLoadBg(BM_UI_PALETTE_BANK * 16, palette, 9);
+  bmPaletteLoadBg(BM_UI_PALETTE_BANK * 16, palette, 14);
   uint8_t tile[TILE_BYTES];
   memset(tile, 0, sizeof(tile));
   bmTilesLoadBg(BM_UI_CHAR_BLOCK, 0, tile, TILE_BYTES);
@@ -168,6 +172,41 @@ static void glyphTile(const uint8_t rows[8], bool onFill, uint8_t tile[TILE_BYTE
   }
 }
 
+// Codes from here on in the cache are map cells (bmUiMapCell), not characters (the private use
+// area: no font of a game has them).
+#define MAP_CODE 0xE000u
+#define MAP_CODE_END 0xE800u
+
+// A row of 8 pixels as 8 nibbles, the left one lowest (the tile's byte order).
+static uint32_t rowOf(uint8_t c)
+{
+  return c * 0x11111111u;
+}
+
+static void mapTile(uint16_t look, uint8_t tile[TILE_BYTES])
+{
+  static const uint8_t fills[3] = { BM_UI_MAP_ROOM, BM_UI_MAP_HERE, BM_UI_MAP_REVEALED };
+  uint8_t kind = (uint8_t)((look >> 8) & 3);
+  uint32_t fill = rowOf(fills[kind < 3 ? kind : 0]);
+  // Walls on the edges, a door's colour in the middle four pixels of its wall.
+  const uint32_t middle = 0x00FFFF00u;   // pixels 2-5 of a row
+  uint32_t top = fill, bottom = fill;
+  if (look & 1) top = (look & 0x10) ? (rowOf(BM_UI_BORDER) & ~middle) | (rowOf(BM_UI_MAP_DOOR) & middle) : rowOf(BM_UI_BORDER);
+  if (look & 4) bottom = (look & 0x40) ? (rowOf(BM_UI_BORDER) & ~middle) | (rowOf(BM_UI_MAP_DOOR) & middle) : rowOf(BM_UI_BORDER);
+  for (int y = 0; y < 8; y++)
+  {
+    uint32_t r = y == 0 ? top : y == 7 ? bottom : fill;
+    bool inMiddle = y >= 2 && y <= 5;
+    if (look & 8) r = (r & ~0xFu) | ((look & 0x80) && inMiddle ? BM_UI_MAP_DOOR : BM_UI_BORDER);
+    if (look & 2) r = (r & 0x0FFFFFFFu) | (uint32_t)((look & 0x20) && inMiddle ? BM_UI_MAP_DOOR : BM_UI_BORDER) << 28;
+    if ((look & BM_UI_MAP_MARKER_BIT) && inMiddle) r = (r & ~middle) | (rowOf(BM_UI_MAP_MARKER) & middle);
+    tile[y * 4] = (uint8_t)r;
+    tile[y * 4 + 1] = (uint8_t)(r >> 8);
+    tile[y * 4 + 2] = (uint8_t)(r >> 16);
+    tile[y * 4 + 3] = (uint8_t)(r >> 24);
+  }
+}
+
 static bool slotOnFill(const BmUi *ui, int s)
 {
   return (ui->glyphOnFill[s / 32] >> (s % 32)) & 1;
@@ -205,10 +244,17 @@ static uint8_t glyphTileFor(BmUi *ui, uint32_t code, bool onFill)
       if (!used[s]) freeSlot = s;
     if (freeSlot < 0) return 0;
   }
-  const uint8_t *rows = glyphRows(ui, code);
-  if (rows == NULL) return 0;
   uint8_t tile[TILE_BYTES];
-  glyphTile(rows, onFill, tile);
+  if (code >= MAP_CODE && code < MAP_CODE_END)
+  {
+    mapTile((uint16_t)(code - MAP_CODE), tile);
+  }
+  else
+  {
+    const uint8_t *rows = glyphRows(ui, code);
+    if (rows == NULL) return 0;
+    glyphTile(rows, onFill, tile);
+  }
   bmTilesLoadBg(BM_UI_CHAR_BLOCK, (uint16_t)(BM_UI_GLYPH_FIRST + freeSlot), tile, TILE_BYTES);
   ui->glyphCode[freeSlot] = (uint16_t)code;
   if (onFill) ui->glyphOnFill[freeSlot / 32] |= 1u << (freeSlot % 32);
@@ -235,6 +281,20 @@ void bmUiClearRect(BmUi *ui, int col, int row, int w, int h)
 void bmUiClear(BmUi *ui)
 {
   bmUiClearRect(ui, 0, 0, 32, BM_UI_ROWS);
+}
+
+void bmUiFillRect(BmUi *ui, int col, int row, int w, int h)
+{
+  if (!ui->ready) return;
+  for (int y = row; y < row + h; y++)
+    for (int x = col; x < col + w; x++) setCell(ui, x, y, TILE_FILL);
+}
+
+void bmUiMapCell(BmUi *ui, int col, int row, uint16_t look)
+{
+  if (!ui->ready || col < 0 || col >= 32 || row < 0 || row >= BM_UI_ROWS) return;
+  uint8_t tile = glyphTileFor(ui, MAP_CODE + (look & 0x7FF), false);
+  if (tile != 0) setCell(ui, col, row, tile);
 }
 
 void bmUiFrame(BmUi *ui, int col, int row, int w, int h)
@@ -491,10 +551,17 @@ void bmUiRestore(BmUi *ui)
   for (int s = 0; s < BM_UI_GLYPH_SLOTS; s++)
   {
     if (ui->glyphCode[s] == 0) continue;
-    const uint8_t *rows = glyphRows(ui, ui->glyphCode[s]);
-    if (rows == NULL) continue;
     uint8_t tile[TILE_BYTES];
-    glyphTile(rows, slotOnFill(ui, s), tile);
+    if (ui->glyphCode[s] >= MAP_CODE && ui->glyphCode[s] < MAP_CODE_END)
+    {
+      mapTile((uint16_t)(ui->glyphCode[s] - MAP_CODE), tile);
+    }
+    else
+    {
+      const uint8_t *rows = glyphRows(ui, ui->glyphCode[s]);
+      if (rows == NULL) continue;
+      glyphTile(rows, slotOnFill(ui, s), tile);
+    }
     bmTilesLoadBg(BM_UI_CHAR_BLOCK, (uint16_t)(BM_UI_GLYPH_FIRST + s), tile, TILE_BYTES);
   }
   ui->dirtyRows = (1u << BM_UI_ROWS) - 1;

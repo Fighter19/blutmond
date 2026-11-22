@@ -404,6 +404,15 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_ui_clear:
     bmUiClearRect(&g->ui, args[0], args[1], args[2], args[3]);
     break;
+  case BM_SCRIPT_API_ui_map:
+    bmMapDraw(g, args[0], args[1], args[2], args[3]);
+    break;
+  case BM_SCRIPT_API_map_percent:
+    *result = bmMapPercent(g);
+    break;
+  case BM_SCRIPT_API_map_reveal:
+    *result = bmMapReveal(g, (uint16_t)args[0]);
+    break;
   case BM_SCRIPT_API_ui_show:
     bmUiShow(&g->ui, args[0] != 0);
     break;

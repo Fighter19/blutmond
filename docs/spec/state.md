@@ -118,6 +118,8 @@ In serialisation order. Count is the array length.
 | `noticeText` | u16 |  | snapshot |
 | `noticeCount` | u8 |  | snapshot |
 | `noticeTimer` | u16 |  | snapshot |
+| `mapExplored` | u8 | 64 | save, link |
+| `mapRevealed` | u8 | 8 | save, link |
 | `savedRoom` | u32 |  | save |
 | `savedX`, `savedY` | s32 |  | save |
 | `dialogue` | u8 |  | snapshot |
@@ -190,8 +192,8 @@ In serialisation order. Count is the array length.
 | `screens.fields` | s32 | 32 | snapshot |
 | `screens.repeat` | u8 |  | transient |
 
-Sizes with this table: a save game is 583 bytes of payload, a link transfer 429, a snapshot
-2133 (2139 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
+Sizes with this table: a save game is 655 bytes of payload, a link transfer 501, a snapshot
+2205 (2211 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
 pushed state hold 3072 bytes. Attachment slots 0 to 7 are the
 player's, 8 to 11 the room's. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).
@@ -201,6 +203,10 @@ the order their kinds were first given, each a key (the FNV-1a hash of a record'
 name) and an amount from 1 to 255; an entry that reaches 0 is removed and the ones behind it
 move up. `equipped` and `quick` hold keys (0 none) and are not used by the engine yet;
 `statBase` holds the player's own stat values, numbered by an enum the game declares.
+
+The world map ([world-format.md](world-format.md) §4): `mapExplored` has a bit per cell of the
+map (bit `cell % 8` of byte `cell / 8`, cells numbered as in the `WRLD` chunk), set when the
+player has been in it; `mapRevealed` a bit per room of the map, set by `map_reveal`.
 
 `actors.fields` holds 8 values per scripted object, object 0 first. The meaning of the
 fields is in [runtime-core.md](runtime-core.md).

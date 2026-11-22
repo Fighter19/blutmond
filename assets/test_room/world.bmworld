@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<world version="1" cell_w="240" cell_h="160">
+ <room id="test_room" x="0" y="0"/>
+ <room id="debug_lobby" hidden="true"/>
+ <room id="debug_wave" hidden="true"/>
+ <room id="debug_spotlight" hidden="true"/>
+ <room id="debug_pulse" hidden="true"/>
+ <room id="debug_gradient" hidden="true"/>
+</world>

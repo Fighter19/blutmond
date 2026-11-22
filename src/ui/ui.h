@@ -36,7 +36,15 @@
 
 /// Colours of the UI palette (bank 15): 1 ink, 2 the ink's shadow, 3 a frame's inside, 4 and
 /// 5 its border (light, dark), 6 a gauge's fill, 7 its empty part, 8 the second gauge colour.
-enum { BM_UI_INK = 1, BM_UI_SHADOW, BM_UI_FILL, BM_UI_BORDER, BM_UI_BORDER_DARK, BM_UI_GAUGE, BM_UI_GAUGE_EMPTY, BM_UI_GAUGE_2 };
+/// 9 to 13 are the map's (map.h): a room explored, the room the player is in, a room revealed
+/// but not explored, a door, the player's marker; its walls are drawn in 4.
+enum { BM_UI_INK = 1, BM_UI_SHADOW, BM_UI_FILL, BM_UI_BORDER, BM_UI_BORDER_DARK, BM_UI_GAUGE, BM_UI_GAUGE_EMPTY, BM_UI_GAUGE_2,
+       BM_UI_MAP_ROOM, BM_UI_MAP_HERE, BM_UI_MAP_REVEALED, BM_UI_MAP_DOOR, BM_UI_MAP_MARKER };
+
+/// A map cell's look (bmUiMapCell): its walls (bits 0-3: north, east, south, west), doors in
+/// them (bits 4-7), how it is filled (BM_UI_MAP_*_KIND << 8) and the player's marker.
+enum { BM_UI_MAP_ROOM_KIND = 0, BM_UI_MAP_HERE_KIND = 1, BM_UI_MAP_REVEALED_KIND = 2 };
+#define BM_UI_MAP_MARKER_BIT 0x400
 
 typedef struct BmUi
 {
@@ -94,6 +102,13 @@ void bmUiClearRect(BmUi *pUi, int col, int row, int w, int h);
 /// A frame of w x h cells (at least 2 x 2): border and filled inside. Text drawn on its inside
 /// keeps the fill behind it.
 void bmUiFrame(BmUi *pUi, int col, int row, int w, int h);
+
+/// The frame's inside over w x h cells (no border): what a map shows where nothing is known.
+void bmUiFillRect(BmUi *pUi, int col, int row, int w, int h);
+
+/// A cell of the map (map.h): `look` as described at BM_UI_MAP_MARKER_BIT. Its tile is made
+/// when drawn and kept in the glyph cache.
+void bmUiMapCell(BmUi *pUi, int col, int row, uint16_t look);
 
 /// A gauge of w cells: `value` of `max` filled, in eighths of a cell.
 void bmUiGauge(BmUi *pUi, int col, int row, int w, int32_t value, int32_t max);

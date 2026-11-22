@@ -79,6 +79,7 @@ language de "Deutsch"
 # Menus
 "Equipment" = "Ausrüstung"
 "Items" = "Gegenstände"
+"Map" = "Karte"
 "System" = "System"
 "Close" = "Schließen"
 "Health" = "Leben"

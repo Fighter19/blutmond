@@ -721,7 +721,8 @@ static void testTheMenus(void)
   TEST_ASSERT(bm_script_errors == errors && uiShows("Two cuts on the way up."));
   press(BM_KEY_B);
   TEST_ASSERT(s_game.screens.count == 1);
-  // System: German. Every open menu shows itself again in it.
+  // System (below Map): German. Every open menu shows itself again in it.
+  press(BM_KEY_DOWN);
   press(BM_KEY_DOWN);
   press(BM_KEY_A);
   TEST_ASSERT(s_game.screens.count == 2);
@@ -745,6 +746,112 @@ static void testTheMenus(void)
   TEST_ASSERT(s_game.health == before - 2);
   // Taken off: the defence goes with it.
   TEST_ASSERT(bmAttachmentsEquip(&s_game, 2, 0) && bmInventoryStat(inv, BM_STAT_DEFENCE) == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+// The world map (docs/spec/world-format.md): the cells the player has been in are explored,
+// the HUD shows a small map around them, the Map page of the Start menu all of it; a room can
+// be revealed; it all comes back with the save game; a room that is not on the map has no
+// small map.
+static bool mapCodeAt(int x, int y, uint16_t *pLook)
+{
+  uint32_t c = cellChar(&s_game.ui, x, y);
+  if (c < 0xE000 || c >= 0xE800) return false;
+  if (pLook) *pLook = (uint16_t)(c - 0xE000);
+  return true;
+}
+
+static int mapCellsIn(int x0, int y0, int w, int h)
+{
+  int n = 0;
+  for (int y = y0; y < y0 + h; y++)
+    for (int x = x0; x < x0 + w; x++) n += mapCodeAt(x, y, NULL);
+  return n;
+}
+
+static int exploredCells(void)
+{
+  int n = 0;
+  for (uint16_t c = 0; c < s_game.map.cellCount; c++) n += bmMapExplored(&s_game, c);
+  return n;
+}
+
+static void testTheWorldMap(void)
+{
+  start();
+  frames(3, 0);
+  // test_room (4 x 1 cells), test_room_2 (2 x 1) and the boss hall (2 x 1) in a row; the debug
+  // rooms are hidden.
+  TEST_ASSERT(s_game.map.pChunk != NULL && s_game.map.roomCount == 3 && s_game.map.cellCount == 8);
+  TEST_ASSERT(s_game.map.room == 0);
+  TEST_ASSERT(exploredCells() == 1 && bmMapPercent(&s_game) == 12);
+  // The HUD's map: the player's cell in the middle (26, 2), marked, in the room they are in.
+  uint16_t look = 0;
+  TEST_ASSERT(mapCodeAt(26, 2, &look));
+  TEST_ASSERT((look & BM_UI_MAP_MARKER_BIT) && ((look >> 8) & 3) == BM_UI_MAP_HERE_KIND);
+  TEST_ASSERT((look & 0x05) == 0x05);   // walls north and south (a room one cell high)
+  // Through the east door: its cell and the next room's first are explored.
+  bmBodyPlace(&s_game.player, 990, 80);
+  frames(60, BM_KEY_RIGHT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
+  frames(5, 0);
+  TEST_ASSERT(s_game.map.room == 1 && exploredCells() == 3 && bmMapPercent(&s_game) == 37);
+  // The door shows on the HUD's map: test_room's last cell, left of the player, has a door east.
+  TEST_ASSERT(mapCodeAt(25, 2, &look) && (look & 0x22) == 0x22 && ((look >> 8) & 3) == BM_UI_MAP_ROOM_KIND);
+  TEST_ASSERT(mapCodeAt(26, 2, &look) && (look & 0x88) == 0x88);   // and west in the player's cell
+  // The Map page (Start, down to Map, A): the explored cells, how much in percent.
+  press(BM_KEY_START);
+  press(BM_KEY_DOWN);
+  press(BM_KEY_DOWN);
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Map") && uiShows("37"));
+  TEST_ASSERT(mapCellsIn(2, 4, 26, 14) == 3);
+  // The player's cell blinks: drawn again with the frame.
+  int marked = 0;
+  for (int i = 0; i < 40; i++)
+  {
+    frames(1, 0);
+    for (int y = 4; y < 18; y++)
+      for (int x = 2; x < 28; x++)
+        if (mapCodeAt(x, y, &look) && (look & BM_UI_MAP_MARKER_BIT)) marked |= 1;
+    bool any = false;
+    for (int y = 4; y < 18; y++)
+      for (int x = 2; x < 28; x++) any |= mapCodeAt(x, y, &look) && (look & BM_UI_MAP_MARKER_BIT);
+    if (!any) marked |= 2;
+  }
+  TEST_ASSERT(marked == 3);
+  press(BM_KEY_B);
+  press(BM_KEY_B);
+  TEST_ASSERT(s_game.screens.count == 0);
+  // A map station reveals the boss hall: its two cells are shown, not explored.
+  TEST_ASSERT(bmMapReveal(&s_game, stringId("boss_hall")));
+  TEST_ASSERT(!bmMapReveal(&s_game, stringId("debug_lobby")));   // hidden: not on the map
+  TEST_ASSERT(exploredCells() == 3);
+  press(BM_KEY_START);
+  press(BM_KEY_DOWN);
+  press(BM_KEY_DOWN);
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(mapCellsIn(2, 4, 26, 14) == 5);
+  int revealed = 0;
+  for (int y = 4; y < 18; y++)
+    for (int x = 2; x < 28; x++) revealed += mapCodeAt(x, y, &look) && ((look >> 8) & 3) == BM_UI_MAP_REVEALED_KIND;
+  TEST_ASSERT(revealed == 2);
+  press(BM_KEY_B);
+  press(BM_KEY_B);
+  // The save game keeps what was explored and revealed.
+  memset(bmHalHostSaveMemory(), 0xFF, BM_HAL_SAVE_SIZE);
+  TEST_ASSERT(bmGameWriteSaveGame(&s_game));
+  start();
+  TEST_ASSERT(exploredCells() <= 1);
+  TEST_ASSERT(bmGameReadSaveGame(&s_game));
+  frames(3, 0);
+  TEST_ASSERT(exploredCells() == 3 && (s_game.mapRevealed[0] & 4) != 0);
+  // A room that is not on the map: no small map.
+  startWith(s_data, s_size, "debug_lobby");
+  frames(3, 0);
+  TEST_ASSERT(s_game.map.room < 0 && !mapCodeAt(26, 2, NULL) && bmMapPercent(&s_game) == 0);
   TEST_ASSERT(bm_script_errors == 0);
 }
 
@@ -1618,6 +1725,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheSwordDefeatsTheBat);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
+  RUN_TEST(testTheWorldMap);
   RUN_TEST(testElementsArmourAndConsumables);
   RUN_TEST(testKnockbackAndFlash);
   RUN_TEST(testADropFallsAndIsTaken);

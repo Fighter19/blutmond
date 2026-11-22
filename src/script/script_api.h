@@ -117,7 +117,10 @@ typedef enum BmScriptType {
   X(held,              BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
   X(on_ground,         BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
   X(bounce,            VOID, 1, FIX,   VOID,  VOID,  VOID, 0) \
-  X(lock_move,         VOID, 2, ENUM,  ENUM,  VOID,  VOID, 0)
+  X(lock_move,         VOID, 2, ENUM,  ENUM,  VOID,  VOID, 0) \
+  X(ui_map,            VOID, 4, INT,   INT,   INT,   INT,  0) \
+  X(map_percent,       INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(map_reveal,        BOOL, 1, NAME,  VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -163,6 +166,12 @@ typedef enum BmScriptType {
 // player (attachable-scripts.md §3): no walking or jumping for that many frames; an animation
 // of the player's sprite that the engine does not replace until the lock is over (or, without a
 // lock, until it ends); whether a lock is on. Nothing from an object.
+//
+// The world map (src/world/map.h, docs/spec/world-format.md): ui_map(x, y, w, h) draws it into
+// w x h cells of the UI layer, centred on the player, whose cell blinks with the game frame (a
+// screen draws it again every few frames); map_percent() is how much of it was explored;
+// map_reveal(#room_id) shows a room's cells without exploring them (false if it is not on the
+// map).
 //
 // Screens and the UI layer (src/ui/ui.h; ui.md §3-4): ui_frame(x, y, w, h), ui_label(x, y,
 // text), ui_number(x, y, value, digits), ui_text(x, y, w, text) (wrapped, down to the last

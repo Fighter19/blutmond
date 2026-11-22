@@ -42,16 +42,19 @@ chunk formats named in section 3.
   the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `SONG`, every `FONT`,
   every `MODB`, optionally `MODN`, every `DTAB`, the `LANG`s, and `STRS`.
 - **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `PALE`, `TILE`, `SPRT`, `SONG`,
-  `FONT`, `MODB`, `MODN`, `DTAB`, `LANG`, `STRS`. `VLAY` is written but not read; where things go in video memory is
+  `FONT`, `MODB`, `MODN`, `DTAB`, `LANG`, `WRLD`, `STRS`. `VLAY` is written but not read; where things go in video memory is
   fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
 - **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the
   profile (GBA: 1024); 15 background palette banks (the 16th is the UI's); a pack pushed over the link has at most 512 chunks
   and must fit the runtime's content pool ([runtime-abi.md](runtime-abi.md) §0).
-- **Sharing**: tiles are merged (with flips) per area and palettes are packed per area.
-  Identical assets are not merged across chunks, and nothing decides between global, area
-  and room level: sprites, songs and scripts are always global.
+- **Sharing**: tiles are merged (with flips) per area and palettes are packed per area. A
+  room's `TMAP` or `COLL` chunk that is byte for byte one an earlier room has is not written
+  again: the room's header refers to the earlier chunk, which stays in the group of the room
+  that came first (the four effect rooms of the test level share their maps and collision:
+  22 KB less). Other identical assets are not merged across chunks, and nothing decides
+  between global, area and room level: sprites, songs and scripts are always global.
 
-Not built: `RCHN`, `META`, `SHAP`, `CLAS`, `SCHM`, `EFCT`, `SFX `, `WRLD`; the layouts other
+Not built: `RCHN`, `META`, `SHAP`, `CLAS`, `SCHM`, `EFCT`, `SFX `; the layouts other
 than writing chunks in the order above; `bmpack relayout`; the `stream` way of section 2.4 as
 described there (the link sends whole packs, chunk by chunk, skipping what the runtime has:
 section 5).
@@ -236,7 +239,7 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `DTAB` | the records of one structure, read in place ([data-format.md](data-format.md) §3) |
 | `FONT` | one font, or a part of one, section 3.1 |
 | `LANG` | one language: translations of the pack's texts, section 3.2 |
-| `WRLD` | world map: rooms, positions, door links, map screen data |
+| `WRLD` | world map: where the rooms lie, their cells' walls and doors ([world-format.md](world-format.md) §3) |
 
 Readers MUST skip chunk types they do not know.
 

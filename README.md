@@ -21,7 +21,7 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `src/core/` | platform-independent core: devices and memory heaps, pools, types |
 | `src/graphics/` | graphics API: video (modes, backgrounds, palettes, tiles, maps, sprites, line tables), backdrop, tilemaps |
 | `src/pack/` | packs: reader (ROM/RAM, in place), writer for tools, CRC-32 |
-| `src/world/` | rooms from packs (graphics layers, map streaming), collision, platformer physics, sprites and animations, the game loop for the engine classes (player, camera, kill zones, doors, save points), scripted objects, the state schema and save states |
+| `src/world/` | rooms from packs (graphics layers, map streaming), collision, platformer physics, sprites and animations, the game loop for the engine classes (player, camera, kill zones, doors, save points), scripted objects, the world map, the state schema and save states |
 | `src/sound/` | the sound engine: sequencer and stereo mixer, the same code on the GBA, the PC and in the editor's preview |
 | `src/script/` | the bytecode interpreter for Mondskript with its verifier, and the table of what scripts can call |
 | `src/link/` | live link: protocol (both sides), the runtime's live reload module, the PC side's pack push |
@@ -153,6 +153,12 @@ changes, so it can run next to Tiled.
   at a time, as a list and a form; every change is saved to the `.bmdata` file and cooked at
   once. A preview shows a record's sprite, for a line of dialogue the speaker's portrait, name
   and words. Right click a record for new, duplicate and delete.
+- **World** (centre tab): the world map ([docs/spec/world-format.md](docs/spec/world-format.md)),
+  the project's rooms on a grid of screens as the game's map shows them, with walls and doors.
+  Drag a room to place it; rooms without a place follow their doors. Hide a room from the map,
+  fix the places, set the cell size and the HUD's small map. The game shows the map in a corner
+  of the HUD and on a Map page of the Start menu (`ui_map` in a screen script), with the cells
+  the player has explored (kept in the save game).
 - **Right click** opens a context menu: on the Project panel's entries (where to edit them),
   on an object in the Room view (its script, the records and dialogue lines it uses) and on a
   record.
