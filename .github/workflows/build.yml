@@ -7,6 +7,11 @@ on:
     branches: [develop]
   pull_request:
 
+# Only the newest commit of a branch matters: a new push cancels the run still going for it.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
