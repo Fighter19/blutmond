@@ -239,8 +239,9 @@ static void testPacksTakeTurnsAtTheEndsOfThePool(void)
   bmLinkMasterFree(&m);
 }
 
-// Two packs that do not fit together: the arriving one is written over the running one. The
-// game holds still from the first packet on, and plays on in the same room afterwards.
+// Two packs that do not fit together: the arriving one is written over the running one, at its
+// place, and the chunks that stay at the same offset stay where they are. The game holds still
+// from the first packet on, and plays on in the same room afterwards.
 static void testAPackTooLargeToGoBesideReplacesTheRunningOne(void)
 {
   BmLinkMaster m;
@@ -254,7 +255,11 @@ static void testAPackTooLargeToGoBesideReplacesTheRunningOne(void)
   BmLivePushStats stats;
   uint32_t frameBefore = s_game.frame;
   TEST_ASSERT(bmLiveMasterPushPack(&m, s_variant, s_variantSize, 7, &r, &stats));
-  TEST_ASSERT(stats.chunksResident == 0);   // nothing of the old one can be kept
+  printf("    over it: %u chunks sent (%u bytes), %u kept in place\n", (unsigned)stats.chunksSent, (unsigned)stats.bytesSent,
+         (unsigned)stats.chunksResident);
+  TEST_ASSERT(r.hello.inPlaceCapacity >= s_variantSize);
+  TEST_ASSERT(stats.chunksSent == 1 && stats.bytesSent < s_variantSize / 8);   // one tile changed: one chunk
+  TEST_ASSERT(s_live.chunksCopied == stats.chunksResident);
   TEST_ASSERT(bmLiveWaiting(&s_live));
   frameBefore = s_game.frame;
   for (int i = 0; i < 30; i++) frame();
@@ -267,6 +272,16 @@ static void testAPackTooLargeToGoBesideReplacesTheRunningOne(void)
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
   for (int i = 0; i < 60; i++) frame();
   TEST_ASSERT(s_game.frame > frameBefore);
+
+  // A pack whose chunks moved (a script changed size): what moved is sent, the rest is kept,
+  // and the result is the pack byte for byte.
+  TEST_ASSERT(bmLiveMasterHello(&m, &r));
+  TEST_ASSERT(bmLiveMasterPushPack(&m, s_scripts, s_scriptsSize, 9, &r, &stats));
+  printf("    moved: %u chunks sent, %u kept in place\n", (unsigned)stats.chunksSent, (unsigned)stats.chunksResident);
+  TEST_ASSERT(bmLiveMasterApply(&m, 9, BM_LIVE_HOT, NULL, &st));
+  TEST_ASSERT(st.result == BM_LIVE_OK);
+  TEST_ASSERT(s_live.active.pData == s_pool && memcmp(s_pool, s_scripts, s_scriptsSize) == 0);
+  for (int i = 0; i < 60; i++) frame();
 
   bmLinkMasterFree(&m);
 }

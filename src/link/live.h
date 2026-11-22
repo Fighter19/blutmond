@@ -18,7 +18,7 @@
 #include "pack.h"
 #include "state.h"
 
-#define BM_LIVE_RUNTIME_VERSION 2
+#define BM_LIVE_RUNTIME_VERSION 3
 #define BM_LIVE_MAX_CHUNKS 512
 #define BM_LIVE_STATE_CAPACITY 2048
 
@@ -86,11 +86,17 @@ typedef struct BmLive
   // The content pool: packs that arrive are placed in it (placePack). The running pack is at
   // one end of it, or outside (ROM, an embedded pack of a cartridge); an arriving one goes to
   // the free end, so the free space is never split. Two packs that do not fit together: the
-  // arriving one overwrites the running one, which is released first (packReleased).
+  // arriving one overwrites the running one, which is released first (packReleased). If it
+  // fits where the running one starts, it goes there and every chunk at the same offset with
+  // the same hash and size stays where it is (inPlace); the old chunk table is kept meanwhile
+  // at the pool's end (pOldChunks: offset, size, hash).
   uint8_t *pPool;
   uint32_t poolSize;
   BmPack active;              // size 0 while released
   bool packReleased;          // no pack to run: the game holds still (bmLiveWaiting)
+  bool inPlace;               // this transfer goes over the running pack, keeping chunks
+  uint32_t *pOldChunks;
+  uint32_t oldChunkCount;
 
   // Pack transfer into the place placePack found.
   uint32_t transferId;
@@ -162,6 +168,10 @@ void bmLiveInit(BmLive *pLive, const BmLiveHooks *pHooks, uint8_t *pPool, uint32
 
 /// The largest pack that can arrive while the running one stays.
 uint32_t bmLiveRoomBeside(const BmLive *pLive);
+
+/// The largest pack that can go over the running one at its place, keeping its chunks that
+/// stay at the same offset (0: none).
+uint32_t bmLiveRoomInPlace(const BmLive *pLive);
 
 /// Starts listening on the serial port.
 void bmLiveStart(BmLive *pLive);
@@ -281,9 +291,11 @@ typedef struct BmLiveHello
   uint32_t chunkCount;        // chunks of the active pack
   uint32_t hashCount;         // pairs that follow (may be fewer than chunkCount)
   uint32_t poolCapacity;      // the largest pack it takes at all, overwriting the running one
+  uint32_t inPlaceCapacity;   // the largest that goes over it keeping chunks in place (0: none)
 } BmLiveHello;
-#define BM_LIVE_HELLO_SIZE 36
-#define BM_LIVE_HELLO_MAX_HASHES ((BM_LINK_MAX_PAYLOAD - BM_LIVE_HELLO_SIZE) / 8)
+#define BM_LIVE_HELLO_SIZE 40
+#define BM_LIVE_HELLO_ENTRY 12   // per chunk listed: hash, size, offset
+#define BM_LIVE_HELLO_MAX_HASHES ((BM_LINK_MAX_PAYLOAD - BM_LIVE_HELLO_SIZE) / BM_LIVE_HELLO_ENTRY)
 
 /// STATUS: kind (0 report, 1 answer to APPLY), result, mode, then transfer id, frame, room,
 /// x, y, applied count.

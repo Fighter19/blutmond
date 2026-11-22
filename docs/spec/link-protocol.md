@@ -196,9 +196,9 @@ All values little endian.
 | Packet | Payload |
 |---|---|
 | `HELLO` M → S | empty |
-| `HELLO` S → M | u16 protocol (1), u16 runtime version (2), u16 ABI major, u16 ABI minor and u32 profile (those of the running pack's header), u32 the largest pack that can arrive while the running one stays, u32 size and u32 CRC of the running pack, u32 chunk count, u32 n, u32 the largest pack at all (it then replaces the running one, [runtime-abi.md](runtime-abi.md) §0), then n × (u32 hash, u32 size) of the running pack's first n chunks, n at most 123. A pack larger than the first size and not larger than the second is sent whole: the runtime keeps none of the running pack's chunks |
+| `HELLO` S → M | u16 protocol (1), u16 runtime version (3), u16 ABI major, u16 ABI minor and u32 profile (those of the running pack's header), u32 the largest pack that can arrive while the running one stays, u32 size and u32 CRC of the running pack, u32 chunk count, u32 n, u32 the largest pack at all (it then replaces the running one, [runtime-abi.md](runtime-abi.md) §0), u32 the largest pack that replaces it at its place (0: none), then n × (u32 hash, u32 size, u32 offset) of the running pack's first n chunks, n at most 82. Beside the running pack the runtime has every chunk with the same hash and size; over it at its place only those also at the same offset (and only if both chunk tables ascend, as the cooker writes them); over it elsewhere none |
 | `PING` | any bytes; the slave sends them back |
-| `TOC` | u32 transfer ID, u32 pack size, u16 part, u16 parts, then at most 1012 bytes of the stream "pack header (36 bytes) + chunk table". Part 0 must hold the whole pack header; it starts a transfer into the content pool beside the running pack, or over it if it does not fit beside it (the game then holds still until a pack is applied); that place is first filled with zeros up to the pack size. The header goes to offset 0 and the table to where the header says. After the last part the runtime copies every chunk the running pack also has (same hash and size) and marks it present (not when it goes over the running pack). A pack larger than the pool, more than 512 chunks or a table outside the pack make the transfer fail (reported by `APPLY`) |
+| `TOC` | u32 transfer ID, u32 pack size, u16 part, u16 parts, then at most 1012 bytes of the stream "pack header (36 bytes) + chunk table". Part 0 must hold the whole pack header; it starts a transfer into the content pool beside the running pack, or over it if it does not fit beside it (the game then holds still until a pack is applied); that place is first filled with zeros up to the pack size. The header goes to offset 0 and the table to where the header says. After the last part the runtime copies every chunk the running pack also has (same hash and size) and marks it present; over the running pack at its place it marks the chunks that are there already (same offset, size and hash) and zeroes only the gaps between chunks. A pack larger than the pool, more than 512 chunks or a table outside the pack make the transfer fail (reported by `APPLY`) |
 | `CHUNK_BEGIN` | u32 transfer ID, u16 chunk index, u16 0, u32 size, u32 hash |
 | `CHUNK_DATA` | u32 transfer ID, u16 chunk index, u16 0, u32 offset in the chunk, data (at most 1012 bytes), copied to the chunk's place in the new pack. Outside the chunk: the transfer fails |
 | `CHUNK_END` | u32 transfer ID, u16 chunk index: marks the chunk present. The chunk's hash is not checked here; the pack's CRC is, at `APPLY` |
@@ -215,7 +215,7 @@ All values little endian.
 The master does not wait for chunk-level answers: a pack transfer is `HELLO` (to learn which
 chunks are there), `TOC`, then for each chunk the runtime lacks `CHUNK_BEGIN`,
 `CHUNK_DATA`…, `CHUNK_END`, in windows; the only round trip is `APPLY` → `STATUS`. If the
-running pack has more than 123 chunks the master cannot know about the rest and sends them;
+running pack has more than 82 chunks the master cannot know about the rest and sends them;
 that is harmless.
 
 Packets are handled in the order received, once per frame, between two game frames. A packet

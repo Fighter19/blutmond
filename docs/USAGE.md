@@ -156,7 +156,8 @@ image in the emulator with `--mgba build-gba/game.gba` (there also `run N`, `che
 
 A multiboot GBA has about 140 KB for pushed packs (the test level is 75 KB). A pack that fits
 beside the running one arrives while the game plays on; a larger one replaces it, the game
-standing still until it is there, and is sent whole.
+standing still until it is there. Either way only the chunks that changed are sent (when it
+replaces the running one: also those that moved).
 
 ## 5. Changing things while the game runs
 

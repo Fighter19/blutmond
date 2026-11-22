@@ -12,17 +12,35 @@ bool bmLiveMasterHello(BmLinkMaster *m, BmLiveRemote *r)
   if (!bmLinkMasterRequest(m, BM_LINK_HELLO, NULL, 0, BM_LINK_HELLO, &p, BM_LIVE_ANSWER_POLLS)) return false;
   if (p.length < BM_LIVE_HELLO_SIZE) return false;
   bmLiveDecodeHello(p.payload, &r->hello);
-  if (r->hello.hashCount > BM_LIVE_HELLO_MAX_HASHES || p.length < BM_LIVE_HELLO_SIZE + r->hello.hashCount * 8) return false;
-  for (uint32_t i = 0; i < 2 * r->hello.hashCount; i++) r->pairs[i] = bmLinkGet32(p.payload + BM_LIVE_HELLO_SIZE + i * 4);
+  if (r->hello.hashCount > BM_LIVE_HELLO_MAX_HASHES || p.length < BM_LIVE_HELLO_SIZE + r->hello.hashCount * BM_LIVE_HELLO_ENTRY)
+    return false;
+  for (uint32_t i = 0; i < 3 * r->hello.hashCount; i++) r->pairs[i] = bmLinkGet32(p.payload + BM_LIVE_HELLO_SIZE + i * 4);
   return true;
 }
 
-static bool resident(const BmLiveRemote *r, uint32_t hash, uint32_t size)
+// Whether the runtime has the chunk: anywhere in its running pack (the new one goes beside
+// it), or at the same offset (`atOffset`: the new one goes over it at its place).
+static bool resident(const BmLiveRemote *r, const BmChunkEntry *e, bool atOffset)
 {
   if (r == NULL) return false;
   for (uint32_t i = 0; i < r->hello.hashCount; i++)
-    if (r->pairs[2 * i] == hash && r->pairs[2 * i + 1] == size) return true;
+    if (r->pairs[3 * i] == e->hash && r->pairs[3 * i + 1] == e->size && (!atOffset || r->pairs[3 * i + 2] == e->offset))
+      return true;
   return false;
+}
+
+// The chunk table ascends without overlaps (what keeping chunks in place relies on).
+static bool ascending(const BmPack *pPack)
+{
+  uint32_t end = 0;
+  for (uint32_t c = 0; c < bmPackChunkCount(pPack); c++)
+  {
+    BmChunkEntry e;
+    bmPackGetChunk(pPack, c, &e);
+    if (e.offset < end) return false;
+    end = e.offset + e.size;
+  }
+  return true;
 }
 
 bool bmLiveMasterPushPack(BmLinkMaster *m, const uint8_t *pPack, uint32_t size, uint32_t id, const BmLiveRemote *r,
@@ -32,9 +50,14 @@ bool bmLiveMasterPushPack(BmLinkMaster *m, const uint8_t *pPack, uint32_t size, 
   BmLivePushStats stats = { 0 };
   if (bmPackOpen(&pack, pPack, size, true) != BM_PACK_OK) return false;
   uint8_t buf[BM_LINK_MAX_PAYLOAD];
-  // Too large to arrive beside the running pack: it is written over it, and the runtime
-  // cannot keep any of its chunks.
-  if (r != NULL && size > r->hello.contentCapacity) r = NULL;
+  // Too large to arrive beside the running pack: it is written over it. At its place the
+  // runtime keeps the chunks that stay at the same offset; elsewhere none.
+  bool atOffset = false;
+  if (r != NULL && size > r->hello.contentCapacity)
+  {
+    if (size <= r->hello.inPlaceCapacity && ascending(&pack)) atOffset = true;
+    else r = NULL;
+  }
 
   // Table of contents: header and entries as one stream, split into parts.
   uint32_t count = bmPackChunkCount(&pack);
@@ -60,7 +83,7 @@ bool bmLiveMasterPushPack(BmLinkMaster *m, const uint8_t *pPack, uint32_t size, 
   {
     BmChunkEntry e;
     bmPackGetChunk(&pack, c, &e);
-    if (resident(r, e.hash, e.size))
+    if (resident(r, &e, atOffset))
     {
       stats.chunksResident++;
       continue;

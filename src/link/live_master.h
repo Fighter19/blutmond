@@ -16,7 +16,7 @@
 typedef struct BmLiveRemote
 {
   BmLiveHello hello;
-  uint32_t pairs[2 * BM_LIVE_HELLO_MAX_HASHES];  // hash, size of the chunks it has
+  uint32_t pairs[3 * BM_LIVE_HELLO_MAX_HASHES];  // hash, size, offset of the chunks it has
 } BmLiveRemote;
 
 typedef struct BmLivePushStats
@@ -28,9 +28,10 @@ typedef struct BmLivePushStats
 bool bmLiveMasterHello(BmLinkMaster *pMaster, BmLiveRemote *pRemote);
 
 /// Sends the pack's table of contents and the chunks `pRemote` does not list (all of them if
-/// `pRemote` is NULL, or the pack is too large to go beside the running one there). Nothing
-/// changes on the runtime until bmLiveMasterApply, unless the pack must overwrite the running
-/// one: the runtime then holds still from the first packet until a pack is applied.
+/// `pRemote` is NULL). A pack too large to go beside the running one there goes over it:
+/// then only chunks at the same offset are kept (if it fits there), or none. Nothing changes
+/// on the runtime until bmLiveMasterApply, unless the pack goes over the running one: the
+/// runtime then holds still from the first packet until a pack is applied.
 bool bmLiveMasterPushPack(BmLinkMaster *pMaster, const uint8_t *pPack, uint32_t size, uint32_t transferId,
                           const BmLiveRemote *pRemote, BmLivePushStats *pStats);
 

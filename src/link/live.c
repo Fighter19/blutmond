@@ -56,6 +56,31 @@ uint32_t bmLiveRoomBeside(const BmLive *l)
   return from > after ? from : after;
 }
 
+uint32_t bmLiveRoomInPlace(const BmLive *l)
+{
+  uint32_t from, to;
+  if (l->hooks.releasePack == NULL || !activeInPool(l, &from, &to)) return 0;
+  uint32_t count = bmPackChunkCount(&l->active);
+  if (count > BM_LIVE_MAX_CHUNKS || count * 12u > l->poolSize) return 0;
+  uint32_t end = l->poolSize - count * 12u;   // the old chunk table goes there meanwhile
+  return end > from ? end - from : 0;
+}
+
+// The chunk table of a pack lists the chunks in ascending, non-overlapping order (as the
+// cooker writes it): what keeping chunks in place relies on.
+static bool chunksAscending(const uint8_t *pPack, uint32_t tocOffset, uint32_t count, uint32_t size)
+{
+  uint32_t end = 0;
+  for (uint32_t i = 0; i < count; i++)
+  {
+    const uint8_t *e = pPack + tocOffset + i * BM_PACK_CHUNK_ENTRY_SIZE;
+    uint32_t offset = bmRead32(e + 4), n = bmRead32(e + 8);
+    if (offset < end || offset > size || n > size - offset) return false;
+    end = offset + n;
+  }
+  return true;
+}
+
 // A place for an arriving pack of `size` bytes: before the running one (at the pool's start)
 // or after it (ending at the pool's end), so the next one again finds one piece free. NULL if
 // it only fits over the running one (*pOver set) or not at all.
@@ -130,6 +155,45 @@ static void copyResidentChunks(BmLive *l)
   }
 }
 
+// Zeroes [from, to) of the pack being put together, but for its header and chunk table.
+static void zeroBetween(BmLive *l, uint32_t from, uint32_t to)
+{
+  uint32_t tocEnd = l->tocOffset + l->chunkCount * BM_PACK_CHUNK_ENTRY_SIZE;
+  if (from < BM_PACK_HEADER_SIZE) from = BM_PACK_HEADER_SIZE;
+  if (from < to && to > l->tocOffset && from < tocEnd)
+  {
+    // Around the table.
+    if (from < l->tocOffset) memset(l->pStaging + from, 0, l->tocOffset - from);
+    from = tocEnd;
+  }
+  if (from < to) memset(l->pStaging + from, 0, to - from);
+}
+
+// Over the running pack at its place: every chunk at the same offset with the same size and
+// hash is there already. The rest of the pack, but for the chunks to come, is zeroed.
+static void keepInPlace(BmLive *l)
+{
+  bool ascending = chunksAscending(l->pStaging, l->tocOffset, l->chunkCount, l->totalSize);
+  uint32_t at = 0, k = 0;
+  for (uint32_t i = 0; i < l->chunkCount && ascending; i++)
+  {
+    const uint8_t *e = l->pStaging + l->tocOffset + i * BM_PACK_CHUNK_ENTRY_SIZE;
+    uint32_t offset = bmRead32(e + 4), size = bmRead32(e + 8), hash = bmRead32(e + 20);
+    zeroBetween(l, at, offset);
+    at = offset + size;
+    // Both tables ascend: the old entry at this offset, if any, is found walking along.
+    while (k < l->oldChunkCount && l->pOldChunks[3 * k] < offset) k++;
+    if (k < l->oldChunkCount && l->pOldChunks[3 * k] == offset && l->pOldChunks[3 * k + 1] == size &&
+        l->pOldChunks[3 * k + 2] == hash)
+    {
+      l->present[i / 8] |= (uint8_t)(1u << (i % 8));
+      l->chunksCopied++;
+    }
+  }
+  zeroBetween(l, ascending ? at : 0, l->totalSize);
+  l->inPlace = false;
+}
+
 static void receiveToc(BmLive *l, const BmLinkPacket *p)
 {
   if (p->length < BM_LIVE_TOC_HEADER) return;
@@ -149,14 +213,36 @@ static void receiveToc(BmLive *l, const BmLinkPacket *p)
     memset(l->present, 0, sizeof(l->present));
     bool over = false;
     l->pStaging = n < BM_PACK_HEADER_SIZE ? NULL : placePack(l, total, &over);
+    l->inPlace = false;
     if (l->pStaging == NULL && n >= BM_PACK_HEADER_SIZE && over && l->hooks.releasePack != NULL)
     {
       // Only over the running pack: the game lets go of it and holds still until this one
-      // is applied; nothing of the old one can be copied.
+      // is applied. Where it fits at the running pack's place, the chunks that stay at the
+      // same offset are kept: the old chunk table is put aside for comparing.
+      if (total <= bmLiveRoomInPlace(l) &&
+          chunksAscending(l->active.pData, l->active.header.tocOffset, bmPackChunkCount(&l->active), l->active.size))
+      {
+        uint32_t count = bmPackChunkCount(&l->active);
+        l->pOldChunks = (uint32_t *)(l->pPool + l->poolSize - count * 12u);
+        l->oldChunkCount = count;
+        for (uint32_t i = 0; i < count; i++)
+        {
+          BmChunkEntry e;
+          bmPackGetChunk(&l->active, i, &e);
+          l->pOldChunks[3 * i] = e.offset;
+          l->pOldChunks[3 * i + 1] = e.size;
+          l->pOldChunks[3 * i + 2] = e.hash;
+        }
+        l->pStaging = (uint8_t *)l->active.pData;
+        l->inPlace = true;
+      }
+      else
+      {
+        l->pStaging = l->pPool;
+      }
       l->hooks.releasePack(l->hooks.pContext);
       l->packReleased = true;
       memset(&l->active, 0, sizeof(l->active));
-      l->pStaging = l->pPool;
     }
     l->transferFailed = l->pStaging == NULL;
     if (l->transferFailed) return;
@@ -169,9 +255,10 @@ static void receiveToc(BmLive *l, const BmLinkPacket *p)
       l->transferFailed = true;
       return;
     }
-    // The padding between chunks belongs to the pack's checksum and must be zero; the buffer
-    // may still hold an older pack whose chunks lay elsewhere.
-    memset(l->pStaging, 0, total);
+    // The padding between chunks belongs to the pack's checksum and must be zero; the pool
+    // may still hold an older pack whose chunks lay elsewhere. In place: only the gaps, once
+    // the table is known (keepInPlace).
+    if (!l->inPlace) memset(l->pStaging, 0, total);
   }
   if (id != l->transferId || l->transferFailed) return;
   for (uint32_t i = 0; i < n && l->tocReceived < l->tocStreamSize; i++, l->tocReceived++)
@@ -184,7 +271,7 @@ static void receiveToc(BmLive *l, const BmLinkPacket *p)
   {
     l->tocComplete = l->tocReceived == l->tocStreamSize;
     l->transferFailed = !l->tocComplete;
-    if (l->tocComplete) copyResidentChunks(l);
+    if (l->tocComplete) l->inPlace ? keepInPlace(l) : copyResidentChunks(l);
   }
 }
 
@@ -220,14 +307,17 @@ static bool sendHello(BmLive *l)
   bmLinkPut32(out + 24, count);
   bmLinkPut32(out + 28, hashes);
   bmLinkPut32(out + 32, l->hooks.releasePack != NULL ? l->poolSize : bmLiveRoomBeside(l));
+  bmLinkPut32(out + 36, chunksAscending(l->active.pData, h->tocOffset, count, l->active.size) ? bmLiveRoomInPlace(l) : 0);
   for (uint32_t i = 0; i < hashes; i++)
   {
     BmChunkEntry e;
     bmPackGetChunk(&l->active, i, &e);
-    bmLinkPut32(out + BM_LIVE_HELLO_SIZE + i * 8, e.hash);
-    bmLinkPut32(out + BM_LIVE_HELLO_SIZE + i * 8 + 4, e.size);
+    uint8_t *o = out + BM_LIVE_HELLO_SIZE + i * BM_LIVE_HELLO_ENTRY;
+    bmLinkPut32(o, e.hash);
+    bmLinkPut32(o + 4, e.size);
+    bmLinkPut32(o + 8, e.offset);
   }
-  return send(l, BM_LINK_HELLO, out, (uint16_t)(BM_LIVE_HELLO_SIZE + hashes * 8));
+  return send(l, BM_LINK_HELLO, out, (uint16_t)(BM_LIVE_HELLO_SIZE + hashes * BM_LIVE_HELLO_ENTRY));
 }
 
 // The state as it is now, sent in parts by pumpState (STATE_DATA: offset, total, data).
@@ -800,4 +890,5 @@ void bmLiveDecodeHello(const uint8_t *i, BmLiveHello *h)
   h->chunkCount = bmLinkGet32(i + 24);
   h->hashCount = bmLinkGet32(i + 28);
   h->poolCapacity = bmLinkGet32(i + 32);
+  h->inPlaceCapacity = bmLinkGet32(i + 36);
 }

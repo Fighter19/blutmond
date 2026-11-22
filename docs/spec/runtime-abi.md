@@ -17,9 +17,13 @@ Most of this document is the design. Built so far (`src/link/live.h`,
   another pack arrived.
 - **Over the running pack.** If the arriving pack fits the pool but not beside the running
   one, the runtime lets go of the running pack at the first packet (`releasePack`) and puts
-  the new one together over it, from the pool's start. The game holds still meanwhile (the
-  picture stays, the sound is quiet) and nothing of the old pack can be kept, so every chunk
-  is sent. A transfer that breaks off leaves the game waiting for the next; restart, hot and
+  the new one together over it. The game holds still meanwhile (the picture stays, the sound
+  is quiet). Where the new pack fits at the running one's place, it goes there, and every
+  chunk at the same offset with the same size and hash is left where it is and not sent:
+  after a small change (a tile, a line of a script) most chunks keep their offset, those
+  after a chunk that changed size move and are sent. The old chunk table is kept at the
+  pool's end meanwhile (12 bytes a chunk). Otherwise the new pack goes to the pool's start
+  and is sent whole. A transfer that breaks off leaves the game waiting for the next; restart, hot and
   module work as usual afterwards (the room's ID and what a module reload compares were taken
   from the old pack beforehand); a pushed state is refused while there is no pack.
 - **The region table** has three entries: the link's own memory (runtime), the pool and the
