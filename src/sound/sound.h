@@ -13,7 +13,8 @@
 // This version: 8 voices; built-in waves (pulse 12.5/25/50 %, saw, triangle, sine, noise) and
 // samples; an attack/decay/sustain/release envelope per voice, updated once per frame; one
 // song as music and one as a sound effect at a time, effects taking voices from the music
-// when none is free; an echo (one delay line per side).
+// when none is free; an echo (one delay line per side); the room's acoustics (an echo whose
+// repeats lose their treble, and a low pass over everything: bmSoundSetRoom).
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -79,6 +80,18 @@ typedef struct BmSoundPlayer
   int8_t transpose;       // semitones added to every note (an effect's pitch: a voice)
 } BmSoundPlayer;
 
+/// What the room does to the sound (a room's `acoustics`, room-format.md §1): an echo after
+/// `echoDelay` samples (at most BM_SOUND_ECHO_MAX) coming back at `feedback`/256, each repeat
+/// low-passed by `damping` (0 none .. 255 most: a cave's dull, far echo), and the whole mix
+/// low-passed by `muffle` (0 none .. 255 most: under water). While `on`, it replaces the echo
+/// of the song playing; off, the song's echo is heard.
+typedef struct BmSoundRoom
+{
+  uint8_t on;
+  uint16_t echoDelay;
+  uint8_t feedback, damping, muffle;
+} BmSoundRoom;
+
 typedef struct BmSound
 {
   const BmPack *pPack;
@@ -92,10 +105,15 @@ typedef struct BmSound
   uint8_t stopAtSilence;
   uint8_t intensity;
   uint16_t layerVolume[BM_SOUND_LAYERS];
-  // Echo of the song playing as music.
+  // Echo of the song playing as music, and the room's acoustics; what is heard (echoDelay ...
+  // muffle: the room's while it has some, else the song's echo).
+  uint16_t songEchoDelay;
+  uint8_t songEchoFeedback;
+  BmSoundRoom room;
   uint16_t echoDelay;
-  uint8_t echoFeedback;
+  uint8_t echoFeedback, echoDamping, muffle;
   uint16_t echoPosition;
+  int16_t echoLow[2], mixLow[2];       // the low passes' last values (left, right; 8.8)
   int8_t *pEchoLeft, *pEchoRight;      // BM_SOUND_ECHO_MAX samples each, or NULL: no echo
   // For tests and the budget display.
   uint32_t outputCrc;                  // over everything mixed so far
@@ -127,6 +145,10 @@ void bmSoundFadeMusic(BmSound *pSound, uint16_t volume, uint16_t frames, bool st
 /// (they fade in and out). 15 at the start: everything. A song started as music begins with its
 /// layers as the level says, without fading.
 void bmSoundSetIntensity(BmSound *pSound, uint8_t level);
+
+/// The room's acoustics (BmSoundRoom); `pRoom` NULL or not `on`: none, the song's echo again.
+/// The echo heard so far rings on into the new setting.
+void bmSoundSetRoom(BmSound *pSound, const BmSoundRoom *pRoom);
 
 /// Plays song data directly (the editor's preview): as music or as an effect.
 bool bmSoundPlayData(BmSound *pSound, const uint8_t *pSong, uint32_t size, bool effect);

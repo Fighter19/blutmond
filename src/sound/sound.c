@@ -158,10 +158,14 @@ static void startPlayer(BmSound *s, int which, const uint8_t *pSong, uint32_t si
     s->stopAtSilence = 0;
     for (int l = 0; l < BM_SOUND_LAYERS; l++) s->layerVolume[l] = l <= s->intensity ? 256 : 0;
     uint16_t delay = pSong != NULL ? rd16(pSong + 24) : 0;
-    s->echoDelay = delay > BM_SOUND_ECHO_MAX ? BM_SOUND_ECHO_MAX : delay;
-    s->echoFeedback = pSong != NULL ? pSong[26] : 0;
-    s->echoPosition = 0;
-    if (s->pEchoLeft != NULL) memset(s->pEchoLeft, 0, 2 * BM_SOUND_ECHO_MAX);
+    s->songEchoDelay = delay > BM_SOUND_ECHO_MAX ? BM_SOUND_ECHO_MAX : delay;
+    s->songEchoFeedback = pSong != NULL ? pSong[26] : 0;
+    if (!s->room.on)
+    {
+      // The song's own echo starts afresh (in a room with acoustics the room's goes on).
+      s->echoPosition = 0;
+      if (s->pEchoLeft != NULL) memset(s->pEchoLeft, 0, 2 * BM_SOUND_ECHO_MAX);
+    }
   }
 }
 
@@ -217,6 +221,13 @@ void bmSoundFadeMusic(BmSound *s, uint16_t volume, uint16_t frames, bool stop)
   s->musicStep = (uint16_t)(frames == 0 ? 256 : (distance + frames - 1) / frames);
   if (s->musicStep == 0) s->musicStep = 1;
   s->stopAtSilence = stop;
+}
+
+void bmSoundSetRoom(BmSound *s, const BmSoundRoom *pRoom)
+{
+  if (pRoom == NULL || !pRoom->on) { s->room = (BmSoundRoom){0}; return; }
+  s->room = *pRoom;
+  if (s->room.echoDelay > BM_SOUND_ECHO_MAX) s->room.echoDelay = BM_SOUND_ECHO_MAX;
 }
 
 void bmSoundSetIntensity(BmSound *s, uint8_t level)
@@ -475,8 +486,14 @@ BM_IWRAM_CODE static uint32_t finishEcho(BmSound *s, const int32_t *pSum, int8_t
   int32_t feedback = s->echoFeedback;
   for (uint32_t i = 0; i < count; i++)
   {
-    int32_t l = clip((pSum[0] >> 8) + ((echoLeft[position] * feedback) >> 8));
-    int32_t r = clip((pSum[1] >> 8) + ((echoRight[position] * feedback) >> 8));
+    // The echo rounded towards zero, so it dies away: rounded down, a -1 (and with much
+    // feedback a little more) would come back unchanged for ever, the end of the sound
+    // repeating quietly once a delay.
+    int32_t el = echoLeft[position] * feedback, er = echoRight[position] * feedback;
+    el = (el + ((el >> 31) & 255)) >> 8;
+    er = (er + ((er >> 31) & 255)) >> 8;
+    int32_t l = clip((pSum[0] >> 8) + el);
+    int32_t r = clip((pSum[1] >> 8) + er);
     pSum += 2;
     echoLeft[position] = (int8_t)l;
     echoRight[position] = (int8_t)r;
@@ -489,6 +506,51 @@ BM_IWRAM_CODE static uint32_t finishEcho(BmSound *s, const int32_t *pSum, int8_t
     b += a;
   }
   s->echoPosition = (uint16_t)position;
+  return (a & 0xFFFF) | (b << 16);
+}
+
+// The room's acoustics: the echo with each repeat low-passed (damping), then the whole output
+// (muffle): one-pole filters, y += (x - y) * (256 - k) / 256, kept in 8.8. (At k = 0 they pass
+// the samples unchanged; the song's echo has its own loop without them, as it plays most of
+// the time.)
+BM_IWRAM_CODE static uint32_t finishRoom(BmSound *s, const int32_t *pSum, int8_t *pLeft, int8_t *pRight, uint32_t count, uint32_t check)
+{
+  uint32_t a = check & 0xFFFF, b = check >> 16;
+  int8_t *echoLeft = s->pEchoLeft, *echoRight = s->pEchoRight;
+  uint32_t position = s->echoPosition, delay = s->echoDelay;
+  int32_t feedback = s->echoFeedback;
+  int32_t keepEcho = 256 - s->echoDamping, keepMix = 256 - s->muffle;
+  int32_t echoL = s->echoLow[0], echoR = s->echoLow[1], mixL = s->mixLow[0], mixR = s->mixLow[1];
+  for (uint32_t i = 0; i < count; i++)
+  {
+    // The echo low-passed, then rounded towards zero (finishEcho).
+    echoL += (((int32_t)echoLeft[position] << 8) - echoL) * keepEcho >> 8;
+    echoR += (((int32_t)echoRight[position] << 8) - echoR) * keepEcho >> 8;
+    int32_t el = (echoL >> 8) * feedback, er = (echoR >> 8) * feedback;
+    el = (el + ((el >> 31) & 255)) >> 8;
+    er = (er + ((er >> 31) & 255)) >> 8;
+    int32_t l = clip((pSum[0] >> 8) + el);
+    int32_t r = clip((pSum[1] >> 8) + er);
+    pSum += 2;
+    echoLeft[position] = (int8_t)l;
+    echoRight[position] = (int8_t)r;
+    if (++position >= delay) position = 0;
+    mixL += ((l << 8) - mixL) * keepMix >> 8;
+    mixR += ((r << 8) - mixR) * keepMix >> 8;
+    l = mixL >> 8;
+    r = mixR >> 8;
+    pLeft[i] = (int8_t)l;
+    pRight[i] = (int8_t)r;
+    a += (uint8_t)l;
+    b += a;
+    a += (uint8_t)r;
+    b += a;
+  }
+  s->echoPosition = (uint16_t)position;
+  s->echoLow[0] = (int16_t)echoL;
+  s->echoLow[1] = (int16_t)echoR;
+  s->mixLow[0] = (int16_t)mixL;
+  s->mixLow[1] = (int16_t)mixR;
   return (a & 0xFFFF) | (b << 16);
 }
 
@@ -535,6 +597,27 @@ void bmSoundFrame(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count)
   s->voicesUsed = used;
   if (used > s->voicesPeak) s->voicesPeak = used;
 
-  if (s->echoDelay != 0 && s->pEchoLeft != NULL) s->outputCrc = finishEcho(s, s_sum, pLeft, pRight, count, s->outputCrc);
+  // What is heard: the room's acoustics, or the song's echo. (A room with only a muffle runs
+  // the echo with nothing coming back: one sample of delay, no feedback.)
+  if (s->room.on)
+  {
+    s->echoDelay = s->room.echoDelay != 0 ? s->room.echoDelay : 1;
+    s->echoFeedback = s->room.echoDelay != 0 ? s->room.feedback : 0;
+    s->echoDamping = s->room.damping;
+    s->muffle = s->room.muffle;
+  }
+  else
+  {
+    s->echoDelay = s->songEchoDelay;
+    s->echoFeedback = s->songEchoFeedback;
+    s->echoDamping = 0;
+    s->muffle = 0;
+  }
+  if (s->echoPosition >= s->echoDelay) s->echoPosition = 0;
+  if (s->echoDelay != 0 && s->pEchoLeft != NULL)
+  {
+    if (s->echoDamping != 0 || s->muffle != 0) s->outputCrc = finishRoom(s, s_sum, pLeft, pRight, count, s->outputCrc);
+    else s->outputCrc = finishEcho(s, s_sum, pLeft, pRight, count, s->outputCrc);
+  }
   else s->outputCrc = finishPlain(s_sum, pLeft, pRight, count, s->outputCrc);
 }

@@ -290,7 +290,10 @@ start:
   or `enter_door`) while no walk is under way starts one instead: `doorSeq` = its object + 1,
   `doorTimer = 0`. At the start of each frame while it lasts: A, B or Start pressed skips it,
   then the buttons count as none (nothing is pressed, held or let go for the game, the menus,
-  the attachments), `doorTimer += 1`, `hurtTimer` at least 2. The body gets, after a lock: for a
+  the attachments), `doorTimer += 1` (but while it is 0 only once the player stands: on the
+  ground, climbing or in water; a jump into a door comes down first, the door still shut),
+  `hurtTimer` at least 2. A respawn ends the walk. The body gets, after a lock: while
+  `doorTimer` is 0 no direction and no jump (the body step: falling); then for a
   side door (`direction` east or west) the direction that way and no jump, and instead of the
   body step the player walks: `facing` that way, `vx` = the running speed that way, `vy = 0`,
   `x += vx` (walls and the room's edges do not stop it: out through the door); for another door

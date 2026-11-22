@@ -220,11 +220,81 @@ static void testEcho()
   TEST_ASSERT(frame(4) == 0);                                 // over, before the echo
   TEST_ASSERT(frame(7) > 30 && frame(7) < 70);                // the echo at half
   TEST_ASSERT(frame(13) > 10 && frame(13) < frame(7));        // and its echo, quieter
+  // It dies away to silence, even with much feedback (it used to stop at -1, the last of it
+  // coming back for ever).
+  for (uint8_t feedback : {128, 50, 230})
+  {
+    s.echoFeedback = feedback;
+    data = cook(s);
+    bmSoundInit(&sound, nullptr, echo);
+    bmSoundPlayData(&sound, data.data(), uint32_t(data.size()), false);
+    Output tail = play(sound, 900);
+    size_t n = tail.left.size();
+    bool silent = true;
+    for (size_t i = n - 20 * BM_SOUND_FRAME_SAMPLES; i < n; i++) silent = silent && tail.left[i] == 0 && tail.right[i] == 0;
+    TEST_ASSERT(silent);
+  }
+  s.echoFeedback = 128;
+  data = cook(s);
   // Without memory for it there is no echo.
   bmSoundInit(&sound, nullptr, nullptr);
   bmSoundPlayData(&sound, data.data(), uint32_t(data.size()), false);
   out = play(sound, 30);
   TEST_ASSERT(frame(7) == 0);
+}
+
+// A room's acoustics (bmSoundSetRoom) replace the song's echo while they are on: none at all
+// ("dry"), an echo whose repeats lose their edges (damping), everything low-passed (muffle).
+static void testRoomAcoustics()
+{
+  song::Song s = oneNote("pulse50", 60, 3);
+  s.echoMs = 100;
+  s.echoFeedback = 128;
+  std::vector<uint8_t> data = cook(s);
+  static int8_t echo[2 * BM_SOUND_ECHO_MAX];
+  BmSound sound;
+  auto run = [&](const BmSoundRoom *pRoom, int frames) {
+    bmSoundInit(&sound, nullptr, echo);
+    bmSoundSetRoom(&sound, pRoom);
+    bmSoundPlayData(&sound, data.data(), uint32_t(data.size()), false);
+    return play(sound, frames);
+  };
+  auto range = [](int f0, int f1) { return std::make_pair(size_t(f0) * BM_SOUND_FRAME_SAMPLES, size_t(f1) * BM_SOUND_FRAME_SAMPLES); };
+  // How sharp the sound's edges are (its treble): the squared steps from sample to sample.
+  auto edges = [](const std::vector<int8_t> &v, std::pair<size_t, size_t> r) {
+    long sum = 0;
+    for (size_t i = r.first + 1; i < r.second; i++) sum += long(v[i] - v[i - 1]) * (v[i] - v[i - 1]);
+    return sum;
+  };
+  // Dry: the song's echo is gone.
+  BmSoundRoom dry = {1, 0, 0, 0, 0};
+  Output out = run(&dry, 20);
+  TEST_ASSERT(peak(out.left, range(0, 1).first, range(0, 1).second) > 80);
+  TEST_ASSERT(peak(out.left, range(5, 9).first, range(5, 9).second) == 0);
+  // An echo of the room's own (50 ms: after about 3 frames), plain and damped.
+  BmSoundRoom plain = {1, uint16_t(50 * BM_SOUND_RATE / 1000), 128, 0, 0};
+  BmSoundRoom cave = plain;
+  cave.damping = 200;
+  Output a = run(&plain, 20), b = run(&cave, 20);
+  auto echoFrames = range(4, 6);   // the note is over by frame 4
+  TEST_ASSERT(peak(a.left, echoFrames.first, echoFrames.second) > 30);
+  TEST_ASSERT(peak(b.left, echoFrames.first, echoFrames.second) > 5);
+  TEST_ASSERT(edges(b.left, echoFrames) * 3 < edges(a.left, echoFrames));   // duller
+  TEST_ASSERT(edges(a.left, range(0, 1)) == edges(b.left, range(0, 1)));     // the note itself as it was
+  // Muffled: the note itself loses its edges, but is there.
+  BmSoundRoom water = {1, 0, 0, 0, 200};
+  Output m = run(&water, 20), d = run(&dry, 20);
+  TEST_ASSERT(peak(m.left, range(0, 1).first, range(0, 1).second) > 20);
+  TEST_ASSERT(edges(m.left, range(0, 1)) * 3 < edges(d.left, range(0, 1)));
+  // Everything dies away.
+  for (const BmSoundRoom *r : {&cave, &water})
+  {
+    Output t = run(r, 600);
+    TEST_ASSERT(peak(t.left, t.left.size() - 20 * BM_SOUND_FRAME_SAMPLES, t.left.size()) <= 1);
+  }
+  // Off again: the song's echo (100 ms, after about 6 frames) as before.
+  out = run(nullptr, 20);
+  TEST_ASSERT(peak(out.left, range(7, 8).first, range(7, 8).second) > 30);
 }
 
 static void testSampleAndDeterminism()
@@ -303,6 +373,7 @@ int main(int argc, char **argv)
   RUN_TEST(testLoopAndEnd);
   RUN_TEST(testVoicesAndEffects);
   RUN_TEST(testEcho);
+  RUN_TEST(testRoomAcoustics);
   RUN_TEST(testSampleAndDeterminism);
   RUN_TEST(testBrokenSongsAreRefused);
   return TEST_RESULT();

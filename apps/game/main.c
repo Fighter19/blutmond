@@ -488,7 +488,8 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
     }
     // Spare time in this frame: verify a little more of the scripts not used yet (they are
     // opened without verifying, vm.h), a function at a time while a fifth of the frame is left.
-    // The budget per line is an estimate (12 words a line kept the lag of the autoplay runs
+    // The budget per line is an estimate (12 words a line, with the verifier as Thumb code in
+    // IWRAM, kept the lag of the autoplay runs
     // where it was; 32 did not).
     // (Only while this frame's time is not over: a frame that ran late has no time to spare,
     // and its line number would say otherwise.)

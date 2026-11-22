@@ -1435,6 +1435,25 @@ static void testDoorsOpenAsThePlayerWalksThrough(void)
   TEST_ASSERT(BM_FIX_INT(s_game.player.x) < x && bmEffectsDoorOpening(&s_game, (uint16_t)back) == 256);
   frames(20, 0);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "debug_lobby") == 0);
+  // Jumped into a side door: the player comes down first (the door still shut), then walks.
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);
+  frames(2, 0);
+  bmBodyPlace(&s_game.player, 10, 120);   // in the door's box, high above the floor
+  s_game.player.onGround = false;
+  frames(2, 0);
+  TEST_ASSERT(s_game.doorSeq == back + 1 && !s_game.player.onGround);
+  int fell = 0;
+  while (!s_game.player.onGround && fell < 60)
+  {
+    TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)back) == 0 && s_game.doorTimer == 0);
+    frames(1, 0);
+    fell++;
+  }
+  TEST_ASSERT(s_game.player.onGround && BM_FIX_INT(s_game.player.y) == 160 && s_game.doorSeq == back + 1);
+  frames(4, 0);
+  TEST_ASSERT(s_game.doorTimer > 0 && bmEffectsDoorOpening(&s_game, (uint16_t)back) > 0);
+  frames(40, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "debug_lobby") == 0);
   // Skipped: B through at once.
   TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);
   frames(2, 0);
@@ -1444,6 +1463,26 @@ static void testDoorsOpenAsThePlayerWalksThrough(void)
   frames(1, BM_KEY_B);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "debug_lobby") == 0 && s_game.doorSeq == 0);
   TEST_ASSERT(bm_script_errors == 0);
+}
+
+// A room's acoustics (`acoustics`, `echo`, ... : room-format.md §1) go to the sound engine as
+// the room is entered, and go again when a room without them is.
+static void testRoomAcoustics(void)
+{
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_spotlight") == BM_SUCCESS);
+  frames(2, 0);
+  // The cave preset, its echo made 180 ms.
+  TEST_ASSERT(s_game.sound.room.on && s_game.sound.room.echoDelay == 180 * BM_SOUND_RATE / 1000);
+  TEST_ASSERT(s_game.sound.room.feedback == 120 && s_game.sound.room.damping == 150 && s_game.sound.room.muffle == 0);
+  TEST_ASSERT(s_game.sound.echoDelay == s_game.sound.room.echoDelay && s_game.sound.echoDamping == 150);
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);
+  frames(2, 0);
+  TEST_ASSERT(s_game.sound.room.on && s_game.sound.room.muffle == 200 && s_game.sound.muffle == 200);
+  // The lobby has none: the castle tune's own echo again.
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_lobby") == BM_SUCCESS);
+  frames(2, 0);
+  TEST_ASSERT(!s_game.sound.room.on && s_game.sound.muffle == 0 && s_game.sound.echoDelay == s_game.sound.songEchoDelay);
+  TEST_ASSERT(s_game.sound.songEchoDelay != 0);
 }
 
 // A line of dialogue appears a letter a frame; A shows the rest at once, the next A closes
@@ -1584,6 +1623,7 @@ int main(int argc, char **argv)
   RUN_TEST(testADropFallsAndIsTaken);
   RUN_TEST(testTheDebugLobby);
   RUN_TEST(testDoorsOpenAsThePlayerWalksThrough);
+  RUN_TEST(testRoomAcoustics);
   RUN_TEST(testCommands);
   RUN_TEST(testEveryWeaponHasCommands);
   RUN_TEST(testAttacksAndMovement);

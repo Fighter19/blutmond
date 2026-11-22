@@ -2,7 +2,8 @@
 @ Copyright (C) 2025 Blutmond contributors
 @
 @ Interrupt handler, called by the BIOS (IRQ mode, ARM). Acknowledges the interrupts in
-@ IF and in the BIOS's copy (for VBlankIntrWait), counts VBlanks and runs the link handler.
+@ IF and in the BIOS's copy (for VBlankIntrWait), counts VBlanks, starts the frame's sound
+@ (hal_gba.c) and runs the link handler.
 
     .section .iwram.text, "ax"
     .arm
@@ -18,10 +19,32 @@ bm_irq_handler:
     orr     r2, r2, r1
     strh    r2, [r0, #-8]
     tst     r1, #1                  @ VBlank?
-    ldrne   r2, =bm_vblank_count
-    ldrne   r3, [r2]
-    addne   r3, r3, #1
-    strne   r3, [r2]
+    beq     2f
+    ldr     r2, =bm_vblank_count
+    ldr     r3, [r2]
+    add     r3, r3, #1
+    str     r3, [r2]
+    @ Sound: DMA 1 and 2 start again on the pair handed over, or on silence if none was.
+    ldr     r2, =bm_hal_audio_next
+    ldr     r3, [r2, #8]            @ on?
+    cmp     r3, #0
+    beq     2f
+    ldmia   r2, {r3, r12}           @ left, right
+    cmp     r3, #0
+    ldreq   r3, =bm_hal_audio_silence
+    moveq   r12, r3
+    mov     r2, #0
+    strh    r2, [r0, #0xC6]         @ DMA1CNT_H, DMA2CNT_H: off
+    strh    r2, [r0, #0xD2]
+    ldr     r2, =bm_hal_audio_next
+    str     r3, [r0, #0xBC]         @ DMA1SAD
+    str     r12, [r0, #0xC8]        @ DMA2SAD
+    mov     r3, #0
+    str     r3, [r2]                @ taken
+    ldr     r3, =0xB640             @ on, at FIFO requests, 32 bits, repeating, fixed destination
+    strh    r3, [r0, #0xC6]
+    strh    r3, [r0, #0xD2]
+2:
     tst     r1, #2                  @ H-blank: the third line table (hal_gba.c)
     beq     1f
     ldrh    r3, [r0, #6]            @ VCOUNT: the line just drawn

@@ -46,7 +46,8 @@ named `jump` and `hurt` when the player jumps and is hurt.
   GBA shows 59.7275 frames per second); notes whose tick has come start. At `length` the song
   goes back to `loop` or ends.
 - **Echo**: one delay line per side; the output of `echo` ms ago comes back multiplied by
-  `echo-feedback / 256`. Only the music's song sets it.
+  `echo-feedback / 256`. Only the music's song sets it, and a room's acoustics replace it
+  while the player is in that room ([room-format.md](room-format.md) §1).
 - Everything is integer arithmetic and identical on every target: a test compares a
   checksum over every sample mixed while the test level is played for 1000 game frames,
   between the PC and the GBA. The next section has the arithmetic.
@@ -137,10 +138,20 @@ vol`.
 and `sample * right`. A voice whose two volumes are 0 is not mixed, but its position moves on
 by `step * 304` (a sample without loop that passes its end ends).
 
-**Output**: `clamp(sum >> 8, -128, 127)`. With an echo: `clamp((sum >> 8) + ((line[p] *
-feedback) >> 8))`, where `line` is the delay line of that side; the result is written back to
+**Output**: `clamp(sum >> 8, -128, 127)`. With an echo: `clamp((sum >> 8) + e)`, where `e =
+line[p] * feedback / 256` rounded towards zero (so the echo dies away to 0; rounded down, a -1
+came back for ever) and `line` is the delay line of that side; the result is written back to
 `line[p]`, and `p` goes on, wrapping at the delay. The echo is on while the music's song has a
 delay other than 0; delay at most 4096 samples.
+
+**A room's acoustics** (`room`: on, delay, feedback, damping, muffle) replace the song's
+delay and feedback while on (a delay of 0 is run as 1 with feedback 0). With damping or
+muffle, two one-pole low passes per side, kept in 8.8: `d += ((line[p] << 8) - d) * (256 -
+damping) >> 8` and `e` from `d >> 8` instead of `line[p]`; and after writing the line, `m +=
+((out << 8) - m) * (256 - muffle) >> 8`, the sample put out being `m >> 8`. The delay lines
+are not cleared when a room's acoustics start or end: what rings goes on into the new
+setting. A song started as music while a room's acoustics are on leaves the delay lines
+alone.
 
 **Starting a song**: the notes of the song it replaces (music or effect) get one frame left,
 so they fade out. Position and next event to 0. For music also: the delay and feedback from

@@ -19,11 +19,14 @@
 // --snapshot: writes the video state (registers, VRAM, palette, OAM) as a PPU snapshot that the
 // software PPU can render (tools/bm_ppu_render). Line tables are not captured.
 //
+// --wav <file>: records the sound the GBA put out (16-bit stereo WAV, mGBA's output rate).
+//
 // --expect-backdrop: every pixel must show BG palette entry 0 (the backdrop colour), and that
 // colour must not be black. This is what apps/backdrop draws.
 
 #include <mgba/core/config.h>
 #include <mgba/core/core.h>
+#include <mgba/core/blip_buf.h>
 #include <mgba/core/log.h>
 #include <mgba/internal/gba/gba.h>
 
@@ -239,6 +242,7 @@ int main(int argc, char **argv)
   int pokeFrame = -1;
   const char *pokeTarget = NULL, *pokeFile = NULL, *dumpTarget = NULL, *dumpFile = NULL;
   const char *until = NULL;
+  const char *wav = NULL;
   // A value in memory that must equal the number in a file (written by the PC game), read
   // when --until is reached: what the program had computed by exactly that point.
   const char *checkFileTarget = NULL, *checkFilePath = NULL;
@@ -272,6 +276,8 @@ int main(int argc, char **argv)
       checkFlags[checkCount] = strcmp(argv[i], "--check") == 0;
       checks[checkCount++] = argv[++i];
     }
+    else if (strcmp(argv[i], "--wav") == 0 && i + 1 < argc)
+      wav = argv[++i];
     else if (strcmp(argv[i], "--until") == 0 && i + 1 < argc)
       until = argv[++i];
     else if (strcmp(argv[i], "--check-file") == 0 && i + 2 < argc)
@@ -324,10 +330,34 @@ int main(int argc, char **argv)
     return 1;
   }
   bool reached = until == NULL;
+  FILE *wavFile = NULL;
+  uint32_t wavSamples = 0;
+  if (wav != NULL)
+  {
+    wavFile = fopen(wav, "wb");
+    if (wavFile == NULL) { perror(wav); return 1; }
+    static const uint8_t header[44] = { 0 };
+    fwrite(header, 1, sizeof(header), wavFile);   // written at the end, when the length is known
+  }
   for (int i = 0; i < frames; i++)
   {
     if (i == pokeFrame && !pokeMailbox(core, pokeTarget, pokeFile)) return 1;
     core->runFrame(core);
+    if (wavFile != NULL)
+    {
+      struct blip_t *left = core->getAudioChannel(core, 0), *right = core->getAudioChannel(core, 1);
+      static short out[2 * 4096];
+      int n = blip_samples_avail(left);
+      while (n > 0)
+      {
+        int k = n < 4096 ? n : 4096;
+        blip_read_samples(left, out, k, 1);
+        blip_read_samples(right, out + 1, k, 1);
+        fwrite(out, sizeof(short), (size_t)k * 2, wavFile);
+        wavSamples += (uint32_t)k;
+        n -= k;
+      }
+    }
     if (until != NULL && core->busRead32(core, untilAddress) >= untilValue)
     {
       if (checkFileTarget != NULL)
@@ -351,6 +381,32 @@ int main(int argc, char **argv)
   {
     fprintf(stderr, "--until %s not reached in %d frames\n", until, frames);
     return 1;
+  }
+
+  if (wavFile != NULL)
+  {
+    // The rate: what came out over the frames run (a GBA frame is 280896 cycles at 2^24 Hz).
+    uint32_t rate = (uint32_t)((double)wavSamples * 16777216.0 / (280896.0 * frames) + 0.5);
+    uint8_t h[44];
+    uint32_t bytes = wavSamples * 4;
+    memcpy(h, "RIFF", 4);
+    uint32_t v[] = { 36 + bytes };
+    memcpy(h + 4, v, 4);
+    memcpy(h + 8, "WAVEfmt ", 8);
+    uint32_t fmtSize = 16, byteRate = rate * 4;
+    uint16_t pcm = 1, channels = 2, align = 4, bits = 16;
+    memcpy(h + 16, &fmtSize, 4);
+    memcpy(h + 20, &pcm, 2);
+    memcpy(h + 22, &channels, 2);
+    memcpy(h + 24, &rate, 4);
+    memcpy(h + 28, &byteRate, 4);
+    memcpy(h + 32, &align, 2);
+    memcpy(h + 34, &bits, 2);
+    memcpy(h + 36, "data", 4);
+    memcpy(h + 40, &bytes, 4);
+    fseek(wavFile, 0, SEEK_SET);
+    fwrite(h, 1, sizeof(h), wavFile);
+    fclose(wavFile);
   }
 
   // BG palette entry 0 as the program left it.

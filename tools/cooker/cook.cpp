@@ -8,6 +8,9 @@
 #include "native_module.h"
 #include "overrides.h"
 #include "song_asset.h"
+extern "C" {
+#include "sound.h"
+}
 #include "font_asset.h"
 #include "lang_asset.h"
 #include "sprite_asset.h"
@@ -659,8 +662,9 @@ Bytes objectsChunk(const tmx::Map &map, StringTable &strings, Report &report, ui
 
   // The room's own object, of the class "@room": the map's properties for the runtime. `attach`
   // and `Class.variable` for the room's scripts (attachable-scripts.md §8, "The room as an
-  // owner"), `effect`, `effect_a`, `effect_b` (screen effects) and `title` (said when the room
-  // is entered).
+  // owner"), `effect`, `effect_a`, `effect_b` (screen effects), `title` (said when the room
+  // is entered) and the acoustics (`acoustics`, `echo`, `echo_feedback`, `echo_damping`,
+  // `muffle`).
   tmx::Object roomObject;
   roomObject.type = "@room";
   roomObject.id = 0;
@@ -669,8 +673,14 @@ Bytes objectsChunk(const tmx::Map &map, StringTable &strings, Report &report, ui
   {
     bool classValue = key.find('.') != std::string::npos && key.find('.') > 0;
     attachValues = attachValues || classValue;
-    if (key == "attach" || classValue || key == "effect" || key == "effect_a" || key == "effect_b" || key == "title")
+    bool acoustics = key == "acoustics" || key == "echo" || key == "echo_feedback" || key == "echo_damping" || key == "muffle";
+    if (key == "attach" || classValue || key == "effect" || key == "effect_a" || key == "effect_b" || key == "title" || acoustics)
       roomObject.properties[key] = value;
+    if (key == "acoustics" && value != "dry" && value != "hall" && value != "cave" && value != "water")
+      report.warning("acoustics", map.path, "unknown acoustics '" + value + "' (dry, hall, cave, water)");
+    if (key == "echo" && std::atoi(value.c_str()) * BM_SOUND_RATE / 1000 > BM_SOUND_ECHO_MAX)
+      report.warning("acoustics", map.path, "an echo of " + value + " ms is longer than the longest (" +
+                     std::to_string(BM_SOUND_ECHO_MAX * 1000 / BM_SOUND_RATE) + " ms)");
   }
   if (!roomObject.properties.empty()) objects.push_back(&roomObject);
   if (attachValues && !roomObject.properties.count("attach"))

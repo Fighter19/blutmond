@@ -15,10 +15,14 @@
 #  define BM_IWRAM_DATA __attribute__((section(".iwram.data")))
 // Optimised for speed whatever the rest of the build does (the images are built for size).
 #  define BM_IWRAM_CODE __attribute__((section(".iwram.text"), target("arm"), noinline, optimize("O2")))
+// In IWRAM as Thumb code, built for size: about half as large as BM_IWRAM_CODE and still far
+// quicker than from ROM or EWRAM (what is not run often enough for ARM code's room).
+#  define BM_IWRAM_THUMB __attribute__((section(".iwram.text"), target("thumb"), noinline, optimize("Os")))
 #else
 #  define BM_EWRAM_BSS
 #  define BM_IWRAM_DATA
 #  define BM_IWRAM_CODE
+#  define BM_IWRAM_THUMB
 #endif
 
 typedef int BmResult;

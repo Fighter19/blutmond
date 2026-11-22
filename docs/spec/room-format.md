@@ -51,6 +51,20 @@ Map-level custom properties:
 | `effect` | string | `none` | the screen effect while in the room: `wave`, `spotlight`, `pulse`, `gradient` ([runtime-core.md](runtime-core.md) §12) |
 | `effect_a`, `effect_b` | int | 0 | the effect's two values (0: its default) |
 | `title` | string | – | shown as a notice at the bottom left when the room is entered |
+| `acoustics` | string | – | what the room does to the sound: `dry`, `hall`, `cave`, `water` (below) |
+| `echo` | int | preset's | ms until the echo comes back, at most 225 (0: none) |
+| `echo_feedback` | int | preset's | how loud each repeat comes back: 0-255 (256 would be as loud) |
+| `echo_damping` | int | preset's | how much treble each repeat loses: 0 none - 255 most |
+| `muffle` | int | preset's | a low pass over everything heard: 0 none - 255 most |
+
+**Acoustics.** While the player is in a room with any of the last five properties, the
+room's echo is heard instead of the one the playing song brings (sound-format.md), over the
+music and the sound effects alike; a room without them hears the song's echo again. The
+presets (echo, feedback, damping, muffle): `dry` 0, 0, 0, 0 (no echo at all, not even the
+song's); `hall` 120, 150, 60, 0; `cave` 200, 120, 150, 0 (a far, dull echo); `water` 70, 70,
+200, 200 (everything muffled). The numbers change a preset's values or, without `acoustics`,
+make the room's own (the rest 0). On the GBA damping or muffle cost about a twentieth of a
+frame (`echo` alone costs what a song's echo does).
 
 The map's tile size MUST be a multiple of 8. Map width and height MUST be at least one screen
 of the profile (240×160 px on GBA).
@@ -383,7 +397,8 @@ little endian; offsets are from the start of the chunk.
 ```
 
 Objects are in the order of the Tiled file. An object without class or name has the id of the
-empty string there. A room with any of the properties `attach`, `effect`, `effect_a`, `effect_b`, `title` has one
+empty string there. A room with any of the properties `attach`, `effect`, `effect_a`, `effect_b`, `title`,
+`acoustics`, `echo`, `echo_feedback`, `echo_damping`, `muffle` has one
 more object at the end, of the class `@room`, persistent id 0, position and size 0, whose
 properties are those and the map's `Class.variable` properties: that is how the runtime finds the room's own scripts. Coordinates are Tiled's, rounded to whole pixels; `w` and `h` are 0 for a
 point. Property values are stored as their text (`true`, `12`, `1.5`, a name), pairs sorted
@@ -414,3 +429,4 @@ room IDs and song names.
 - 0.1.3: exact layouts of `ROOM`, `TMAP`, `OBJS`, `PALE` and `TILE` as implemented by the cooker.
 - 0.2.1: room properties `attach` and `Class.variable`; the `@room` object in `OBJS`.
 - 0.2.2: room properties `effect`, `effect_a`, `effect_b`, `title`.
+- 0.2.3: room acoustics: `acoustics`, `echo`, `echo_feedback`, `echo_damping`, `muffle`.

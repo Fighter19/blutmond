@@ -33,7 +33,7 @@ the hardware. A back end for another machine translates.
 | `bmHalVideoReadReg(offset)` | the copy (most GBA video registers cannot be read back) |
 | `bmHalVramWrite(offset, data, size)` | copies into video memory; offset and size even |
 | `bmHalOamWrite(first, data, count)` | copies halfwords into the sprite table; call in the vertical blank |
-| `bmHalVideoWaitVBlank()` | waits for the next vertical blank, restarts the line tables, swaps the sound buffers; returns the count of vertical blanks so far, so a missed frame shows as a gap |
+| `bmHalVideoWaitVBlank()` | hands the sound buffers just filled over, waits for the next vertical blank, restarts the line tables; returns the count of vertical blanks so far, so a missed frame shows as a gap |
 | `bmHalVideoLine()` | the line being drawn, 0-227; 160 and up is the vertical blank |
 | `bmHalLineTableSet(slot, reg, values)` | from the next frame on, register `reg` gets `values[y]` on line y (160 values, copied); `NULL` switches it off. Three slots (0 to 2) |
 | `bmHalVideoSnapshotPart(offset, out, size)` | the video state as a snapshot (section 6), piecewise; returns the total size |
@@ -78,16 +78,17 @@ access); the interrupt stack and the user stack; copy `.iwram` and `.ewram` from
 were loaded; zero `.bss` and `.sbss`; call `main`.
 
 **Functions in IWRAM** are compiled as ARM code and optimised for speed whatever the rest of
-the build does (`BM_IWRAM_CODE`): the serial handler and what it calls, the sound mixer, the
-script interpreter's loop, the wait loops of the serial master, the script verifier
-(`bmVmModuleVerifySome`, about 2 KB).
+the build does (`BM_IWRAM_CODE`): the serial handler and what it calls, the sound mixer (with
+the room acoustics' loop), the script interpreter's loop, the wait loops of the serial master.
+The script verifier (`bmVmModuleVerifySome`, about 1.2 KB) is in IWRAM as Thumb code built
+for size (`BM_IWRAM_THUMB`): half the size of ARM code. From ROM it made the checks at a
+room's entry miss frames (multiboot autoplay 11 missed frames in 1000 instead of 8).
 
-IWRAM is nearly full: the cartridge game leaves about 360 bytes between `.bss` and the
-stacks (the image with native scripts about 540). **When room is needed, the verifier is the
-first to leave:** drop its `BM_IWRAM_CODE` (it then runs from ROM, or EWRAM on multiboot,
-several times slower; it only checks scripts in the frame's spare time and at room entry)
-and lower `BM_SPARE_WORDS_PER_LINE` in `apps/game/main.c` until the autoplay runs lag no more
-than before (`bm_game_stats` lag, the `game_render_*` tests).
+IWRAM is nearly full: the cartridge game leaves about 380 bytes between `.bss` and the
+stacks (the image with native scripts about 560). When room is needed: move what runs rarely
+from `BM_IWRAM_CODE` to `BM_IWRAM_THUMB`, or out of IWRAM, and check that the autoplay runs
+miss no more frames than before (`bm_game_stats` lag, the `game_render_*` tests); the
+verifier's spare-time budget is `BM_SPARE_WORDS_PER_LINE` in `apps/game/main.c`.
 
 ## 4. Interrupts, video, sound, input, save
 
@@ -95,11 +96,12 @@ than before (`bm_game_stats` lag, the `game_render_*` tests).
 bit 3, `IE` bit 0), while line-table slot 2 is in use horizontal blank (`DISPSTAT` bit 4, `IE`
 bit 1), and while the link listens serial (`IE` bit 7). The handler (`irq.S`, ARM, in IWRAM)
 acknowledges what is pending and enabled in `IF` and in the BIOS's copy at 0x03007FF8, counts
-vertical blanks, writes slot 2's next value at a horizontal blank, and for a serial interrupt
+vertical blanks, starts the frame's sound at a vertical blank (below), writes slot 2's next
+value at a horizontal blank, and for a serial interrupt
 switches to system mode with interrupts off and calls the C handler on the user stack.
 
-**Waiting for a frame** is the BIOS call 0x05 (VBlankIntrWait). After it: the line tables are
-restarted and the sound buffers are swapped.
+**Waiting for a frame** is the BIOS call 0x05 (VBlankIntrWait). Before it the sound buffers
+filled this frame are handed over; after it the line tables are restarted.
 
 **Video.** `DISPCNT = 0` at start. Register writes go to the hardware and to the copy. Video
 memory is written 16 bits at a time. Palette values are masked with 0x7FFF.
@@ -123,10 +125,14 @@ blank; then the value of the next line is written at every horizontal blank. Eac
 - Timer 0: reload `65536 - 924`, running without prescaler. 280,896 / 924 = 304.
 - Two pairs of buffers of 304 + 16 bytes; the 16 stay zero, so a request that falls just
   before the swap plays silence.
-- `bmHalAudioBuffers` gives the pair to fill. At each vertical blank DMA 1 (to FIFO A,
-  0x040000A0) and DMA 2 (to FIFO B, 0x040000A4) are stopped and started on the pair just
-  filled (32 bits, repeat, destination fixed, start on FIFO request), and the other pair
-  becomes the one to fill.
+- `bmHalAudioBuffers` gives the pair to fill. Waiting for the frame hands it over
+  (`bm_hal_audio_next`: left, right, sound on) and the other pair becomes the one to fill. At
+  each vertical blank the interrupt handler stops DMA 1 (to FIFO A, 0x040000A0) and DMA 2 (to
+  FIFO B, 0x040000A4) and starts them (32 bits, repeat, destination fixed, start on FIFO
+  request) on the pair handed over, or, if none was (the frame ran late), on a frame of
+  silence (`bm_hal_audio_silence`, EWRAM). Before, the buffers were swapped only when the
+  game waited: a late frame left the DMA reading on past the buffer, over the other side's
+  and the other pair's samples, so the end of the sound was heard again.
 
 So what is mixed in one frame plays during the next.
 

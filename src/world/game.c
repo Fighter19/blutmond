@@ -412,8 +412,61 @@ static void updateCamera(BmGame *g)
 // The echo's delay lines.
 static int8_t s_echo[2 * BM_SOUND_ECHO_MAX] BM_EWRAM_BSS;
 
+// A room's acoustics (room-format.md §1): `acoustics` names a preset, `echo` (ms),
+// `echo_feedback`, `echo_damping` and `muffle` (0-255) change it or make one of their own.
+static const struct { const char *name; uint16_t echoMs; uint8_t feedback, damping, muffle; } s_acoustics[] = {
+  { "dry",   0,   0,   0,   0 },     // no echo at all, not even the song's
+  { "hall",  120, 150, 60,  0 },
+  { "cave",  200, 120, 150, 0 },     // a far, dull echo
+  { "water", 70,  70,  200, 200 },   // everything muffled
+};
+
+static bool numberProperty(const char *text, int32_t *pValue)
+{
+  if (text == NULL || *text < '0' || *text > '9') return false;
+  int32_t v = 0;
+  for (; *text >= '0' && *text <= '9'; text++) v = v * 10 + (*text - '0');
+  *pValue = v;
+  return true;
+}
+
+static uint8_t byteOf(int32_t v)
+{
+  return (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v);
+}
+
+static void roomAcoustics(BmGame *g)
+{
+  BmSoundRoom room = {0};
+  for (uint16_t i = 0; i < g->objectCount; i++)
+  {
+    const BmObjectView *o = &g->objects[i];
+    if (strcmp(o->className, "@room") != 0) continue;
+    const char *preset = bmGameObjectProperty(g, o, "acoustics");
+    int32_t echoMs = 0;
+    for (uint32_t k = 0; preset != NULL && k < sizeof(s_acoustics) / sizeof(s_acoustics[0]); k++)
+    {
+      if (strcmp(preset, s_acoustics[k].name) != 0) continue;
+      room.on = 1;
+      echoMs = s_acoustics[k].echoMs;
+      room.feedback = s_acoustics[k].feedback;
+      room.damping = s_acoustics[k].damping;
+      room.muffle = s_acoustics[k].muffle;
+    }
+    int32_t v;
+    if (numberProperty(bmGameObjectProperty(g, o, "echo"), &v)) { room.on = 1; echoMs = v; }
+    if (numberProperty(bmGameObjectProperty(g, o, "echo_feedback"), &v)) { room.on = 1; room.feedback = byteOf(v); }
+    if (numberProperty(bmGameObjectProperty(g, o, "echo_damping"), &v)) { room.on = 1; room.damping = byteOf(v); }
+    if (numberProperty(bmGameObjectProperty(g, o, "muffle"), &v)) { room.on = 1; room.muffle = byteOf(v); }
+    int32_t samples = echoMs * BM_SOUND_RATE / 1000;
+    room.echoDelay = (uint16_t)(samples > BM_SOUND_ECHO_MAX ? BM_SOUND_ECHO_MAX : samples);
+    break;
+  }
+  bmSoundSetRoom(&g->sound, &room);
+}
+
 // The sound engine reads songs in place: a new pack means starting over. Then the room's song,
-// unless it is the one playing.
+// unless it is the one playing, and its acoustics.
 static void enterRoomSound(BmGame *g)
 {
   if (g->pSoundFrom != g->pPack->pData || g->sound.pPack != g->pPack)
@@ -431,6 +484,7 @@ static void enterRoomSound(BmGame *g)
     bmSoundSetIntensity(&g->sound, BM_SOUND_LAYERS - 1);
     bmSoundPlayMusic(&g->sound, music);
   }
+  roomAcoustics(g);
 }
 
 static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
@@ -532,6 +586,7 @@ static void respawn(BmGame *g)
   g->player.facing = facing;
   g->deaths++;
   g->hurtTimer = 60;
+  g->doorSeq = 0;   // a door being walked through (fallen into a pit before it) is left
 }
 
 // The walk through a door with a panel (effects.h): side doors are walked through, a door in
@@ -924,7 +979,9 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   {
     doorSkip = (pressed & (BM_KEY_A | BM_KEY_B | BM_KEY_START)) != 0;
     keys = pressed = previous = 0;
-    if (g->doorTimer < 255) g->doorTimer++;
+    // In the air (a jump into the door): down first, the walk through starts on the ground.
+    bool standing = g->player.onGround || g->player.climbing || g->player.inWater;
+    if (g->doorTimer < 255 && (standing || g->doorTimer != 0)) g->doorTimer++;
     if (g->hurtTimer < 2) g->hurtTimer = 2;
   }
   if (g->doorArriveTimer != 0 && --g->doorArriveTimer == 0) g->doorArrive = 0;
@@ -1027,7 +1084,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     // Through a side door the player walks on, out of the room; at a door in the back wall
     // the player stands while it opens.
     uint8_t side = g->objectDoorSide[g->doorSeq - 1];
-    in.dx = (int8_t)(side == 1 ? 1 : side == 2 ? -1 : 0);
+    in.dx = (int8_t)(g->doorTimer == 0 ? 0 : side == 1 ? 1 : side == 2 ? -1 : 0);
     in.dy = 0;
     in.jumpPressed = in.jumpHeld = false;
     in.coast = false;
