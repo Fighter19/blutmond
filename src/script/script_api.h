@@ -18,6 +18,7 @@ typedef enum BmScriptType {
   BM_SCRIPT_NAME,   // string id, written #Name
   BM_SCRIPT_TEXT,   // string id, written "text"
   BM_SCRIPT_ENUM,   // a value of an enum (0, 1, ...); which enum only the compiler knows
+  BM_SCRIPT_RECORD, // record<S>: the key of a record (FNV-1a of its name), 0 none
 } BmScriptType;
 
 // X(name, result type, argument count, argument types..., latent)
@@ -44,7 +45,15 @@ typedef enum BmScriptType {
   X(has_item,           BOOL, 1, NAME, VOID, VOID, 0) \
   X(abs,                INT,  1, INT,  VOID, VOID, 0) \
   X(play_sound,         VOID, 1, NAME, VOID, VOID, 0) \
-  X(play_music,         VOID, 1, NAME, VOID, VOID, 0)
+  X(play_music,         VOID, 1, NAME, VOID, VOID, 0) \
+  X(record_get,         INT,  3, INT,  INT,  INT,  0) \
+  X(record_count,       INT,  1, INT,  VOID, VOID, 0) \
+  X(record_at,          INT,  2, INT,  INT,  VOID, 0)
+
+// record_get(table, key, field), record_count(table), record_at(table, index): what the
+// compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
+// structure's name; field: offset | type << 16 (BmDataType).
+#define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {
 #define X(name, result, argc, a0, a1, a2, latent) BM_SCRIPT_API_##name,

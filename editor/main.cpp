@@ -607,6 +607,7 @@ struct Editor
     scriptPanel.setScripts(scripts);
     std::vector<std::string> songs = songPaths(projectPanel.catalog());
     project.setSongs(songs);
+    project.setData(dataPaths(projectPanel.catalog()));
     soundPanel.setSongs(songs);
     if (!songs.empty()) soundPanel.songDir = std::filesystem::path(songs[0]).parent_path().string();
     else if (!projectPanel.file().assetDirs.empty())
@@ -841,7 +842,7 @@ struct Editor
     if (reloadTimer > 1.0f)
     {
       reloadTimer = 0;
-      if (project.changedOnDisk())
+      if (project.dataChangedOnDisk() | project.changedOnDisk())
       {
         cook();
         pushLive();

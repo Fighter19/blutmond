@@ -1,7 +1,12 @@
 # Plan: custom structures and records
 
-Status: step 1 built (enums and structures in the compiler, specified in
-[../spec/mondskript.md](../spec/mondskript.md) §11 "Structures"); steps 2 to 5 are open.
+Status: steps 1 and 2 built (enums and structures in the compiler, record files, `DTAB`,
+`record<S>` in scripts), specified in [../spec/mondskript.md](../spec/mondskript.md) §11 and
+[../spec/data-format.md](../spec/data-format.md); the test level's bat reads its numbers
+from an `Enemy` record. Steps 3 to 5 are open. Where the built version differs from sections
+2 to 6: `DTAB` also holds the defaults record; reading an unknown key gives the defaults
+silently (no report through the link yet); `record_get` takes the field as `offset | type <<
+16`.
 Milestone M12 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies

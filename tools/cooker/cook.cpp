@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
+#include "data_asset.h"
 #include "cook.h"
 #include <fstream>
 
@@ -907,6 +908,8 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       report.warning("music", map.path, "the room's music '" + music + "' is not a song of this cook");
   }
 
+  if (options.scripts.empty() && !options.data.empty())
+    report.error("data", options.data[0], "records need the structures declared in the scripts: cook the scripts too");
   // Scripts: all classes in one module.
   if (!options.scripts.empty())
   {
@@ -941,6 +944,13 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       for (const script::StructInfo &s : module.structs)
         report.info("structure", s.file, s.name + (s.base.empty() ? "" : " is " + s.base) + ": " + std::to_string(s.fields.size()) +
                                              " fields, " + std::to_string(s.size) + " bytes per record");
+      // Records: one table per structure, global (structures.md §4).
+      for (const DataTable &t : cookData(options.data, module, [&](const std::string &s) { return strings.id(s); }, report))
+      {
+        Bytes d;
+        d.data = t.chunk;
+        add(writer, BM_CHUNK_DTAB, BM_CATEGORY_OBJECTS, 0, d);
+      }
       if (!options.scriptC.empty() || !options.nativeCompiler.empty())
       {
         std::string c = script::emitC(module, bmCrc32(0, module.data.data(), module.data.size()));

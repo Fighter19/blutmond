@@ -1,0 +1,14 @@
+# Kinds of enemies (structure Enemy in enemies.ms).
+table Enemy
+
+record Bat {
+  damage = 1
+  speed = 0.75
+}
+
+# A faster bat that hits harder. Set Kind = FastBat on a bat in Tiled to use it.
+record FastBat : Bat {
+  damage = 2
+  speed = 1.25
+  give_up_distance = 160
+}

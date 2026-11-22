@@ -358,7 +358,7 @@ bmlink --xboo /dev/parport0 gdb 2345          (or --mgba game.gba run 60 gdb 234
 arm-none-eabi-gdb game.elf
 (gdb) target remote :2345
 (gdb) add-symbol-file scripts.elf &bm_native_slot
-(gdb) break bat.ms:14
+(gdb) break bat.ms:13
 (gdb) continue
 ```
 

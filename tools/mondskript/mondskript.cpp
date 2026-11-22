@@ -212,8 +212,12 @@ std::vector<Token> lex(const std::string &src)
 // While compiling, a value of enum k has the type kEnumTypeBase + k; the module only says
 // BM_SCRIPT_ENUM.
 constexpr int kEnumTypeBase = 0x40;
+constexpr int kRecordTypeBase = 0x200;   // record<S>: kRecordTypeBase + structure
 BmScriptType enumType(size_t k) { return BmScriptType(kEnumTypeBase + int(k)); }
-bool isEnumType(BmScriptType t) { return int(t) >= kEnumTypeBase; }
+bool isEnumType(BmScriptType t) { return int(t) >= kEnumTypeBase && int(t) < kRecordTypeBase; }
+BmScriptType recordType(size_t k) { return BmScriptType(kRecordTypeBase + int(k)); }
+bool isRecordType(BmScriptType t) { return int(t) >= kRecordTypeBase; }
+BmScriptType moduleType(BmScriptType t) { return isEnumType(t) ? BM_SCRIPT_ENUM : isRecordType(t) ? BM_SCRIPT_RECORD : t; }
 
 struct Types
 {
@@ -241,6 +245,7 @@ struct Types
   std::string label(BmScriptType t) const
   {
     if (isEnumType(t)) return enums[size_t(int(t) - kEnumTypeBase)].name;
+    if (isRecordType(t)) return "record<" + structs[size_t(int(t) - kRecordTypeBase)].name + ">";
     return typeName(t);
   }
 };
@@ -647,6 +652,7 @@ struct Value
   bool literalInt = false;      // an integer literal: becomes fix where fix is expected
   int32_t value = 0;
   int reg = -1;
+  std::string nameText;         // a #Name literal: becomes a record's key where record<S> is expected
 };
 
 class Compiler
@@ -755,6 +761,16 @@ private:
       pos_++;
       return true;
     }
+    if (isWord("record") && isPunct("<", 1))
+    {
+      pos_ += 2;
+      Token s = expectIdent("the structure of the records");
+      int k = types_.findStruct(s.text);
+      if (k < 0) error(s, "there is no structure '" + s.text + "'");
+      expectPunct(">");
+      *pType = recordType(size_t(k));
+      return true;
+    }
     return false;
   }
   void skipBlock()
@@ -783,6 +799,7 @@ private:
       v.value = want == BM_SCRIPT_FIX ? t.value * 256 : t.value;
     }
     else if (t.kind == Tok::Fix) { v.type = BM_SCRIPT_FIX; v.value = t.value; }
+    else if (t.kind == Tok::Name && !negative && isRecordType(want)) { v.type = want; v.value = int32_t(nameKey(t.text)); }
     else if (t.kind == Tok::Name && !negative) { v.type = BM_SCRIPT_NAME; v.value = stringId_(t.text); }
     else if (t.kind == Tok::String && !negative) { v.type = BM_SCRIPT_TEXT; v.value = stringId_(t.text); }
     else if (t.kind == Tok::Ident && (t.text == "true" || t.text == "false") && !negative) { v.type = BM_SCRIPT_BOOL; v.value = t.text == "true"; }
@@ -887,9 +904,8 @@ private:
           else if (acceptWord("derived")) f.flags |= BM_SCRIPT_FIELD_TRANSIENT;
           else break;
         }
-        Token typeTok = peek();
-        if (!parseType(&f.type)) error(peek(), "expected a type (bool, int, fix, name, text or an enum)");
-        f.typeLabel = typeTok.text;
+        if (!parseType(&f.type)) error(peek(), "expected a type (bool, int, fix, name, text, an enum or record<S>)");
+        f.typeLabel = tn(f.type);
         Token name = expectIdent("the name of the variable");
         f.name = name.text;
         if (lookupField(f.name) >= 0 || lookupVar(f.name) >= 0 || cls_.consts.count(f.name)) error(name, "'" + f.name + "' exists already");
@@ -1089,6 +1105,13 @@ private:
       v.value *= 256;
       v.literalInt = false;
     }
+    // #ShortSword where a record<S> is expected is that record's key.
+    if (v.isConst && !v.nameText.empty() && isRecordType(want))
+    {
+      v.type = want;
+      v.value = int32_t(nameKey(v.nameText));
+      v.nameText.clear();
+    }
   }
   void expectType(Value &v, BmScriptType want, const Token &at, const char *what)
   {
@@ -1115,13 +1138,86 @@ private:
   }
 
   // --- Expressions ---
+  // A primary expression, then field access on records: held.attack, held.bonus.strength,
+  // held.combo[1], held.upgrade.attack.
   Value primary()
+  {
+    Value v = primaryBase();
+    while (isRecordType(v.type) && isPunct("."))
+    {
+      Token dot = next();
+      const StructInfo *s = &types_.structs[size_t(int(v.type) - kRecordTypeBase)];
+      uint16_t table = stringId_(s->name);
+      int offset = 0;
+      const StructField *f = nullptr;
+      for (;;)
+      {
+        Token name = expectIdent("the name of a field");
+        f = nullptr;
+        for (const StructField &c : s->fields)
+          if (c.name == name.text) f = &c;
+        if (!f) error(name, "'" + s->name + "' has no field '" + name.text + "'");
+        offset += f->offset;
+        if (acceptPunct("["))
+        {
+          Token at = peek();
+          Value index = expression();
+          if (!index.isConst || index.type != BM_SCRIPT_INT) error(at, "the index of a field of a record is a constant number in this version");
+          if (index.value < 0 || index.value >= f->count) error(at, "'" + f->name + "' has " + std::to_string(f->count) + " elements");
+          offset += index.value * f->elementSize;
+          expectPunct("]");
+        }
+        else if (f->count > 1) error(name, "'" + f->name + "' is an array: write " + f->name + "[index]");
+        if (f->type != BM_DATA_STRUCT) break;
+        if (!acceptPunct(".")) error(name, "'" + f->name + "' is a structure: name one of its fields (" + f->name + ".field)");
+        s = &types_.structs[size_t(types_.findStruct(f->detail))];
+      }
+      // record_get(table, key, field)
+      int first = tempTop_;
+      int rTable = temp(dot), rKey = temp(dot), rField = temp(dot);
+      Value c;
+      c.isConst = true;
+      c.type = BM_SCRIPT_INT;
+      c.value = table;
+      tempTop_ = rTable;
+      materialise(c, dot);
+      if (v.isConst)
+      {
+        Value k = v;
+        tempTop_ = rKey;
+        materialise(k, dot);
+      }
+      else op2(BM_OP_MOVE, rKey, v.reg);
+      c.isConst = true;
+      c.value = BM_SCRIPT_RECORD_FIELD(offset, f->type);
+      tempTop_ = rField;
+      materialise(c, dot);
+      tempTop_ = rField + 1;
+      Value r;
+      r.reg = temp(dot);
+      op2(BM_OP_CALLN, r.reg, BM_SCRIPT_API_record_get | (first << 8));
+      switch (f->type)
+      {
+      case BM_DATA_BOOL: r.type = BM_SCRIPT_BOOL; break;
+      case BM_DATA_FIX: r.type = BM_SCRIPT_FIX; break;
+      case BM_DATA_NAME: case BM_DATA_SPRITE: case BM_DATA_SOUND: case BM_DATA_ATTACH: r.type = BM_SCRIPT_NAME; break;
+      case BM_DATA_TEXT: r.type = BM_SCRIPT_TEXT; break;
+      case BM_DATA_ENUM: r.type = enumType(size_t(types_.findEnum(f->detail))); break;
+      case BM_DATA_RECORD: r.type = recordType(size_t(types_.findStruct(f->detail))); break;
+      default: r.type = BM_SCRIPT_INT; break;
+      }
+      v = r;
+    }
+    return v;
+  }
+
+  Value primaryBase()
   {
     Token t = next();
     Value v;
     if (t.kind == Tok::Int) { v.isConst = true; v.literalInt = true; v.type = BM_SCRIPT_INT; v.value = t.value; return v; }
     if (t.kind == Tok::Fix) { v.isConst = true; v.type = BM_SCRIPT_FIX; v.value = t.value; return v; }
-    if (t.kind == Tok::Name) { v.isConst = true; v.type = BM_SCRIPT_NAME; v.value = stringId_(t.text); return v; }
+    if (t.kind == Tok::Name) { v.isConst = true; v.type = BM_SCRIPT_NAME; v.value = stringId_(t.text); v.nameText = t.text; return v; }
     if (t.kind == Tok::String) { v.isConst = true; v.type = BM_SCRIPT_TEXT; v.value = stringId_(t.text); return v; }
     if (t.kind == Tok::Punct && t.text == "(")
     {
@@ -1424,6 +1520,58 @@ private:
     error(target, cls_.consts.count(target.text) ? "'" + target.text + "' is a constant" : "'" + target.text + "' is not known here");
   }
 
+  // for w in records(Weapon) { ... }: every record of the table, in the order of their keys.
+  void forRecords(const Token &name)
+  {
+    pos_ += 2;
+    Token s = expectIdent("the structure of the records");
+    int k = types_.findStruct(s.text);
+    if (k < 0) error(s, "there is no structure '" + s.text + "'");
+    expectPunct(")");
+    scopes_.emplace_back();
+    int saved = localTop_;
+    auto hidden = [&](const char *what) {
+      Token h = name;
+      h.text = std::string("(") + what + " of " + name.text + ")";
+      return declareLocal(h, BM_SCRIPT_INT);
+    };
+    int table = hidden("table"), index = hidden("index"), limit = hidden("count"), one = hidden("step");
+    int var = declareLocal(name, recordType(size_t(k)));
+    auto load = [&](int reg, int32_t value) {
+      Value c;
+      c.isConst = true;
+      c.type = BM_SCRIPT_INT;
+      c.value = value;
+      tempTop_ = reg;
+      materialise(c, name);
+      tempTop_ = localTop_;
+    };
+    load(table, stringId_(s.text));
+    load(index, 0);
+    load(one, 1);
+    // record_count(table) and record_at(table, index) take their arguments from consecutive
+    // registers: table and index are declared next to each other for that.
+    op2(BM_OP_CALLN, limit, BM_SCRIPT_API_record_count | (table << 8));
+    size_t top = fn_->code.size();
+    int cond = temp(name);
+    op2(BM_OP_LT, cond, index | (limit << 8));
+    size_t out = jump(BM_OP_JZ, cond);
+    tempTop_ = localTop_;
+    op2(BM_OP_CALLN, var, BM_SCRIPT_API_record_at | (table << 8));
+    loops_.emplace_back();
+    block();
+    size_t increment = fn_->code.size();
+    op2(BM_OP_ADD, index, index | (one << 8));
+    op2(BM_OP_JMP, 0, int(top));
+    patch(out);
+    for (size_t b : loops_.back().breaks) patch(b);
+    for (size_t c : loops_.back().continues) patchTo(c, increment);
+    loops_.pop_back();
+    scopes_.pop_back();
+    localTop_ = saved;
+    tempTop_ = localTop_;
+  }
+
   void statement()
   {
     tempTop_ = localTop_;
@@ -1493,6 +1641,11 @@ private:
       if (fn_->stateCode) error(t, "the code of a state cannot use 'for' (its counter would not survive sleep); count in a var of the class");
       Token name = expectIdent("the name of the counter");
       if (!acceptWord("in")) error(peek(), "for x in a..b");
+      if (isWord("records") && isPunct("(", 1))
+      {
+        forRecords(name);
+        return;
+      }
       scopes_.emplace_back();
       int saved = localTop_;
       Value from = expression();
@@ -1893,7 +2046,7 @@ Module compile(const std::vector<Source> &sources, const std::function<uint16_t(
     for (const FieldInfo &f : c.info.fields)
     {
       put16(b, stringId(f.name));
-      b.push_back(uint8_t(isEnumType(f.type) ? BM_SCRIPT_ENUM : f.type));
+      b.push_back(uint8_t(moduleType(f.type)));
       b.push_back(f.flags);
       put32(b, uint32_t(f.defaultValue));
     }

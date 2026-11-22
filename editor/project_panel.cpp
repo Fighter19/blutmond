@@ -31,6 +31,7 @@ const char *kindName(AssetKind k)
   case AssetKind::Sprite: return "sprite";
   case AssetKind::Script: return "script";
   case AssetKind::Song: return "song";
+  case AssetKind::Data: return "records";
   case AssetKind::Tileset: return "tileset";
   case AssetKind::Image: return "image";
   default: return "file";
@@ -100,6 +101,7 @@ void ProjectPanel::rebuild()
                     {"Sprites", "film", AssetKind::Sprite},
                     {"Scripts", "terminal", AssetKind::Script},
                     {"Songs and effects", "music", AssetKind::Song},
+                    {"Records", "list", AssetKind::Data},
                     {"Tilesets", "th", AssetKind::Tileset},
                     {"Images", "image", AssetKind::Image},
                     {"Other files", "file", AssetKind::Other}};

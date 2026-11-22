@@ -1,6 +1,6 @@
 # Mondskript
 
-Version 0.5, draft.
+Version 0.6, draft.
 
 Mondskript is Blutmond's scripting language. It is modelled on the old UnrealScript (classes
 with declared fields, states with latent functions, `defaultproperties`) and avoids its known
@@ -189,7 +189,8 @@ every other file of the same module.
 |---|---|---|
 | Types | `bool`, `int`, `fix`, `name`, `text`, enums; every variable takes 4 bytes | `byte`/`short` and unsigned types in classes, `fix16`, `vec`, structs as variables, arrays, handles (`C`, `C?`) |
 | Enums | `enum E { A, B }` before the class or in a file of its own; variables and parameters of type `E`; values written `E.A`, or just `A` where the type is known (defaults, `defaultproperties`); `==` and `!=` between values of the same enum. An enum is not a number: assigning one to `int` or to another enum is an error | `switch`, conversion to `int` |
-| Structures | `struct S { ... }` and `struct S is Base { ... }` declared and laid out for records ([../plans/structures.md](../plans/structures.md) §2): field types, alignment, defaults, sizes, see "Structures" below | records and `record<S>` in scripts (that plan's step 2) |
+| Structures | `struct S { ... }` and `struct S is Base { ... }` declared and laid out for records: field types, alignment, defaults, sizes, see "Structures" below | structures as variables of a class |
+| Records | `record<S>` variables, parameters and results, `#Name` as a record, field access (`.field`, `.inner.field`, `.array[2]`, through `record<T>` fields), `for x in records(S)`; [data-format.md](data-format.md) §5 | a dynamic array index |
 | Classes | `class Name extends Actor;`, `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes, inheritance between script classes, components (`has`) |
 | Functions | functions with up to 3 parameters and a result, calls nested up to 16 deep; all are final | `virtual`, `static` |
 | Events | `spawn()`, `tick()`, `touch()` (the player starts touching the object), in the class and per state | parameters; `hit`, `dies`, `enter_room`, `leave_room`, `use` |
@@ -220,7 +221,8 @@ struct Weapon is Item { int attack = 1; Element element = Fire; record<Weapon> u
   structure has the defaults of its own fields.
 - A record is identified by the FNV-1a hash of its name (`nameKey`), as items are.
 - The compiler hands the layouts to the cooker (`Module::structs`), which reports the size of
-  every structure. They reach the pack with the records ([../plans/structures.md](../plans/structures.md) §4).
+  every structure. They reach the pack with the records as `DTAB` chunks
+  ([data-format.md](data-format.md)).
 
 What scripts can call is one table shared by compiler, verifier and runtime
 (`src/script/script_api.h`); an entry's position is its index in bytecode, so entries are only
@@ -228,7 +230,8 @@ added at the end. This version: `sleep`, `finish_anim`, `play_anim(name)`, `anim
 `player_x`, `player_y`, `player_distance`, `move_toward_player(fix)`, `move_toward(fix, fix,
 fix)`, `hurt_player(int)`, `enter_door`, `hide`, `show`, `face_player`, `log(int)`,
 `random(int)`, `touching_player`, `give_item(name)`, `has_item(name)`, `abs(int)`,
-`play_sound(name)`, `play_music(name)`; and the
+`play_sound(name)`, `play_music(name)`, and for records `record_get`, `record_count`,
+`record_at` (written by the compiler, not by hand); and the
 actor variables `x`, `y`, `facing` and (read only) `home_x`, `home_y`. What each of these does,
 exactly, is in [runtime-core.md](runtime-core.md) §8.
 
@@ -258,7 +261,7 @@ line table:          per function a u32 offset to: u16 file (string id), u16 n, 
 
 Everything is little endian. Variable types: 0 void, 1 bool, 2 int, 3 fix, 4 name, 5 text
 (names and texts are string ids), 6 enum (a value of an enum, numbered from 0 in declaration
-order; which enum is known only to the compiler). Events in the order of their numbers: 0 `spawn`, 1 `tick`,
+order; which enum is known only to the compiler), 7 record (a record's key). Events in the order of their numbers: 0 `spawn`, 1 `tick`,
 2 `touch`. The line table's offset may be 0 (none).
 
 #### Instructions
@@ -434,3 +437,5 @@ for now), per-class modules loaded on room changes.
 - 0.4: instruction numbers and encodings, how functions and state code run, the verifier's
   rules; what the runtime functions do moved to runtime-core.md.
 - 0.5: enums, and structures laid out for records; variable type 6 (enum).
+- 0.6: `record<S>`, field access, `for x in records(S)`; variable type 7 (record); runtime
+  functions 22 to 24.

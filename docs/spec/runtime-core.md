@@ -312,6 +312,9 @@ value is dropped and counts as a script error.
 | 19 | `abs(n)` | |
 | 20 | `play_sound(name)` | starts that effect |
 | 21 | `play_music(name)` | starts that song unless it is the one playing |
+| 22 | `record_get(table, key, field)` | a value of a record, or of the structure's defaults if the key is not in the table; 0 if there is no table ([data-format.md](data-format.md) §4). The compiler writes these three for `record<S>`; `field` is `offset \| type << 16` |
+| 23 | `record_count(table)` | the number of records of that structure; 0 without a table |
+| 24 | `record_at(table, index)` | the key of the record at that place in key order; 0 outside |
 
 `dist(a, b) = max(|a|, |b|) + min(|a|, |b|) / 2`.
 

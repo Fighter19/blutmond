@@ -79,6 +79,8 @@ struct CookOptions
   std::vector<std::string> scripts;
   /// Songs and sound effects (.bmsong, sound-format.md).
   std::vector<std::string> songs;
+  /// Records (.bmdata, data_asset.h) of the structures the scripts declare.
+  std::vector<std::string> data;
   /// If set: the scripts are also compiled to native code with this GCC for the profile's
   /// machine (mondskript.md §12) and packed as a MODN chunk next to the bytecode.
   std::string nativeCompiler;

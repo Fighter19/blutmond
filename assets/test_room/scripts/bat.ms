@@ -3,15 +3,14 @@ class Bat extends Actor;
 // Hangs where it was placed until the player comes near, then chases them. When the player
 // gets away, or after it has hit them, it flies home and sleeps again.
 
-var(Combat) int Damage = 1;
-var(Flight) fix Speed = 0.75;
-var(Flight) int WakeDistance = 56;
-var(Flight) int GiveUpDistance = 120;
+// Its numbers come from its kind, a record of data/enemies.bmdata; a bat placed in Tiled can
+// be given another kind with the property Kind.
+var(Combat) record<Enemy> Kind = #Bat;
 var int Tired;
 
 state Sleeping {
   event tick() {
-    if player_distance() < WakeDistance { gotostate Chasing; }
+    if player_distance() < Kind.wake_distance { gotostate Chasing; }
   }
 begin:
   play_anim(#idle);
@@ -20,11 +19,11 @@ begin:
 state Chasing {
   event tick() {
     face_player();
-    move_toward_player(Speed);
-    if player_distance() > GiveUpDistance { gotostate Returning; }
+    move_toward_player(Kind.speed);
+    if player_distance() > Kind.give_up_distance { gotostate Returning; }
   }
   event touch() {
-    hurt_player(Damage);
+    hurt_player(Kind.damage);
     gotostate Returning;
   }
 begin:
@@ -34,14 +33,14 @@ begin:
   loop {
     sleep(60);
     Tired += 1;
-    if Tired >= 5 { gotostate Returning; }
+    if Tired >= Kind.patience { gotostate Returning; }
   }
 }
 
 state Returning {
 begin:
   loop {
-    if move_toward(home_x, home_y, Speed) { gotostate Resting; }
+    if move_toward(home_x, home_y, Kind.speed) { gotostate Resting; }
     sleep(1);
   }
 }

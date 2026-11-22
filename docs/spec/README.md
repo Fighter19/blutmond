@@ -13,6 +13,7 @@ protocols and language. The reasons behind them, the research and the roadmap ar
 | [room-format.md](room-format.md) | rooms: layers, collision cells, materials, physics, objects, engine classes, Tiled mapping |
 | [sprite-format.md](sprite-format.md) | sprites: sheet, frames, anchors, hitboxes, animations; the cooked `SPRT` chunk |
 | [sound-format.md](sound-format.md) | songs and sound effects: instruments, notes, the mixer and sequencer, the cooked `SONG` chunk |
+| [data-format.md](data-format.md) | structures and records: record files, the cooked `DTAB` chunk, reading records from scripts |
 | [pack-format.md](pack-format.md) | the cooked binary pack: header, table of contents, chunk types, compression, load order |
 | [streaming.md](streaming.md) | planned: live-link streaming with rooms as anchors, room chain, priorities, load profiles |
 | [runtime-abi.md](runtime-abi.md) | live reload as built (content buffers, restart, hot, state); planned: API table, handles, residency |

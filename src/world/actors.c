@@ -6,6 +6,7 @@
 
 #include <string.h>
 
+#include "data.h"
 #include "game.h"
 #include "hal.h"
 #include "native.h"
@@ -240,6 +241,7 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     bmSoundPlayMusic(&g->sound, bmPackString(g->pPack, (uint16_t)args[0]));
     break;
   default:
+    bmDataScriptCall(g->pPack, api, args, result);   // record_get, record_count, record_at
     break;
   }
   return false;
@@ -409,6 +411,7 @@ static void applyProperties(BmGame *g, uint8_t i, BmVmInstance *inst)
       const char *value = bmPackString(g->pPack, valueId);
       if (value == NULL) break;
       if (type == BM_SCRIPT_NAME || type == BM_SCRIPT_TEXT) inst->fields[f] = valueId;
+      else if (type == BM_SCRIPT_RECORD) inst->fields[f] = (int32_t)hashName(value);   // the record's key
       else if (type == BM_SCRIPT_BOOL) inst->fields[f] = strcmp(value, "true") == 0 || strcmp(value, "1") == 0;
       else inst->fields[f] = parseNumber(value, type == BM_SCRIPT_FIX);
       break;

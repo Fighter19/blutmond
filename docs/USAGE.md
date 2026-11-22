@@ -190,7 +190,7 @@ What to expect:
 build/bmcook --native arm-none-eabi-gcc --native-elf scripts.elf -o level.bmpk ...   # scripts as machine code
 build/bmlink --xboo /dev/parport0 gdb 2345
 arm-none-eabi-gdb build-gba/game.elf -ex "target remote :2345" \
-  -ex "add-symbol-file scripts.elf &bm_native_slot" -ex "break bat.ms:14"
+  -ex "add-symbol-file scripts.elf &bm_native_slot" -ex "break bat.ms:13"
 ```
 
 Breakpoints work in ARM code in RAM (the native script module), not in Thumb code or ROM.

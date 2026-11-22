@@ -30,7 +30,7 @@ struct ProjectFile
   bool removeRoom(const std::string &path);    // the file stays
 };
 
-enum class AssetKind { Room, Sprite, Script, Song, Tileset, Image, Other };
+enum class AssetKind { Room, Sprite, Script, Song, Data, Tileset, Image, Other };
 
 struct AssetInfo
 {
@@ -81,6 +81,8 @@ std::vector<std::string> spritePaths(const AssetCatalog &catalog);
 std::vector<std::string> scriptPaths(const AssetCatalog &catalog);
 /// The songs and sound effects of a catalogue.
 std::vector<std::string> songPaths(const AssetCatalog &catalog);
+/// The record files (.bmdata) of a catalogue.
+std::vector<std::string> dataPaths(const AssetCatalog &catalog);
 
 /// Writes a new, empty room in Tiled's format with the layers the cooker expects (background,
 /// main, collision, objects with a PlayerStart and a CameraZone).

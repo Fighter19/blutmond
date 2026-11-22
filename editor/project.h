@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -62,8 +63,13 @@ public:
   void setScripts(std::vector<std::string> paths) { scripts_ = std::move(paths); }
   /// Songs and sound effects that go into the level pack.
   void setSongs(std::vector<std::string> paths) { songs_ = std::move(paths); }
+  /// Record files (.bmdata) that go into the level pack.
+  void setData(std::vector<std::string> paths) { data_ = std::move(paths); }
   /// True if a room file changed on disk since the last cook (for hot reload).
   bool changedOnDisk() const;
+  /// True if a record file changed on disk since the last call (the first call only notes
+  /// the times). Record files have no panel of their own that saves them.
+  bool dataChangedOnDisk();
 
   const Report &report() const { return report_; }
   const std::string &error() const { return error_; }
@@ -89,7 +95,8 @@ private:
   void analyse();
 
   std::vector<std::string> rooms_;
-  std::vector<std::string> sprites_, scripts_, songs_;
+  std::vector<std::string> sprites_, scripts_, songs_, data_;
+  std::map<std::string, std::filesystem::file_time_type> dataTimes_;
   int current_ = -1;
   std::string profile_ = "gba";
   std::filesystem::file_time_type cookedTime_{};

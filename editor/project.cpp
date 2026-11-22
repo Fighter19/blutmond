@@ -77,6 +77,23 @@ bool Project::changedOnDisk() const
   return !ec && t != cookedTime_;
 }
 
+bool Project::dataChangedOnDisk()
+{
+  bool changed = false;
+  std::map<std::string, std::filesystem::file_time_type> now;
+  for (const std::string &path : data_)
+  {
+    std::error_code ec;
+    auto t = std::filesystem::last_write_time(path, ec);
+    if (ec) continue;
+    now[path] = t;
+    auto it = dataTimes_.find(path);
+    changed |= it != dataTimes_.end() && it->second != t;
+  }
+  dataTimes_ = std::move(now);
+  return changed;
+}
+
 bool Project::cook()
 {
   error_.clear();
@@ -138,6 +155,7 @@ bool Project::cookLevel(const std::string &path, std::string *pError) const
     options.sprites = sprites_;
     options.scripts = scripts_;
     options.songs = songs_;
+    options.data = data_;
     Report report;
     std::vector<uint8_t> pack = bm::cook(maps, options, report);
     for (const auto &e : report.entries)

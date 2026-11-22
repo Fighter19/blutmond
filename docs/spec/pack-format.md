@@ -40,9 +40,9 @@ chunk formats named in section 3.
   where a new game starts.
 - **What the cooker writes**, in this order: per area `VLAY`, `PALE`, `TILE`, then per room of
   the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `SONG`, `MODB`,
-  optionally `MODN`, and `STRS`.
+  optionally `MODN`, every `DTAB`, and `STRS`.
 - **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `PALE`, `TILE`, `SPRT`, `SONG`,
-  `MODB`, `MODN`, `STRS`. `VLAY` is written but not read; where things go in video memory is
+  `MODB`, `MODN`, `DTAB`, `STRS`. `VLAY` is written but not read; where things go in video memory is
   fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
 - **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the
   profile (GBA: 1024); 16 palette banks; a pack pushed over the link has at most 512 chunks
@@ -233,6 +233,7 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `SFX ` | sound effects |
 | `MODB` | script module: classes, variables, states, functions and bytecode ([mondskript.md](mondskript.md) §11) |
 | `MODN` | the same scripts as machine code for one machine, with the list of addresses to patch when it is loaded ([mondskript.md](mondskript.md) §12); optional |
+| `DTAB` | the records of one structure, read in place ([data-format.md](data-format.md) §3) |
 | `WRLD` | world map: rooms, positions, door links, map screen data |
 
 Readers MUST skip chunk types they do not know.
