@@ -83,6 +83,10 @@ typedef struct BmGame
   uint8_t resists[BM_GAME_ELEMENTS];   // per element: what the player wears that resists it
   uint8_t striker;                 // the figure striking the player right now (hits.h), else 0xFF
   uint8_t returnPending;           // bmGameReturnToSave asked for: done at the next frame's start
+  uint8_t lockCoast;               // the lock is an attack's (owner_lock): the player keeps their speed
+  // A door with a panel being walked through (effects.h): its object + 1 (0 none) and the
+  // frames so far; the door just come through, closing behind the player, and frames left.
+  uint8_t doorSeq, doorTimer, doorArrive, doorArriveTimer;
   // Commands (commands.h): the directions as they changed (numpad), when (frame, low 16 bits).
   uint8_t cmdDirs[8];
   uint16_t cmdTimes[8];

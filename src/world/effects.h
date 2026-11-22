@@ -57,14 +57,16 @@ void bmEffectsPresent(struct BmGame *pGame);
 
 /// Doors with a panel (the sprite their `panel` property names, its anchor the hinge at the
 /// bottom): drawn as if turning about the hinge, an affine sprite scaled in x only, standing on
-/// the ground under the door. Closed far from the player, open near: `direction` east and west
-/// doors stand in the side wall (narrow: their depth shows 0.4 wide) and swing out of the room,
-/// widening; others (north) face the screen and turn away, narrowing, in front of the dark of
-/// the opening (the sprite's frame 1, if any). Scaled to the door's height.
+/// the ground under the door. Shut but while the player goes through (game.h, doorSeq) and
+/// while it closes behind them (doorArrive): `direction` east and west doors stand in the side
+/// wall (narrow: their depth shows 0.4 wide) and swing into the room; others (north) face the
+/// screen and turn away, narrowing, in front of the dark of the opening (the sprite's frame 1,
+/// if any). Scaled to the door's height.
 /// Returns the OAM entries used, from `firstOam`.
 uint8_t bmEffectsDrawDoors(struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
 
-/// How open a door is for the player where they are: 0 closed to 256 open.
+/// How open a door is now: 0 shut to 256 open (12 frames into a walk through it; closing in 16
+/// behind the player).
 int32_t bmEffectsDoorOpening(const struct BmGame *pGame, uint16_t object);
 
 /// How far the wave pulls the room's backgrounds left on screen line `y` now, 0 to

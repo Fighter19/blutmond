@@ -57,12 +57,14 @@ start.
 
 Every weapon has a list of **commands** (directions, then a button, like Down,
 Down-Fwd, Fwd + B for the Short Sword's Lunge), and a charm worn gives its commands with any
-weapon (the Crimson Charm absorbs blood, the Moon Charm flips gravity). An attack while jumping keeps the jump going. Start, Commands lists
+weapon (the Crimson Charm absorbs blood, the Moon Charm flips gravity). An attack never stops the player: a run or a jump keeps its speed through the swing. Start, Commands lists
 what the player has now. The debug lobby has a Dagger and both charms lying about to try them.
 
-Doors with a `panel` property (a sprite) swing open in a 3D look as the player walks up to
-them: an affine sprite, scaled horizontally about its hinge, standing on the ground. All doors of the test level have
-one (`door_panel`).
+Doors with a `panel` property (a sprite) open in a 3D look only as the player goes through
+them: touching a side door, the player walks on through it while it swings into the room, a
+door in the back wall opens in front of the player; then the next room, where the door closes
+behind. A, B or Start skips the walk. The panel is an affine sprite, scaled horizontally about
+its hinge, standing on the ground. All doors of the test level have one (`door_panel`).
 
 Without a window (for tests and scripts): `--frames N`, `--headless`, `--autoplay`,
 `--snapshot-at N file`, `--load file`, `--listen PORT`, `--follow`, `--until-frame N`,

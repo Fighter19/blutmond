@@ -132,10 +132,11 @@ State: `x`, `y` (fix, the feet: bottom centre of the box), `vx`, `vy` (fix per f
 `onGround`, `climbing`, `inWater`, `jumpCutDone`, `facing` (-1 or 1), `coyote`, `jumpBuffer`,
 `dropThrough` (frames), `safeX`, `safeY` (pixels), `flipped`.
 
-**An attack in the air** keeps the jump going: while `lockTimer` holds the player and they are
-not on the ground, the body gets `coast` with no direction, and in the air without a direction
-and with `coast` the horizontal speed stays (no air drag). On the ground a lock stands the
-player still (friction) as before.
+**An attack never stops the player**: `owner_lock` sets `lockCoast = 1`, `player_lock` (a
+scene) `lockCoast = 0`. While `lockTimer` holds the player the body gets no direction and no
+jump, and with `lockCoast` also `coast`: without a direction and with `coast` the horizontal
+speed stays as it is, on the ground (no friction) and in the air (no air drag). A scene's lock
+stands the player still (friction) as before.
 
 **Gravity flipped** (`flipped`, `flip_gravity`): gravity pulls up. The box stays `[y - height,
 y]`, but the feet are its top: everything below is mirrored (jumping goes down, the gravity and
@@ -274,12 +275,24 @@ start:
   (the intensity set to 15 first; the song already playing goes on, fading back to full
   volume); `none` fades the music away in 120 frames, then it stops; no property: the music
   goes on.
+- **The walk through a door** with a panel (section 12, "Doors"): going through it (an overlap
+  or `enter_door`) while no walk is under way starts one instead: `doorSeq` = its object + 1,
+  `doorTimer = 0`. At the start of each frame while it lasts: A, B or Start pressed skips it,
+  then the buttons count as none (nothing is pressed, held or let go for the game, the menus,
+  the attachments), `doorTimer += 1`, `hurtTimer` at least 2. The body gets, after a lock: for a
+  side door (`direction` east or west) the direction that way and no jump, and instead of the
+  body step the player walks: `facing` that way, `vx` = the running speed that way, `vy = 0`,
+  `x += vx` (walls and the room's edges do not stop it: out through the door); for another door
+  no direction (the player stands). After the scripted objects (step 8): if skipped, or
+  `doorTimer` reached 30 (side) or 20 (other), `doorSeq = 0` and the player goes through it.
 - **Going through a door**: the door's property `target_room` names a room id. If there is no
   such room, nothing happens. Otherwise enter that room with the scripted objects starting
   fresh; `roomChanges += 1`; `doorCooldown = 20`. Arrival: if the property `target_door` names
   a `Door` object in the new room (by object name): `y = door.y + door.h`, and `x = door.x -
-  12` if `door.x + door.w / 2 > room width / 2`, else `door.x + door.w + 12`. Else the first
-  `PlayerStart`. Else (32, 32). The player is placed there keeping `facing` and `vx`.
+  12` if `door.x + door.w / 2 > room width / 2`, else `door.x + door.w + 12`; if it has a panel
+  it closes behind the player: `doorArrive` = its object + 1, `doorArriveTimer = 16`, counted
+  down at the start of each frame (`doorArrive = 0` at 0). Else the first `PlayerStart`. Else
+  (32, 32). The player is placed there keeping `facing` and `vx`.
 - **Start**: enter the first room (or the one asked for by id) fresh; the random seed is 1;
   place the player at the first `PlayerStart` (facing left if its property `facing` is
   `left`), else at (32, 32).
@@ -623,12 +636,12 @@ in place of the room's effect: the wave at 8 px times the phase (0 at the ends, 
 **Doors** (`bmEffectsDrawDoors`): a `Door` with the property `panel` (a sprite's name, its
 anchor the hinge at the bottom left, its hitbox the panel's size, frame 0's) is drawn as a
 panel turning about a vertical hinge, only scaled in x, so that it keeps standing on the
-ground. How open it is, `open` 0..256, follows the player's distance `d` (px from the player's
-x to the door's rectangle, 0 inside): 256 within 16, 0 from 64 on, in between
-`(64 - d) * 256 / 48`; 0 if the player's feet are above the door's top or more than 16 below its
-bottom. The panel's angle `a` from the screen's x axis (256 to a turn): `direction` east
-`64 - open * 56 / 256` (closed along the depth in the side wall, open swung out to the right),
-west `64 + open * 56 / 256`, else `open * 52 / 256` (closed facing the screen, open turned away).
+ground. How open it is, `open` 0..256: for the door being walked through (section 6) `doorTimer
+* 256 / 12`, 256 from 12 on; for the door closing behind the player `doorArriveTimer * 256 / 16`;
+any other is shut (0). The panel's angle `a` from the screen's x axis (256 to a turn):
+`direction` east `64 + open * 56 / 256` (closed along the depth in the side wall, open swung
+into the room, to the left), west `64 - open * 56 / 256`, else `open * 52 / 256` (closed facing
+the screen, open turned away).
 A point `u` along the panel and `v` up it is drawn at `(hinge x + u * xs, ground + v * scale)`
 with `scale` = the door's height / the panel's and `xs = scale * cos a`, for east and west
 `scale * (cos a + 0.4 sin a)` (a side wall's depth shows 0.4 wide, 102/256): the scale of an

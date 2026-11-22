@@ -369,7 +369,11 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     // Only the player's attachments act on their owner.
     if (i != BM_ACTORS_OWNER) break;
     if (api == BM_SCRIPT_API_owner_busy) *result = g->lockTimer != 0;
-    else if (api == BM_SCRIPT_API_owner_lock) g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
+    else if (api == BM_SCRIPT_API_owner_lock)
+    {
+      g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
+      g->lockCoast = 1;   // an attack: the player's speed goes on
+    }
     else bmGamePlayPlayerAnim(g, (uint16_t)args[0]);
     break;
   case BM_SCRIPT_API_ui_frame:
@@ -565,6 +569,7 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     break;
   case BM_SCRIPT_API_player_lock:
     g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
+    g->lockCoast = 0;   // a scene: the player stands
     break;
   case BM_SCRIPT_API_spawn:
   case BM_SCRIPT_API_spawn_with:

@@ -86,7 +86,7 @@ static void testDoorsLeadBothWays(void)
   start();
   // Stand next to the east door on the stone block and walk into it.
   bmBodyPlace(&s_game.player, 990, 80);
-  frames(30, BM_KEY_RIGHT);
+  frames(60, BM_KEY_RIGHT);   // into the door, and the walk through it
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
   frames(40, 0);
   for (int i = 0; i < 200 && strcmp(bmGameRoomId(&s_game), "test_room_2") == 0; i++)
@@ -359,7 +359,7 @@ static void testTheRoomsAttachmentsComeAndGoWithTheRoom(void)
   // Back through the east door: attached again, the visits counted on.
   frames(60, 0);
   bmBodyPlace(&s_game.player, 990, 80);
-  frames(30, BM_KEY_RIGHT);
+  frames(60, BM_KEY_RIGHT);   // into the door, and the walk through it
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
   TEST_ASSERT(t->classKey[slot] != 0 && fields[1] == 2 && fields[0] == BM_FIX(1));
   // A script's room_attach and room_detach work on the same slots: here by hand.
@@ -467,7 +467,7 @@ static void testTheSwordDefeatsTheBat(void)
 
   // Through the door into the second room.
   bmBodyPlace(&s_game.player, 990, 80);
-  frames(30, BM_KEY_RIGHT);
+  frames(60, BM_KEY_RIGHT);   // into the door, and the walk through it
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
   int dummy = actorOfClass("Dummy"), bat = actorOfClass("Bat");
   TEST_ASSERT(dummy >= 0 && bat >= 0 && s_game.actors.health[bat] == 4);
@@ -936,7 +936,7 @@ static void testADropFallsAndIsTaken(void)
   TEST_ASSERT(!bmActorsSpawn(&s_game, stringId("Drop"), BM_FIX(400), BM_FIX(100), potion));
   // Through the west door and back: the room's objects only.
   bmBodyPlace(&s_game.player, 8, 160);
-  frames(2, 0);
+  frames(40, 0);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0 && a->spawned[0] == 0);
   TEST_ASSERT(bm_script_errors == 0);
 }
@@ -1006,7 +1006,7 @@ static void inputs(const uint16_t *keys, int n)
 
 static void testCommands(void)
 {
-  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_lobby") == BM_SUCCESS);
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);   // no door in the way
   frames(3, 0);
   BmInventory *inv = &s_game.inventory;
   const BmAttachments *t = &s_game.attachments;
@@ -1015,7 +1015,7 @@ static void testCommands(void)
   bmInventoryGive(inv, dagger, 1);
   TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, sword));
   const int32_t *swing = &t->fields[0];   // WeaponSwing: Item, Swings, Strikes
-  bmBodyPlace(&s_game.player, 140, 160);   // between the first two doors, clear of both
+  bmBodyPlace(&s_game.player, 60, 160);
   frames(10, 0);
   s_game.mana = 20;
   // Down, Down-Fwd, Fwd + B: the Short Sword's Lunge, 4 mana, a dash forward; no swing.
@@ -1048,6 +1048,8 @@ static void testCommands(void)
 
   // The Moon Charm, worn, gives Gravity Flip whatever the weapon: Down, Up + A. The player
   // falls up and stands under the top of the room (its edge), upside down.
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_lobby") == BM_SUCCESS);
+  frames(3, 0);
   const uint32_t moon = keyOf("MoonCharm");
   bmInventoryGive(inv, moon, 1);
   TEST_ASSERT(bmAttachmentsEquip(&s_game, 4, moon));
@@ -1187,8 +1189,9 @@ static void testEveryWeaponHasCommands(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
-// Jumping and attacking: the swing holds the player, but in the air the jump keeps its speed.
-static void testAnAttackInTheAirKeepsTheJumpGoing(void)
+// Attacking never stops the player: the swing holds the controls, but the run or the jump keeps
+// its speed.
+static void testAnAttackKeepsTheMomentum(void)
 {
   TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);
   frames(2, 0);
@@ -1205,40 +1208,78 @@ static void testAnAttackInTheAirKeepsTheJumpGoing(void)
   TEST_ASSERT(s_game.lockTimer != 0 && !s_game.player.onGround);
   frames(8, BM_KEY_RIGHT | BM_KEY_A);
   TEST_ASSERT(s_game.lockTimer != 0 && !s_game.player.onGround && s_game.player.vx == run && run > 0);
-  // On the ground a swing stands still, as before.
+  // On the ground too: the run goes on through the swing.
   frames(60, 0);
+  bmBodyPlace(&s_game.player, 40, 160);
+  frames(5, 0);
   frames(20, BM_KEY_RIGHT);
   frames(1, BM_KEY_RIGHT | BM_KEY_B);
   frames(6, BM_KEY_RIGHT);
-  TEST_ASSERT(s_game.player.onGround && s_game.player.vx == 0);
+  TEST_ASSERT(s_game.lockTimer != 0 && s_game.player.onGround && s_game.player.vx == run);
+  // A scene's lock (player_lock) still stands the player: the run slows down.
+  s_game.lockTimer = 10;
+  s_game.lockCoast = 0;
+  frames(6, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.player.vx == 0);
 }
 
-// Doors with a panel open as the player comes near (drawn as affine sprites, sheared).
-static void testDoorPanelsOpenNearby(void)
+// Doors with a panel open only as the player goes through: touching one starts a walk through
+// it (the room changes at its end, or at once with A, B or Start), and on the other side the
+// door come through closes behind the player.
+static int doorNamed(const char *name)
+{
+  for (uint16_t i = 0; i < s_game.objectCount; i++)
+    if (s_game.objects[i].name != NULL && strcmp(s_game.objects[i].name, name) == 0) return i;
+  return -1;
+}
+
+static void testDoorsOpenAsThePlayerWalksThrough(void)
 {
   TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_lobby") == BM_SUCCESS);
   frames(2, 0);
-  int door = -1;
-  for (uint16_t i = 0; i < s_game.objectCount; i++)
-    if (s_game.objects[i].name != NULL && strcmp(s_game.objects[i].name, "to_debug_wave") == 0) door = i;
+  int door = doorNamed("to_debug_wave");
   TEST_ASSERT(door >= 0 && s_game.objectSheet[door] >= 0);   // its `panel`, door_panel
   const BmObjectView *o = &s_game.objects[door];
   TEST_ASSERT(s_game.objectDoorGround[door] == 160);   // the lobby's floor (row 10)
-  int32_t y = o->y + o->h - 1;
-  bmBodyPlace(&s_game.player, o->x - 80, y);
-  TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)door) == 0);
-  bmBodyPlace(&s_game.player, o->x - 40, y);
-  int32_t half = bmEffectsDoorOpening(&s_game, (uint16_t)door);
-  TEST_ASSERT(half > 0 && half < 256);
-  bmBodyPlace(&s_game.player, o->x - 8, y);
-  TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)door) == 256);
-  // Far above it: shut.
-  bmBodyPlace(&s_game.player, o->x, o->y - 40);
-  TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)door) == 0);
-  // The lobby's doors on screen are drawn (a sprite of 32x32 and one of 32x16 each).
-  bmBodyPlace(&s_game.player, 40, y);
+  // Close by: still shut.
+  bmBodyPlace(&s_game.player, o->x - 10, 160);
+  frames(2, 0);
+  TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)door) == 0 && s_game.doorSeq == 0);
+  // In it: it opens while the player stands (a door in the back wall), then the next room.
+  bmBodyPlace(&s_game.player, o->x + 16, 160);
   frames(1, 0);
-  TEST_ASSERT(bmEffectsDrawDoors(&s_game, 0, 128) >= 4);   // with the dark of the opening behind
+  TEST_ASSERT(s_game.doorSeq == door + 1);
+  frames(5, BM_KEY_RIGHT);   // the buttons are not the game's meanwhile
+  int32_t half = bmEffectsDoorOpening(&s_game, (uint16_t)door);
+  TEST_ASSERT(half > 0 && half < 256 && BM_FIX_INT(s_game.player.x) == o->x + 16);
+  TEST_ASSERT(bmEffectsDrawDoors(&s_game, 0, 128) >= 4);   // panels, the dark behind the open one
+  frames(20, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "debug_wave") == 0 && s_game.doorSeq == 0);
+  // The west door come through closes behind the player.
+  int back = doorNamed("exit_west");
+  TEST_ASSERT(back >= 0 && s_game.doorArrive == back + 1 && bmEffectsDoorOpening(&s_game, (uint16_t)back) > 0);
+  frames(20, 0);
+  TEST_ASSERT(bmEffectsDoorOpening(&s_game, (uint16_t)back) == 0);
+  // A side door: the player walks on through it, out of the room, as it swings open.
+  bmBodyPlace(&s_game.player, 30, 160);
+  frames(5, 0);
+  frames(1, BM_KEY_LEFT);
+  frames(10, BM_KEY_LEFT);
+  TEST_ASSERT(s_game.doorSeq == back + 1 && strcmp(bmGameRoomId(&s_game), "debug_wave") == 0);
+  int32_t x = BM_FIX_INT(s_game.player.x);
+  frames(8, 0);   // let go: the walk goes on by itself
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) < x && bmEffectsDoorOpening(&s_game, (uint16_t)back) == 256);
+  frames(20, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "debug_lobby") == 0);
+  // Skipped: B through at once.
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);
+  frames(2, 0);
+  bmBodyPlace(&s_game.player, 10, 160);
+  frames(2, 0);
+  TEST_ASSERT(s_game.doorSeq != 0);
+  frames(1, BM_KEY_B);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "debug_lobby") == 0 && s_game.doorSeq == 0);
+  TEST_ASSERT(bm_script_errors == 0);
 }
 
 // A line of dialogue appears a letter a frame; A shows the rest at once, the next A closes
@@ -1370,10 +1411,10 @@ int main(int argc, char **argv)
   RUN_TEST(testKnockbackAndFlash);
   RUN_TEST(testADropFallsAndIsTaken);
   RUN_TEST(testTheDebugLobby);
-  RUN_TEST(testDoorPanelsOpenNearby);
+  RUN_TEST(testDoorsOpenAsThePlayerWalksThrough);
   RUN_TEST(testCommands);
   RUN_TEST(testEveryWeaponHasCommands);
-  RUN_TEST(testAnAttackInTheAirKeepsTheJumpGoing);
+  RUN_TEST(testAnAttackKeepsTheMomentum);
   RUN_TEST(testALineAppearsLetterByLetter);
   RUN_TEST(testTheBossIsDefeated);
   free(s_data);

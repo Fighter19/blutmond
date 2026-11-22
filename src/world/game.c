@@ -533,7 +533,29 @@ static void respawn(BmGame *g)
   g->hurtTimer = 60;
 }
 
-static void useDoor(BmGame *g, const BmObjectView *door)
+// The walk through a door with a panel (effects.h): side doors are walked through, a door in
+// the back wall opens in front of the player; A, B or Start ends it at once.
+#define DOOR_WALK_FRAMES 30
+#define DOOR_FACING_FRAMES 20
+#define DOOR_CLOSE_FRAMES 16
+
+static void goThroughDoor(BmGame *g, const BmObjectView *door);
+
+static void useDoor(BmGame *g, uint16_t index)
+{
+  if (index >= g->objectCount || g->doorSeq != 0) return;
+  if (g->objects[index].kind == BM_OBJECT_DOOR && g->objectSheet[index] >= 0)
+  {
+    g->doorSeq = (uint8_t)(index + 1);
+    g->doorTimer = 0;
+    g->doorArrive = 0;
+    return;
+  }
+  BmObjectView door = g->objects[index];   // the room's objects change when the room does
+  goThroughDoor(g, &door);
+}
+
+static void goThroughDoor(BmGame *g, const BmObjectView *door)
 {
   const char *target = bmGameObjectProperty(g, door, "target_room");
   const char *targetDoor = bmGameObjectProperty(g, door, "target_door");
@@ -548,6 +570,13 @@ static void useDoor(BmGame *g, const BmObjectView *door)
   int32_t x = 32, y = 32;
   if (targetDoor && findObject(g, BM_OBJECT_DOOR, targetDoor, &arrive))
   {
+    // Come through it: it closes behind the player.
+    for (uint16_t i = 0; i < g->objectCount; i++)
+      if (g->objects[i].kind == BM_OBJECT_DOOR && g->objectSheet[i] >= 0 && g->objects[i].name == arrive.name)
+      {
+        g->doorArrive = (uint8_t)(i + 1);
+        g->doorArriveTimer = DOOR_CLOSE_FRAMES;
+      }
     // Step into the room, away from the edge the door is on.
     bool rightSide = arrive.x + arrive.w / 2 > g->room.widthPx / 2;
     x = rightSide ? arrive.x - 12 : arrive.x + arrive.w + 12;
@@ -882,6 +911,16 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   g->keysPrevious = keys;
   if (g->returnPending) returnToSave(g);
   bmEffectsFrame(g);
+  // Walking through a door: the buttons are not the game's meanwhile, A, B or Start skips it.
+  bool doorSkip = false;
+  if (g->doorSeq != 0)
+  {
+    doorSkip = (pressed & (BM_KEY_A | BM_KEY_B | BM_KEY_START)) != 0;
+    keys = pressed = previous = 0;
+    if (g->doorTimer < 255) g->doorTimer++;
+    if (g->hurtTimer < 2) g->hurtTimer = 2;
+  }
+  if (g->doorArriveTimer != 0 && --g->doorArriveTimer == 0) g->doorArrive = 0;
   // Mana comes back slowly (first-items.md §1).
   if (g->frame % BM_GAME_MANA_EVERY == 0 && g->mana < bmGameMaxMana(g)) g->mana++;
 
@@ -956,12 +995,22 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   // A lock (a swing) takes walking and jumping away; set this frame, it already counts.
   if (g->lockTimer != 0)
   {
-    // In the air the jump goes on as it was (an attack does not brake it); on the ground the
-    // player stands.
-    in.coast = !g->player.onGround;
+    // An attack's lock keeps the player's speed, on the ground and in the air; a scene's
+    // (player_lock) stands the player still.
+    in.coast = g->lockCoast != 0;
     in.dx = 0;
     in.jumpPressed = false;
     g->lockTimer--;
+  }
+  if (g->doorSeq != 0)
+  {
+    // Through a side door the player walks on, out of the room; at a door in the back wall
+    // the player stands while it opens.
+    uint8_t side = g->objectDoorSide[g->doorSeq - 1];
+    in.dx = (int8_t)(side == 1 ? 1 : side == 2 ? -1 : 0);
+    in.dy = 0;
+    in.jumpPressed = in.jumpHeld = false;
+    in.coast = false;
   }
   // Heavy armour and the like change the running speed (add_speed).
   BmBodyParams params = g->playerParams;
@@ -970,7 +1019,20 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     int32_t percent = 100 + g->speedPercent;
     params.runSpeed = (bm_fix)(params.runSpeed * (percent < 10 ? 10 : percent) / 100);
   }
-  uint32_t events = bmBodyStep(&g->player, &params, &g->collision, &g->physics, in);
+  uint32_t events = 0;
+  if (g->doorSeq != 0 && in.dx != 0)
+  {
+    // Through a side door: walking at running speed out over the room's edge, the walls and
+    // edges do not hold the player there.
+    g->player.facing = in.dx;
+    g->player.vx = in.dx * params.runSpeed;
+    g->player.vy = 0;
+    g->player.x += g->player.vx;
+  }
+  else
+  {
+    events = bmBodyStep(&g->player, &params, &g->collision, &g->physics, in);
+  }
   bmAttachmentsBodyEvents(g, events);
   if (g->hurtTimer) g->hurtTimer--;
   if (g->doorCooldown) g->doorCooldown--;
@@ -1013,10 +1075,9 @@ void bmGameFrame(BmGame *g, uint16_t keys)
       respawn(g);
       break;
     }
-    if (g->doorCooldown == 0)
+    if (g->doorCooldown == 0 && g->doorSeq == 0)
     {
-      BmObjectView door = *o;  // the room's objects change when the room does
-      useDoor(g, &door);
+      useDoor(g, i);
       break;
     }
   }
@@ -1030,11 +1091,14 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   {
     uint16_t index = (uint16_t)(g->actors.pendingDoor - 1);
     g->actors.pendingDoor = 0;
-    if (g->doorCooldown == 0 && index < g->objectCount)
-    {
-      BmObjectView door = g->objects[index];
-      useDoor(g, &door);
-    }
+    if (g->doorCooldown == 0 && index < g->objectCount) useDoor(g, index);
+  }
+  // Through the door being walked through, when the walk is over or skipped.
+  if (g->doorSeq != 0 && (doorSkip || g->doorTimer >= (g->objectDoorSide[g->doorSeq - 1] != 0 ? DOOR_WALK_FRAMES : DOOR_FACING_FRAMES)))
+  {
+    BmObjectView door = g->objects[g->doorSeq - 1];
+    g->doorSeq = 0;
+    goThroughDoor(g, &door);
   }
   // Falling out of the bottom without a kill zone.
   if (BM_FIX_INT(g->player.y) > g->room.heightPx + 64 || (g->player.flipped && BM_FIX_INT(g->player.y) < -64))
@@ -1087,6 +1151,11 @@ static const BmStateField s_gameFields[] = {
   F(speedPercent, BM_TYPE_S16, BM_STATE_SNAPSHOT),
   BM_STATE_ARRAY(BmGame, resists, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_GAME_ELEMENTS),
   F(returnPending, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(lockCoast, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(doorSeq, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(doorTimer, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(doorArrive, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(doorArriveTimer, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   BM_STATE_ARRAY(BmGame, cmdDirs, BM_TYPE_U8, BM_STATE_SNAPSHOT, 8),
   BM_STATE_ARRAY(BmGame, cmdTimes, BM_TYPE_U16, BM_STATE_SNAPSHOT, 8),
   F(cmdHead, BM_TYPE_U8, BM_STATE_SNAPSHOT),

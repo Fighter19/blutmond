@@ -36,7 +36,7 @@ typedef struct BmBodyInput
   int8_t dx, dy;      // -1, 0, 1 (D-pad)
   bool jumpPressed;   // pressed this frame
   bool jumpHeld;
-  bool coast;         // no steering (an attack in the air): keep the speed, no air drag
+  bool coast;         // no steering (an attack): keep the speed, no friction or air drag
 } BmBodyInput;
 
 enum {

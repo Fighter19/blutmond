@@ -121,21 +121,16 @@ int32_t bmEffectsWaveAt(const BmGame *g, int32_t y)
 
 // Depth in the view: a pixel of depth is drawn 0.4 px wide.
 #define DEPTH_X 102
-// Doors: shut from this far (px between the player and the door), open from DOOR_OPEN.
-#define DOOR_SHUT 64
-#define DOOR_OPEN 16
+#define DOOR_OPENING_FRAMES 12
 
 int32_t bmEffectsDoorOpening(const BmGame *g, uint16_t object)
 {
+  // Only the door being walked through opens (in DOOR_OPENING_FRAMES), and the one just come
+  // through closes behind the player.
   if (object >= g->objectCount) return 0;
-  const BmObjectView *o = &g->objects[object];
-  int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
-  int32_t dx = px < o->x ? o->x - px : px > o->x + o->w ? px - o->x - o->w : 0;
-  // Only from about its height: a door above or below stays shut.
-  if (py < o->y || py > o->y + o->h + 16) return 0;
-  if (dx >= DOOR_SHUT) return 0;
-  if (dx <= DOOR_OPEN) return 256;
-  return (DOOR_SHUT - dx) * 256 / (DOOR_SHUT - DOOR_OPEN);
+  if (g->doorSeq == object + 1) return g->doorTimer >= DOOR_OPENING_FRAMES ? 256 : g->doorTimer * 256 / DOOR_OPENING_FRAMES;
+  if (g->doorArrive == object + 1) return g->doorArriveTimer * 256 / 16;
+  return 0;
 }
 
 uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
@@ -159,12 +154,12 @@ uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
     uint8_t side = g->objectDoorSide[i];
     if (side == 1)
     {
-      angle = 64 - open * 56 / 256;   // along the depth, out to the right
+      angle = 64 + open * 56 / 256;   // along the depth, swung into the room (to the left)
       hx = o->x + o->w - closedWidth;
     }
     else if (side == 2)
     {
-      angle = 64 + open * 56 / 256;   // along the depth, out to the left
+      angle = 64 - open * 56 / 256;   // along the depth, swung into the room (to the right)
       hx = o->x + o->w - closedWidth;
     }
     else

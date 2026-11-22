@@ -153,8 +153,9 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     bm_fix target = in.dx * p->runSpeed;
     if (b->inWater) target /= 2;
     if (in.dx) b->vx = approach(b->vx, target, wasOnGround ? p->groundAccel : p->airAccel);
+    else if (in.coast) {}   // keeps its speed
     else if (wasOnGround) b->vx = approach(b->vx, 0, p->friction);
-    else if (!in.coast) b->vx = approach(b->vx, 0, p->airAccel / 2);
+    else b->vx = approach(b->vx, 0, p->airAccel / 2);
 
     // Jumping (with coyote time and a jump buffer); down + jump drops through platforms.
     if (b->jumpBuffer && (wasOnGround || b->coyote))
