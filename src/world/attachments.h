@@ -71,5 +71,11 @@ void bmAttachmentsLeaveRoom(struct BmGame *pGame);
 /// names, sets their variables from its `Class.variable` properties and kept `save` values.
 void bmAttachmentsEnterRoom(struct BmGame *pGame);
 
+/// Runs an event of the attachment in `slot`, if there is one (hit, struck).
+void bmAttachmentsEvent(struct BmGame *pGame, uint8_t slot, BmScriptEvent event, int32_t arg);
+
+/// The player was struck: hit(amount) to each of the player's attachments.
+void bmAttachmentsPlayerHit(struct BmGame *pGame, int32_t amount);
+
 /// After the pack's scripts were (re)loaded: finds each slot's class again.
 void bmAttachmentsBind(struct BmGame *pGame);

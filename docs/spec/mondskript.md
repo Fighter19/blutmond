@@ -197,7 +197,7 @@ every other file of the same module.
 | Records | `record<S>` variables, parameters and results, `#Name` as a record, field access (`.field`, `.inner.field`, `.array[2]`, through `record<T>` fields), `for x in records(S)`; [data-format.md](data-format.md) §5 | a dynamic array index |
 | Classes | `class Name extends Actor;` and `extends Attachment` (below), `var` with `(Category)` and `save`/`link`/`transient`/`derived`, `const`, at most 8 variables | other base classes (`Player`, `Screen`), inheritance between script classes, components (`has`) |
 | Functions | functions with up to 3 parameters and a result, calls nested up to 16 deep; all are final | `virtual`, `static` |
-| Events | Actor: `spawn()`, `tick()`, `touch()` (the player starts touching the object); Attachment: `attached()`, `detached()`, `tick()`, `press(name button)`, `release(name button)`, `jumped()`, `landed()`; in the class and per state | `hit`, `dies`, `enter_room`, `leave_room`, `use`, `hurt`, `struck`, `message` |
+| Events | Actor: `spawn()`, `tick()`, `touch()` (the player starts touching the object); Attachment: `attached()`, `detached()`, `tick()`, `press(name button)`, `release(name button)`, `jumped()`, `landed()`; both: `hit(int amount)` (struck: for an attachment, the player was), `struck(int amount)` (a hit of its own struck another); in the class and per state | `dies`, `enter_room`, `leave_room`, `use`, `message`, the target and element of a hit |
 | States | `state` with events and state code after `begin:`, `gotostate`, `start_state`; latent `sleep(frames)`, `finish_anim()`, `wait_until(condition)` | functions overridden per state; locals and `for` in state code (their values would not survive a wait: use variables of the class) |
 | Statements | `var` locals, `if`/`else`, `while`, `loop`, `for x in a..b`, `break`, `continue`, `return`, assignment with `=`, `+=`, `-=`, `*=`, `/=` | `switch`, `match`, queries |
 | Expressions | `+ - * / %`, comparisons, `&& || !` (short circuit), `fix(...)`, `int(...)`; integer literals become `fix` where `fix` is expected; mixing `int` and `fix` is an error | |
@@ -230,10 +230,35 @@ a room brings the room's attachments as they were.
 The compiler refuses in an attachment what acts on a room's own object (`hide`, `show`,
 `play_anim`, `finish_anim`, `anim_done`, `face_player`, `player_distance`, `touching_player`,
 `move_toward*`, `enter_door`; the list is `BM_SCRIPT_ACTOR_ONLY` in `script_api.h`) and the
-variables `home_x`, `home_y`; `x`, `y` and `facing` read the player's and cannot be written.
-The runtime ignores such calls from a module made by hand. An attachment's class is kept by
+variables `home_x`, `home_y`; `x`, `y`, `facing`, `health` and `team` read the player's, and
+of them only `health` can be written (a potion). The runtime ignores such calls from a module made by hand. An attachment's class is kept by
 the hash of its name; its state is in the snapshot (state.md). Not yet: attachments on actors,
 `save` variables of the player's attachments, attachments from the inventory.
+
+### Hits
+
+```
+state Chasing {
+  event struck(int amount) { gotostate Returning; }   // the bite struck the player
+begin:
+  arm(#bite, Kind.damage, Element.None);
+}
+state Returning { begin: disarm(#bite); ... }
+```
+
+`arm(#box, damage, element)` makes the hit boxes of that name in the figure's sprite
+(sprite-format.md) live as one hit, on whichever frames have them, until `disarm(#box)`, the
+figure's animation changing or ending, or the figure being struck. `hit_box(reach, frames,
+damage)` is a hit without a drawing: a rectangle `reach` pixels ahead of the figure, as high as
+its body, for `frames` frames. Once a frame, after all scripts and animations, the hits are
+tested against the figures of other teams ([runtime-core.md](runtime-core.md) §10): a hit
+strikes each figure at most once; a struck figure loses health, cannot be struck again for a
+while (20 frames, the player 60), its own hits end and it gets `hit(amount)`; the object or
+attachment that made the hit gets `struck(amount)`. An object has the variables `health`
+(struck only while above 0; 0 at the start, so a script that wants to be struck sets it) and
+`team` (0, the enemies, by default; the player is 1). From an attachment of the player, the
+figure is the player. Not yet: guard boxes, the element and the target's defence in the
+damage, the target in `struck`, projectiles ([../plans/hitboxes.md](../plans/hitboxes.md)).
 
 ### Structures
 
@@ -304,7 +329,8 @@ Everything is little endian. Variable types: 0 void, 1 bool, 2 int, 3 fix, 4 nam
 order; which enum is known only to the compiler), 7 record (a record's key). Events in the
 order of their numbers, with the kinds of class that get them: 0 `spawn()` (Actor), 1
 `tick()` (both), 2 `touch()` (Actor), 3 `attached()`, 4 `detached()`, 5 `press(name)`, 6
-`release(name)`, 7 `jumped()`, 8 `landed()` (Attachment). The line table's offset may be 0
+`release(name)`, 7 `jumped()`, 8 `landed()` (Attachment), 9 `hit(int)`, 10 `struck(int)`
+(both). The line table's offset may be 0
 (none). Version 1 had the three events of an Actor and 0 in place of the kind; it is refused.
 
 #### Instructions

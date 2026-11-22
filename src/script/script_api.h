@@ -59,7 +59,10 @@ typedef enum BmScriptType {
   X(detach,             VOID, 1, INT,  VOID, VOID, 0) \
   X(impulse,            VOID, 2, FIX,  FIX,  VOID, 0) \
   X(room_attach,        BOOL, 2, INT,  NAME, VOID, 0) \
-  X(room_detach,        VOID, 1, INT,  VOID, VOID, 0)
+  X(room_detach,        VOID, 1, INT,  VOID, VOID, 0) \
+  X(arm,                VOID, 3, NAME, INT,  ENUM, 0) \
+  X(disarm,             VOID, 1, NAME, VOID, VOID, 0) \
+  X(hit_box,            VOID, 3, INT,  INT,  INT,  0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -75,6 +78,13 @@ typedef enum BmScriptType {
 // if there is no Attachment class of that name. impulse(vx, vy): added to the player's speed
 // once. room_attach(slot, #Class), room_detach(slot): the same for the room's 4 slots; the
 // room detaches them when it is left.
+//
+// arm(#box, damage, element), disarm(#box), hit_box(reach, frames, damage): hits
+// (src/world/hits.h, docs/plans/hitboxes.md §3). arm makes the hit boxes of that name on the
+// frames the figure shows live as one hit, until disarm, the figure's animation changing or
+// ending, or the figure being struck; hit_box is a hit without a drawing: a rectangle from the
+// figure's anchor `reach` pixels ahead, as high as its body, for `frames` frames. From an
+// attachment the figure is the player.
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {
@@ -84,14 +94,18 @@ typedef enum BmScriptApi {
   BM_SCRIPT_API_COUNT
 } BmScriptApi;
 
-// Variables every actor has, read and written like fields.
+// Variables every actor has, read and written like fields. health: struck only while above
+// 0; team: hits strike only figures of another team (0, the default: enemies; the player is
+// 1). An attachment reads its owner's (the player's) and may write `health`.
 // X(name, type, writable)
 #define BM_SCRIPT_ACTOR_VARS(X) \
   X(x,      FIX, 1) \
   X(y,      FIX, 1) \
   X(home_x, FIX, 0) \
   X(home_y, FIX, 0) \
-  X(facing, INT, 1)
+  X(facing, INT, 1) \
+  X(health, INT, 1) \
+  X(team,   INT, 1)
 
 typedef enum BmScriptActorVar {
 #define X(name, type, writable) BM_SCRIPT_VAR_##name,
@@ -107,7 +121,10 @@ typedef enum BmScriptKind {
   BM_SCRIPT_KIND_COUNT
 } BmScriptKind;
 
-// Events the runtime calls. X(name, type of the parameter (VOID: none), kinds that get it:
+// Events the runtime calls. hit(amount): the figure was struck (its health already lowered;
+// an attachment gets it when the player was); struck(amount): a hit of this figure or
+// attachment struck another.
+// X(name, type of the parameter (VOID: none), kinds that get it:
 // 1 Actor, 2 Attachment)
 #define BM_SCRIPT_EVENTS(X) \
   X(spawn,    VOID, 1) \
@@ -118,7 +135,9 @@ typedef enum BmScriptKind {
   X(press,    NAME, 2) \
   X(release,  NAME, 2) \
   X(jumped,   VOID, 2) \
-  X(landed,   VOID, 2)
+  X(landed,   VOID, 2) \
+  X(hit,      INT,  3) \
+  X(struck,   INT,  3)
 
 typedef enum BmScriptEvent {
 #define X(name, arg, kinds) BM_SCRIPT_EVENT_##name,

@@ -367,6 +367,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   // The room being left takes its attachments with it (they get detached() while it is
   // still there). A state just loaded (not fresh) brings its own.
   if (fresh) bmAttachmentsLeaveRoom(g);
+  if (fresh) bmHitsClear(g);
   BmResult r = bmRoomOpen(&g->room, g->pPack, index);
   if (r != BM_SUCCESS) return r;
   g->roomIndex = index;
@@ -394,6 +395,7 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   if (index < 0) return BM_ERROR_INVALID_ARGUMENT;
   bmVideoInit();
   g->actors.seed = 1;
+  g->health = BM_GAME_PLAYER_HEALTH;
   BmResult r = enterRoom(g, (uint32_t)index, true);
   if (r != BM_SUCCESS) return r;
   BmObjectView start;
@@ -459,12 +461,30 @@ static void useDoor(BmGame *g, const BmObjectView *door)
 
 void bmGameHurtPlayer(BmGame *g, int32_t damage)
 {
-  if (damage <= 0 || g->hurtTimer != 0) return;
+  // As if from straight ahead: pushed back.
+  bmGameStrikePlayer(g, damage, g->player.x + g->player.facing);
+}
+
+bool bmGameStrikePlayer(BmGame *g, int32_t amount, int32_t fromX)
+{
+  if (amount <= 0 || g->hurtTimer != 0) return false;
   bmSoundPlayEffect(&g->sound, "hurt");
   g->hurts++;
-  g->hurtTimer = 60;
+  g->hurtTimer = BM_HITS_PLAYER_INVULNERABLE;
   g->player.vy = -BM_FIX(3);
-  g->player.vx = -g->player.facing * BM_FIX(2);
+  int32_t away = fromX > g->player.x ? -1 : fromX < g->player.x ? 1 : -g->player.facing;
+  g->player.vx = away * BM_FIX(2);
+  // A struck figure's own hits end.
+  for (uint8_t k = 0; k < BM_HITS_MAX; k++)
+    if (g->hits.source[k] == BM_HITS_PLAYER) bmHitsDisarm(g, BM_HITS_PLAYER, g->hits.name[k]);
+  g->health = (int16_t)(g->health - (amount > g->health ? g->health : amount));
+  bmAttachmentsPlayerHit(g, amount);
+  if (g->health <= 0)
+  {
+    respawn(g);
+    g->health = BM_GAME_PLAYER_HEALTH;
+  }
+  return true;
 }
 
 void bmGameFrame(BmGame *g, uint16_t keys)
@@ -550,6 +570,8 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   }
 
   animatePlayer(g);
+  // Scripts and animations have had their turn: who is struck.
+  bmHitsFrame(g);
   updateCamera(g);
   updateSprites(g);
 
@@ -581,6 +603,7 @@ static const BmStateField s_gameFields[] = {
   F(frame, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   F(keysPrevious, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(hurtTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(health, BM_TYPE_S16, BM_STATE_SAVE | BM_STATE_LINK),
   F(doorCooldown, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(saveCooldown, BM_TYPE_U16, BM_STATE_TRANSIENT),
   F(deaths, BM_TYPE_U32, BM_STATE_SAVE),
@@ -609,6 +632,9 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.animFinished, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animStep, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.health, BM_TYPE_S32, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.team, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.invulnerable, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   F(actors.seed, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   // What `save` variables hold: this goes into the save game.
   F(actors.storeCount, BM_TYPE_U8, BM_STATE_SAVE),
@@ -630,6 +656,16 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, attachments.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
   BM_STATE_ARRAY(BmGame, attachments.fields, BM_TYPE_S32, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS * BM_SCRIPT_MAX_FIELDS),
   BM_STATE_ARRAY(BmGame, attachments.lifetime, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ATTACH_SLOTS),
+  // Hits in the middle of a swing: a snapshot continues them with the same targets still to come.
+  BM_STATE_ARRAY(BmGame, hits.source, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.slot, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.name, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.damage, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.element, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.anim, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.frames, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.reach, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.struck, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
 };
 #undef F
 

@@ -64,6 +64,9 @@ typedef struct BmActors
   uint8_t hidden[BM_ACTORS_MAX], touching[BM_ACTORS_MAX];
   uint8_t anim[BM_ACTORS_MAX], animFinished[BM_ACTORS_MAX];
   uint16_t animStep[BM_ACTORS_MAX], animTimer[BM_ACTORS_MAX];
+  int32_t health[BM_ACTORS_MAX];       // struck only while above 0 (hits.h)
+  uint8_t team[BM_ACTORS_MAX];         // 0: enemies
+  uint8_t invulnerable[BM_ACTORS_MAX]; // frames until it can be struck again
   uint32_t seed;
   // `save` variables, by room, object and field.
   uint8_t storeCount;
@@ -91,6 +94,13 @@ void bmActorsFrame(struct BmGame *pGame);
 
 /// Draws the scripted objects from OAM entry `firstOam`; returns how many entries it used.
 uint8_t bmActorsDraw(struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
+
+/// The box of scripted object `actor` in room pixels: its rectangle, its sprite's body box, or
+/// 16x16 above its anchor.
+void bmActorsBox(const struct BmGame *pGame, uint8_t actor, int32_t *pX, int32_t *pY, int32_t *pW, int32_t *pH);
+
+/// Runs an event of scripted object `actor` (hit, struck).
+void bmActorsEvent(struct BmGame *pGame, uint8_t actor, BmScriptEvent event, int32_t arg);
 
 /// Whether an object of the room is scripted (then the engine leaves it alone).
 bool bmActorsOwnObject(const struct BmGame *pGame, uint16_t objectIndex);

@@ -11,6 +11,7 @@
 #include "data.h"
 #include "game.h"
 #include "hal.h"
+#include "hits.h"
 #include "native.h"
 #include "video.h"
 
@@ -118,6 +119,11 @@ static void boxOf(const BmGame *g, uint8_t i, int32_t *px, int32_t *py, int32_t 
     *pw = 16;
     *ph = 16;
   }
+}
+
+void bmActorsBox(const BmGame *g, uint8_t i, int32_t *px, int32_t *py, int32_t *pw, int32_t *ph)
+{
+  boxOf(g, i, px, py, pw, ph);
 }
 
 static bool touchesPlayer(const BmGame *g, uint8_t i)
@@ -306,6 +312,20 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     a->currentSlot = slot;
     break;
   }
+  case BM_SCRIPT_API_arm:
+  case BM_SCRIPT_API_disarm:
+  case BM_SCRIPT_API_hit_box:
+  {
+    // The figure: the object itself, or for the player's attachments the player. The room has
+    // no figure to hit from.
+    if (i == BM_ACTORS_ROOM) break;
+    uint8_t source = i < BM_ACTORS_MAX ? (uint8_t)(1 + i) : BM_HITS_PLAYER;
+    uint8_t slot = i < BM_ACTORS_MAX ? BM_HITS_NO_SLOT : a->currentSlot;
+    if (api == BM_SCRIPT_API_arm) bmHitsArm(g, source, slot, (uint16_t)args[0], args[1], (uint8_t)args[2], 0, 0);
+    else if (api == BM_SCRIPT_API_disarm) bmHitsDisarm(g, source, (uint16_t)args[0]);
+    else bmHitsArm(g, source, slot, 0xFFFF, args[2], 0, args[0], args[1]);
+    break;
+  }
   case BM_SCRIPT_API_impulse:
     g->player.vx += args[0];
     g->player.vy += args[1];
@@ -338,6 +358,7 @@ static int32_t hostGetVar(void *pContext, BmVmInstance *inst, uint16_t var)
     if (var == BM_SCRIPT_VAR_x) return BM_FIX(g->room.cameraX);
     if (var == BM_SCRIPT_VAR_y) return BM_FIX(g->room.cameraY);
     if (var == BM_SCRIPT_VAR_facing) return 1;
+    if (var == BM_SCRIPT_VAR_team) return BM_HITS_PLAYER_TEAM;
     return 0;
   }
   if (i >= BM_ACTORS_MAX)
@@ -346,6 +367,8 @@ static int32_t hostGetVar(void *pContext, BmVmInstance *inst, uint16_t var)
     if (var == BM_SCRIPT_VAR_x) return g->player.x;
     if (var == BM_SCRIPT_VAR_y) return g->player.y;
     if (var == BM_SCRIPT_VAR_facing) return g->player.facing;
+    if (var == BM_SCRIPT_VAR_health) return g->health;
+    if (var == BM_SCRIPT_VAR_team) return BM_HITS_PLAYER_TEAM;
     return 0;
   }
   switch (var)
@@ -355,6 +378,8 @@ static int32_t hostGetVar(void *pContext, BmVmInstance *inst, uint16_t var)
   case BM_SCRIPT_VAR_home_x: return a->homeX[i];
   case BM_SCRIPT_VAR_home_y: return a->homeY[i];
   case BM_SCRIPT_VAR_facing: return a->facing[i];
+  case BM_SCRIPT_VAR_health: return a->health[i];
+  case BM_SCRIPT_VAR_team: return a->team[i];
   default: return 0;
   }
 }
@@ -365,12 +390,21 @@ static void hostSetVar(void *pContext, BmVmInstance *inst, uint16_t var, int32_t
   BmGame *g = pContext;
   BmActors *a = &g->actors;
   uint8_t i = a->current;
-  if (i >= BM_ACTORS_MAX) return;   // an attachment cannot move its owner this way
+  if (i >= BM_ACTORS_MAX)
+  {
+    // An attachment cannot move its owner this way, but it can heal the player (to at least 1:
+    // only a hit takes the last of it).
+    if (i == BM_ACTORS_OWNER && var == BM_SCRIPT_VAR_health)
+      g->health = (int16_t)(value < 1 ? 1 : value > BM_GAME_PLAYER_HEALTH ? BM_GAME_PLAYER_HEALTH : value);
+    return;
+  }
   switch (var)
   {
   case BM_SCRIPT_VAR_x: a->x[i] = value; break;
   case BM_SCRIPT_VAR_y: a->y[i] = value; break;
   case BM_SCRIPT_VAR_facing: a->facing[i] = (int8_t)(value < 0 ? -1 : 1); break;
+  case BM_SCRIPT_VAR_health: a->health[i] = value; break;
+  case BM_SCRIPT_VAR_team: a->team[i] = (uint8_t)value; break;
   default: break;
   }
 }
@@ -733,6 +767,9 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->facing[i] = 1;
     a->hidden[i] = 0;
     a->touching[i] = 0;
+    a->health[i] = 0;
+    a->team[i] = 0;
+    a->invulnerable[i] = 0;
     BmAnimState none = { 0, 0, 0, 0 };
     setAnim(a, i, &none);
     applyProperties(g, i, &inst);
@@ -803,6 +840,21 @@ uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
                                               a->facing[i] < 0, 1, (uint8_t)(firstOam + used), (uint8_t)(maxOam - used)));
   }
   return used;
+}
+
+void bmActorsEvent(BmGame *g, uint8_t i, BmScriptEvent event, int32_t arg)
+{
+  BmActors *a = &g->actors;
+  if (!a->hasModule || i >= a->count) return;
+  BmVmHost host = hostOf(g);
+  BmVmInstance inst;
+  loadInstance(a, i, &inst);
+  uint8_t current = a->current, currentSlot = a->currentSlot;
+  a->current = i;
+  bmVmEventWith(moduleOf(a, i), &host, &inst, event, arg);
+  storeInstance(a, i, &inst);
+  a->current = current;
+  a->currentSlot = currentSlot;
 }
 
 bool bmActorsOwnObject(const BmGame *g, uint16_t objectIndex)
@@ -906,6 +958,18 @@ static void slotFrame(BmGame *g, uint8_t slot)
     t->lifetime[slot] = 1;   // detached() still sees it attached
     bmAttachmentsDetach(g, slot);
   }
+}
+
+void bmAttachmentsEvent(BmGame *g, uint8_t slot, BmScriptEvent event, int32_t arg)
+{
+  if (slot < BM_ATTACH_SLOTS) slotEvent(g, slot, event, arg);
+}
+
+void bmAttachmentsPlayerHit(BmGame *g, int32_t amount)
+{
+  BmAttachments *t = &g->attachments;
+  if ((t->occupied & ((1u << BM_ATTACH_PLAYER_SLOTS) - 1)) == 0) return;
+  for (uint8_t s = 0; s < BM_ATTACH_PLAYER_SLOTS; s++) slotEvent(g, s, BM_SCRIPT_EVENT_hit, amount);
 }
 
 void bmAttachmentsBind(BmGame *g)

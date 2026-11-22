@@ -63,8 +63,9 @@ L 512.
 8. **Scripted objects** (section 8). Then, if one of them called `enter_door` and
    `doorCooldown == 0`, go through that door.
 9. If `INT(player.y) > room height + 64`: respawn.
-10. Player animation (section 9), camera (section 7), sprites (section 9), sound
-    ([sound-format.md](sound-format.md)).
+10. Player animation (section 9).
+11. **Hits** (section 10).
+12. Camera (section 7), sprites (section 9), sound ([sound-format.md](sound-format.md)).
 
 ## 4. Collision
 
@@ -201,8 +202,14 @@ start:
 
 ## 6. Hurt, respawn, doors, start
 
-- **Hurt(damage)**: nothing if `damage <= 0` or `hurtTimer != 0`. Else play the effect `hurt`,
-  `hurts += 1`, `hurtTimer = 60`, `vy = -3.0`, `vx = -facing * 2.0`.
+- **Strike(amount, fromX)**: nothing if `amount <= 0` or `hurtTimer != 0`. Else play the
+  effect `hurt`, `hurts += 1`, `hurtTimer = 60`, `vy = -3.0`, `vx = away * 2.0` with `away =
+  -1` if `fromX > x`, 1 if `fromX < x`, else `-facing`; the player's hits end (section 10);
+  `health -= min(amount, health)`; each of the player's attachments in slot order gets
+  `hit(amount)`; then if `health <= 0`: respawn and `health = 30`.
+- **Hurt(damage)** (hazards, `hurt_player`): Strike(damage, `x + facing`), so the push is
+  backwards.
+- **Health** starts at 30 (until the stat `MaxHealth` gives it) and is kept in the save game.
 - **Respawn**: `place(safeX, safeY)` keeping `facing`; `deaths += 1`; `hurtTimer = 60`.
 - **Going through a door**: the door's property `target_room` names a room id. If there is no
   such room, nothing happens. Otherwise enter that room with the scripted objects starting
@@ -326,11 +333,22 @@ value is dropped and counts as a script error.
 | 33 | `impulse(vx, vy)` | added to the player's speed once (fix) |
 | 34 | `room_attach(slot, class)` | like `attach`, in the room's slot 0 to 3; the room detaches it when it is left |
 | 35 | `room_detach(slot)` | like `detach`, for the room's slot |
+| 36 | `arm(box, damage, element)` | starts a hit of this figure with its hit boxes named `box` (section 10); arming the same name again replaces it with a new hit |
+| 37 | `disarm(box)` | ends this figure's hits with that box name |
+| 38 | `hit_box(reach, frames, damage)` | starts a hit of this figure with a rectangle `reach` (0..255) pixels ahead for `frames` (1..65535) frames |
+
+`arm`, `disarm` and `hit_box` from one of the player's attachments act for the player and
+remember the slot; from a room's attachment they do nothing.
 
 `dist(a, b) = max(|a|, |b|) + min(|a|, |b|) / 2`.
 
-Actor variables by index: 0 `x`, 1 `y`, 2 `home_x`, 3 `home_y`, 4 `facing`. Writing `facing`
-stores -1 for a negative value, else 1. `home_x` and `home_y` cannot be written.
+Actor variables by index: 0 `x`, 1 `y`, 2 `home_x`, 3 `home_y`, 4 `facing`, 5 `health`, 6
+`team`. Writing `facing` stores -1 for a negative value, else 1. `home_x` and `home_y` cannot
+be written. `health` and `team` start at 0 when an object starts anew; `team` keeps the low 8
+bits. An attachment of the player reads the player's `x`, `y`, `facing`, `health` and `team`
+(1) and can write only `health`, clamped to 1..30; one of the room reads the camera's `x`,
+`y`, `facing = 1`, `team = 1`, and 0 for the rest.
+
 
 ## 9. Sprites on screen
 
@@ -374,7 +392,39 @@ the sheet's first tile + the piece's tile; palette bank = the sheet's; priority 
    an object with a size, `(x - 8, y - 16)` for a point.
 4. The rest are hidden.
 
-## 10. What is not specified here
+## 10. Hits
+
+Figures are numbered: 0 the player, `1 + i` scripted object `i`. A figure's **team** is 1 for
+the player and the variable `team` for an object. **Hits**: 8 entries, each source figure
+(0xFF: free), the attachment slot that made it (0xFF: none), box name (0xFFFF: a rectangle),
+damage, element, the source's animation when armed, frames left, reach, and the figures it
+struck (a bit each). `arm` takes the entry of the same source and name if there is one, else
+the first free; a hit started when all are used is dropped. A room entered fresh has none.
+
+**Each frame**, for each entry in order that is not free:
+
+1. An armed hit (with a box name) ends if its source no longer exists, or its source has a
+   sheet and shows another animation than the one it was armed in, or that animation does not
+   loop and has finished.
+2. Its rectangles: for a box name, the source's boxes of kind hit with that name on the frame
+   showing (sprite-format.md, mirrored when `facing < 0`), relative to its anchor; none if it
+   has no sheet. For a rectangle: `[ax, ax + reach)` (`[ax - reach, ax)` when facing left),
+   with `ax = INT(x)` of the source, over the height of the source's body box.
+3. For each figure `f` in number order: skip the source, a figure of the same team, one
+   already struck by this hit, and one that cannot be struck now (the player: `hurtTimer !=
+   0`; an object: hidden, `health <= 0`, or invulnerable). Its hurt rectangles are its boxes
+   of kind hurt on the frame showing, or its body box (the player's box of section 3, an
+   object's box of section 8) if there are none. If any hit rectangle overlaps any of them, it
+   is struck with `amount = max(1, damage)`: the bit of `f` is set; the player gets Strike
+   (amount, `FIX(INT(source x))`) (section 6); an object `health -= amount`, 20 frames
+   invulnerable, its hits end, and it gets `hit(amount)`. Then the source hears of it: the
+   attachment in the entry's slot, else a source object, gets `struck(amount)`. If the entry
+   is no longer the one it was (freed or replaced by those events), stop with it.
+4. A rectangle whose entry is still the same: `frames -= 1`, at 0 it is free.
+
+Then every object's invulnerability goes down by 1 if not 0.
+
+## 11. What is not specified here
 
 Sound ([sound-format.md](sound-format.md)), the script interpreter
 ([mondskript.md](mondskript.md)), the link ([link-protocol.md](link-protocol.md)) and the

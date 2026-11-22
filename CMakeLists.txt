@@ -45,6 +45,8 @@ set(BM_TEST_LEVEL_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/door.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/high_jump.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/dummy.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/jab.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/items.ms
@@ -563,6 +565,7 @@ if(BM_PLATFORM STREQUAL "host")
       ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmsprite ${PROJECT_SOURCE_DIR}/assets/test_room/bat.bmsprite
       ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bat.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/pickup.ms ${cooked}/door.ms
       ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/high_jump.ms
+      ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/dummy.ms ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/jab.ms
       ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.ms ${PROJECT_SOURCE_DIR}/assets/test_room/data/enemies.bmdata
       ${PROJECT_SOURCE_DIR}/assets/test_room/data/items.ms ${PROJECT_SOURCE_DIR}/assets/test_room/data/weapons.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/consumables.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata ${PROJECT_SOURCE_DIR}/assets/test_room/data/key_items.bmdata
       ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong

@@ -13,7 +13,10 @@ attachments keep no `save` variables; `impulse` (section 7) came early, for the 
 `jumped()` and `landed()` arrive after the body step. The room as an owner (section 8) is
 built too: the map properties `attach` and `Class.variable`, 4 room slots, `room_attach` and
 `room_detach`, `save` variables per room; instead of an event `entered_room()` they get
-`attached()`, which happens on every entry. The rest of steps 4 to 8 is open. Milestone M14 in [../PLAN.md](../PLAN.md).
+`attached()`, which happens on every entry. Of step 5, hit boxes, health and `hit`/`struck`
+are built ([hitboxes.md](hitboxes.md) step 2): `health` and `team` are variables of every
+object, the player's health is a value of the engine (30) until stats give it; `spawn` and
+messages are open. The rest of steps 4 to 8 is open. Milestone M14 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

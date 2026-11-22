@@ -13,6 +13,7 @@
 #include "actors.h"
 #include "body.h"
 #include "collision.h"
+#include "hits.h"
 #include "pack.h"
 #include "room.h"
 #include "sound.h"
@@ -22,6 +23,7 @@
 #define BM_GAME_MAX_OBJECTS 64
 #define BM_GAME_MAX_SHEETS 8
 #define BM_GAME_MAX_OAM 48
+#define BM_GAME_PLAYER_HEALTH 30   // until the stat MaxHealth gives it (first-items.md §1)
 
 /// Animations the engine's player looks for in the sprite called "player".
 enum { BM_PLAYER_ANIM_IDLE, BM_PLAYER_ANIM_RUN, BM_PLAYER_ANIM_JUMP, BM_PLAYER_ANIM_FALL, BM_PLAYER_ANIM_CLIMB, BM_PLAYER_ANIM_COUNT };
@@ -61,6 +63,7 @@ typedef struct BmGame
   uint32_t frame;
   uint16_t keysPrevious;
   uint16_t hurtTimer;
+  int16_t health;                  // the player's; at 0 they start again at the last safe place
   uint16_t doorCooldown;
   uint32_t deaths, roomChanges, hurts, saves;
   uint16_t saveCooldown;
@@ -83,6 +86,8 @@ typedef struct BmGame
   BmInventory inventory;
   // Scripts attached to the player (docs/plans/attachable-scripts.md).
   BmAttachments attachments;
+  // Hits armed by scripts (docs/plans/hitboxes.md).
+  BmHits hits;
   // Music and sound effects. Not part of the game state yet: a loaded state starts the room's
   // song from its beginning.
   BmSound sound;
@@ -91,6 +96,12 @@ typedef struct BmGame
 
 /// Hurts the player as a hazard does (unless still blinking from the last hit).
 void bmGameHurtPlayer(BmGame *pGame, int32_t damage);
+
+/// Strikes the player for `amount` from room x `fromX` (fix: they are pushed away from it),
+/// unless still blinking: health, the blink, the push, the end of the player's hits and
+/// hit(amount) to their attachments. At 0 health they start again with all of it. False if
+/// they could not be struck.
+bool bmGameStrikePlayer(BmGame *pGame, int32_t amount, int32_t fromX);
 
 /// Number of objects in the current room and access to one of them.
 uint16_t bmGameObjectCount(const BmGame *pGame);

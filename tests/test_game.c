@@ -182,6 +182,10 @@ static void testTheBatChasesHitsAndGoesHome(void)
   for (; frame < 300 && s_game.hurts == hurtsBefore; frame++) frames(1, 0);
   TEST_ASSERT(s_game.hurts == hurtsBefore + 1);
   TEST_ASSERT(strcmp(stateOf(bat), "Returning") == 0);
+  // Its bite is a hit (the box `bite` armed while chasing): the player lost its damage.
+  TEST_ASSERT(s_game.health == BM_GAME_PLAYER_HEALTH - (int32_t)s_game.hurts);
+  frames(1, 0);
+  TEST_ASSERT(bmHitsLive(&s_game) == 0);   // Returning disarmed it
   bmBodyPlace(&s_game.player, 40, 160);
   for (frame = 0; frame < 400 && strcmp(stateOf(bat), "Resting") != 0; frame++) frames(1, 0);
   TEST_ASSERT(strcmp(stateOf(bat), "Resting") == 0);
@@ -360,6 +364,75 @@ static void testTheRoomsAttachmentsComeAndGoWithTheRoom(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// hitboxes.md step 2: a hit strikes a figure once however many frames it overlaps, a second
+// hit strikes again once the figure can be struck again, a hit facing away misses; the source
+// hears of it (struck), the target too (hit), and health runs out into a new start.
+static void testAHitStrikesOnce(void)
+{
+  startWith(s_data, s_size, "test_room_2");
+  int dummy = actorOfClass("Dummy");
+  TEST_ASSERT(dummy >= 0 && s_game.actors.health[dummy] == 999);
+  const int32_t *dummyFields = &s_game.actors.fields[dummy * BM_SCRIPT_MAX_FIELDS];   // Hits, LastDamage
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 0, stringId("Jab"), 0));
+  const int32_t *jab = &s_game.attachments.fields[0];   // Reach, Damage, Strikes, LastAmount, Taken
+  TEST_ASSERT(jab[0] == 20 && jab[1] == 2);
+
+  // Just left of the dummy, facing it.
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[dummy]) - 14, 160);
+  s_game.player.facing = 1;
+  frames(30, 0);
+  frames(6, BM_KEY_B);   // pressed once and held: the rectangle lives 3 frames
+  TEST_ASSERT(dummyFields[0] == 1 && dummyFields[1] == 2);
+  TEST_ASSERT(jab[2] == 1 && jab[3] == 2);
+  TEST_ASSERT(bmHitsLive(&s_game) == 0);
+  // Pressed again at once: a new hit, but the dummy cannot be struck yet.
+  frames(1, 0);
+  frames(1, BM_KEY_B);
+  frames(3, 0);
+  TEST_ASSERT(dummyFields[0] == 1 && jab[2] == 1);
+  // Later it can.
+  frames(20, 0);
+  frames(1, BM_KEY_B);
+  TEST_ASSERT(dummyFields[0] == 2 && jab[2] == 2);
+  // Facing away: nothing.
+  frames(30, 0);
+  s_game.player.facing = -1;
+  frames(1, BM_KEY_B);
+  frames(4, 0);
+  TEST_ASSERT(dummyFields[0] == 2);
+  TEST_ASSERT(s_game.actors.health[dummy] == 999);
+
+  // A snapshot in the middle of a hit continues it: the strike comes after loading it too.
+  s_game.player.facing = 1;
+  frames(30, 0);
+  frames(1, BM_KEY_B);
+  TEST_ASSERT(dummyFields[0] == 3);
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[dummy]) - 60, 160);
+  frames(22, 0);
+  s_game.player.facing = 1;
+  frames(1, BM_KEY_B);
+  TEST_ASSERT(bmHitsLive(&s_game) == 1);
+  static uint8_t snap[2048];
+  BmStateBlock block = bmGameStateBlock(&s_game);
+  uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
+  TEST_ASSERT(size > 0);
+  printf("    snapshot with hits: %u bytes\n", (unsigned)size);
+  TEST_ASSERT(bmStateRead(&block, 1, snap, size) == BM_STATE_OK && bmGameAfterLoad(&s_game) == BM_SUCCESS);
+  TEST_ASSERT(bmHitsLive(&s_game) == 1);
+
+  // The player struck: health, hit() to the attachments; at 0 a new start with all of it.
+  uint32_t deaths = s_game.deaths;
+  TEST_ASSERT(bmGameStrikePlayer(&s_game, 3, s_game.player.x + BM_FIX(4)));
+  TEST_ASSERT(s_game.health == BM_GAME_PLAYER_HEALTH - 3 && jab[4] == 3);
+  TEST_ASSERT(s_game.player.vx < 0);                                   // pushed away from it
+  TEST_ASSERT(bmHitsLive(&s_game) == 0);                                // the player's hit ended
+  TEST_ASSERT(!bmGameStrikePlayer(&s_game, 3, s_game.player.x));        // still blinking
+  s_game.hurtTimer = 0;
+  TEST_ASSERT(bmGameStrikePlayer(&s_game, 100, s_game.player.x));
+  TEST_ASSERT(s_game.deaths == deaths + 1 && s_game.health == BM_GAME_PLAYER_HEALTH);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 static uint8_t *readFile(const char *path, uint32_t *pSize)
 {
   FILE *f = fopen(path, "rb");
@@ -393,6 +466,7 @@ int main(int argc, char **argv)
   RUN_TEST(testAnAttachmentMakesThePlayerJumpHigher);
   RUN_TEST(testTheItemTables);
   RUN_TEST(testTheRoomsAttachmentsComeAndGoWithTheRoom);
+  RUN_TEST(testAHitStrikesOnce);
   free(s_data);
   free(s_windData);
   return TEST_RESULT();

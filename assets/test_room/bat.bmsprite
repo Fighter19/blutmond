@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sprite version="1" image="bat.png">
  <hitbox x="-6" y="-8" w="12" h="8"/>
+ <box kind="hit" name="bite" x="-6" y="-8" w="12" h="8"/>
  <frame x="0" y="0" w="16" h="16" ax="8" ay="12"/>
  <frame x="16" y="0" w="16" h="16" ax="8" ay="12"/>
  <animation name="idle" loop="1">

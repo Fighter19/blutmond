@@ -5,7 +5,16 @@ Status: step 1 built: boxes in the sprite file and in `SPRT` version 2
 (`bmSpriteSheetBoxes`); the Animation tab lists the boxes of a frame or of the sprite, adds,
 deletes and edits them by their numbers and draws them over the frame. Not yet: boxes on an
 animation, drawing boxes with the mouse, copying them to other frames, onion skin (section 7).
-Steps 2 to 5 are open. Milestone M17 in [../PLAN.md](../PLAN.md). Fills in what
+Step 2 built ([../spec/runtime-core.md](../spec/runtime-core.md) §10, `src/world/hits.c`):
+`arm`, `disarm`, `hit_box`, teams, the decision step once a frame, the struck list,
+invulnerability, `hit(amount)` and `struck(amount)`; health for the player and objects. The
+bat's bite is an armed box now, and the test level has a training dummy and a `Jab`
+attachment that strikes with a rectangle. Where it differs from sections 3 and 4: 8 hits at a
+time, not 16; the struck list is a bit per figure (every figure, not 6); `hit_box(reach,
+frames, damage)` is a rectangle ahead of the figure over its body's height (a script call
+takes at most 3 arguments), not one placed by numbers; events carry only the amount, not the
+target or the element; the damage rule is `max(1, damage)`, without defence or elements; the
+player's hurt timer is their invulnerability, also against hazards. Steps 3 to 5 are open. Milestone M17 in [../PLAN.md](../PLAN.md). Fills in what
 [attachable-scripts.md](attachable-scripts.md) §6 only names ("hit boxes"), and is what the
 weapons and spells of [first-items.md](first-items.md) hit with.
 
