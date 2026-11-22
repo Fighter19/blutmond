@@ -112,7 +112,9 @@ its script and adds its stats.
 | Flame Brand | 5 | 18 | 4 | 10 | Fire | `WeaponSwing` | a record copied from Short Sword; element; sends `#Ignite` to what it strikes; +2 `Attack` from its `stats` |
 
 Four scripts and one projectile class for six weapons. `WeaponSwing` is the one in
-attachable-scripts.md §3.
+attachable-scripts.md §3. It aims by the d-pad held when Attack is pressed: Up strikes above
+the head (`slash_up`), Down sweeps low on the ground (`slash_low`) and stabs below the feet in
+the air (`slash_down`; what it strikes bounces the player up at 4.5 px/frame), else ahead.
 
 ## 4. Spells
 

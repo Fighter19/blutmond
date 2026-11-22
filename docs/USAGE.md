@@ -57,7 +57,7 @@ start.
 
 Every weapon has a list of **commands** (directions, then a button, like Down,
 Down-Fwd, Fwd + B for the Short Sword's Lunge), and a charm worn gives its commands with any
-weapon (the Crimson Charm absorbs blood, the Moon Charm flips gravity). An attack never stops the player: a run or a jump keeps its speed through the swing. Start, Commands lists
+weapon (the Crimson Charm absorbs blood, the Moon Charm flips gravity). An attack never stops the player: a run or a jump keeps its speed through the swing. Up + B strikes above, Down + B sweeps low, and in the air stabs downwards (bouncing off what it hits). Start, Commands lists
 what the player has now. The debug lobby has a Dagger and both charms lying about to try them.
 
 Doors with a `panel` property (a sprite) open in a 3D look only as the player goes through

@@ -172,7 +172,27 @@ bool bmHitsArm(BmGame *g, uint8_t source, uint8_t slot, uint16_t name, int32_t d
   h->anim[k] = st.anim;
   h->frames[k] = (uint16_t)(frames < 1 ? 1 : frames > 0xFFFF ? 0xFFFF : frames);
   h->reach[k] = (int16_t)(reach < -255 ? -255 : reach > 255 ? 255 : reach);   // < 0: both sides
+  // A rectangle takes the aim set for it, which is used up.
+  h->aim[k] = 0;
+  if (name == NO_NAME && source < sizeof(h->aimNext))
+  {
+    h->aim[k] = h->aimNext[source];
+    h->aimNext[source] = 0;
+  }
   return true;
+}
+
+int32_t bmHitAimNamed(const char *name)
+{
+  static const char *const names[] = { "Ahead", "Up", "Down", "Low" };
+  for (int32_t i = 0; name != NULL && i < 4; i++)
+    if (strcmp(name, names[i]) == 0) return i;
+  return -1;
+}
+
+void bmHitsAim(BmGame *g, uint8_t source, uint8_t aim)
+{
+  if (source < sizeof(g->hits.aimNext) && aim <= BM_HIT_LOW) g->hits.aimNext[source] = aim;
 }
 
 void bmHitsDisarm(BmGame *g, uint8_t source, uint16_t name)
@@ -214,7 +234,25 @@ static uint8_t hitRects(const BmGame *g, uint8_t k, Rect *pOut)
   anchorOf(g, f, &x, &y, &flip);
   Rect body = bodyOf(g, f);
   int32_t reach = h->reach[k];
-  pOut[0] = reach < 0 ? (Rect){ x + reach, body.y, -2 * reach, body.h } : (Rect){ flip ? x - reach : x, body.y, reach, body.h };
+  switch (h->aim[k])
+  {
+  case BM_HIT_UP:
+    // Above the head, a little wider than the body, reaching into its top.
+    pOut[0] = (Rect){ x - 10, body.y - (reach < 0 ? -reach : reach), 20, (reach < 0 ? -reach : reach) + 8 };
+    break;
+  case BM_HIT_DOWN:
+    // Below the feet, from a little above them.
+    pOut[0] = (Rect){ x - 10, body.y + body.h - 8, 20, (reach < 0 ? -reach : reach) + 8 };
+    break;
+  case BM_HIT_LOW:
+    // Ahead (or around), only in the body's lower half.
+    pOut[0] = reach < 0 ? (Rect){ x + reach, body.y + body.h / 2, -2 * reach, body.h - body.h / 2 }
+                        : (Rect){ flip ? x - reach : x, body.y + body.h / 2, reach, body.h - body.h / 2 };
+    break;
+  default:
+    pOut[0] = reach < 0 ? (Rect){ x + reach, body.y, -2 * reach, body.h } : (Rect){ flip ? x - reach : x, body.y, reach, body.h };
+    break;
+  }
   return 1;
 }
 

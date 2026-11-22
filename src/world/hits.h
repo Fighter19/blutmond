@@ -42,10 +42,23 @@ typedef struct BmHits
   uint8_t anim[BM_HITS_MAX];       // the source's animation when it was armed
   uint16_t frames[BM_HITS_MAX];    // a rectangle: frames left
   int16_t reach[BM_HITS_MAX];      // a rectangle: how far ahead
+  uint8_t aim[BM_HITS_MAX];        // a rectangle: BmHitAim
   uint16_t struck[BM_HITS_MAX];    // a bit per figure already struck
+  uint8_t aimNext[1 + 8];          // per figure: the aim of its next rectangle (aim(), then reset)
 } BmHits;
 
+
 struct BmGame;
+
+/// Where a rectangle (hit_box) lies: ahead as high as the body; above the head; below the feet;
+/// ahead in the body's lower half.
+typedef enum BmHitAim { BM_HIT_AHEAD = 0, BM_HIT_UP, BM_HIT_DOWN, BM_HIT_LOW } BmHitAim;
+
+/// The aim by name (#Ahead, #Up, #Down, #Low), or -1.
+int32_t bmHitAimNamed(const char *name);
+
+/// The next rectangle figure `source` arms has this aim (hit_box after aim()).
+void bmHitsAim(struct BmGame *pGame, uint8_t source, uint8_t aim);
 
 /// No hits (a room is entered anew).
 void bmHitsClear(struct BmGame *pGame);

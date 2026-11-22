@@ -1261,6 +1261,8 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, hits.anim, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   BM_STATE_ARRAY(BmGame, hits.frames, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   BM_STATE_ARRAY(BmGame, hits.reach, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.aim, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_HITS_MAX),
+  BM_STATE_ARRAY(BmGame, hits.aimNext, BM_TYPE_U8, BM_STATE_SNAPSHOT, 9),
   BM_STATE_ARRAY(BmGame, hits.struck, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_HITS_MAX),
   // Open screens, in the middle of what their scripts do.
   F(screens.count, BM_TYPE_U8, BM_STATE_SNAPSHOT),

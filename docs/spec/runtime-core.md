@@ -465,6 +465,10 @@ value is dropped and counts as a script error.
 | 85 | `music_intensity(level)` | the sound engine's intensity (0..15): which layers of the music are heard |
 | 86 | `teleport(room, x, y)` | a teleport (section 12) to the room of that id (`#here`: this one) at `x`, `y`; false if there is no such room or a teleport is under way |
 | 87 | `screen_effect(name, a, b)` | the room's effect now (section 12): `#none`, `#wave`, `#spotlight`, `#pulse`, `#gradient`; `a`, `b` 0 for the defaults |
+| 89 | `aim(name)` | the figure's next `hit_box` lies `#Up` above its head, `#Down` below its feet, `#Low` ahead in the lower half of its body, or `#Ahead` (section 10) |
+| 90 | `held(name)` | `#Up`, `#Down`, `#Left`, `#Right`, `#Fwd`, `#Back` (by `facing`) or a game button is held now |
+| 91 | `on_ground()` | the player stands |
+| 92 | `bounce(speed)` | the player's `vy = -speed` (`+speed` with gravity flipped), not on the ground |
 | 88 | `flip_gravity()` | the player's gravity turns over or back (section 5, "Gravity flipped"): `flipped` toggled, `vy = 0`, not on the ground, no coyote time; true if it now pulls up |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
@@ -543,8 +547,14 @@ the first free; a hit started when all are used is dropped. A room entered fresh
    loop and has finished.
 2. Its rectangles: for a box name, the source's boxes of kind hit with that name on the frame
    showing (sprite-format.md, mirrored when `facing < 0`), relative to its anchor; none if it
-   has no sheet. For a rectangle: `[ax, ax + reach)` (`[ax - reach, ax)` when facing left),
-   with `ax = INT(x)` of the source, over the height of the source's body box.
+   has no sheet. For a rectangle, by its aim (`aim()` before `hit_box`; per figure `aimNext`,
+   taken into the entry when it is armed and set back to ahead), with `ax = INT(x)` of the
+   source, its body box from `top` to `bottom` and `r = |reach|`:
+   - ahead: `[ax, ax + reach)` (`[ax - reach, ax)` when facing left; `[ax - r, ax + r)` for a
+     negative reach), over the height of the body box;
+   - up: `[ax - 10, ax + 10)` x `[top - r, top + 8)`;
+   - down: `[ax - 10, ax + 10)` x `[bottom - 8, bottom + r)`;
+   - low: as ahead, over the lower half of the body box (`[top + h / 2, bottom)`).
 3. For each figure `f` in number order: skip the source, a figure of the same team, one
    already struck by this hit, and one that cannot be struck now (the player: `hurtTimer !=
    0`; an object: hidden, `health <= 0`, or invulnerable). Its hurt rectangles are its boxes

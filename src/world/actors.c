@@ -513,6 +513,38 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_return_to_save:
     bmGameReturnToSave(g);
     break;
+  case BM_SCRIPT_API_aim:
+  {
+    if (i == BM_ACTORS_ROOM) break;
+    int32_t aim = bmHitAimNamed(bmPackString(g->pPack, (uint16_t)args[0]));
+    if (aim >= 0) bmHitsAim(g, i < BM_ACTORS_MAX ? (uint8_t)(1 + i) : BM_HITS_PLAYER, (uint8_t)aim);
+    break;
+  }
+  case BM_SCRIPT_API_held:
+  {
+    const char *n = bmPackString(g->pPack, (uint16_t)args[0]);
+    uint16_t keys = g->keysPrevious, key = 0;
+    if (n == NULL) break;
+    if (strcmp(n, "Up") == 0) key = BM_KEY_UP;
+    else if (strcmp(n, "Down") == 0) key = BM_KEY_DOWN;
+    else if (strcmp(n, "Left") == 0) key = BM_KEY_LEFT;
+    else if (strcmp(n, "Right") == 0) key = BM_KEY_RIGHT;
+    else if (strcmp(n, "Fwd") == 0) key = g->player.facing < 0 ? BM_KEY_LEFT : BM_KEY_RIGHT;
+    else if (strcmp(n, "Back") == 0) key = g->player.facing < 0 ? BM_KEY_RIGHT : BM_KEY_LEFT;
+#define X(name, k) else if (strcmp(n, #name) == 0) key = k;
+    BM_ATTACH_BUTTONS(X)
+#undef X
+    *result = (keys & key) != 0;
+    break;
+  }
+  case BM_SCRIPT_API_on_ground:
+    *result = g->player.onGround;
+    break;
+  case BM_SCRIPT_API_bounce:
+    // Up the way the player's gravity is (down when it is flipped).
+    g->player.vy = g->player.flipped ? args[0] : -args[0];
+    g->player.onGround = false;
+    break;
   case BM_SCRIPT_API_flip_gravity:
     g->player.flipped = !g->player.flipped;
     g->player.vy = 0;

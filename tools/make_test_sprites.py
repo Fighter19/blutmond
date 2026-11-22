@@ -305,6 +305,53 @@ def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, 
         f.write("\n".join(out) + "\n")
 
 
+def tall_frame(top, torso, leg_rows, blade):
+    """16x48: the player in the lower 32 rows (`top` False: the upper 32), a blade drawn by
+    `blade` (x, y, colour) in frame coordinates."""
+    body = player_frame(torso, leg_rows)
+    empty = ["................"] * 16
+    rows = [list(r) for r in (empty + body if not top else body + empty)]
+    for x, y, c in blade:
+        rows[y][x] = c
+    return ["".join(r) for r in rows]
+
+
+def blade_line(x, y0, y1, hilt):
+    """A vertical blade in column x from y0 to y1 (inclusive), the hilt (grip and guard) at
+    row `hilt`."""
+    out = [(x, y, 'b') for y in range(min(y0, y1), max(y0, y1) + 1)]
+    out += [(x - 1, hilt, 'c'), (x, hilt, 'c'), (x + 1, hilt, 'c')]
+    return out
+
+
+# Upwards: arm raised, the blade above the head (wind-up short, then at full length).
+SLASH_UP_FRAMES = [
+    tall_frame(False, TORSO_ARMS_UP_R, legs(-1, 1), blade_line(12, 14, 21, 22) + [(12, 23, 'c')]),
+    tall_frame(False, TORSO_ARMS_UP_R, legs(-2, 2), blade_line(12, 1, 21, 22) + [(12, 23, 'c')]),
+]
+# Downwards in the air: knees up, the blade held point down below the feet.
+SLASH_DOWN_FRAMES = [
+    tall_frame(True, TORSO, legs(-1, 2, lift_l=3, lift_r=3), blade_line(12, 17, 30, 16)),
+    tall_frame(True, TORSO, legs(-1, 2, lift_l=3, lift_r=3), blade_line(12, 17, 46, 16)),
+]
+
+
+def low_frame(reach):
+    """32x32: a sweep at knee height, the arm down and the blade ahead `reach` long."""
+    rows = [list(r + "." * 16) for r in player_frame(TORSO, legs(-3, 3), bob=1)]
+    for y in range(16, 23):
+        rows[y][13] = '3'
+    rows[23][13] = 'c'
+    rows[22][14] = 'c'
+    rows[24][14] = 'c'
+    for x in range(15, 15 + reach):
+        rows[23][x] = 'b'
+    return ["".join(r) for r in rows]
+
+
+SLASH_LOW_FRAMES = [low_frame(6), low_frame(15)]
+
+
 def main():
     out = sys.argv[1]
     img = sheet(PLAYER_FRAMES, 8, 16, 32)
@@ -313,8 +360,23 @@ def main():
         for y in range(32):
             for x in range(32):
                 img.putpixel((32 + i * 32 + x, 32 + y), PALETTE[frame[y][x]])
+    # Below, in a third row: the swing up and down (16 x 48) and the low sweep (32 x 32).
+    tall = Image.new("RGBA", (img.width, 112), (0, 0, 0, 0))
+    tall.paste(img, (0, 0))
+    img = tall
+    for i, frame in enumerate(SLASH_UP_FRAMES + SLASH_DOWN_FRAMES):
+        for y in range(48):
+            for x in range(16):
+                img.putpixel((i * 16 + x, 64 + y), PALETTE[frame[y][x]])
+    for i, frame in enumerate(SLASH_LOW_FRAMES):
+        for y in range(32):
+            for x in range(32):
+                img.putpixel((64 + i * 32 + x, 64 + y), PALETTE[frame[y][x]])
     img.save(os.path.join(out, "player.png"))
     extra = [(32 + i * 32, 32, 32, 32, 8, 32) for i in range(len(SLASH_FRAMES))]
+    extra += [(i * 16, 64, 16, 48, 8, 48) for i in range(2)]        # 13, 14: up
+    extra += [(32 + i * 16, 64, 16, 48, 8, 32) for i in range(2)]   # 15, 16: down
+    extra += [(64 + i * 32, 64, 32, 32, 8, 32) for i in range(2)]   # 17, 18: low
     sprite_file(os.path.join(out, "player.bmsprite"), "player.png", len(PLAYER_FRAMES), 8, 16, 32, (8, 32), (-5, -30, 10, 30), [
         ("idle", True, [(0, 40), (1, 40)]),
         ("run", True, [(2, 6), (3, 6), (4, 6), (5, 6)]),
@@ -322,6 +384,9 @@ def main():
         ("fall", False, [(7, 1)]),
         ("climb", True, [(8, 10), (9, 10)]),
         ("slash", False, [(10, 4), (11, 4), (12, 8)]),
+        ("slash_up", False, [(13, 4), (14, 10)]),
+        ("slash_down", False, [(15, 4), (16, 14)]),
+        ("slash_low", False, [(17, 4), (18, 10)]),
     ], extra=extra)
     sheet(BAT_FRAMES, 2, 16, 16).save(os.path.join(out, "bat.png"))
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [

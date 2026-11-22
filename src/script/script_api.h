@@ -112,7 +112,11 @@ typedef enum BmScriptType {
   X(music_intensity,   VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(teleport,          BOOL, 3, NAME,  INT,   INT,   VOID, 0) \
   X(screen_effect,     VOID, 3, NAME,  INT,   INT,   VOID, 0) \
-  X(flip_gravity,      BOOL, 0, VOID,  VOID,  VOID,  VOID, 0)
+  X(flip_gravity,      BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(aim,               VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(held,              BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(on_ground,         BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(bounce,            VOID, 1, FIX,   VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -135,6 +139,13 @@ typedef enum BmScriptType {
 // ending, or the figure being struck; hit_box is a hit without a drawing: a rectangle from the
 // figure's anchor `reach` pixels ahead (a negative reach: that far on both sides), as high as
 // its body, for `frames` frames. From an attachment the figure is the player.
+//
+// aim(#Up | #Down | #Low | #Ahead): the figure's next hit_box lies above its head, below its
+// feet, ahead in the lower half of its body, or ahead as usual (src/world/hits.h); used up by
+// that hit_box. held(#Up | #Down | #Left | #Right | #Fwd | #Back | #Jump | #Attack | ...): the
+// d-pad or a game button is held now (Fwd and Back: the way the player faces). on_ground(): the
+// player stands. bounce(speed): the player's upward speed is `speed` now (a stab downwards that
+// strikes).
 //
 // flip_gravity(): the player's gravity turns over (standing on ceilings, src/world/body.h) or
 // back; true if it now pulls up.

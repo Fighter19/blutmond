@@ -1198,6 +1198,56 @@ static void testEveryWeaponHasCommands(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// Aimed swings: Up + attack strikes above the head, Down + attack sweeps low on the ground and
+// stabs below the feet in the air (the player bounces off what it strikes).
+static int16_t swingAt(int bat, int32_t px, int32_t py, int32_t bx, int32_t by, uint16_t keys, bool air)
+{
+  BmActors *a = &s_game.actors;
+  a->health[bat] = 4;
+  frames(40, 0);   // the last strike's invulnerability is over
+  bmBodyPlace(&s_game.player, px, py);
+  if (!air) frames(2, 0);
+  s_game.player.facing = 1;
+  for (int f = 0; f < 8; f++)
+  {
+    a->x[bat] = BM_FIX(bx);   // held in place while the swing comes
+    a->y[bat] = BM_FIX(by);
+    if (air && a->health[bat] == 4)
+    {
+      s_game.player.x = BM_FIX(px);   // and the player in the air above it, until it strikes
+      s_game.player.y = BM_FIX(py);
+      s_game.player.vy = 0;
+    }
+    frames(1, f == 0 ? (uint16_t)(keys | BM_KEY_B) : keys);
+  }
+  return (int16_t)(4 - a->health[bat]);
+}
+
+static void testAimedSwings(void)
+{
+  TEST_ASSERT(bmGameStart(&s_game, &s_pack, "test_room_2") == BM_SUCCESS);
+  frames(2, 0);
+  const uint32_t sword = keyOf("ShortSword");
+  bmInventoryGive(&s_game.inventory, sword, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, sword));
+  int bat = actorOfClass("Bat");
+  TEST_ASSERT(bat >= 0);
+  // The bat over the player's head (its box 8 to 16 px above it): a plain swing misses, with Up
+  // it is struck.
+  TEST_ASSERT(swingAt(bat, 200, 160, 200, 128, 0, false) == 0);
+  TEST_ASSERT(swingAt(bat, 200, 160, 200, 128, BM_KEY_UP, false) == 3);
+  TEST_ASSERT(s_game.hits.aimNext[0] == 0);   // the aim is used up by the swing
+  // At head height ahead: a plain swing strikes it, the low sweep (Down) passes under it.
+  TEST_ASSERT(swingAt(bat, 200, 160, 212, 138, 0, false) == 3);
+  TEST_ASSERT(swingAt(bat, 200, 160, 212, 138, BM_KEY_DOWN, false) == 0);
+  // At the feet ahead: the low sweep strikes it.
+  TEST_ASSERT(swingAt(bat, 200, 160, 212, 160, BM_KEY_DOWN, false) == 3);
+  // Below the player in the air: Down stabs it, and the player bounces up.
+  TEST_ASSERT(swingAt(bat, 200, 100, 200, 116, BM_KEY_DOWN, true) == 3);
+  TEST_ASSERT(s_game.player.vy < 0 && !s_game.player.onGround && BM_FIX_INT(s_game.player.y) < 100);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // Attacking never stops the player: the swing holds the controls, but the run or the jump keeps
 // its speed.
 static void testAnAttackKeepsTheMomentum(void)
@@ -1427,6 +1477,7 @@ int main(int argc, char **argv)
   RUN_TEST(testCommands);
   RUN_TEST(testEveryWeaponHasCommands);
   RUN_TEST(testAnAttackKeepsTheMomentum);
+  RUN_TEST(testAimedSwings);
   RUN_TEST(testALineAppearsLetterByLetter);
   RUN_TEST(testTheBossIsDefeated);
   free(s_data);

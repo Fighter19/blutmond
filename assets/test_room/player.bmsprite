@@ -14,6 +14,12 @@
  <frame x="32" y="32" w="32" h="32" ax="8" ay="32"/>
  <frame x="64" y="32" w="32" h="32" ax="8" ay="32"/>
  <frame x="96" y="32" w="32" h="32" ax="8" ay="32"/>
+ <frame x="0" y="64" w="16" h="48" ax="8" ay="48"/>
+ <frame x="16" y="64" w="16" h="48" ax="8" ay="48"/>
+ <frame x="32" y="64" w="16" h="48" ax="8" ay="32"/>
+ <frame x="48" y="64" w="16" h="48" ax="8" ay="32"/>
+ <frame x="64" y="64" w="32" h="32" ax="8" ay="32"/>
+ <frame x="96" y="64" w="32" h="32" ax="8" ay="32"/>
  <animation name="idle" loop="1">
   <step frame="0" duration="40"/>
   <step frame="1" duration="40"/>
@@ -38,5 +44,17 @@
   <step frame="10" duration="4"/>
   <step frame="11" duration="4"/>
   <step frame="12" duration="8"/>
+ </animation>
+ <animation name="slash_up" loop="0">
+  <step frame="13" duration="4"/>
+  <step frame="14" duration="10"/>
+ </animation>
+ <animation name="slash_down" loop="0">
+  <step frame="15" duration="4"/>
+  <step frame="16" duration="14"/>
+ </animation>
+ <animation name="slash_low" loop="0">
+  <step frame="17" duration="4"/>
+  <step frame="18" duration="10"/>
  </animation>
 </sprite>
