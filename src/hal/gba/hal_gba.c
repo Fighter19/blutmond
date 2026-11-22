@@ -185,6 +185,11 @@ uint32_t bmHalVideoWaitVBlank(void)
   return bm_vblank_count;
 }
 
+uint32_t bmHalVideoFrameCount(void)
+{
+  return bm_vblank_count;
+}
+
 // Most video registers are write-only on the GBA, so the HAL keeps what it wrote.
 static uint16_t s_regs[BM_PPU_REG_SIZE / 2] BM_EWRAM_BSS;
 

@@ -46,10 +46,32 @@ typedef struct Wire
 static Wire s_wire;
 static bool s_paused;  // frames go on for the link, the game stands still
 
+// What the loading box would show, seen every frame.
+typedef struct Seen
+{
+  uint32_t framesReceiving;
+  uint32_t lastBytes, maxBytes, totalBytes, maxChunks, chunkCount;
+  bool wentBack;   // fewer bytes than the frame before, within one transfer
+} Seen;
+static Seen s_seen;
+
 static void frame(void)
 {
   bmVideoWaitFrame();
   bmLiveFrame(&s_live);
+  BmLiveProgress p;
+  bmLiveGetProgress(&s_live, &p);
+  if (p.receiving)
+  {
+    if (s_seen.framesReceiving != 0 && p.bytes < s_seen.lastBytes) s_seen.wentBack = true;
+    s_seen.framesReceiving++;
+    s_seen.lastBytes = p.bytes;
+    if (p.bytes > s_seen.maxBytes) s_seen.maxBytes = p.bytes;
+    if (p.chunks > s_seen.maxChunks) s_seen.maxChunks = p.chunks;
+    s_seen.totalBytes = p.totalBytes;
+    s_seen.chunkCount = p.chunkCount;
+    TEST_ASSERT(p.bytes <= p.totalBytes && p.chunks <= p.chunkCount);
+  }
   if (!s_paused && !bmLiveWaiting(&s_live)) bmGameFrame(&s_game, bmAutopilotKeys(&s_pilot, &s_game));
 }
 
@@ -205,6 +227,32 @@ static void testRestartInAnotherRoom(void)
   TEST_ASSERT(st.result == BM_LIVE_OK);
   TEST_ASSERT(st.roomIndex == 1);
   TEST_ASSERT(st.frame < 5);
+  bmLinkMasterFree(&m);
+}
+
+// While a pack arrives, the progress counts up to all of it and never back.
+static void testProgressWhileAPackArrives(void)
+{
+  BmLinkMaster m;
+  start(&m);
+  BmLiveProgress p;
+  bmLiveGetProgress(&s_live, &p);
+  TEST_ASSERT(!p.receiving);   // nothing arriving
+  memset(&s_seen, 0, sizeof(s_seen));
+  TEST_ASSERT(bmLiveMasterPushPack(&m, s_variant, s_variantSize, 7, NULL, NULL));
+  TEST_ASSERT(s_seen.framesReceiving > 2);
+  TEST_ASSERT(!s_seen.wentBack);
+  TEST_ASSERT(s_seen.totalBytes == s_variantSize);
+  TEST_ASSERT(s_seen.chunkCount > 0 && s_seen.maxChunks <= s_seen.chunkCount);
+  TEST_ASSERT(s_seen.maxBytes > s_variantSize / 2);
+  // All of it once every chunk is there (seen before the apply, which ends the receiving).
+  bmLiveGetProgress(&s_live, &p);
+  if (p.receiving) TEST_ASSERT(p.bytes == p.totalBytes && p.chunks == p.chunkCount);
+  BmLiveStatus st;
+  TEST_ASSERT(bmLiveMasterApply(&m, 7, BM_LIVE_RESTART, NULL, &st));
+  TEST_ASSERT(st.result == BM_LIVE_OK);
+  bmLiveGetProgress(&s_live, &p);
+  TEST_ASSERT(!p.receiving);
   bmLinkMasterFree(&m);
 }
 
@@ -479,6 +527,7 @@ int main(int argc, char **argv)
   RUN_TEST(testHotReloadKeepsTheGameGoing);
   RUN_TEST(testStateGetAndPut);
   RUN_TEST(testRestartInAnotherRoom);
+  RUN_TEST(testProgressWhileAPackArrives);
   RUN_TEST(testFailedTransferLeavesTheGameAlone);
   RUN_TEST(testPacksTakeTurnsAtTheEndsOfThePool);
   RUN_TEST(testAPackTooLargeToGoBesideReplacesTheRunningOne);

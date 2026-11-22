@@ -36,6 +36,7 @@
 #endif
 
 #include "autopilot.h"
+#include "builtin_font.h"
 #include "game.h"
 #include "game_live.h"
 #include "live.h"
@@ -47,6 +48,7 @@
 #  include "transfer.h"
 #endif
 #include "video.h"
+#include "ui.h"
 
 #include <string.h>
 
@@ -252,9 +254,79 @@ static bool s_realtime;        // --realtime: 60 frames per second also without 
 static uint32_t s_randomKeys;  // --random-keys N: keys change at random, every N frames on average (tests)
 #endif
 
+// The loading box (while a pack arrives and the game waits for it): drawn with the engine's
+// font from a little pack of its own (builtin_font.h), as the game's pack is not there.
+// Script code is verified in spare time while a frame has used fewer lines than this (of 228),
+// as much as fits into the rest, counted as code words: a line verifies more than this many.
+#define BM_SPARE_LINES 180
+#define BM_SPARE_WORDS_PER_LINE 12
+
+static BmPack s_fontPack;
+static bool s_loadingShown;
+
+static void loadingBox(uint32_t frame)
+{
+  BmUi *ui = &s_game.ui;
+  if (!s_loadingShown)
+  {
+    if (bmPackOpen(&s_fontPack, bm_builtin_font_pack, sizeof(bm_builtin_font_pack), false) != BM_PACK_OK) return;
+    if (!ui->ready) bmUiInit(ui, &s_fontPack, NULL);
+    else bmUiRebind(ui, &s_fontPack);
+    bmUiClear(ui);
+    bmUiFrame(ui, 2, 6, 26, 8);
+    bmUiLabel(ui, 4, 7, "Loading");
+    s_loadingShown = true;
+  }
+  else if (frame % 8 != 0)
+  {
+    return;   // a few times a second is enough, and leaves the time to the link
+  }
+  BmLiveProgress p;
+  bmLiveGetProgress(&s_live, &p);
+  bmUiClearRect(ui, 3, 8, 24, 5);
+  if (!p.receiving)
+  {
+    bmUiLabel(ui, 4, 9, "Waiting for the PC");
+    // A dot running along: it is alive.
+    bmUiLabel(ui, 4 + (int)((frame / 16) % 18), 11, ".");
+  }
+  else
+  {
+    bmUiLabel(ui, 4, 8, "Receiving the game");
+    bmUiGauge(ui, 4, 9, 22, (int32_t)(p.bytes / 256), (int32_t)(p.totalBytes / 256));
+    int x = 4;
+    bmUiNumber(ui, x, 10, (int32_t)(p.bytes / 1024), 3);
+    x += 3;
+    x += bmUiLabel(ui, x, 10, " of ");
+    bmUiNumber(ui, x, 10, (int32_t)((p.totalBytes + 1023) / 1024), 3);
+    x += 3;
+    x += bmUiLabel(ui, x, 10, " KB  ");
+    bmUiNumber(ui, x, 10, p.totalBytes ? (int32_t)((uint64_t)p.bytes * 100 / p.totalBytes) : 0, 3);
+    bmUiLabel(ui, x + 3, 10, "%");
+    x = 4;
+    x += bmUiLabel(ui, x, 12, "Chunks ");
+    bmUiNumber(ui, x, 12, (int32_t)p.chunks, 3);
+    x += 3;
+    x += bmUiLabel(ui, x, 12, " of ");
+    bmUiNumber(ui, x, 12, (int32_t)p.chunkCount, 3);
+  }
+  bmUiShow(ui, true);
+  bmUiPresent(ui);
+}
+
 static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autoplay)
 {
-  if (bmPackOpen(&s_pack, pData, size, false) != BM_PACK_OK) return 2;
+  // Without a pack (a runtime image, game_runtime_mb.gba): it waits for one over the link,
+  // with the loading box, and starts the game with what arrives.
+  bool noPack = size == 0;
+  if (!noPack && bmPackOpen(&s_pack, pData, size, false) != BM_PACK_OK) return 2;
+  if (noPack)
+  {
+    memset(&s_pack, 0, sizeof(s_pack));
+    bmVideoInit();
+  }
+  else
+  {
 #ifdef BM_PLATFORM_HOST
   if (bmGameStart(&s_game, &s_pack, s_startRoom) != BM_SUCCESS) return 3;
   if (s_debugItem)
@@ -275,19 +347,28 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
 #ifdef BM_PLATFORM_HOST
   if (s_loadPath != NULL && !loadSnapshot(s_load, s_loadSize)) return 4;
 #endif
+  }
   BmLiveHooks hooks = bmGameLiveHooks(&s_gameLive);
   bmLiveInit(&s_live, &hooks, POOL, POOL_SIZE, &s_pack);
+  if (noPack)
+  {
+    s_live.packReleased = true;   // nothing to run until a pack is there
+    s_gameLive.released = true;
+  }
   bmLiveStart(&s_live);
-  bmOverlayInit(&s_game, s_overlay);
+  if (!noPack) bmOverlayInit(&s_game, s_overlay);
 
   uint32_t lastVideoFrame = bmVideoWaitFrame();
   uint32_t catchUp = 0;
+  uint32_t waited = 0;   // frames the loading box has been up
   for (uint32_t frame = 0; frames == 0 || frame < frames; frame++)
   {
     if (catchUp == 0)
     {
       uint32_t videoFrame = bmVideoWaitFrame();
-      if (videoFrame != lastVideoFrame + 1) bm_game_stats.lagFrames += videoFrame - lastVideoFrame - 1;
+      // The first game frame belongs to the loading: it enters the first room and verifies
+      // the scripts it uses (actors.h, bmActorsVerifyInUse). What it misses is not counted.
+      if (videoFrame != lastVideoFrame + 1 && frame > 1) bm_game_stats.lagFrames += videoFrame - lastVideoFrame - 1;
       lastVideoFrame = videoFrame;
     }
     if (bm_state_inbox.size != 0 && !bmLiveWaiting(&s_live))
@@ -298,8 +379,10 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
     bmLiveFrame(&s_live);
     if (bmLiveWaiting(&s_live))
     {
-      // The pack is being replaced over itself: nothing of it may be read until the new one
-      // is applied. The picture stays; the sound is quiet.
+      // The pack is being replaced over itself (or there was none): nothing of it may be read
+      // until the new one is applied. The picture stays, with the loading box over it; the
+      // sound is quiet.
+      loadingBox(waited++);
       int8_t *left, *right;
       bmHalAudioBuffers(&left, &right);
       memset(left, 0, BM_HAL_AUDIO_FRAME_SAMPLES);
@@ -309,6 +392,13 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
 #endif
       frame--;
       continue;
+    }
+    if (s_loadingShown)
+    {
+      // The new pack is there: the game cleared and rebound its UI to it (bmGameStart, or the
+      // room entered again).
+      s_loadingShown = false;
+      waited = 0;
     }
     if (bmLiveCapturing(&s_live))
     {
@@ -395,6 +485,17 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
 #ifdef BM_PLATFORM_HOST
       writeSnapshotFile();
 #endif
+    }
+    // Spare time in this frame: verify a little more of the scripts not used yet (they are
+    // opened without verifying, vm.h), a function at a time while a fifth of the frame is left.
+    // The budget per line is an estimate (12 words a line kept the lag of the autoplay runs
+    // where it was; 32 did not).
+    // (Only while this frame's time is not over: a frame that ran late has no time to spare,
+    // and its line number would say otherwise.)
+    {
+      uint32_t used = (uint32_t)(bmHalVideoLine() + 228 - 160) % 228;
+      if (bmHalVideoFrameCount() == lastVideoFrame && used < BM_SPARE_LINES)
+        bmActorsVerifySome(&s_game, (BM_SPARE_LINES - used) * BM_SPARE_WORDS_PER_LINE);
     }
     bm_game_stats.frames++;
     bm_game_stats.deaths = s_game.deaths;

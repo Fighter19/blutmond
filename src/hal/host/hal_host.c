@@ -140,6 +140,11 @@ uint32_t bmHalVideoWaitVBlank(void)
   return ++s_frame;
 }
 
+uint32_t bmHalVideoFrameCount(void)
+{
+  return s_frame;
+}
+
 void bmHalVideoWriteReg(uint16_t offset, uint16_t value)
 {
   ensureInit();

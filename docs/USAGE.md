@@ -29,6 +29,7 @@ What you get:
 | `build/bmlink` | the link tool: boot, push, state, sync, GDB |
 | `build-gba/game.gba` | the game for a cartridge or an emulator |
 | `build-gba/game_mb.gba` | the game as a multiboot image (what is sent over the cable) |
+| `build-gba/game_runtime_mb.gba` | the runtime alone as a multiboot image: no level inside, it waits for one over the cable (what the editor boots) |
 
 ## 2. Play on the PC
 
@@ -166,7 +167,12 @@ From then on the GBA does not need to be touched: a `boot` while the game runs a
 runtime to restart the GBA into its BIOS first. `bmlink reset` does only that.
 
 In the editor: choose **GBA (Xboo)** and press **Run**. If no runtime answers, it boots one
-(you have a minute to switch the GBA on), then pushes the level. Run does not replace a
+(you have a minute to switch the GBA on), then pushes the level. It boots
+`game_runtime_mb.gba`, which has no level of its own: the cable carries the runtime once
+and the level once (with `game_mb.gba` the test level inside it went over the cable first,
+and then the level was sent again). While the GBA waits for a level, or one arrives in
+place of the running one, it shows a loading box: waiting for the PC, then how many KB and
+chunks are there. Run does not replace a
 runtime that is already running; after rebuilding the runtime, boot it once by hand as above.
 
 ### What bmlink can do

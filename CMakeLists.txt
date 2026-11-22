@@ -257,7 +257,10 @@ if(BM_PLATFORM STREQUAL "gba")
   # game_send: the autoplaying game that, at frame 800 (in the second room), brings the GBA on the other end of the
   # cable to where it is (tests). The cartridge game does the same on Select + Start.
   # game_overlay: the autoplaying game with the debug overlay on (tests).
-  foreach(variant game game_autoplay game_autoplay_native game_send game_overlay)
+  # game_runtime: the game with no pack inside: it waits for one over the link, showing a
+  # loading box (the editor boots it and pushes the project's pack once).
+  file(WRITE ${CMAKE_BINARY_DIR}/no_pack.bmpk "")
+  foreach(variant game game_autoplay game_autoplay_native game_send game_overlay game_runtime)
     bm_add_gba_image(${variant} apps/game/main.c apps/game/autopilot.c apps/game/game_live.c apps/game/overlay.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
     if(variant STREQUAL "game_overlay")
       foreach(target ${BM_GBA_TARGETS})
@@ -284,10 +287,12 @@ if(BM_PLATFORM STREQUAL "gba")
       endif()
       if(variant STREQUAL "game_autoplay_native")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_NATIVE_PACK}\"")
+      elseif(variant STREQUAL "game_runtime")
+        target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${CMAKE_BINARY_DIR}/no_pack.bmpk\"")
       else()
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
       endif()
-      if(NOT variant STREQUAL "game")
+      if(NOT variant STREQUAL "game" AND NOT variant STREQUAL "game_runtime")
         # The autoplay image also writes a snapshot at game frame 300 (for the state tests).
         target_compile_definitions(${target} PRIVATE BM_AUTOPLAY=1 BM_SNAPSHOT_FRAME=300)
       endif()
@@ -435,7 +440,7 @@ if(BM_PLATFORM STREQUAL "host")
       # Run on the GBA multiboots the runtime from a GBA build (or set gba-image in editor.conf);
       # Export appends the pack to the cartridge image (or set gba-rom).
       if(BM_GBA_BUILD_DIR)
-        target_compile_definitions(bmeditor PRIVATE "BM_EDITOR_GBA_IMAGE=\"${BM_GBA_BUILD_DIR}/game_mb.gba\""
+        target_compile_definitions(bmeditor PRIVATE "BM_EDITOR_GBA_IMAGE=\"${BM_GBA_BUILD_DIR}/game_runtime_mb.gba\""
           "BM_EDITOR_GBA_ROM=\"${BM_GBA_BUILD_DIR}/game.gba\"")
       endif()
       # Run needs the game and bmlink next to the editor.
@@ -600,6 +605,15 @@ if(BM_PLATFORM STREQUAL "host")
   add_test(NAME cook_test_level
     COMMAND bmcook --profile gba -o ${cooked}/test_level_gba.bmpk ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS})
   set_tests_properties(cook_test_level PROPERTIES FIXTURES_SETUP test_level_pack)
+  # The game's built-in font (apps/game/builtin_font.h) is the engine font cooked on its own:
+  # it must stay what the cooker makes of it.
+  add_test(NAME cook_builtin_font
+    COMMAND bmcook --profile gba -o ${cooked}/builtin_font_gba.bmpk ${PROJECT_SOURCE_DIR}/assets/engine/font.bmfont)
+  set_tests_properties(cook_builtin_font PROPERTIES FIXTURES_SETUP builtin_font_pack)
+  add_test(NAME builtin_font_header_is_current
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/embed_pack_header.py ${cooked}/builtin_font_gba.bmpk
+            ${PROJECT_SOURCE_DIR}/apps/game/builtin_font.h bm_builtin_font_pack --check)
+  set_tests_properties(builtin_font_header_is_current PROPERTIES FIXTURES_REQUIRED builtin_font_pack)
   add_test(NAME cook_test_level_base
     COMMAND bmcook --profile gba -o ${cooked}/test_level_base_gba.bmpk ${BM_TEST_LEVEL_BASE_ROOMS} ${BM_TEST_LEVEL_BASE_ASSETS})
   set_tests_properties(cook_test_level_base PROPERTIES FIXTURES_SETUP test_level_base_pack)
@@ -966,6 +980,14 @@ if(BM_PLATFORM STREQUAL "host")
       add_test(NAME live_mgba_ppu_snapshot_matches COMMAND ${compare} ${out}/live_snapshot_mgba.ppm ${out}/live_snapshot_ppu.ppm
           --ignore 32 96 47 127)  # the screenshot is a few frames later: the player's idle animation
       set_tests_properties(live_mgba_ppu_snapshot_matches PROPERTIES FIXTURES_REQUIRED live_mgba_ppu_render)
+      # The runtime image (no pack of its own, what the editor boots): it waits with the
+      # loading box, then runs the pack pushed to it.
+      set(elf ${BM_GBA_BUILD_DIR}/game_runtime_mb.elf)
+      add_test(NAME live_mgba_runtime_image
+        COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game_runtime_mb.gba run 40 screenshot ${out}/runtime_waiting.ppm
+          push ${cooked}/test_level_gba.bmpk restart run 60 screenshot ${out}/runtime_running.ppm
+          check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+8=0 stats)
+      set_tests_properties(live_mgba_runtime_image PROPERTIES FIXTURES_REQUIRED test_level_pack)
       foreach(image game_autoplay game_autoplay_mb)
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         # The full level, also on a multiboot GBA: the variant does not fit beside the embedded

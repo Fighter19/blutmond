@@ -47,6 +47,10 @@ uint16_t bmHalPaletteRead(uint16_t index);
 /// frame. Returns the frame counter after the wait.
 uint32_t bmHalVideoWaitVBlank(void);
 
+/// The frame counter now, without waiting: it has gone past what bmHalVideoWaitVBlank returned
+/// when the frame's time is over (the next vertical blank has begun).
+uint32_t bmHalVideoFrameCount(void);
+
 /// Writes a video register. `offset` is the byte offset in the GBA's I/O layout
 /// (BM_PPU_DISPCNT, BM_PPU_BGCNT(n), ... in ppu.h), the platform-neutral register model.
 void bmHalVideoWriteReg(uint16_t offset, uint16_t value);

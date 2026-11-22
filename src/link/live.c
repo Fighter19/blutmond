@@ -150,6 +150,7 @@ static void copyResidentChunks(BmLive *l)
       memcpy(l->pStaging + offset, l->active.pData + a.offset, size);
       l->present[i / 8] |= (uint8_t)(1u << (i % 8));
       l->chunksCopied++;
+      l->bytesIn += size;
       break;
     }
   }
@@ -188,6 +189,7 @@ static void keepInPlace(BmLive *l)
     {
       l->present[i / 8] |= (uint8_t)(1u << (i % 8));
       l->chunksCopied++;
+      l->bytesIn += size;
     }
   }
   zeroBetween(l, ascending ? at : 0, l->totalSize);
@@ -208,6 +210,7 @@ static void receiveToc(BmLive *l, const BmLinkPacket *p)
     // A new transfer: into the buffer that does not hold the running pack.
     l->transferId = id;
     l->totalSize = total;
+    l->bytesIn = 0;
     l->tocReceived = 0;
     l->tocComplete = false;
     memset(l->present, 0, sizeof(l->present));
@@ -288,6 +291,21 @@ static void receiveChunkData(BmLive *l, const BmLinkPacket *p)
     return;
   }
   memcpy(l->pStaging + offset + at, p->payload + BM_LIVE_CHUNK_DATA_HEADER, n);
+  l->bytesIn += n;
+}
+
+void bmLiveGetProgress(const BmLive *l, BmLiveProgress *pOut)
+{
+  *pOut = (BmLiveProgress){0};
+  if (l->pStaging == NULL || !l->tocComplete) return;
+  pOut->receiving = true;
+  pOut->chunkCount = l->chunkCount;
+  for (uint32_t i = 0; i < l->chunkCount && i < BM_LIVE_MAX_CHUNKS; i++)
+    if (l->present[i / 8] & (1u << (i % 8))) pOut->chunks++;
+  pOut->totalBytes = l->totalSize;
+  // The header and the chunk table count as there; a part sent twice is not counted twice.
+  uint32_t bytes = l->bytesIn + l->tocOffset + l->chunkCount * BM_PACK_CHUNK_ENTRY_SIZE;
+  pOut->bytes = bytes < l->totalSize ? bytes : l->totalSize;
 }
 
 // HELLO: what runs here, and the running pack's chunks from `first` on (as many as fit; the

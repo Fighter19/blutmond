@@ -26,6 +26,15 @@ Most of this document is the design. Built so far (`src/link/live.h`,
   and is sent whole. A transfer that breaks off leaves the game waiting for the next; restart, hot and
   module work as usual afterwards (the room's ID and what a module reload compares were taken
   from the old pack beforehand); a pushed state is refused while there is no pack.
+- **No pack at all.** The runtime image (`game_runtime_mb.gba`) carries no pack: it starts
+  with the pack let go of and waits for the first. A restart or hot push then starts the
+  game.
+- **The loading box.** While there is no pack to run (waiting, or one arriving over the
+  running one) the game draws a box with the engine's own font, which it keeps built in
+  (`apps/game/builtin_font.h`, a pack of just the font), since the pack's font is gone:
+  "Waiting for the PC", or "Receiving the game" with a gauge, the KB there of the pack's
+  size and the chunks there (`bmLiveGetProgress`: chunks received or kept from the running
+  pack, the header and chunk table counting as there).
 - **The region table** has three entries: the link's own memory (runtime), the pool and the
   buffer for a pushed state (content). Nothing reads it yet.
 - **What the game provides** (`BmLiveHooks`): its state blocks ([state.md](state.md));
@@ -182,6 +191,7 @@ from the live link). A CF/SD back end would read the `sequential` layout
 
 ## History
 
+- 0.3: no pack at all (the runtime image), the loading box and the progress.
 - 0.2: section 0, what is built.
 - 0.1: first draft.
 - 0.1.1: residency table and room changes (§4).

@@ -26,8 +26,10 @@ static bool usePack(void *pContext, const BmPack *pPack, BmLiveMode mode, const 
   if (gl->released)
   {
     // The old pack is gone: nothing to fall back to. On failure the game keeps waiting.
+    // Started without a pack (a runtime image waiting for one): any mode starts the game.
+    bool neverStarted = g->pPack == NULL;
     *gl->pPack = *pPack;
-    if (mode == BM_LIVE_RESTART)
+    if (mode == BM_LIVE_RESTART || neverStarted)
     {
       if (bmGameStart(g, gl->pPack, roomId) != BM_SUCCESS) return false;
       if (gl->pPilot != NULL) memset(gl->pPilot, 0, sizeof(*gl->pPilot));

@@ -94,6 +94,15 @@ void bmActorsPrepareReload(struct BmGame *pGame);
 /// Called when a room was entered. `fresh`: objects start anew (a room change or a restart);
 /// otherwise the state was just loaded and only what is derived is rebuilt - unless the scripts
 /// are not the ones the state was made with, then the objects start anew too.
+/// Verifies the script code of what runs now (the room's objects, the attachments), so its
+/// first use in play costs nothing: while a room loads.
+void bmActorsVerifyInUse(struct BmGame *pGame);
+
+/// Verifies a little more of the pack's script code not verified yet (modules are opened
+/// lazily, vm.h): functions of `words` code words at most in all (one too long for that waits).
+/// False when all is verified.
+bool bmActorsVerifySome(struct BmGame *pGame, uint32_t words);
+
 void bmActorsEnterRoom(struct BmGame *pGame, bool fresh);
 
 /// One frame: tick and touch events, state code, animations.

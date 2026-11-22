@@ -473,6 +473,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   bmCommandsPrepare(g);
   bmActorsEnterRoom(g, fresh);
   if (fresh) bmAttachmentsEnterRoom(g);
+  bmActorsVerifyInUse(g);   // the rest of the scripts is verified in spare time (main.c)
   enterRoomSound(g);
   return bmRoomShow(&g->room, 0, 0);
 }

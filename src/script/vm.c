@@ -120,7 +120,7 @@ uint16_t bmVmLine(const BmVmModule *m, uint16_t function, uint16_t word)
 
 // --- Verification ---------------------------------------------------------------------------
 
-static bool verifyFunction(const BmVmModule *m, uint16_t index, const char **ppError)
+static inline __attribute__((always_inline)) bool verifyFunction(const BmVmModule *m, uint16_t index, const char **ppError)
 {
   const uint8_t *f = functionAt(m, index);
   uint32_t start = rd32(f);
@@ -235,6 +235,11 @@ static bool verifyFunction(const BmVmModule *m, uint16_t index, const char **ppE
 
 bool bmVmModuleOpen(BmVmModule *m, const uint8_t *p, uint32_t size, const char **ppError)
 {
+  return bmVmModuleOpenLazy(m, p, size, ppError) && bmVmModuleVerify(m, ppError);
+}
+
+bool bmVmModuleOpenLazy(BmVmModule *m, const uint8_t *p, uint32_t size, const char **ppError)
+{
   const char *dummy;
   if (ppError == NULL) ppError = &dummy;
 #define FAIL(msg) do { *ppError = msg; return false; } while (0)
@@ -273,10 +278,34 @@ bool bmVmModuleOpen(BmVmModule *m, const uint8_t *p, uint32_t size, const char *
     if (statesAt > size || (uint32_t)states * BM_VM_STATE_SIZE > size - statesAt) FAIL("states outside the module");
     if (start != 0xFF && start >= states) FAIL("unknown start state");
   }
-  for (uint16_t f = 0; f < m->functionCount; f++)
+#undef FAIL
+  return true;
+}
+
+bool bmVmModuleVerify(BmVmModule *m, const char **ppError)
+{
+  uint32_t all = 0xFFFFFFFFu;
+  return bmVmModuleVerifySome(m, &all, ppError);
+}
+
+// In IWRAM on the GBA with the function checks it inlines: a module's code is verified the
+// first time it runs (or in spare time), and from fast memory that is several times quicker.
+BM_IWRAM_CODE bool bmVmModuleVerifySome(BmVmModule *m, uint32_t *pWords, const char **ppError)
+{
+  const char *dummy;
+  if (ppError == NULL) ppError = &dummy;
+  if (m->verified == 1) return true;
+  if (m->verified == 2) { *ppError = "the module was refused"; return false; }
+#define FAIL(msg) do { *ppError = msg; m->verified = 2; return false; } while (0)
+  for (; m->verifiedFunctions < m->functionCount; m->verifiedFunctions++)
   {
-    if (!verifyFunction(m, f, ppError)) return false;
+    // What a function costs is about its length: one that does not fit waits for more room.
+    uint32_t words = rd16(functionAt(m, m->verifiedFunctions) + 4) + 8u;
+    if (words > *pWords) return true;
+    *pWords -= words;
+    if (!verifyFunction(m, m->verifiedFunctions, ppError)) { m->verified = 2; return false; }
   }
+  if (m->verifiedFunctions < m->functionCount) return true;   // more next time
   // Events and state code must be functions of their class with the right shape.
   for (uint16_t c = 0; c < m->classCount; c++)
   {
@@ -304,6 +333,7 @@ bool bmVmModuleOpen(BmVmModule *m, const uint8_t *p, uint32_t size, const char *
     }
   }
 #undef FAIL
+  m->verified = 1;
   return true;
 }
 
@@ -375,6 +405,16 @@ static int32_t s_eventArg;
 // word to continue at if a latent function started waiting, else 0xFFFF.
 static uint16_t run(const BmVmModule *m, const BmVmHost *h, BmVmInstance *inst, uint16_t function, uint16_t pc, int32_t arg)
 {
+  // A module opened lazily: its code is verified the first time any of it runs.
+  if (m->verified != 1)
+  {
+    const char *why = NULL;
+    if (!bmVmModuleVerify((BmVmModule *)m, &why))
+    {
+      fail(m, h, inst, why != NULL ? why : "the module was refused", BM_VM_NONE, 0);
+      return 0xFFFF;
+    }
+  }
   // Native entries exist only for functions without parameters.
   if (m->pNative != NULL && m->pNative->entries[function] != NULL)
   {

@@ -170,7 +170,13 @@ source → parser → AST → type check → IR ─┬─► bytecode module ('M
 - **Bytecode**: register based, 16-bit instructions. A module contains: header (magic `BMMB`,
   version, counts), classes, states, variables, functions, constant pool, code, line table.
   The loader **verifies** it before use and rejects a module that fails. The layout, the
-  instructions and the verifier's rules are in section 11. The cooker writes **one module per
+  instructions and the verifier's rules are in section 11. Opening a module checks only its
+  header and tables; its code is verified when it is needed (`bmVmModuleOpenLazy`): the
+  modules of a room's objects and of the player's attachments when the room is entered, the
+  others a function at a time in the spare time at the end of a frame (the GBA game), and at
+  the latest the first time any of their code would run. A module refused then runs nothing;
+  the refusal counts as a script error. (Verifying every module of a pack at once took about
+  a fifth of a second on the GBA.) The cooker writes **one module per
   class** (one `MODB` chunk each): a class's functions and constants are numbered from 0 in its
   module, so a module changes only when its script does, and a changed script travels over
   the link as one small chunk. The runtime opens every `MODB` chunk of the pack and makes a

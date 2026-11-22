@@ -160,7 +160,9 @@ changes, so it can run next to Tiled.
 **Run** (F6) cooks all rooms into one pack and plays it on the target chosen next to the button:
 
 - **PC**: starts the game in its own window; Run again restarts it with the new pack.
-- **GBA (Xboo)**: multiboots the runtime if none answers on the cable, then pushes the pack.
+- **GBA (Xboo)**: multiboots the runtime if none answers on the cable (`game_runtime_mb.gba`,
+  the runtime without a level), then pushes the pack; the GBA shows a loading box with the
+  progress meanwhile.
   This needs the multiboot image: configure with `-DBM_GBA_BUILD_DIR=...`, or set `gba-image`.
 
 With **Live** on, every cook while a target runs (a saved room, F5) is pushed in as a hot

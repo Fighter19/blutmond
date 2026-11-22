@@ -940,7 +940,8 @@ static uint32_t loadModules(BmGame *g)
     }
     const char *why = NULL;
     changed = true;
-    if (!bmVmModuleOpen(&a->modules[n], p, size, &why))
+    // Its code is verified when it first runs (vm.h): a pack's many scripts start quickly.
+    if (!bmVmModuleOpenLazy(&a->modules[n], p, size, &why))
     {
       bm_script_errors++;
 #ifdef BM_PLATFORM_HOST
@@ -1033,6 +1034,34 @@ static bool keepObject(BmGame *g, uint8_t i)
   a->pc[i] = 0;
   a->timer[i] = 0;
   return true;
+}
+
+bool bmActorsVerifySome(BmGame *g, uint32_t words)
+{
+  BmActors *a = &g->actors;
+  bool more = false;
+  for (uint8_t m = 0; m < a->moduleCount && words > 0; m++)
+  {
+    if (a->modules[m].verified != 0) continue;
+    if (!bmVmModuleVerifySome(&a->modules[m], &words, NULL)) bm_script_errors++;
+    more |= a->modules[m].verified == 0;
+  }
+  return more;
+}
+
+// The code of what runs now is verified while the room loads (a load may take its time; a
+// first use in the middle of play would cost a frame): the room's objects, the player's and
+// the room's attachments, open screens.
+void bmActorsVerifyInUse(BmGame *g)
+{
+  BmActors *a = &g->actors;
+  for (uint8_t i = 0; i < a->count; i++)
+    if (a->classIndex[i] < a->classCount && !bmVmModuleVerify(&a->modules[a->classModule[a->classIndex[i]]], NULL)) bm_script_errors++;
+  for (uint8_t s = 0; s < BM_ATTACH_SLOTS; s++)
+  {
+    int8_t c = g->attachments.cls[s];
+    if (g->attachments.classKey[s] != 0 && c >= 0 && !bmVmModuleVerify(&a->modules[a->classModule[(uint8_t)c]], NULL)) bm_script_errors++;
+  }
 }
 
 void bmActorsEnterRoom(BmGame *g, bool fresh)

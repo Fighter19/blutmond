@@ -74,6 +74,10 @@ typedef struct BmVmModule
   uint32_t codeWords;
   const uint8_t *pLines;   // may be NULL
   const struct BmVmNativeModule *pNative;   // native.h; NULL: everything is interpreted
+  // Whether its code was verified: 0 not yet (bmVmModuleOpenLazy), 1 yes, 2 it was refused.
+  // Code of a module not yet verified is verified when it first runs.
+  uint8_t verified;
+  uint16_t verifiedFunctions;   // functions verified so far (bmVmModuleVerifySome)
 } BmVmModule;
 
 /// What an object is waiting for.
@@ -115,6 +119,19 @@ typedef struct BmVmHost
 
 /// Opens and verifies a module. On failure `*ppError` says why and the module must not be used.
 bool bmVmModuleOpen(BmVmModule *pModule, const uint8_t *pData, uint32_t size, const char **ppError);
+
+/// Opens a module, checking its header and class tables (what reading its classes needs), but
+/// not its code: that is verified when code of it first runs (an instance of a class whose
+/// module is refused then fails). Much quicker for a pack's many scripts at its start.
+bool bmVmModuleOpenLazy(BmVmModule *pModule, const uint8_t *pData, uint32_t size, const char **ppError);
+
+/// Verifies the code of a module opened lazily (nothing to do if it was). False if refused.
+bool bmVmModuleVerify(BmVmModule *pModule, const char **ppError);
+
+/// Verifies more functions of a module opened lazily, as many as fit into `*pWords` (their
+/// code words, which it takes off; a function that does not fit waits), and the rest of the
+/// module when they are all done: the work spread over frames. False if refused.
+bool bmVmModuleVerifySome(BmVmModule *pModule, uint32_t *pWords, const char **ppError);
 
 // The class table.
 uint16_t bmVmClassName(const BmVmModule *pModule, uint16_t cls);     // string id

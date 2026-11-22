@@ -641,7 +641,42 @@ defaultproperties { start_state = S; }
     if (round % 16 == 0) data.resize(data.size() - (rnd() % 24) - 1);  // cut short
     BmVmModule vm;
     const char *why = nullptr;
-    if (!bmVmModuleOpen(&vm, data.data(), uint32_t(data.size()), &why))
+    bool whole = bmVmModuleOpen(&vm, data.data(), uint32_t(data.size()), &why);
+    // Opened without verifying, then verified a little at a time (the game's spare time):
+    // the same answer in the end.
+    BmVmModule lazy;
+    if (bmVmModuleOpenLazy(&lazy, data.data(), uint32_t(data.size()), &why))
+    {
+      bool ok = true;
+      for (int k = 0; k < 10000 && ok && lazy.verified == 0; k++)
+      {
+        uint32_t words = 1 + rnd() % 64;
+        ok = bmVmModuleVerifySome(&lazy, &words, &why);
+      }
+      if (lazy.verified == 0) ok = bmVmModuleVerify(&lazy, &why);   // a function longer than the budgets
+      TEST_ASSERT(ok == whole && lazy.verified == (whole ? 1 : 2));
+      if (!whole && round % 8 == 0)
+      {
+        // A refused module opened lazily runs nothing (it is verified on first use).
+        BmVmModule again;
+        TEST_ASSERT(bmVmModuleOpenLazy(&again, data.data(), uint32_t(data.size()), &why));
+        Game game;
+        BmVmHost host = {&game, hostCall, hostGet, hostSet, hostField, hostWaitOver, hostError};
+        for (uint16_t cls = 0; cls < again.classCount; cls++)
+        {
+          BmVmInstance inst;
+          bmVmInstanceInit(&again, &inst, cls);
+          for (int frame = 0; frame < 4; frame++)
+          {
+            bmVmEvent(&again, &host, &inst, BmScriptEvent(frame % BM_SCRIPT_EVENT_COUNT));
+            bmVmStep(&again, &host, &inst);
+          }
+        }
+        TEST_ASSERT(again.verified == 2 || again.classCount == 0);
+      }
+    }
+    else TEST_ASSERT(!whole);
+    if (!whole)
     {
       refused++;
       continue;

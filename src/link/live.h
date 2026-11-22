@@ -159,7 +159,20 @@ typedef struct BmLive
 
   BmLiveRegion regions[BM_LIVE_REGIONS];
   uint32_t applied, chunksCopied, chunksReceived;
+  uint32_t bytesIn;           // this transfer: chunk bytes received or kept (for its progress)
 } BmLive;
+
+/// How far a pack transfer has come (for a loading box): `receiving` once its table of chunks
+/// is there, then the chunks there and all, and the bytes there (received, or kept from the
+/// running pack) of the pack's size.
+typedef struct BmLiveProgress
+{
+  bool receiving;
+  uint32_t chunks, chunkCount;
+  uint32_t bytes, totalBytes;
+} BmLiveProgress;
+
+void bmLiveGetProgress(const BmLive *pLive, BmLiveProgress *pProgress);
 
 /// `pPool` is `poolSize` bytes for packs that arrive (4-byte aligned); `pPack` is the pack
 /// running now, which may lie at the start or the end of the pool (a multiboot image's
