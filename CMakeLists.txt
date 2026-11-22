@@ -334,8 +334,15 @@ if(BM_PLATFORM STREQUAL "host")
     endif()
     add_executable(bmeditor editor/main.cpp editor/project.cpp editor/views.cpp editor/runner.cpp editor/graphics_view.cpp
       editor/dialogs.cpp editor/project_panel.cpp editor/palette_panel.cpp editor/animation_panel.cpp
-      editor/code_edit.cpp editor/script_panel.cpp editor/sound_panel.cpp)
+      editor/code_edit.cpp editor/script_panel.cpp editor/sound_panel.cpp ${CMAKE_BINARY_DIR}/generated/build_version.c)
     set_target_properties(bmeditor PROPERTIES CXX_STANDARD 20)
+    # The commit and build date for Help > Version: looked at in every build, rewritten when the
+    # commit changes (cmake/version.cmake).
+    add_custom_target(bm_build_version
+      COMMAND ${CMAKE_COMMAND} -DSRC=${PROJECT_SOURCE_DIR} -DOUT=${CMAKE_BINARY_DIR}/generated/build_version.c
+        -P ${PROJECT_SOURCE_DIR}/cmake/version.cmake
+      BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/build_version.c)
+    add_dependencies(bmeditor bm_build_version)
     target_link_libraries(bmeditor PRIVATE bm_editor_model bm_cooker blutmond ose_ui_sdl3)
     set(BM_GBA_BUILD_DIR "" CACHE PATH "GBA build directory (runtime images for the editor and the mGBA tests)")
     if(EMSCRIPTEN)

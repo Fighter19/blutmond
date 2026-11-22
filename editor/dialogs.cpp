@@ -168,6 +168,23 @@ void openForm(Context &ui, const std::string &title, std::vector<FormField> fiel
   ui.openPopup(std::move(window), {}, PopupPlacement::Center, true);
 }
 
+void openMessage(Context &ui, const std::string &title, const std::string &text)
+{
+  auto window = makeWindow(title, 420);
+  auto *box = window->addChild(std::make_unique<VBox>());
+  auto *label = static_cast<Label *>(box->addChild(std::make_unique<Label>()));
+  label->text = text;
+  label->wrap = true;
+  auto buttons = std::make_unique<HBox>();
+  buttons->addChild(std::make_unique<Control>())->sizeFlagsH = SizeFlags::Fill | SizeFlags::Expand;
+  auto *close = static_cast<Button *>(buttons->addChild(std::make_unique<Button>("Close")));
+  box->addChild(std::move(buttons));
+  Window *w = window.get();
+  Context *ctx = &ui;
+  close->clicked.connect([ctx, w] { ctx->closePopup(w); });
+  ui.openPopup(std::move(window), {}, PopupPlacement::Center, true);
+}
+
 void openConfirm(Context &ui, const std::string &title, const std::string &text, const std::string &okLabel, std::function<void()> onOk)
 {
   auto window = makeWindow(title, 460);

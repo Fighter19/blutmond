@@ -7,7 +7,7 @@
 // Run (F6) plays all rooms: on the PC in the game's window, or on a GBA over the Xboo cable
 // (editor/runner.h). With "Live" on, every cook while it runs is pushed in as a hot reload.
 //
-//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--target pc|gba] [--frames N --screenshot out.ppm] [--tab N]
+//   bmeditor [project.bmproj | room.tmx...] [--profile gba|snes] [--theme classic|light|dark] [--target pc|gba] [--frames N --screenshot out.ppm] [--tab N] [--action name]
 //            [--game path] [--bmlink path] [--gba-image path] [--xboo device] [--reset none|xboo]
 //            [--port N] [--gba-rom path]
 //
@@ -162,6 +162,13 @@ EM_JS(void, bmWebGameStop, (void), {
 });
 #endif
 
+// What the editor was built from (cmake/version.cmake writes them): Help > Version.
+extern "C" {
+extern const char *const bm_build_commit;
+extern const int bm_build_changed;
+extern const char *const bm_build_date;
+}
+
 using namespace ose::ui;
 using namespace bm::editor;
 
@@ -182,6 +189,7 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
       <Item action="sync.off"/><Item action="sync.gba_pc"/><Item action="sync.pc_gba"/></Menu>
     <Menu title="View"><Item action="view.collision"/><Item action="view.objects"/><Item action="view.grid"/>
       <Item action="theme.classic"/><Item action="theme.light"/><Item action="theme.dark"/></Menu>
+    <Menu title="Help"><Item action="help.version"/></Menu>
   </MenuBar>
   <PanelContainer theme-type="Toolbar"><Flow>
     <Label text="Profile"/>
@@ -822,6 +830,10 @@ struct Editor
     ui.actions().add({"app.quit", "Quit", "", "Ctrl+Q", "", [this] { app.quit(); }, nullptr, nullptr});
     ui.actions().add({"view.collision", "Collision", "", "C", "", [this] { overview->showCollision = !overview->showCollision; }, nullptr, nullptr});
     ui.actions().add({"view.objects", "Objects", "", "O", "", [this] { overview->showObjects = !overview->showObjects; }, nullptr, nullptr});
+    ui.actions().add({"help.version", "Version", "", "", "", [this] {
+      openMessage(app.ui(), "Version", std::string("Blutmond editor\n\nCommit: ") + bm_build_commit + (bm_build_changed ? " (with changes not committed)" : "") +
+                                     "\nBuilt: " + bm_build_date);
+    }, nullptr, nullptr});
     ui.actions().add({"view.grid", "Grid", "", "G", "", [this] { overview->showGrid = !overview->showGrid; }, nullptr, nullptr});
 
     for (const char *name : {"classic", "light", "dark"})
@@ -1030,6 +1042,7 @@ int main(int argc, char **argv)
   std::string themeName = loadThemeName();
   int frames = 0;
   const char *screenshot = nullptr;
+  std::vector<std::string> actions;   // menu actions to run at the start (help.version, ...)
   int tab = 0;
   RunTarget startTarget = RunTarget::Pc;
   RunSettings run;
@@ -1055,6 +1068,7 @@ int main(int argc, char **argv)
     else if (std::strcmp(argv[i], "--frames") == 0 && i + 1 < argc) frames = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--screenshot") == 0 && i + 1 < argc) screenshot = argv[++i];
     else if (std::strcmp(argv[i], "--tab") == 0 && i + 1 < argc) tab = std::atoi(argv[++i]);
+    else if (std::strcmp(argv[i], "--action") == 0 && i + 1 < argc) actions.push_back(argv[++i]);
     else if (std::strcmp(argv[i], "--target") == 0 && i + 1 < argc) startTarget = std::strcmp(argv[++i], "gba") == 0 ? RunTarget::Gba : RunTarget::Pc;
     else if (std::strncmp(argv[i], "--", 2) == 0 && i + 1 < argc && run.set(argv[i] + 2, argv[i + 1])) i++;
     else if (std::filesystem::path(argv[i]).extension() == ".bmproj") projectPath = argv[i];
@@ -1124,6 +1138,8 @@ int main(int argc, char **argv)
   editor.project.setProfile(profile);
   editor.build();
   if (auto *center = app.ui().root()->findAs<TabContainer>("center")) center->setCurrent(tab);
+  for (const std::string &a : actions)
+    if (!app.ui().actions().run(a)) std::fprintf(stderr, "no action %s\n", a.c_str());
 
   if (frames > 0)
   {

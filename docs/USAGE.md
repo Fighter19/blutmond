@@ -55,6 +55,11 @@ build/bmeditor game.bmproj
 Options: `--theme classic|light|dark` (also in the View menu, remembered), `--target pc|gba`,
 `--xboo device`, `--reset none|xboo`, `--gba-image file`, `--bmlink file`, `--game file`,
 `--port N`. The last six can also stand in `~/.config/blutmond/editor.conf` as `key = value`.
+`--action name` runs a menu action at the start (`help.version`, `run.start`, ...), and with
+`--frames N --screenshot out.ppm` the editor draws N frames, saves the picture and quits.
+**Help > Version** shows the commit the editor was built from (marked if the tree had changes
+not committed) and when that commit was first built there; the published pages show the
+commit they were built from.
 
 - **Run** (F6) cooks all rooms and plays them on the target next to the button: **PC** (the
   game window) or **GBA (Xboo)** (section 4).

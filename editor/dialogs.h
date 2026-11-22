@@ -31,6 +31,9 @@ void openForm(ose::ui::Context &ui, const std::string &title, std::vector<FormFi
 void openConfirm(ose::ui::Context &ui, const std::string &title, const std::string &text, const std::string &okLabel,
                  std::function<void()> onOk);
 
+/// A window with text and a Close button.
+void openMessage(ose::ui::Context &ui, const std::string &title, const std::string &text);
+
 /// Delivers results of system file dialogs; call once per frame on the UI thread.
 void pollFileDialogs();
 
