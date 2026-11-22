@@ -107,7 +107,9 @@ typedef enum BmScriptType {
   X(set_quick_slot,    VOID, 2, INT,   RECORD, VOID,  VOID, 0) \
   X(set_knockback,     VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(say_line,          VOID, 1, RECORD, VOID,  VOID,  VOID, 0) \
-  X(say_as,            VOID, 2, RECORD, TEXT,  VOID,  VOID, 0)
+  X(say_as,            VOID, 2, RECORD, TEXT,  VOID,  VOID, 0) \
+  X(fade_music,        VOID, 2, INT,   INT,   VOID,  VOID, 0) \
+  X(music_intensity,   VOID, 1, INT,   VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -172,7 +174,13 @@ typedef enum BmScriptType {
 //
 // say_line(record): the dialogue box with a Line record: its `speaker` (a record whose `name`
 // and `portrait` are shown) and what it `says`. say_as(speaker, text): the same with a line
-// written in the script. The portrait is a sprite of the pack, at the box's left.
+// written in the script. The portrait is a sprite of the pack, at the box's left; the
+// speaker's `voice` (a sound effect) is heard with every second letter as the line appears.
+//
+// fade_music(percent, frames): the music's volume goes to `percent` (0-100) in that many
+// frames; at 0 it stops. music_intensity(level): dynamic music: the song's instruments of layer
+// 1 to 15 are heard while level is at least their layer, fading in and out (set it before
+// play_music for a song to begin that way).
 #define BM_SCRIPT_RECORD_FIELD(offset, type) ((int32_t)(offset) | ((int32_t)(type) << 16))
 
 typedef enum BmScriptApi {

@@ -5,7 +5,10 @@ Status: a first part built: `say(speaker, line)` shows a box with a name and a l
 (`struct Speaker { text name; sprite portrait; }`, without voice, colour and side yet) and so
 are lines (`struct Line { record<Speaker> speaker; text says; }`, instead of talk files for
 now); `say_line(#Line)` and `say_as(#Speaker, "...")` show the speaker's portrait (a 32 x 32
-sprite, one expression) at the box's left. Both are edited in the editor's Data tab, with the
+sprite, one expression) at the box's left. The typewriter is built (a letter a frame, A shows
+the rest, then closes; no pages, no speed codes yet), with the speaker's `voice` (a sound
+effect, every second letter, a little higher or lower by the letter: the hero's blip,
+Vesper's rasp). Both are edited in the editor's Data tab, with the
 portrait and the line as the box shows them in its preview; right clicking an object in the
 room lists the lines its script says and their speakers. Languages (step 4)
 are built differently from section 4: a translation file per language keyed by the original

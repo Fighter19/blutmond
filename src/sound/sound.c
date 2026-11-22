@@ -123,6 +123,9 @@ void bmSoundInit(BmSound *s, const BmPack *pPack, int8_t *pEcho)
   if (!s_wavesReady) buildWaves();
   memset(s, 0, sizeof(*s));
   s->pPack = pPack;
+  s->musicVolume = s->musicTarget = 256;
+  s->intensity = BM_SOUND_LAYERS - 1;
+  for (int l = 0; l < BM_SOUND_LAYERS; l++) s->layerVolume[l] = 256;
   if (pEcho != NULL)
   {
     s->pEchoLeft = pEcho;
@@ -145,8 +148,13 @@ static void startPlayer(BmSound *s, int which, const uint8_t *pSong, uint32_t si
   p->nextEvent = 0;
   p->nameId = nameId;
   p->playing = pSong != NULL;
+  p->transpose = 0;
   if (which == 0)
   {
+    // New music: full volume, its layers as the intensity says.
+    s->musicVolume = s->musicTarget = 256;
+    s->stopAtSilence = 0;
+    for (int l = 0; l < BM_SOUND_LAYERS; l++) s->layerVolume[l] = l <= s->intensity ? 256 : 0;
     uint16_t delay = pSong != NULL ? rd16(pSong + 24) : 0;
     s->echoDelay = delay > BM_SOUND_ECHO_MAX ? BM_SOUND_ECHO_MAX : delay;
     s->echoFeedback = pSong != NULL ? pSong[26] : 0;
@@ -165,7 +173,12 @@ static bool playNamed(BmSound *s, const char *pName, int which)
     if (p == NULL || size < BM_SOUND_SONG_HEADER) continue;
     const char *name = bmPackString(s->pPack, rd16(p));
     if (name == NULL || strcmp(name, pName) != 0) continue;
-    if (which == 0 && s->players[0].playing && s->players[0].pSong == p) return true;  // already playing
+    if (which == 0 && s->players[0].playing && s->players[0].pSong == p)
+    {
+      // Already playing: it goes on, back to full volume if it was fading.
+      bmSoundFadeMusic(s, 256, 30, false);
+      return true;
+    }
     if (!bmSoundSongValid(p, size)) return false;
     startPlayer(s, which, p, size, rd16(p));
     return true;
@@ -188,6 +201,49 @@ bool bmSoundPlayEffect(BmSound *s, const char *pName)
   return playNamed(s, pName, 1);
 }
 
+bool bmSoundPlayEffectAt(BmSound *s, const char *pName, int8_t semitones)
+{
+  if (!playNamed(s, pName, 1)) return false;
+  s->players[1].transpose = semitones;
+  return true;
+}
+
+void bmSoundFadeMusic(BmSound *s, uint16_t volume, uint16_t frames, bool stop)
+{
+  s->musicTarget = volume > 256 ? 256 : volume;
+  uint32_t distance = s->musicTarget > s->musicVolume ? s->musicTarget - s->musicVolume : s->musicVolume - s->musicTarget;
+  s->musicStep = (uint16_t)(frames == 0 ? 256 : (distance + frames - 1) / frames);
+  if (s->musicStep == 0) s->musicStep = 1;
+  s->stopAtSilence = stop;
+}
+
+void bmSoundSetIntensity(BmSound *s, uint8_t level)
+{
+  s->intensity = level >= BM_SOUND_LAYERS ? BM_SOUND_LAYERS - 1 : level;
+}
+
+// Once a frame: the music's volume and its layers go towards their targets.
+static void runVolumes(BmSound *s)
+{
+  if (s->musicVolume < s->musicTarget)
+    s->musicVolume = (uint16_t)(s->musicTarget - s->musicVolume <= s->musicStep ? s->musicTarget : s->musicVolume + s->musicStep);
+  else if (s->musicVolume > s->musicTarget)
+    s->musicVolume = (uint16_t)(s->musicVolume - s->musicTarget <= s->musicStep ? s->musicTarget : s->musicVolume - s->musicStep);
+  if (s->musicVolume == 0 && s->stopAtSilence && s->players[0].playing)
+  {
+    s->stopAtSilence = 0;
+    startPlayer(s, 0, NULL, 0, 0);
+    s->musicVolume = 0;   // startPlayer set it back; silence until the next song
+    s->musicTarget = 0;
+  }
+  for (int l = 1; l < BM_SOUND_LAYERS; l++)
+  {
+    uint16_t target = l <= s->intensity ? 256 : 0, v = s->layerVolume[l];
+    if (v < target) s->layerVolume[l] = (uint16_t)(target - v <= BM_SOUND_LAYER_STEP ? target : v + BM_SOUND_LAYER_STEP);
+    else if (v > target) s->layerVolume[l] = (uint16_t)(v - target <= BM_SOUND_LAYER_STEP ? target : v - BM_SOUND_LAYER_STEP);
+  }
+}
+
 bool bmSoundPlayData(BmSound *s, const uint8_t *pSong, uint32_t size, bool effect)
 {
   if (pSong != NULL && !bmSoundSongValid(pSong, size)) return false;
@@ -200,6 +256,11 @@ bool bmSoundPlayData(BmSound *s, const uint8_t *pSong, uint32_t size, bool effec
 static void noteOn(BmSound *s, int owner, const uint8_t *pSong, uint8_t instrument, uint8_t key, uint8_t velocity, uint16_t frames)
 {
   const uint8_t *in = pSong + rd32(pSong + 28) + (uint32_t)instrument * BM_SOUND_INSTRUMENT_SIZE;
+  // A layer of the music that is not heard (and not fading) takes no voice.
+  uint8_t layer = owner == 0 ? (uint8_t)(rd16(in + 10) & (BM_SOUND_LAYERS - 1)) : 0;
+  if (layer != 0 && layer > s->intensity && s->layerVolume[layer] == 0) return;
+  int32_t shifted = (int32_t)key + (owner == 1 ? s->players[1].transpose : 0);
+  key = (uint8_t)(shifted < 0 ? 0 : shifted > 127 ? 127 : shifted);
   // A free voice; else the quietest one fading out; else, for an effect, the oldest note of
   // the music; else the oldest note of the same owner.
   int pick = -1;
@@ -253,6 +314,7 @@ static void noteOn(BmSound *s, int owner, const uint8_t *pSong, uint8_t instrume
   v->velocity = velocity > 127 ? 127 : velocity;
   v->framesLeft = frames == 0 ? 1 : frames;
   v->owner = (uint8_t)owner;
+  v->layer = layer;
   v->age = s->frame;
   v->active = 1;
 }
@@ -298,7 +360,7 @@ static void runPlayer(BmSound *s, int which)
   }
 }
 
-static void runEnvelope(BmSoundVoice *v)
+static void runEnvelope(BmSoundVoice *v, uint32_t gain)
 {
   switch (v->phase)
   {
@@ -322,6 +384,7 @@ static void runEnvelope(BmSoundVoice *v)
 
   uint32_t volume = ((uint32_t)(v->level >> 8) * v->velocity * v->volume) >> 15;
   if (volume > 256) volume = 256;
+  volume = (volume * gain) >> 8;   // the music's volume and layer (256: as it is)
   int32_t pan = v->pan;
   v->volumeLeft = (int16_t)(pan > 0 ? (volume * (uint32_t)(64 - pan)) >> 6 : volume);
   v->volumeRight = (int16_t)(pan < 0 ? (volume * (uint32_t)(64 + pan)) >> 6 : volume);
@@ -441,6 +504,7 @@ void bmSoundFrame(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count)
 {
   if (count > BM_SOUND_FRAME_SAMPLES) count = BM_SOUND_FRAME_SAMPLES;
   s->frame++;
+  runVolumes(s);
   runPlayer(s, 0);
   runPlayer(s, 1);
 
@@ -450,7 +514,7 @@ void bmSoundFrame(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count)
   {
     BmSoundVoice *v = &s->voices[i];
     if (!v->active) continue;
-    runEnvelope(v);
+    runEnvelope(v, v->owner == 0 ? ((uint32_t)s->musicVolume * s->layerVolume[v->layer]) >> 8 : 256);
     if (!v->active) continue;
     used++;
     if (v->volumeLeft != 0 || v->volumeRight != 0) mixVoice(v, s_sum, count);

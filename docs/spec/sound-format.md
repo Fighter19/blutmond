@@ -1,6 +1,6 @@
 # Sound format
 
-Version 1.1, draft. The reasons and the full feature target are in [../PLAN.md](../PLAN.md),
+Version 1.2, draft. The reasons and the full feature target are in [../PLAN.md](../PLAN.md),
 section 13; this document describes what version 1 of the engine (`src/sound/sound.h`) plays.
 
 A **song** is a source asset ([asset-model.md](asset-model.md)): a `.bmsong` file (XML) with
@@ -23,7 +23,7 @@ named `jump` and `hurt` when the player jumps and is hurt.
 | Element | Attributes | Meaning |
 |---|---|---|
 | `song` | `bpm` (20-400); `length` and `loop` in ticks, 24 per beat (`loop`: where the song repeats from, -1: it plays once); `effect` (1: a sound effect); `echo` in ms (0: none, at most 225) and `echo-feedback` (0-255) | |
-| `instrument` | `name`; `wave`: `pulse12`, `pulse25`, `pulse50`, `saw`, `triangle`, `sine`, `noise` or `sample`; for samples `sample` (a WAV file next to the song: uncompressed, 8 or 16 bit; converted to 8 bit mono), `root` (the key at which it plays at its own rate) and `loop` (1: it repeats); envelope `attack`, `decay`, `release` in frames (1/60 s) and `sustain` (0-255); `volume` (0-255); `pan` (-64 left to 63 right) | |
+| `instrument` | `name`; `wave`: `pulse12`, `pulse25`, `pulse50`, `saw`, `triangle`, `sine`, `noise` or `sample`; for samples `sample` (a WAV file next to the song: uncompressed, 8 or 16 bit; converted to 8 bit mono), `root` (the key at which it plays at its own rate) and `loop` (1: it repeats); envelope `attack`, `decay`, `release` in frames (1/60 s) and `sustain` (0-255); `volume` (0-255); `pan` (-64 left to 63 right); `layer` (0-15, default 0: dynamic music, below) | |
 | `track` | `name`, `instrument` | notes for one instrument |
 | `note` | `t` (tick), `key` (MIDI number, 60 = middle C), `len` (ticks), `vel` (1-127) | |
 
@@ -52,6 +52,23 @@ named `jump` and `hurt` when the player jumps and is hurt.
   between the PC and the GBA. The next section has the arithmetic.
 - The engine is a struct with no global state besides the wave tables and a mixing scratch
   buffer, so the editor's preview runs the same code on its own instance.
+
+### Dynamic music, fades, pitched effects
+
+- **Layers.** An instrument of a song played as music belongs to a layer: 0 is always heard,
+  1 to 15 are heard while the engine's **intensity** is at least that number
+  (`bmSoundSetIntensity`, the script's `music_intensity`; 15 at the start). Each layer has a
+  volume of 0 to 256 that moves towards 256 (heard) or 0 by 6 a frame, at the start of a
+  frame; a song started as music begins with each layer at its target (no fade). A note of a
+  layer whose target and volume are 0 takes no voice.
+- **The music's volume** (0-256) moves towards a target by a step a frame (`bmSoundFadeMusic`:
+  `step = ceil(|target - volume| / frames)`, at least 1; `frames` 0: at once). With `stop`, the
+  music stops when it reaches 0. Starting a song as music sets it to 256; asking for the song
+  already playing fades it back to 256 in 30 frames.
+- A music voice's volume is multiplied by `(music volume * layer volume) >> 8`, then `>> 8`;
+  at 256 and 256 nothing changes, so songs without layers sound as before.
+- **Pitched effects**: `bmSoundPlayEffectAt(name, semitones)` adds `semitones` to every note of
+  the effect (keys kept in 0..127): the dialogue's voices.
 
 ### The arithmetic, exactly
 
@@ -161,7 +178,7 @@ not met: it needs the inner loop in assembly and more voices than 8.
 Volume ramps within a frame (changes are steps at frame boundaries), interpolation, the
 original PSG channels, pulse width modulation and other synthesis, tracker effects (vibrato,
 portamento, arpeggio as effects), filters, separate rates for music and effects, tempo and
-automation tracks, adaptive music (sections, layers), import of MIDI and tracker files. The
+automation tracks, adaptive music by sections (layers are there), import of MIDI and tracker files. The
 position in a song is not part of the game state yet: a loaded state starts the room's song
 from its beginning.
 
@@ -177,7 +194,7 @@ from its beginning.
 28  u32 offset of: instruments, events, sample data
 
 instrument (28 bytes): u8 wave (0-6 as listed above, 255: sample), u8 volume, s8 pan, u8 sustain,
-                       u16 attack, decay, release (level change per frame; the level is 0-65535; 0: at once), u16 0,
+                       u16 attack, decay, release (level change per frame; the level is 0-65535; 0: at once), u16 layer (0-15),
                        u32 sample offset, u32 sample length, u32 loop start (0xFFFFFFFF: none),
                        u32 step at key 60 (20.12)
 event (12 bytes):      u32 tick, u16 length in ticks, u8 instrument, u8 key, u8 velocity, 3 × u8 0
@@ -191,3 +208,4 @@ chunk and that every event names an instrument that exists, before playing (`bmS
 
 - 1: first version.
 - 1.1: the arithmetic written out.
+- 1.2: layers and intensity, the music's volume and fades, pitched effects.

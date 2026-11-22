@@ -34,7 +34,11 @@ function hud() {
 
 event hit(int amount) {
   if health <= 0 { gotostate Dying; }
-  else if health <= Health / 2 { Speed = 1.75; }
+  else if health <= Health / 2 {
+    // Enraged: faster, and the frantic arpeggio joins the music.
+    Speed = 1.75;
+    music_intensity(3);
+  }
 }
 
 state Waiting {
@@ -51,6 +55,11 @@ begin:
   play_anim(#idle);
   face_player();
   while !move_toward(x, 96.0, 0.75) { sleep(1); }
+  // The castle's tune has faded away by now (the room's music is "none"); a moment of silence,
+  // then its song begins quietly: only the drone under the words (dynamic music, layer 0).
+  sleep(30);
+  music_intensity(0);
+  play_music(#vesper);
   // The lines are records (data/lines.bmdata), with the speakers' portraits.
   say_line(#VesperWakes);
   wait_until(dialogue_done());
@@ -60,6 +69,8 @@ begin:
   wait_until(dialogue_done());
   player_lock(0);
   health = Health;
+  // The fight: bass, heartbeat, the lead and the hats come in.
+  music_intensity(2);
   gotostate Hover;
 }
 
@@ -113,6 +124,7 @@ begin:
   Defeated = true;
   player_lock(400);
   ui_clear(14, 0, 16, 3);
+  fade_music(0, 150);
   Shots = 0;
   while Shots < 6 {
     hide();

@@ -374,7 +374,7 @@ def write_tmx(path):
     ET.ElementTree(m).write(path, encoding="UTF-8", xml_declaration=True)
 
 
-def write_small_room(path, room_id, area, w, h, main_layer, objects):
+def write_small_room(path, room_id, area, w, h, main_layer, objects, music="castle"):
     """A room with a background, a main layer and its collision, and objects."""
     bg = [[gid("sky_top" if y < 4 else ("sky_mid" if y < 8 else "sky_bottom")) for _ in range(w)] for y in range(h)]
     first_col = 1 + len(TILES)
@@ -386,7 +386,7 @@ def write_small_room(path, room_id, area, w, h, main_layer, objects):
         "nextlayerid": "6", "nextobjectid": "1",
     })
     mp = ET.SubElement(m, "properties")
-    prop(mp, "music", "castle")
+    prop(mp, "music", music)
     prop(mp, "room_id", room_id)
     prop(mp, "area", area)
     ts = ET.SubElement(m, "tileset", {"firstgid": "1", "name": "test_tiles", "tilewidth": str(T),
@@ -479,7 +479,8 @@ def write_boss_hall(path):
         ("CameraZone", "room", 0, 0, w * T, h * T, False, []),
         ("MoonBat", "vesper", 200, 40, 0, 0, True, []),
     ]
-    write_small_room(path, "boss_hall", "keep", w, h, main_layer, objects)
+    # "none": the castle's tune fades away; the moon bat brings its own song.
+    write_small_room(path, "boss_hall", "keep", w, h, main_layer, objects, music="none")
 
 
 def main():

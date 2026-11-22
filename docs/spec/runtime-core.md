@@ -244,12 +244,23 @@ start:
   its anchor at (8, 124) and priority 0, in front of the box. `say_line(record)` reads the
   record's fields `speaker` (a record) and `says` (a text), and of the speaker `name` (a text)
   and `portrait` (a sprite), by their names in whichever table holds them;
-  `say_as(speaker, line)` the speaker's two. A pressed in a frame while `dialogue != 0` (step 3 of section 3): the rows
+  `say_as(speaker, line)` the speaker's two, and of the speaker also `voice` (a sound).
+- **The line appears** letter by letter: `dialogueShown` letters of `dialogueLength`
+  (characters of the line as wrapped: spaces and line breaks count) are drawn. In each game
+  frame without a screen, after the buttons, one more appears; when its number n is even, a
+  voice is set and the character is a letter or digit (A-Z, a-z, 0-9, or any code from U+00C0),
+  the voice plays as an effect `(code * 7) % 5 - 2` semitones higher. A pressed while the line
+  is not all there shows the rest (no jump); pressed when it is, it closes the box. Drawn again
+  after the layer was cleared, as far as it had come. A pressed in a frame while `dialogue != 0` (step 3 of section 3): the rows
   are cleared, `dialogue = 0`, and that A is no jump.
 - **Hurt(damage)** (hazards, `hurt_player`): Strike(damage, `x + facing`), so the push is
   backwards.
 - **Health** starts at the most and is kept in the save game.
 - **Respawn**: `place(safeX, safeY)` keeping `facing`; `deaths += 1`; `hurtTimer = 60`.
+- **A room's music**: entering it, its `music` property names a song that starts as music
+  (the intensity set to 15 first; the song already playing goes on, fading back to full
+  volume); `none` fades the music away in 120 frames, then it stops; no property: the music
+  goes on.
 - **Going through a door**: the door's property `target_room` names a room id. If there is no
   such room, nothing happens. Otherwise enter that room with the scripted objects starting
   fresh; `roomChanges += 1`; `doorCooldown = 20`. Arrival: if the property `target_door` names
@@ -416,6 +427,8 @@ value is dropped and counts as a script error.
 | 79, 80 | `quick_slot(i)`, `set_quick_slot(i, record)` | `quick[i]` for i 0 to 3 (0 otherwise); set it |
 | 81 | `set_knockback(percent)` | object only: `steady = 100 - percent` (percent clamped to 0..100) |
 | 82, 83 | `say_line(record)`, `say_as(speaker, line)` | the dialogue box with a portrait (section 6, "Dialogue") |
+| 84 | `fade_music(percent, frames)` | the music's volume to `percent * 256 / 100` (0..100) in `frames` (0..65535); at 0 it stops (sound-format.md, "Dynamic music") |
+| 85 | `music_intensity(level)` | the sound engine's intensity (0..15): which layers of the music are heard |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
 (state.md §4): what equipment adds, taken away in its `detached()`, not saved. `stat` (28)

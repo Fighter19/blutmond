@@ -933,6 +933,28 @@ static void testADropFallsAndIsTaken(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// A line of dialogue appears a letter a frame; A shows the rest at once, the next A closes
+// the box. Drawn again after the layer was cleared (a menu, a state), as far as it had come.
+static void testALineAppearsLetterByLetter(void)
+{
+  startWith(s_data, s_size, "boss_hall");
+  frames(2, 0);
+  bmGameSayLine(&s_game, keyOf("VesperWakes"));
+  TEST_ASSERT(s_game.dialogue && s_game.dialogueShown == 0 && s_game.dialogueLength == 34);
+  TEST_ASSERT(s_game.dialogueVoice != 0xFFFF && strcmp(bmPackString(&s_pack, s_game.dialogueVoice), "voice_vesper") == 0);
+  frames(5, 0);
+  TEST_ASSERT(s_game.dialogueShown == 5);
+  // "Who w": the first five letters are there, the sixth not yet.
+  TEST_ASSERT(cellChar(&s_game.ui, 7, 17) == 'W' && cellChar(&s_game.ui, 11, 17) == 'w' && cellChar(&s_game.ui, 12, 17) != 'a');
+  TEST_ASSERT(s_game.sound.players[1].playing);   // the voice
+  // A: all of it; again: gone.
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.dialogue && s_game.dialogueShown == s_game.dialogueLength && uiShows("moon?"));
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.dialogue == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // The first boss (first-items.md, ui.md, the user's request): the autopilot plays from the start
 // through both rooms into the boss hall, presses A through the moon bat's words, defeats it,
 // takes the Iron Helm it leaves and puts it on in the Equipment menu. The moon bat stays
@@ -942,7 +964,7 @@ static void testTheBossIsDefeated(void)
   start();
   BmAutopilot pilot = {0};
   const uint32_t helm = keyOf("IronHelm");
-  int frame = 0, hall = -1, dialogues = 0, portraits = 0;
+  int frame = 0, hall = -1, dialogues = 0, portraits = 0, voices = 0, fadedAt = -1, droneAt = -1, fightAt = -1, enragedAt = -1;
   uint16_t lastLine = 0xFFFF;
   for (; frame < 6000 && s_game.inventory.equipped[2] != helm; frame++)
   {
@@ -959,11 +981,27 @@ static void testTheBossIsDefeated(void)
       if (s_game.dialoguePortrait != 0xFFFF && (first == 'V' || first == 'Y')) portraits++;
     }
     if (s_game.dialogue) lastLine = s_game.dialogueLine;
+    // A line appears letter by letter, with the speaker's voice.
+    if (s_game.dialogue && s_game.sound.players[1].playing && s_game.sound.players[1].nameId == s_game.dialogueVoice) voices++;
+    // The music: the castle's tune fades away in the hall, then the moon bat's song grows.
+    const BmSound *snd = &s_game.sound;
+    const char *song = snd->players[0].playing ? bmPackString(&s_pack, snd->players[0].nameId) : NULL;
+    if (hall >= 0 && fadedAt < 0 && song == NULL) fadedAt = frame;
+    if (song != NULL && strcmp(song, "vesper") == 0)
+    {
+      if (droneAt < 0 && snd->intensity == 0) droneAt = frame;
+      if (fightAt < 0 && snd->intensity == 2) fightAt = frame;
+      if (enragedAt < 0 && snd->intensity == 3) enragedAt = frame;
+    }
   }
   printf("    boss hall at frame %d, helm on at frame %d, %d lines said, deaths %u, hurts %u\n", hall, frame, dialogues,
          (unsigned)s_game.deaths, (unsigned)s_game.hurts);
   // Vesper, the hero's answer, Vesper again, and her last words when defeated.
   TEST_ASSERT(hall > 0 && s_game.inventory.equipped[2] == helm && dialogues == 4 && portraits == 4);
+  printf("    music: castle gone at %d, drone at %d, fight at %d, enraged at %d; %d frames with a voice\n", fadedAt, droneAt, fightAt, enragedAt, voices);
+  TEST_ASSERT(hall < fadedAt && fadedAt < droneAt && droneAt < fightAt && fightAt < enragedAt && voices > 10);
+  // Defeated: its song faded away.
+  TEST_ASSERT(!s_game.sound.players[0].playing);
   TEST_ASSERT(bmInventoryStat(&s_game.inventory, BM_STAT_DEFENCE) == 3);
   int boss = actorOfClass("MoonBat");
   TEST_ASSERT(boss >= 0 && s_game.actors.hidden[boss] && strcmp(stateOf(boss), "Gone") == 0);
@@ -1023,6 +1061,7 @@ int main(int argc, char **argv)
   RUN_TEST(testElementsArmourAndConsumables);
   RUN_TEST(testKnockbackAndFlash);
   RUN_TEST(testADropFallsAndIsTaken);
+  RUN_TEST(testALineAppearsLetterByLetter);
   RUN_TEST(testTheBossIsDefeated);
   free(s_data);
   free(s_windData);

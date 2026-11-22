@@ -953,7 +953,8 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
   for (const tmx::Map &map : maps)
   {
     std::string music = map.property("music");
-    if (!music.empty() && !songNames.count(music))
+    // "none": the music fades away in this room (runtime-core.md §6).
+    if (!music.empty() && music != "none" && !songNames.count(music))
       report.warning("music", map.path, "the room's music '" + music + "' is not a song of this cook");
   }
 

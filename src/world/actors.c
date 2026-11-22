@@ -517,6 +517,15 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_say:
     bmGameSay(g, (uint16_t)args[0], (uint16_t)args[1]);
     break;
+  case BM_SCRIPT_API_fade_music:
+  {
+    int32_t percent = args[0] < 0 ? 0 : args[0] > 100 ? 100 : args[0];
+    bmSoundFadeMusic(&g->sound, (uint16_t)(percent * 256 / 100), (uint16_t)(args[1] < 0 ? 0 : args[1] > 0xFFFF ? 0xFFFF : args[1]), percent == 0);
+    break;
+  }
+  case BM_SCRIPT_API_music_intensity:
+    bmSoundSetIntensity(&g->sound, (uint8_t)(args[0] < 0 ? 0 : args[0] > 15 ? 15 : args[0]));
+    break;
   case BM_SCRIPT_API_say_line:
     bmGameSayLine(g, (uint32_t)args[0]);
     break;
@@ -525,7 +534,9 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     int32_t name = 0xFFFF, portrait = 0xFFFF;
     bmGameRecordField(g, (uint32_t)args[0], "name", &name);
     bmGameRecordField(g, (uint32_t)args[0], "portrait", &portrait);
-    bmGameSayWith(g, (uint16_t)name, (uint16_t)args[1], (uint16_t)portrait);
+    int32_t voice = 0xFFFF;
+    bmGameRecordField(g, (uint32_t)args[0], "voice", &voice);
+    bmGameSpeak(g, (uint16_t)name, (uint16_t)args[1], (uint16_t)portrait, (uint16_t)voice);
     break;
   }
   case BM_SCRIPT_API_dialogue_done:
@@ -1632,7 +1643,7 @@ void bmScreensClose(BmGame *g)
     g->hudDirty = true;   // the HUD and a notice come back
     bmUiShow(&g->ui, g->dialogue != 0);
     darkenRoom(false);
-    if (g->dialogue) bmGameSayWith(g, g->dialogueSpeaker, g->dialogueLine, g->dialoguePortrait);   // the box comes back
+    bmGameDrawDialogue(g);   // the dialogue box comes back, as far as its line had appeared
   }
   else bmScreensRedraw(g);   // the one below shows again
 }

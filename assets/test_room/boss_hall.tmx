@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="12" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="4">
  <properties>
-  <property name="music" value="castle" />
+  <property name="music" value="none" />
   <property name="room_id" value="boss_hall" />
   <property name="area" value="keep" />
  </properties>

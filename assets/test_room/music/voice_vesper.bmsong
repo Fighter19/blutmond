@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="400" length="10" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="rasp" wave="saw" attack="0" decay="5" sustain="0" release="2" volume="110" pan="8"/>
+ <instrument name="hiss" wave="pulse12" attack="0" decay="4" sustain="0" release="1" volume="45" pan="8"/>
+ <track name="rasp" instrument="rasp">
+  <note t="0" key="47" len="8" vel="100"/>
+ </track>
+ <track name="hiss" instrument="hiss">
+  <note t="0" key="54" len="6" vel="70"/>
+ </track>
+</song>

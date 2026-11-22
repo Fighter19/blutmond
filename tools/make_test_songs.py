@@ -5,7 +5,11 @@
 usage: make_test_songs.py <assets/test_room/music>
 
 A four-bar tune in A minor (lead, bass, arpeggio, drums), a jump and a hurt effect, and the
-kick drum's sample. Everything is made by this script, so the test assets stay free of
+kick drum's sample. The moon bat's song (vesper.bmsong) is dynamic music in D phrygian: four
+layers that come in as the fight grows (instrument attribute `layer`, the script's
+music_intensity): 0 a drone under the dialogue, 1 bass and a heartbeat of kicks, 2 the lead
+and hats, 3 a frantic diminished arpeggio. The speakers' voices are short blips
+(voice_hero, voice_vesper). Everything is made by this script, so the test assets stay free of
 third-party material.
 """
 import math
@@ -87,6 +91,64 @@ def main():
         'name="buzz" wave="saw" attack="0" decay="10" sustain="0" release="3" volume="170" pan="0"',
         'name="hiss" wave="noise" attack="0" decay="8" sustain="0" release="2" volume="140" pan="0"',
     ], [("buzz", "buzz", [(0, 52, 6, 120), (6, 47, 6, 120), (12, 43, 10, 120)]), ("hiss", "hiss", [(0, 60, 10, 110)])])
+    vesper(out)
+    voices(out)
+
+
+def vesper(out):
+    """The moon bat's song: 8 bars at 92 bpm, D phrygian, in four layers."""
+    roots = [38, 38, 39, 38, 34, 36, 39, 33]   # D D Eb D Bb C Eb A (bass octave)
+    drone, choir, bass, kicks, lead, hats, arp = [], [], [], [], [], [], []
+    for bar, root in enumerate(roots):
+        t0 = bar * 4 * BEAT
+        drone.append((t0, root + 12, 4 * BEAT - 8, 90))
+        if bar % 2 == 0:   # every second bar, held for two: fewer voices at the bar lines
+            choir.append((t0, root + 31, 8 * BEAT - 8, 60))
+        # Eighths with the flat second leaning in, the threat of the mode.
+        for i, step in enumerate([0, 0, 12, 0, 0, 1, 0, 12]):
+            bass.append((t0 + i * 12, root + step, 9, 105 if i % 2 == 0 else 85))
+        # A heartbeat: two beats close together, twice a bar.
+        for beat in (0, 2):
+            kicks.append((t0 + beat * BEAT, 60, 6, 120))
+            kicks.append((t0 + beat * BEAT + 8, 60, 6, 85))
+        for i in range(8):
+            if i % 2 == 1:
+                hats.append((t0 + i * 12, 84, 3, 55))
+        # A diminished seventh above the root, sixteenths, rising and falling.
+        chord = [root + 24 + k for k in (0, 3, 6, 9)]
+        for i in range(16):
+            arp.append((t0 + i * 6, (chord + chord[2:0:-1])[i % 6], 4, 62 if i % 4 == 0 else 48))
+    melody = [(0, 69, 36), (36, 70, 12), (48, 69, 48),
+              (96, 67, 24), (120, 65, 24), (144, 63, 48),
+              (192, 67, 36), (228, 65, 12), (240, 63, 24), (264, 62, 24),
+              (288, 62, 84),
+              (384, 65, 24), (408, 70, 24), (432, 74, 48),
+              (480, 72, 24), (504, 70, 24), (528, 69, 48),
+              (576, 70, 24), (600, 69, 24), (624, 67, 24), (648, 63, 24),
+              (672, 62, 90)]
+    for t, key, length in melody:
+        lead.append((t, key, length - 2, 110))
+    song(os.path.join(out, "vesper.bmsong"), 'bpm="92" length="768" loop="0" effect="0" echo="180" echo-feedback="90"', [
+        'name="drone" wave="triangle" attack="40" decay="0" sustain="255" release="10" volume="150" pan="0"',
+        'name="choir" wave="sine" attack="60" decay="0" sustain="255" release="10" volume="70" pan="-20"',
+        'name="bass" wave="saw" attack="0" decay="8" sustain="120" release="2" volume="150" pan="0" layer="1"',
+        'name="kick" wave="sample" sample="kick.wav" root="60" loop="0" attack="0" decay="0" sustain="255" release="2" volume="230" pan="0" layer="1"',
+        'name="lead" wave="pulse25" attack="2" decay="20" sustain="170" release="6" volume="140" pan="-10" layer="2"',
+        'name="hat" wave="noise" attack="0" decay="3" sustain="0" release="1" volume="60" pan="16" layer="2"',
+        'name="arp" wave="pulse12" attack="0" decay="5" sustain="40" release="2" volume="75" pan="26" layer="3"',
+    ], [("drone", "drone", drone), ("choir", "choir", choir), ("bass", "bass", bass), ("kick", "kick", kicks),
+        ("lead", "lead", lead), ("hat", "hat", hats), ("arp", "arp", arp)])
+
+
+def voices(out):
+    """A speaker's voice: a blip heard with every second letter of a line (pitched by the letter)."""
+    song(os.path.join(out, "voice_hero.bmsong"), 'bpm="400" length="6" loop="-1" effect="1" echo="0" echo-feedback="0"', [
+        'name="blip" wave="pulse25" attack="0" decay="3" sustain="0" release="1" volume="90" pan="-8"',
+    ], [("blip", "blip", [(0, 74, 5, 80)])])
+    song(os.path.join(out, "voice_vesper.bmsong"), 'bpm="400" length="10" loop="-1" effect="1" echo="0" echo-feedback="0"', [
+        'name="rasp" wave="saw" attack="0" decay="5" sustain="0" release="2" volume="110" pan="8"',
+        'name="hiss" wave="pulse12" attack="0" decay="4" sustain="0" release="1" volume="45" pan="8"',
+    ], [("rasp", "rasp", [(0, 47, 8, 100)]), ("hiss", "hiss", [(0, 54, 6, 70)])])
 
 
 if __name__ == "__main__":

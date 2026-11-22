@@ -31,6 +31,7 @@
 #define BM_GAME_ELEMENTS 4         // element values 0 (none) to 3; the game's enum names them
 #define BM_GAME_ITEM_SLOT 7        // the attachment slot an item being used takes (use_item)
 #define BM_GAME_NOTICE_FRAMES 120  // how long an obtained item is shown
+#define BM_GAME_MUSIC_FADE 120     // frames the music takes to fade away in a room with music "none"
 #define BM_GAME_PORTRAIT_X 8       // where a speaker's portrait (32 x 32) is, in the dialogue box
 #define BM_GAME_PORTRAIT_Y 124
 #define BM_GAME_PORTRAIT_CELLS 5   // the name and the line start this many cells further right
@@ -127,6 +128,8 @@ typedef struct BmGame
   uint8_t dialogue;
   uint16_t dialogueSpeaker, dialogueLine;   // string ids
   uint16_t dialoguePortrait;                // the speaker's sprite (its name's string id), 0xFFFF none
+  uint16_t dialogueVoice;                   // the speaker's voice: a sound effect's name, 0xFFFF none
+  uint8_t dialogueShown, dialogueLength;    // letters of the line shown so far, and in all
   // The UI layer (src/ui/ui.h): menus, dialogue, the HUD, the debug overlay. What it shows is
   // presentation, not game state.
   BmUi ui;
@@ -144,6 +147,11 @@ typedef struct BmGame
 /// speaker's portrait, a sprite of the pack by its name's string id (0xFFFF: none), at the box's left.
 void bmGameSay(BmGame *pGame, uint16_t speaker, uint16_t line);
 void bmGameSayWith(BmGame *pGame, uint16_t speaker, uint16_t line, uint16_t portrait);
+/// The same with the speaker's voice (a sound effect's name, string id; 0xFFFF none), heard
+/// with every second letter as the line appears, one letter a frame; A shows the rest at once.
+void bmGameSpeak(BmGame *pGame, uint16_t speaker, uint16_t line, uint16_t portrait, uint16_t voice);
+/// Draws the dialogue box again as far as its line has appeared (after the layer was cleared).
+void bmGameDrawDialogue(BmGame *pGame);
 
 /// say_line: a record with the fields `speaker` (a record with `name` and `portrait`) and
 /// `says` (docs/plans/dialogue.md §2: speakers and lines as records).

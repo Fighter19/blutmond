@@ -399,7 +399,14 @@ static void enterRoomSound(BmGame *g)
     bmHalAudioStart();
   }
   const char *music = g->room.musicId != 0xFFFF ? bmPackString(g->pPack, g->room.musicId) : NULL;
-  if (music != NULL) bmSoundPlayMusic(&g->sound, music);
+  // "none": what plays fades away (a boss's room: the boss brings its own); a song starts
+  // (full volume, all its layers) unless it is the one playing.
+  if (music != NULL && strcmp(music, "none") == 0) bmSoundFadeMusic(&g->sound, 0, BM_GAME_MUSIC_FADE, true);
+  else if (music != NULL)
+  {
+    bmSoundSetIntensity(&g->sound, BM_SOUND_LAYERS - 1);
+    bmSoundPlayMusic(&g->sound, music);
+  }
 }
 
 static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
@@ -549,20 +556,58 @@ bool bmGameRecordField(const BmGame *g, uint32_t key, const char *name, int32_t 
 
 void bmGameSayWith(BmGame *g, uint16_t speaker, uint16_t line, uint16_t portrait)
 {
+  bmGameSpeak(g, speaker, line, portrait, 0xFFFF);
+}
+
+void bmGameSpeak(BmGame *g, uint16_t speaker, uint16_t line, uint16_t portrait, uint16_t voice)
+{
   g->dialogue = 1;
   g->dialogueSpeaker = speaker;
   g->dialogueLine = line;
   g->dialoguePortrait = portrait;
-  if (g->screens.count != 0) return;   // drawn when the menu closes
+  g->dialogueVoice = voice;
+  g->dialogueShown = 0;   // it appears letter by letter (dialogueFrame)
+  bmGameDrawDialogue(g);
+}
+
+// Where the line goes in the box: right of a portrait (drawn by updateSprites over the box's
+// left end) if there is one.
+static int dialogueIndent(const BmGame *g)
+{
+  return g->dialoguePortrait != 0xFFFF && sheetNamed(g, g->dialoguePortrait) >= 0 ? BM_GAME_PORTRAIT_CELLS : 0;
+}
+
+void bmGameDrawDialogue(BmGame *g)
+{
+  if (g->dialogue == 0 || g->screens.count != 0) return;   // drawn when the menu closes
   bmUiClearRect(&g->ui, 0, 15, 32, 5);
   g->noticeWidth = 0;   // the box covers the notice's place
   bmUiFrame(&g->ui, 0, 15, 30, 5);
-  // With a portrait (a sprite, drawn by updateSprites over the box's left end) the name and
-  // the line move right of it.
-  int x = portrait != 0xFFFF && sheetNamed(g, portrait) >= 0 ? BM_GAME_PORTRAIT_CELLS : 0;
-  bmUiLabel(&g->ui, 1 + x, 16, bmText(g->pPack, g->language, speaker));
-  bmUiText(&g->ui, 2 + x, 17, 27 - x, 2, line, NULL, 0);
+  int x = dialogueIndent(g);
+  bmUiLabel(&g->ui, 1 + x, 16, bmText(g->pPack, g->language, g->dialogueSpeaker));
+  // The letters shown so far; and how many there are.
+  int32_t count = 0;
+  bmUiTextRange(&g->ui, 2 + x, 17, 27 - x, 2, g->dialogueLine, NULL, 0, 0, g->dialogueShown, &count);
+  g->dialogueLength = (uint8_t)(count > 255 ? 255 : count);
+  if (g->dialogueShown > g->dialogueLength) g->dialogueShown = g->dialogueLength;
   bmUiShow(&g->ui, true);
+}
+
+// Once a frame while the box is shown: the next letter appears, and with every second letter
+// (not a space or a mark) the speaker's voice, a little higher or lower by the letter.
+static void dialogueFrame(BmGame *g)
+{
+  if (g->dialogue == 0 || g->screens.count != 0 || g->dialogueShown >= g->dialogueLength) return;
+  int32_t n = g->dialogueShown++;
+  int x = dialogueIndent(g);
+  bmUiTextRange(&g->ui, 2 + x, 17, 27 - x, 2, g->dialogueLine, NULL, 0, n, n + 1, NULL);
+  if (g->dialogueVoice == 0xFFFF || (n & 1) != 0) return;
+  // The letter: the n-th character of the line as shown.
+  const char *p = bmText(g->pPack, g->language, g->dialogueLine);
+  uint32_t c = 0;
+  for (int32_t i = 0; p != NULL && *p && i <= n; i++) c = bmTextNextChar(&p);
+  bool letter = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c >= 0xC0;
+  if (letter) bmSoundPlayEffectAt(&g->sound, bmPackString(g->pPack, g->dialogueVoice), (int8_t)((int32_t)(c * 7u % 5u) - 2));
 }
 
 void bmGameSayLine(BmGame *g, uint32_t line)
@@ -572,7 +617,9 @@ void bmGameSayLine(BmGame *g, uint32_t line)
   bmGameRecordField(g, line, "says", &says);
   bmGameRecordField(g, (uint32_t)speaker, "name", &name);
   bmGameRecordField(g, (uint32_t)speaker, "portrait", &portrait);
-  bmGameSayWith(g, (uint16_t)name, (uint16_t)says, (uint16_t)portrait);
+  int32_t voice = 0xFFFF;
+  bmGameRecordField(g, (uint32_t)speaker, "voice", &voice);
+  bmGameSpeak(g, (uint16_t)name, (uint16_t)says, (uint16_t)portrait, (uint16_t)voice);
 }
 
 // A pressed: the dialogue box goes.
@@ -820,10 +867,18 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   }
   if (g->dialogue != 0 && (pressed & BM_KEY_A))
   {
-    endDialogue(g);
+    // A shows the rest of the line at once; when it is all there, the box goes.
+    if (g->dialogueShown < g->dialogueLength)
+    {
+      int x = dialogueIndent(g);
+      bmUiTextRange(&g->ui, 2 + x, 17, 27 - x, 2, g->dialogueLine, NULL, 0, g->dialogueShown, 0x7FFFFFFF, NULL);
+      g->dialogueShown = g->dialogueLength;
+    }
+    else endDialogue(g);
     pressed = (uint16_t)(pressed & ~BM_KEY_A);
     in.jumpPressed = false;
   }
+  dialogueFrame(g);
   // The quick slots (first-items.md §1): L uses the first, Select the second (not while L or
   // R is held: L + R + Select is the debug overlay's).
   if (g->dialogue == 0)
@@ -974,6 +1029,9 @@ static const BmStateField s_gameFields[] = {
   F(dialogueSpeaker, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(dialogueLine, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(dialoguePortrait, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(dialogueVoice, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(dialogueShown, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(dialogueLength, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(doorCooldown, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(saveCooldown, BM_TYPE_U16, BM_STATE_TRANSIENT),
   F(deaths, BM_TYPE_U32, BM_STATE_SAVE),
@@ -1075,7 +1133,7 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   g->hudDirty = true;
   bmDataPrepare(g->pPack);
   bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
-  if (g->dialogue) bmGameSayWith(g, g->dialogueSpeaker, g->dialogueLine, g->dialoguePortrait);
+  bmGameDrawDialogue(g);
   bmScreensRedraw(g);
   updateCamera(g);
   updateSprites(g);

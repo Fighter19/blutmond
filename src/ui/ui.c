@@ -397,12 +397,21 @@ static int cellsOf(const char *p, int bytes)
 
 int bmUiText(BmUi *ui, int col, int row, int w, int h, uint16_t textId, const BmUiArg *args, uint8_t argCount)
 {
+  return bmUiTextRange(ui, col, row, w, h, textId, args, argCount, 0, 0x7FFFFFFF, NULL);
+}
+
+int bmUiTextRange(BmUi *ui, int col, int row, int w, int h, uint16_t textId, const BmUiArg *args, uint8_t argCount, int32_t first,
+                  int32_t last, int32_t *pCount)
+{
+  if (pCount) *pCount = 0;
   if (!ui->ready || w < 1 || h < 1) return 0;
   char text[256];
   bmUiFormat(ui->pPack, ui->language, text, sizeof(text), bmText(ui->pPack, ui->language, textId), args, argCount);
   // Word by word: a word that does not fit on the row goes to the next; one longer than a row
-  // is cut. Rows past h are left out.
+  // is cut. Rows past h are left out. Characters are counted (spaces and line breaks too); only
+  // those from `first` to before `last` are drawn, the others only take their places.
   int x = 0, y = 0;
+  int32_t n = 0;
   const char *p = text;
   while (*p && y < h)
   {
@@ -411,12 +420,18 @@ int bmUiText(BmUi *ui, int col, int row, int w, int h, uint16_t textId, const Bm
       x = 0;
       y++;
       p++;
+      n++;
       continue;
     }
     if (*p == ' ')
     {
-      if (x > 0 && x < w) put(ui, col + x++, row + y, ' ');
+      if (x > 0 && x < w)
+      {
+        if (n >= first && n < last) put(ui, col + x, row + y, ' ');
+        x++;
+      }
       p++;
+      n++;
       continue;
     }
     int bytes = 0;
@@ -437,10 +452,14 @@ int bmUiText(BmUi *ui, int col, int row, int w, int h, uint16_t textId, const Bm
         y++;
         if (y >= h) break;
       }
-      put(ui, col + x++, row + y, bmTextNextChar(&p));
+      uint32_t c = bmTextNextChar(&p);
+      if (n >= first && n < last) put(ui, col + x, row + y, c);
+      x++;
+      n++;
     }
     p = end;
   }
+  if (pCount) *pCount = n;
   return y < h ? y + (x > 0) : h;
 }
 

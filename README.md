@@ -136,7 +136,9 @@ changes, so it can run next to Tiled.
   toolbar sets tempo, length, loop and echo. Play previews through the engine's own mixer, so
   it is what the device plays. "What it costs" shows voices, an estimate of the GBA's processor
   time and the size. Edits are saved and, with Live on, pushed into the running game. A room's
-  `music` property names its song; effects called `jump` and `hurt` play by themselves, others
+  `music` property names its song (`none` fades the music away); an instrument's `layer` makes
+  dynamic music that scripts bring in with `music_intensity` (the moon bat's song grows in four
+  layers as the fight does); effects called `jump` and `hurt` play by themselves, others
   from scripts with `play_sound(#name)`.
 - **Graphics** (centre tab): what is loaded in video memory and how much of the hardware it
   takes: all 96 KB of VRAM as tiles with the maps of each background, overlaps in red and data

@@ -117,6 +117,7 @@ Song load(const std::string &path)
     in.release = toInt(e, "release", 4);
     in.volume = toInt(e, "volume", 200);
     in.pan = toInt(e, "pan", 0);
+    in.layer = toInt(e, "layer", 0);
     s.instruments.push_back(in);
   }
   for (const xml::Element *t : root->childrenNamed("track"))
@@ -149,7 +150,9 @@ bool save(const Song &s, std::string *pError)
     out << " <instrument name=\"" << in.name << "\" wave=\"" << in.wave << "\"";
     if (in.wave == "sample") out << " sample=\"" << in.sample << "\" root=\"" << in.root << "\" loop=\"" << (in.loop ? 1 : 0) << "\"";
     out << " attack=\"" << in.attack << "\" decay=\"" << in.decay << "\" sustain=\"" << in.sustain << "\" release=\"" << in.release
-        << "\" volume=\"" << in.volume << "\" pan=\"" << in.pan << "\"/>\n";
+        << "\" volume=\"" << in.volume << "\" pan=\"" << in.pan << "\"";
+    if (in.layer != 0) out << " layer=\"" << in.layer << "\"";
+    out << "/>\n";
   }
   for (const Track &t : s.tracks)
   {
@@ -271,7 +274,7 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
     u16(in.attack <= 0 ? 0 : uint32_t(std::max(1, 65535 / in.attack)));
     u16(in.decay <= 0 ? 0 : uint32_t(std::max(1, (65535 - sustain * 256) / in.decay)));
     u16(in.release <= 0 ? 0 : uint32_t(std::max(1, 65535 / in.release)));
-    u16(0);
+    u16(uint32_t(std::clamp(in.layer, 0, 15)));   // the layer (sound-format.md, dynamic music)
     if (sampleOf[i] >= 0)
     {
       const Sample &sm = samples[size_t(sampleOf[i])];

@@ -4,9 +4,11 @@ table Speaker
 record Hero {
   name = "You"
   portrait = "hero_face"
+  voice = "voice_hero"
 }
 
 record Vesper {
   name = "Vesper"
   portrait = "vesper_face"
+  voice = "voice_vesper"
 }

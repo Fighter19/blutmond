@@ -22,6 +22,7 @@ struct Instrument
   int sustain = 255;              // level after the decay, 0-255
   int volume = 200;               // 0-255
   int pan = 0;                    // -64 (left) .. 63 (right)
+  int layer = 0;                  // 0: always heard; 1-15: heard from that music intensity on
 };
 
 struct Note

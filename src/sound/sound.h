@@ -30,6 +30,8 @@
 #define BM_SOUND_INSTRUMENT_SIZE 28
 #define BM_SOUND_EVENT_SIZE 12
 #define BM_SOUND_SONG_SFX 1
+#define BM_SOUND_LAYERS 16
+#define BM_SOUND_LAYER_STEP 6         // a layer fades in or out in 43 frames
 
 typedef enum BmSoundWave {
   BM_WAVE_PULSE_12 = 0,
@@ -61,6 +63,7 @@ typedef struct BmSoundVoice
   uint16_t framesLeft;    // until the note is released
   uint8_t volume;
   int8_t pan;
+  uint8_t layer;          // of its instrument (music): 0 always heard, 1-15 by intensity
   uint32_t age;
 } BmSoundVoice;
 
@@ -73,6 +76,7 @@ typedef struct BmSoundPlayer
   uint32_t nextEvent;
   uint16_t nameId;
   uint8_t playing;
+  int8_t transpose;       // semitones added to every note (an effect's pitch: a voice)
 } BmSoundPlayer;
 
 typedef struct BmSound
@@ -81,6 +85,13 @@ typedef struct BmSound
   BmSoundVoice voices[BM_SOUND_VOICES];
   BmSoundPlayer players[2];            // music, effect
   uint32_t frame;
+  // The music's volume (0-256), going towards a target by a step a frame; at 0 with
+  // stopAtSilence the music stops. Dynamic music: an instrument of layer n is heard while
+  // intensity >= n; each layer's volume goes to 256 or 0 by BM_SOUND_LAYER_STEP a frame.
+  uint16_t musicVolume, musicTarget, musicStep;
+  uint8_t stopAtSilence;
+  uint8_t intensity;
+  uint16_t layerVolume[BM_SOUND_LAYERS];
   // Echo of the song playing as music.
   uint16_t echoDelay;
   uint8_t echoFeedback;
@@ -104,6 +115,18 @@ bool bmSoundPlayMusic(BmSound *pSound, const char *pName);
 void bmSoundStopMusic(BmSound *pSound);
 /// Plays a song as a sound effect (it replaces the effect playing).
 bool bmSoundPlayEffect(BmSound *pSound, const char *pName);
+
+/// The same with every note `semitones` higher (negative: lower): a speaker's voice blip.
+bool bmSoundPlayEffectAt(BmSound *pSound, const char *pName, int8_t semitones);
+
+/// Fades the music to `volume` (0-256) in `frames` frames (0: at once); with `stop`, the music
+/// stops when it gets to 0. Starting a song as music sets the volume to 256 again.
+void bmSoundFadeMusic(BmSound *pSound, uint16_t volume, uint16_t frames, bool stop);
+
+/// Dynamic music: instruments of layer 1 to 15 are heard while `level` is at least their layer
+/// (they fade in and out). 15 at the start: everything. A song started as music begins with its
+/// layers as the level says, without fading.
+void bmSoundSetIntensity(BmSound *pSound, uint8_t level);
 
 /// Plays song data directly (the editor's preview): as music or as an effect.
 bool bmSoundPlayData(BmSound *pSound, const uint8_t *pSong, uint32_t size, bool effect);

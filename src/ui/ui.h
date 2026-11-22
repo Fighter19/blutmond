@@ -117,6 +117,12 @@ uint32_t bmUiFormat(const BmPack *pPack, uint8_t language, char *pOut, uint32_t 
 /// w x h cells. Returns the rows used.
 int bmUiText(BmUi *pUi, int col, int row, int w, int h, uint16_t textId, const BmUiArg *args, uint8_t argCount);
 
+/// The same drawing only the characters from `first` to before `last` (counted in the text as
+/// formatted, spaces and line breaks included; the others keep their places): a text that
+/// appears letter by letter. `*pCount` (if not NULL): the characters of the text.
+int bmUiTextRange(BmUi *pUi, int col, int row, int w, int h, uint16_t textId, const BmUiArg *args, uint8_t argCount, int32_t first,
+                  int32_t last, int32_t *pCount);
+
 /// Shows or hides the layer (from the next present).
 void bmUiShow(BmUi *pUi, bool shown);
 

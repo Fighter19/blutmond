@@ -5,6 +5,7 @@
 struct Speaker {
   text   name;
   sprite portrait;   // 32 x 32, its anchor at the top left: shown at the dialogue box's left
+  sound  voice;      // a short sound effect, heard with every second letter as a line appears
 }
 
 struct Line {
