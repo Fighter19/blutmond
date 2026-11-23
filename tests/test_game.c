@@ -530,6 +530,28 @@ static void testGuardsAndProjectiles(void)
   frames(24, 0);
   TEST_ASSERT(kf[0] - hits >= 4 && kf[2] == 1);
   bmAttachmentsDetach(&s_game, 1);
+  // The shield filters the hurt box: from behind, a blade long enough to reach the shield
+  // still strikes (the shield is not between it and the body); from ahead, a short one that
+  // touches only the shield is blocked.
+  TEST_ASSERT(bmAttachmentsAttach(&s_game, 1, stringId("Jab"), 0));
+  int32_t *jab = &s_game.attachments.fields[1 * BM_SCRIPT_MAX_FIELDS];   // Reach, Damage, Strikes
+  jab[0] = 32;
+  bmBodyPlace(b, 286, 160);
+  b->facing = 1;
+  frames(30, 0);
+  hits = kf[0];
+  int blocked = kf[2];
+  frames(1, BM_KEY_B);
+  frames(4, 0);
+  TEST_ASSERT(kf[0] == hits + 1 && kf[2] == blocked && jab[2] == 1);
+  jab[0] = 18;
+  bmBodyPlace(b, 330, 160);
+  b->facing = -1;
+  frames(30, 0);
+  frames(1, BM_KEY_B);
+  frames(4, 0);
+  TEST_ASSERT(kf[0] == hits + 1 && kf[2] == blocked + 1 && jab[2] == 1);
+  bmAttachmentsDetach(&s_game, 1);
 
   // Knives: two in the air at most; a fast one still strikes the knight it passes.
   TEST_ASSERT(bmAttachmentsAttach(&s_game, 2, stringId("Thrower"), 0));
@@ -548,6 +570,31 @@ static void testGuardsAndProjectiles(void)
   TEST_ASSERT(thrower[0] == 2);
   frames(20, 0);
   TEST_ASSERT(kf[0] == hits + 1 && thrower[1] >= 1);                // struck, and the thrower heard of it
+  TEST_ASSERT(actorOfClass("Knife") < 0 || a->gone[actorOfClass("Knife")]);
+  // From behind, sped up to 20 pixels a frame, wherever in a frame's way the knife first meets
+  // the knight (some over body and shield at once): struck. From ahead: blocked, and gone
+  // (guarded()).
+  for (int off = 0; off < 20; off++)
+  {
+    bmBodyPlace(b, 240 + off, 160);
+    b->facing = 1;
+    frames(30, 0);
+    hits = kf[0];
+    blocked = kf[2];
+    frames(1, BM_KEY_R);
+    knife = actorOfClass("Knife");
+    TEST_ASSERT(knife >= 0);
+    a->vx[knife] = BM_FIX(20);
+    frames(20, 0);
+    TEST_ASSERT(kf[0] == hits + 1 && kf[2] == blocked);
+  }
+  bmBodyPlace(b, 400, 160);
+  b->facing = -1;
+  frames(30, 0);
+  hits = kf[0];
+  frames(1, BM_KEY_R);
+  frames(20, 0);
+  TEST_ASSERT(kf[0] == hits && kf[2] == blocked + 1);
   TEST_ASSERT(actorOfClass("Knife") < 0 || a->gone[actorOfClass("Knife")]);
   // Thrown at the room's right wall from close by: gone there.
   bmBodyPlace(b, 470, 160);

@@ -305,8 +305,7 @@ state Swing { begin:
 the lock is over (or, without one, until it ends), `owner_busy()` says whether a lock is on;
 from an object they do nothing. A save game keeps what is equipped and attaches it again.
 
-Not yet for hits: guard boxes, the element and the target's defence in the
-damage, the target in `struck`, projectiles ([../plans/hitboxes.md](../plans/hitboxes.md)).
+Not yet for hits: the target in `struck` ([../plans/hitboxes.md](../plans/hitboxes.md)).
 
 ### Screens
 

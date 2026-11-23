@@ -73,7 +73,7 @@ the figure's facing:
 |---|---|
 | `hurt` | the figure can be hit here |
 | `hit` | this hits, while it is armed (section 3) |
-| `guard` | a hit that reaches this box first is blocked |
+| `guard` | filters the hurt boxes: a hit whose way from its origin to a hurt box crosses it is blocked |
 
 The box used for touching and for standing in the world stays what it is (`hitbox` in the
 sprite file; called the **body box** from here on). A frame without `hurt` boxes uses the
@@ -145,8 +145,12 @@ Once per game frame, after scripts and animations have run and before drawing:
    order:
    - no overlap between any of the hit's boxes and the figure's hurt or guard boxes: next;
    - the hit has already struck this figure (and is not `#Multi`): next;
-   - a guard box overlaps and the hit is not `#Pierce`: the figure gets `blocked(source)`,
-     the source gets `guarded(target)`, and the hit is spent for this figure;
+   - unless the hit is `#Pierce`, the guard boxes filter the hurt boxes: a hurt box the hit
+     overlaps counts only if the line from the hit's origin (the source's body middle; a
+     moving object's where it was at the start of the frame) to the middle of the overlap
+     crosses no guard box. No such hurt box, but a guard box or a guarded hurt box touched:
+     the figure gets `blocked(source)`, the source gets `guarded(target)`, and the hit is
+     spent for this figure;
    - else the figure is struck: amount through the damage rule and the figure's `damage_in`
      filters ([first-items.md](first-items.md) §1), then `hit(amount, element)` to the
      figure and `struck(target, amount)` to the source.

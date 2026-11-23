@@ -21,6 +21,30 @@ static bool overlap(const Rect *a, const Rect *b)
   return a->x < b->x + b->w && b->x < a->x + a->w && a->y < b->y + b->h && b->y < a->y + a->h;
 }
 
+// The overlap of two rectangles (false: none).
+static bool intersection(const Rect *a, const Rect *b, Rect *pOut)
+{
+  if (!overlap(a, b)) return false;
+  int32_t x0 = a->x > b->x ? a->x : b->x, y0 = a->y > b->y ? a->y : b->y;
+  int32_t x1 = a->x + a->w < b->x + b->w ? a->x + a->w : b->x + b->w;
+  int32_t y1 = a->y + a->h < b->y + b->h ? a->y + a->h : b->y + b->h;
+  *pOut = (Rect){ x0, y0, x1 - x0, y1 - y0 };
+  return true;
+}
+
+// Whether the line from (x0, y0) to (x1, y1), in half pixels, crosses rectangle r: their
+// bounds overlap and r's corners do not all lie on one side of the line. Multiplications only.
+static bool crosses(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const Rect *r)
+{
+  int32_t left = 2 * r->x, top = 2 * r->y, right = 2 * (r->x + r->w) - 1, bottom = 2 * (r->y + r->h) - 1;
+  if ((x0 < x1 ? x1 : x0) < left || (x0 < x1 ? x0 : x1) > right) return false;
+  if ((y0 < y1 ? y1 : y0) < top || (y0 < y1 ? y0 : y1) > bottom) return false;
+  int32_t dx = x1 - x0, dy = y1 - y0;
+  int32_t s0 = dx * (top - y0) - dy * (left - x0), s1 = dx * (top - y0) - dy * (right - x0);
+  int32_t s2 = dx * (bottom - y0) - dy * (left - x0), s3 = dx * (bottom - y0) - dy * (right - x0);
+  return !((s0 > 0 && s1 > 0 && s2 > 0 && s3 > 0) || (s0 < 0 && s1 < 0 && s2 < 0 && s3 < 0));
+}
+
 // --- Figures --------------------------------------------------------------------------------
 
 static uint8_t figureCount(const BmGame *g)
@@ -74,6 +98,18 @@ static Rect bodyOf(const BmGame *g, uint8_t f)
     bmActorsBox(g, (uint8_t)(f - 1), &r.x, &r.y, &r.w, &r.h);
   }
   return r;
+}
+
+// Where a hit of figure f comes from, in half pixels: the middle of its body box, for an
+// object where it was at the start of the frame (a projectile's way in).
+static void originOf(const BmGame *g, uint8_t f, int32_t *px2, int32_t *py2)
+{
+  Rect r = bodyOf(g, f);
+  *px2 = 2 * r.x + r.w;
+  *py2 = 2 * r.y + r.h;
+  if (f == BM_HITS_PLAYER) return;
+  *px2 -= 2 * BM_FIX_INT(g->actors.vx[f - 1]);
+  *py2 -= 2 * BM_FIX_INT(g->actors.vy[f - 1]);
 }
 
 // The sprite sheet and animation of a figure (false: it has none).
@@ -456,18 +492,35 @@ void bmHitsFrame(BmGame *g)
     uint8_t n = hitRects(g, k, hit);
     uint8_t source = h->source[k];
     uint16_t name = h->name[k];
+    int32_t ox2, oy2;
+    originOf(g, source, &ox2, &oy2);
     // Figures in a fixed order: the player, then the objects by index.
     for (uint8_t f = 0; n != 0 && f < figureCount(g); f++)
     {
       // A projectile has no health: only a hit that reflects reaches it.
       bool reflects = (h->flags[k] & BM_HIT_REFLECT) && isProjectile(g, f);
       if (f == source || teamOf(g, f) == teamOf(g, source) || (h->struck[k] & (1u << f)) || !(reflects || strikable(g, f))) continue;
-      // A guard box the hit touches stops it, unless it pierces.
-      Rect guard[MAX_RECTS];
+      // Its guard boxes (none for a hit that pierces) filter its hurt boxes: a hurt box the hit
+      // overlaps is struck if the line from the hit's origin to the middle of the overlap
+      // crosses none of them. A hit that touches only guard boxes, or whose every line to a
+      // hurt box is guarded, is blocked.
+      Rect guard[MAX_RECTS], hurt[MAX_RECTS];
       uint8_t gn = (h->flags[k] & BM_HIT_PIERCE) ? 0 : boxesOf(g, f, BM_BOX_GUARD, NO_NAME, guard);
-      bool guarded = false;
-      for (uint8_t a = 0; a < n && !guarded; a++)
-        for (uint8_t b = 0; b < gn && !guarded; b++) guarded = overlap(&hit[a], &guard[b]);
+      uint8_t m = hurtOf(g, f, hurt);
+      bool touches = false, clear = false;
+      for (uint8_t a = 0; a < n && !clear; a++)
+        for (uint8_t b = 0; b < m && !clear; b++)
+        {
+          Rect o;
+          if (!intersection(&hit[a], &hurt[b], &o)) continue;
+          touches = true;
+          clear = true;
+          for (uint8_t c = 0; c < gn && clear; c++)
+            clear = !crosses(ox2, oy2, 2 * o.x + o.w, 2 * o.y + o.h, &guard[c]);
+        }
+      bool guarded = !clear && touches;
+      for (uint8_t a = 0; a < n && !clear && !guarded; a++)
+        for (uint8_t c = 0; c < gn && !guarded; c++) guarded = overlap(&hit[a], &guard[c]);
       if (guarded)
       {
         int32_t amount = h->damage[k] < 1 ? 1 : h->damage[k];
@@ -481,12 +534,7 @@ void bmHitsFrame(BmGame *g)
         if (h->source[k] != source || h->name[k] != name) break;
         continue;
       }
-      Rect hurt[MAX_RECTS];
-      uint8_t m = hurtOf(g, f, hurt);
-      bool touches = false;
-      for (uint8_t a = 0; a < n && !touches; a++)
-        for (uint8_t b = 0; b < m && !touches; b++) touches = overlap(&hit[a], &hurt[b]);
-      if (!touches) continue;
+      if (!clear) continue;
       // The hit's damage, at least 1; the target's defence (the player's) and its weakness
       // or resistance to the hit's element follow in strike().
       int32_t amount = h->damage[k] < 1 ? 1 : h->damage[k];

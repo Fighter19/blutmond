@@ -16,8 +16,11 @@
 //
 // Options of a hit (hit_option, hit_knock; set before it is armed): #Pierce goes through guard
 // boxes, #Multi strikes a figure again every n frames, #Stop holds the game still when it
-// strikes, #Reflect turns a projectile around, and its own push. A guard box of the target that
-// the hit touches stops it (blocked, guarded) unless it pierces. A moving object's (a
+// strikes, #Reflect turns a projectile around, and its own push. The target's guard boxes filter
+// its hurt boxes (unless the hit pierces): a hurt box the hit overlaps is struck only if the
+// line from the hit's origin (the source's body middle; an object's where it was at the start
+// of the frame) to the middle of the overlap crosses no guard box. A hit that touches only
+// guard boxes, or whose every such line is guarded, is blocked (blocked, guarded). A moving object's (a
 // projectile's) hit is stretched back along the way it came this frame.
 
 #include "shared.h"

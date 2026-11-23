@@ -609,15 +609,21 @@ taken into the entry when it is armed (`arm` or `hit_box`) and set back to none.
 3. For each figure `f` in number order: skip the source, a figure of the same team, one
    already struck by this hit, and one that cannot be struck now (the player: `hurtTimer !=
    0`; an object: hidden, `health <= 0`, or invulnerable) unless the hit reflects and `f` is a
-   projectile (an object made at run time whose `vx` or `vy` is not 0). Unless the hit pierces,
-   if any hit rectangle overlaps one of `f`'s boxes of kind guard on the frame showing, the hit
-   is **blocked**: the bit of `f` is set, `f` gets `blocked(amount)` (the player: each of their
+   projectile (an object made at run time whose `vx` or `vy` is not 0). Its hurt rectangles are
+   its boxes of kind hurt on the frame showing, or its body box (the player's box of section 3,
+   an object's box of section 8) if there are none; its guard rectangles its boxes of kind
+   guard on the frame showing, none if the hit pierces. The hit's origin is the middle of the
+   source's body box, for an object less `(INT(vx), INT(vy))` (where it was at the start of the
+   frame), taken once per hit and frame. For each hit rectangle and hurt rectangle that
+   overlap, in order, the line from the origin to the middle of their overlap (in half pixels)
+   is tested against each guard rectangle: it crosses one if their bounds overlap and the
+   rectangle's corners (right and bottom one half pixel inside) do not all lie strictly on one
+   side of it. The first overlap whose line crosses none: `f` is struck. If there is none, but
+   some overlap was found or a hit rectangle overlaps a guard rectangle, the hit is
+   **blocked**: the bit of `f` is set, `f` gets `blocked(amount)` (the player: each of their
    attachments), the source object `guarded(amount)` and so does the attachment in the entry's
-   slot (or the one that made the projectile); then the next figure. Its hurt rectangles are its boxes
-   of kind hurt on the frame showing, or its body box (the player's box of section 3, an
-   object's box of section 8) if there are none. If any hit rectangle overlaps any of them, it
-   is struck with `amount = max(1, damage)`: the bit of `f` is set; a hit that reflects and a
-   projectile `f`: `f` turns (`vx`, `vy`, `facing` negated), takes the source's team, its maker
+   slot (or the one that made the projectile); then the next figure. Struck,
+   `amount = max(1, damage)`: the bit of `f` is set; a hit that reflects and a projectile `f`: `f` turns (`vx`, `vy`, `facing` negated), takes the source's team, its maker
    becomes the source (and its attachment), its own hits' struck bits are cleared, and nothing
    more happens. A projectile's maker is the owner of its hits: if the hit is the
    player's, their attachments in slot order get `damage_out(amount)` (as `damage_in`, section

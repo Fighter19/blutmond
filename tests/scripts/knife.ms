@@ -1,7 +1,7 @@
 class Knife extends Actor;
 
 // A thrown knife (docs/plans/hitboxes.md §5): flies at 12 pixels a frame away from the player,
-// for at most 60 frames; strikes the first figure it meets and is gone, as it is at a wall.
+// for at most 60 frames; strikes the first figure it meets and is gone, as it is at a wall or a shield.
 // Cooked only into the test pack with wind.
 
 var int Walls;
@@ -14,6 +14,7 @@ event spawn() {
 }
 
 event struck(int amount) { destroy(); }
+event guarded(int amount) { destroy(); }
 
 event wall() {
   Walls += 1;
