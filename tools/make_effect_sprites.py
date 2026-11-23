@@ -13,6 +13,11 @@ debris.png, debris.bmsprite: a broken wall (bmGameBreak, one per cell) and a bro
 
 crate.png, crate.bmsprite: a wooden crate that a hit breaks (scripts/crate.ms). 16x16, the
 anchor at the bottom middle.
+
+puzzle.png, puzzle.bmsprite: what physics puzzles are drawn with (src/world/puzzle.h), one
+sheet (one palette bank): a stone block bound with iron (32x32, animation block), an iron
+portcullis (16x48, gate), a pressure plate up and pressed (32x8, plate, plate_down). Anchored
+at their top left.
 Everything here is drawn by this script.
 """
 import os
@@ -33,6 +38,9 @@ PALETTE = {
     'w': (120, 74, 38, 255),     # wood
     'b': (168, 112, 58, 255),    # wood, lit
     'k': (80, 46, 24, 255),      # wood, dark
+    'i': (58, 62, 74, 255),      # iron
+    'I': (110, 118, 136, 255),   # iron, lit
+    'r': (150, 60, 40, 255),     # rust
 }
 
 FRAMES = [
@@ -212,6 +220,104 @@ CRATE = [r.replace('.', 'k') for r in CRATE]
 CRATE[0] = "................"
 
 
+def block():
+    rows = []
+    for y in range(32):
+        row = []
+        for x in range(32):
+            edge = x in (0, 31) or y in (0, 31)
+            band = y in (5, 6, 25, 26)
+            rivet = band and x in (3, 10, 21, 28)
+            if edge:
+                c = 'o'
+            elif rivet:
+                c = 'I'
+            elif band:
+                c = 'i' if y in (6, 26) else 'I'
+            elif y == 1 or x == 1:
+                c = 'l'
+            elif y == 30 or x == 30:
+                c = 'd'
+            elif (x + 2 * y) % 13 == 0 or (3 * x + y) % 17 == 0:
+                c = 'd'          # the stone's grain
+            else:
+                c = 's'
+            row.append(c)
+        rows.append("".join(row))
+    # A crack across the middle.
+    for x, y in ((8, 12), (9, 13), (10, 13), (11, 14), (12, 15), (13, 15), (14, 16), (15, 17)):
+        rows[y] = rows[y][:x] + 'o' + rows[y][x + 1:]
+    return rows
+
+
+def gate():
+    rows = []
+    for y in range(48):
+        row = []
+        for x in range(16):
+            bar = x in (1, 2, 7, 8, 13, 14)
+            cross = y % 12 in (4, 5)
+            spike = y >= 44
+            if spike and bar:
+                c = 'I' if (x in (1, 7, 13)) and y < 46 else ('i' if y < 47 else '.')
+            elif spike:
+                c = '.'
+            elif bar and cross:
+                c = 'I'
+            elif bar:
+                c = 'I' if x in (1, 7, 13) else 'i'
+            elif cross:
+                c = 'r' if (x + y) % 5 == 0 else ('I' if y % 12 == 4 else 'o')
+            else:
+                c = '.'
+            row.append(c)
+        rows.append("".join(row))
+    return rows
+
+
+def plate(pressed):
+    top = 5 if pressed else 2
+    rows = []
+    for y in range(8):
+        row = []
+        for x in range(32):
+            if y < top:
+                c = '.'
+            elif y == top:
+                c = 'o' if x in (0, 31) else 'I'
+            elif y == 7:
+                c = 'o'
+            else:
+                c = 'o' if x in (0, 31) else ('i' if (x // 4) % 2 else 'd')
+            row.append(c)
+        rows.append("".join(row))
+    return rows
+
+
+def puzzle_sheet(out):
+    img = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+    def put(px, x0, y0):
+        for y, row in enumerate(px):
+            for x, ch in enumerate(row):
+                img.putpixel((x0 + x, y0 + y), PALETTE[ch])
+    put(block(), 0, 0)
+    put(gate(), 32, 0)
+    put(plate(False), 0, 32)
+    put(plate(True), 0, 40)
+    img.save(os.path.join(out, "puzzle.png"))
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<sprite version="1" image="puzzle.png">',
+             ' <hitbox x="0" y="0" w="32" h="32"/>',
+             ' <frame x="0" y="0" w="32" h="32" ax="0" ay="0"/>',
+             ' <frame x="32" y="0" w="16" h="48" ax="0" ay="0"/>',
+             ' <frame x="0" y="32" w="32" h="8" ax="0" ay="0"/>',
+             ' <frame x="0" y="40" w="32" h="8" ax="0" ay="0"/>']
+    for i, name in enumerate(("block", "gate", "plate", "plate_down")):
+        lines += [' <animation name="%s" loop="1">' % name, '  <step frame="%d" duration="60"/>' % i, ' </animation>']
+    lines.append('</sprite>')
+    with open(os.path.join(out, "puzzle.bmsprite"), "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 def sheet(path, frames):
     for f in frames:
         assert len(f) == 16 and all(len(r) == 16 for r in f), f
@@ -245,6 +351,7 @@ def main():
     sprite_file(os.path.join(out, "debris.bmsprite"), "debris.png", len(DEBRIS), (8, 8), (-4, -4, 8, 8), "burst", DEBRIS_DURATIONS, False)
     sheet(os.path.join(out, "crate.png"), [CRATE])
     sprite_file(os.path.join(out, "crate.bmsprite"), "crate.png", 1, (8, 16), (-7, -15, 14, 15), "idle", [60], True)
+    puzzle_sheet(out)
 
 
 if __name__ == "__main__":

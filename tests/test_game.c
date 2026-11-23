@@ -1073,11 +1073,12 @@ static void testTheWorldMap(void)
 {
   start();
   frames(3, 0);
-  // The guard room (2 x 1 cells), test_room (4 x 1), test_room_2 (2 x 1) and the boss hall
-  // (2 x 1) in a row, the hall of abilities (2 x 2) behind it; the debug rooms are hidden.
-  TEST_ASSERT(s_game.map.pChunk != NULL && s_game.map.roomCount == 5 && s_game.map.cellCount == 14);
+  // The gatehouse and the guard room (2 x 1 cells each), test_room (4 x 1), test_room_2 (2 x 1)
+  // and the boss hall (2 x 1) in a row, the hall of abilities (2 x 2) behind it; the debug
+  // rooms are hidden.
+  TEST_ASSERT(s_game.map.pChunk != NULL && s_game.map.roomCount == 6 && s_game.map.cellCount == 16);
   TEST_ASSERT(s_game.map.room == 0);
-  TEST_ASSERT(exploredCells() == 1 && bmMapPercent(&s_game) == 7);
+  TEST_ASSERT(exploredCells() == 1 && bmMapPercent(&s_game) == 6);
   // The HUD's map: the player's cell in the middle (26, 2), marked, in the room they are in.
   uint16_t look = 0;
   TEST_ASSERT(mapCodeAt(26, 2, &look));
@@ -1088,7 +1089,7 @@ static void testTheWorldMap(void)
   frames(60, BM_KEY_RIGHT);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
   frames(5, 0);
-  TEST_ASSERT(s_game.map.room == 1 && exploredCells() == 3 && bmMapPercent(&s_game) == 21);
+  TEST_ASSERT(s_game.map.room == 1 && exploredCells() == 3 && bmMapPercent(&s_game) == 18);
   // The door shows on the HUD's map: test_room's last cell, left of the player, has a door east.
   TEST_ASSERT(mapCodeAt(25, 2, &look) && (look & 0x22) == 0x22 && ((look >> 8) & 3) == BM_UI_MAP_ROOM_KIND);
   TEST_ASSERT(mapCodeAt(26, 2, &look) && (look & 0x88) == 0x88);   // and west in the player's cell
@@ -1098,7 +1099,7 @@ static void testTheWorldMap(void)
   press(BM_KEY_DOWN);
   press(BM_KEY_DOWN);
   press(BM_KEY_A);
-  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Map") && uiShows("21"));
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Map") && uiShows("18"));
   TEST_ASSERT(mapCellsIn(2, 4, 26, 14) == 3);
   // The player's cell blinks: drawn again with the frame.
   int marked = 0;
@@ -2260,8 +2261,8 @@ static void testBreakableWallsAndCrates(void)
   // Through it, to the heart behind.
   int heart = actorOfClass("Pickup");
   TEST_ASSERT(heart >= 0 && !s_game.actors.hidden[heart]);
-  frames(40, BM_KEY_LEFT);
-  TEST_ASSERT(BM_FIX_INT(s_game.player.x) < 48 && s_game.actors.hidden[heart]);
+  for (int f = 0; f < 60 && !s_game.actors.hidden[heart]; f++) frames(1, BM_KEY_LEFT);   // (the gatehouse's door is further on)
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) < 48 && s_game.actors.hidden[heart] && strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
   // The crate: broken, its potion left behind.
   int crate = actorOfClass("Crate");
   TEST_ASSERT(crate >= 0 && !s_game.actors.hidden[crate] && actorOfClass("Drop") < 0);
@@ -2282,6 +2283,58 @@ static void testBreakableWallsAndCrates(void)
   wall = doorNamed("secret_wall");
   TEST_ASSERT((s_game.objectBreak[wall] & 0x80) && !solidCell(3, 8) && s_game.room.holeCount == 1);
   TEST_ASSERT(s_game.actors.hidden[actorOfClass("Crate")]);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+// The gatehouse (assets/test_room/puzzle_room.tmx, puzzle.h): the stone block on the step is
+// pushed left (a cell a push), falls off the step's end, is pushed along the floor onto the
+// pressure plate; the gate opens and stays open while the block is on it; over the block,
+// through the gate, the key. The player alone on the plate opens it only while standing there.
+static void testThePushBlockPuzzle(void)
+{
+  startWith(s_data, s_size, "puzzle_room");
+  frames(5, 0);
+  const BmPuzzle *p = &s_game.puzzle;
+  TEST_ASSERT(p->blockCount == 1 && p->gateCount == 1 && p->plateCount == 1 && p->plateGate[0] == 0 && p->sheet >= 0);
+  TEST_ASSERT(p->blockX[0] == 320 && p->blockY[0] == 112 && p->gateLift[0] == 0);
+  TEST_ASSERT(solidCell(4, 8) && solidCell(20, 7) && !solidCell(22, 7));   // the gate, the block
+  // The player alone on the plate: open while there, shut again when gone.
+  bmBodyPlace(&s_game.player, 176, 160);
+  frames(30, 0);
+  TEST_ASSERT(p->pressed == 1 && p->gateLift[0] == 48 && !solidCell(4, 8));
+  bmBodyPlace(&s_game.player, 260, 160);
+  frames(30, 0);
+  TEST_ASSERT(p->pressed == 0 && p->gateLift[0] == 0 && solidCell(4, 8));
+  // A moment against it does not move it; held, it goes a cell at a time.
+  bmBodyPlace(&s_game.player, 362, 144);
+  frames(5, BM_KEY_LEFT);
+  TEST_ASSERT(p->blockX[0] == 320);
+  frames(30, BM_KEY_LEFT);
+  TEST_ASSERT(p->blockX[0] < 320 && p->blockX[0] >= 304 && p->blockY[0] == 112);
+  // On to the step's end: it falls to the floor.
+  int f = 0;
+  for (; f < 600 && p->blockY[0] != 128; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(p->blockY[0] == 128 || p->blockToY[0] == 128);
+  frames(10, BM_KEY_LEFT);
+  TEST_ASSERT(p->blockX[0] == 224 && p->blockY[0] == 128 && solidCell(14, 9) && !solidCell(20, 8));
+  // Along the floor onto the plate.
+  for (f = 0; f < 600 && p->pressed == 0; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(p->pressed == 1);
+  frames(30, 0);
+  TEST_ASSERT(p->gateLift[0] == 48 && !solidCell(4, 8));
+  // Over it and through the gate: the key.
+  int key = actorOfClass("Pickup");
+  TEST_ASSERT(key >= 0 && !s_game.actors.hidden[key]);
+  frames(1, BM_KEY_LEFT | BM_KEY_A);
+  frames(20, BM_KEY_LEFT | BM_KEY_A);
+  frames(90, BM_KEY_LEFT);
+  TEST_ASSERT(s_game.actors.hidden[key] && BM_FIX_INT(s_game.player.x) < 64 && p->gateLift[0] == 48);
+  // Entered again, the puzzle is as it was made.
+  bmBodyPlace(&s_game.player, 470, 160);
+  for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_RIGHT);
+  frames(30, 0);
+  for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "puzzle_room") != 0; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "puzzle_room") == 0 && p->blockX[0] == 320 && p->blockY[0] == 112 && p->gateLift[0] == 0);
   TEST_ASSERT(bm_script_errors == 0);
 }
 
@@ -2313,6 +2366,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheKnightsShield);
   RUN_TEST(testBackThroughADoorAtOnce);
   RUN_TEST(testBreakableWallsAndCrates);
+  RUN_TEST(testThePushBlockPuzzle);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
   RUN_TEST(testTheWorldMap);

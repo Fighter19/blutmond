@@ -195,6 +195,27 @@ its top: a downward stab, the ground pound). Broken, from then on (`bmGameBreak`
 
 Not yet: `collision.set` from scripts, crumbling and switchable blocks.
 
+### 3.9 Physics puzzles
+
+Built (`src/world/puzzle.c`): push blocks, pressure plates and gates (§5), drawn with the
+sprite `puzzle` (animations `block`, `gate`, `plate`, `plate_down`, frames anchored at their top
+left). Per room up to 4 of each.
+
+- A `PushBlock` is solid where it is and where it is going (collision overrides, as a broken
+  wall's). The player on the ground walking into its side, as tall as it there, for
+  `push_frames` frames (12 by default) pushes it one cell (16 pixels) that way at 1 pixel a
+  frame, if the cells there are free: inside the room, not solid in the map (a broken wall's
+  cells count as it left them), no other block, no closed gate, not the player. With nothing
+  under it, it falls a cell at a time at 4 pixels a frame (the room's bottom holds it).
+- A `PressurePlate` is pressed while a push block overlaps it or the player stands on it; it
+  opens the `Gate` its `gate` names.
+- A `Gate` is solid (whole cells) until it is all the way open. Held open by a plate it slides
+  up at 2 pixels a frame; when nothing holds it, it comes down again, unless the player is
+  under it. Drawn behind the main layer, so it goes up into the wall above it.
+- Where the blocks are, how far each gate is up and which plates are pressed are state
+  (snapshots), not kept in the save game: a room's puzzle is as it was made when the room is
+  entered again.
+
 ### 3.8 Tiled mapping
 
 - `collision`: tile layer using `blutmond_collision.tsx`. Its tiles carry the properties
@@ -355,7 +376,9 @@ Objects live in the `objects` layer.
 | `Pickup` | point | `item`, `persistent` (bool) |
 | `MovingPlatform` | rectangle, with a polyline object named by `path` | `path`, `speed`, `wait_frames`, `loop` |
 | `Breakable` | rectangle (whole cells) | `cell` (collision cell after breaking), `by` (attack kinds), `drop` |
-| `PushBlock` | rectangle | solid and pushable body for puzzles: `weight`, `push_start_frames`, `push_max_speed`, `friction` |
+| `PushBlock` | rectangle (whole cells) | solid, pushed by the player a cell at a time and falling where nothing holds it (§3.9): `push_frames` |
+| `PressurePlate` | rectangle (on a floor) | pressed by a push block on it or the player standing on it (§3.9): `gate` (the name of the Gate it opens) |
+| `Gate` | rectangle (whole cells) | solid while closed; slides up while a plate holds it open (§3.9) |
 
 Game classes (enemies, NPCs, lanterns) are written in Mondskript and used the same way.
 

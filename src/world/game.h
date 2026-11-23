@@ -18,6 +18,7 @@
 #include "hits.h"
 #include "pack.h"
 #include "room.h"
+#include "puzzle.h"
 #include "sound.h"
 #include "sprite.h"
 #include "state.h"
@@ -26,6 +27,7 @@
 #define BM_GAME_MAX_OBJECTS 64
 #define BM_GAME_MAX_SHEETS 13   // palette banks 0-12 (13: hit flash, 14-15: built in)
 #define BM_GAME_MAX_OAM 48
+#define BM_GAME_MAX_OVERRIDES (BM_ROOM_MAX_HOLES + BM_PUZZLE_BLOCKS + BM_PUZZLE_GATES)
 #define BM_GAME_EFFECTS 8      // effects shown at once: sparks (a blocked hit), debris (a broken wall)
 #define BM_GAME_PLAYER_HEALTH 30   // the base the stat MaxHealth adds to (first-items.md §1)
 #define BM_GAME_PLAYER_MANA 20     // the base the stat MaxMana adds to
@@ -58,6 +60,7 @@ typedef enum BmObjectKind {
   BM_OBJECT_TRIGGER,
   BM_OBJECT_SAVE_POINT,
   BM_OBJECT_BREAKABLE,   // a wall or floor that a hit breaks (bmGameBreak)
+  BM_OBJECT_PUZZLE,      // PushBlock, PressurePlate, Gate (puzzle.h draws them)
 } BmObjectKind;
 
 typedef struct BmObjectView
@@ -162,6 +165,12 @@ typedef struct BmGame
   uint8_t objectBreak[BM_GAME_MAX_OBJECTS];
   uint8_t breakCount;
   BmCellOverride breakCells[BM_ROOM_MAX_HOLES];
+  // Push blocks, pressure plates and gates of the room (puzzle.h).
+  BmPuzzle puzzle;
+  // What the collision grid reads in place of its cells: broken walls, blocks, closed gates
+  // (bmPuzzleOverrides makes them).
+  uint8_t overrideCount;
+  BmCellOverride overrides[BM_GAME_MAX_OVERRIDES];
   int8_t playerAnims[BM_PLAYER_ANIM_COUNT];
   int8_t objectSheet[BM_GAME_MAX_OBJECTS];     // sheet named like the object's class, or -1
   uint8_t objectDoorSide[BM_GAME_MAX_OBJECTS]; // a door's direction: 0 north (Up goes through), 1 east, 2 west, 3 other

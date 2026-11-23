@@ -27,6 +27,7 @@ static uint8_t kindOf(const char *cls)
   if (strcmp(cls, "Trigger") == 0) return BM_OBJECT_TRIGGER;
   if (strcmp(cls, "SavePoint") == 0) return BM_OBJECT_SAVE_POINT;
   if (strcmp(cls, "Breakable") == 0) return BM_OBJECT_BREAKABLE;
+  if (strcmp(cls, "PushBlock") == 0 || strcmp(cls, "PressurePlate") == 0 || strcmp(cls, "Gate") == 0) return BM_OBJECT_PUZZLE;
   return BM_OBJECT_OTHER;
 }
 
@@ -363,6 +364,7 @@ static void updateSprites(BmGame *g)
   }
 
   next = (uint8_t)(next + bmActorsDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
+  next = (uint8_t)(next + bmPuzzleDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
   next = (uint8_t)(next + bmEffectsDrawDoors(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
 
   // Other objects: the sprite named like their class (its first animation, until scripts play
@@ -520,6 +522,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   g->physics.waterGravity = g->room.waterGravity;
   g->physics.waterMaxFallSpeed = g->room.waterMaxFallSpeed;
   readObjects(g);
+  g->puzzle.blockCount = g->puzzle.gateCount = g->puzzle.plateCount = 0;   // the last room's are gone
   enterBreakables(g);
   if (fresh)
   {
@@ -539,6 +542,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
     }
   }
   loadSprites(g);
+  bmPuzzleEnterRoom(g, fresh);
   bmCommandsPrepare(g);
   bmActorsEnterRoom(g, fresh);
   if (fresh) bmAttachmentsEnterRoom(g);
@@ -722,8 +726,7 @@ static void applyBreak(BmGame *g, uint16_t i)
   r->y1 = (int16_t)((o->y + o->h + c - 1) / c);
   r->shape = shape;
   r->material = 0;
-  g->collision.pOverrides = g->breakCells;
-  g->collision.overrideCount = g->breakCount;
+  bmPuzzleOverrides(g);
   bmRoomAddHole(&g->room, o->x, o->y, o->w, o->h);
 }
 
@@ -1276,6 +1279,8 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   }
   else
   {
+    // Blocks pushed (the way the player walks), plates, gates: before the player moves.
+    bmPuzzleFrame(g, in.dx);
     events = bmBodyStep(&g->player, &params, &g->collision, &g->physics, in);
     if (keepFacing) g->player.facing = facing;
   }
@@ -1560,6 +1565,13 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, screens.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_SCREENS_MAX),
   BM_STATE_ARRAY(BmGame, screens.fields, BM_TYPE_S32, BM_STATE_SNAPSHOT, BM_SCREENS_MAX * BM_SCRIPT_MAX_FIELDS),
   F(screens.repeat, BM_TYPE_U8, BM_STATE_TRANSIENT),
+  BM_STATE_ARRAY(BmGame, puzzle.blockX, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
+  BM_STATE_ARRAY(BmGame, puzzle.blockY, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
+  BM_STATE_ARRAY(BmGame, puzzle.blockToX, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
+  BM_STATE_ARRAY(BmGame, puzzle.blockToY, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
+  BM_STATE_ARRAY(BmGame, puzzle.blockPush, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
+  BM_STATE_ARRAY(BmGame, puzzle.gateLift, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_PUZZLE_GATES),
+  F(puzzle.pressed, BM_TYPE_U8, BM_STATE_SNAPSHOT),
 };
 #undef F
 
