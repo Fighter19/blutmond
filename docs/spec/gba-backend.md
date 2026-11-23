@@ -33,7 +33,7 @@ the hardware. A back end for another machine translates.
 | `bmHalVideoReadReg(offset)` | the copy (most GBA video registers cannot be read back) |
 | `bmHalVramWrite(offset, data, size)` | copies into video memory; offset and size even |
 | `bmHalOamWrite(first, data, count)` | copies halfwords into the sprite table; call in the vertical blank |
-| `bmHalVideoWaitVBlank()` | hands the sound buffers just filled over, waits for the next vertical blank, restarts the line tables; returns the count of vertical blanks so far, so a missed frame shows as a gap |
+| `bmHalVideoWaitVBlank()` | hands the sound buffers just filled over, waits for the next vertical blank; returns the count of vertical blanks so far, so a missed frame shows as a gap |
 | `bmHalVideoLine()` | the line being drawn, 0-227; 160 and up is the vertical blank |
 | `bmHalLineTableSet(slot, reg, values)` | from the next frame on, register `reg` gets `values[y]` on line y (160 values, copied); `NULL` switches it off. Three slots (0 to 2) |
 | `bmHalVideoSnapshotPart(offset, out, size)` | the video state as a snapshot (section 6), piecewise; returns the total size |
@@ -101,7 +101,7 @@ value at a horizontal blank, and for a serial interrupt
 switches to system mode with interrupts off and calls the C handler on the user stack.
 
 **Waiting for a frame** is the BIOS call 0x05 (VBlankIntrWait). Before it the sound buffers
-filled this frame are handed over; after it the line tables are restarted.
+filled this frame are handed over.
 
 **Video.** `DISPCNT = 0` at start. Register writes go to the hardware and to the copy. Video
 memory is written 16 bits at a time. Palette values are masked with 0x7FFF.
@@ -110,13 +110,19 @@ memory is written 16 bits at a time. Palette values are masked with 0x7FFF.
 blank; then the value of the next line is written at every horizontal blank. Each table has
 161 entries (the last one doubled), because the last horizontal blank reads one more.
 
+- The vertical-blank interrupt restarts all three from `bm_hal_lines` (per slot a pointer to
+  the register and one to the values; `next` for what was set, `shown` for what is shown), so
+  a frame that runs late shows the same table again.
+- Two buffers per slot. `bmHalLineTableSet` first sets `next` back to `shown` (dropping a table
+  set earlier in the frame), writes into the buffer not shown, then points `next` at it, with
+  interrupts off for the pointer writes. The table shown is never written while it is drawn.
 - Slots 0 and 1: DMA 0 and DMA 3 (DMA 1 and 2 are the sound's): source the table from entry
   1, destination fixed, count 1, control = enable + start at horizontal blank + repeat. They
   cost no processor time.
 - Slot 2: the horizontal-blank interrupt. The handler reads `VCOUNT` (the line just drawn);
-  below 160 it writes entry `VCOUNT + 1` of the table `bm_hal_line2` (a pointer to the
-  register, then the 161 values, in IWRAM) to the register. About 160 short interrupts a
-  frame; while the serial handler runs (interrupts off) a line can keep the previous value.
+  below 160 it writes entry `VCOUNT + 1` of `shown[2]` to its register. About 160 short
+  interrupts a frame; while the serial handler runs (interrupts off) a line can keep the
+  previous value. Switched off, the interrupt stops at the first frame wait after.
 
 **Sound.** Two channels of signed 8-bit samples, 18,157 per second, exactly 304 per frame.
 

@@ -111,6 +111,7 @@ BmStateMailbox bm_state_inbox BM_MAILBOX_SECTION;
 BmStateMailbox bm_state_outbox BM_MAILBOX_SECTION;
 #if defined(BM_GBA_MULTIBOOT) && !defined(BM_NATIVE_SLOT_BYTES)
 uint8_t bm_live_state_out[BM_LIVE_STATE_CAPACITY];   // live.c's, here in IWRAM too
+uint16_t bm_hal_line_values_irq[2][161];             // hal_gba.c's third line table, too
 #endif
 
 #ifdef BM_PLATFORM_HOST

@@ -212,11 +212,25 @@ void bmEffectsPresent(BmGame *g)
     // Window 0 is a circle around the player, a span per line (WIN0H); outside it is dark.
     int32_t cx = BM_FIX_INT(g->player.x) - g->room.cameraX, cy = BM_FIX_INT(g->player.y) - 14 - g->room.cameraY;
     int32_t r = g->fxA < 8 ? 8 : g->fxA > 120 ? 120 : g->fxA;
+    // The circle's half width at each distance from its middle, worked out when the radius
+    // changes: the most h with h * h + dy * dy <= r * r. (Searched for on every line, every
+    // frame, it took half of a GBA frame.)
+    static uint8_t s_half[121];
+    static int32_t s_halfRadius;
+    if (s_halfRadius != r)
+    {
+      int32_t h = r;
+      for (int32_t dy = 0; dy <= r; dy++)
+      {
+        while (h > 0 && h * h + dy * dy > r * r) h--;
+        s_half[dy] = (uint8_t)h;
+      }
+      s_halfRadius = r;
+    }
     for (int32_t y = 0; y <= BM_HAL_SCREEN_HEIGHT; y++)
     {
-      int32_t dy = y - cy, half = 0;
-      if (dy > -r && dy < r)
-        while ((half + 1) * (half + 1) + dy * dy <= r * r) half++;
+      int32_t dy = y < cy ? cy - y : y - cy;
+      int32_t half = dy < r ? s_half[dy] : 0;
       int32_t left = cx - half, right = cx + half;
       left = left < 0 ? 0 : left > 240 ? 240 : left;
       right = right < 0 ? 0 : right > 240 ? 240 : right;
