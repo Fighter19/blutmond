@@ -6,6 +6,7 @@
 #include "game.h"
 #include "hal_host.h"
 #include "hits.h"
+#include "state.h"
 #include "physical_device.h"
 #include "text.h"
 #include "ui.h"
@@ -18,6 +19,7 @@
 #include <string.h>
 
 static uint8_t *s_data, *s_windData;
+static uint8_t *readFile(const char *path, uint32_t *pSize);
 static uint32_t s_size, s_windSize;
 static BmPack s_pack;
 static BmGame s_game;
@@ -117,6 +119,52 @@ static void testSavePointWritesASaveGame(void)
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0);
   TEST_ASSERT(BM_FIX_INT(s_game.player.x) >= 380 && BM_FIX_INT(s_game.player.x) <= 412);  // at the save point
   TEST_ASSERT(s_game.saves == 1);
+}
+
+// versioning.md step 2: save games written by earlier versions (tests/data, made by those
+// versions' engines at the save point of the first room) load: their layouts are in the pack's
+// MIGR chunk (assets/test_room/save.bmschema), fields are copied by name, new ones keep their
+// start values.
+static void testOldSaveGames(void)
+{
+  static const struct { const char *file; bool hasHealth; } saves[] = {
+    { "save_milestone-gba-hardware.bin", false }, { "save_311888b.bin", true }, { "save_d80f1cd.bin", true } };
+  for (size_t i = 0; i < sizeof(saves) / sizeof(saves[0]); i++)
+  {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/%s", BM_TEST_DATA_DIR, saves[i].file);
+    uint32_t size = 0;
+    uint8_t *data = readFile(path, &size);
+    TEST_ASSERT(data != NULL && size == 1024);
+    start();
+    memcpy(bmHalHostSaveMemory(), data, size);
+    free(data);
+    TEST_ASSERT(bmStateWrittenSchema(bmHalHostSaveMemory(), 1024) != 0);
+    bool loaded = bmGameReadSaveGame(&s_game);
+    printf("    %s: %s\n", saves[i].file, loaded ? "loaded" : "refused");
+    TEST_ASSERT(loaded);
+    TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0 && s_game.saves == 1);
+    TEST_ASSERT(BM_FIX_INT(s_game.player.x) >= 380 && BM_FIX_INT(s_game.player.x) <= 420);
+    TEST_ASSERT(s_game.health == (saves[i].hasHealth ? 17 : bmGameMaxHealth(&s_game)));
+    // The return point came later: older saves keep the start's.
+    TEST_ASSERT(s_game.savedRoom == 0 && (!saves[i].hasHealth || s_game.savedX == 400));
+    // It plays on, and the next save is today's layout.
+    frames(30, 0);
+    TEST_ASSERT(bmGameWriteSaveGame(&s_game));
+    BmStateBlock block = bmGameStateBlock(&s_game);
+    TEST_ASSERT(bmStateWrittenSchema(bmHalHostSaveMemory(), 1024) == bmStateSchemaHash(&block, 1));
+  }
+  // A layout the pack does not know (a newer version's): refused, the save left as it is.
+  start();
+  memset(bmHalHostSaveMemory(), 0xFF, BM_HAL_SAVE_SIZE);
+  TEST_ASSERT(bmGameWriteSaveGame(&s_game));
+  uint8_t *mem = bmHalHostSaveMemory();
+  mem[8] ^= 0x5A;   // another schema hash
+  uint8_t copy[64];
+  memcpy(copy, mem, sizeof(copy));
+  start();
+  TEST_ASSERT(!bmGameReadSaveGame(&s_game) && memcmp(copy, bmHalHostSaveMemory(), sizeof(copy)) == 0);
+  TEST_ASSERT(bm_script_errors == 0);
 }
 
 // --- Scripted objects (assets/test_room/scripts) ---------------------------------------------
@@ -2046,6 +2094,7 @@ int main(int argc, char **argv)
   RUN_TEST(testFallingIntoAPitRespawnsOnSafeGround);
   RUN_TEST(testDoorsLeadBothWays);
   RUN_TEST(testSavePointWritesASaveGame);
+  RUN_TEST(testOldSaveGames);
   RUN_TEST(testTheBatChasesHitsAndGoesHome);
   RUN_TEST(testAPickupStaysTaken);
   RUN_TEST(testAnAttachmentMakesThePlayerJumpHigher);

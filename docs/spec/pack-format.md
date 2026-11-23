@@ -42,7 +42,7 @@ chunk formats named in section 3.
   the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `SONG`, every `FONT`,
   every `MODB`, optionally `MODN`, every `DTAB`, the `LANG`s, and `STRS`.
 - **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `PALE`, `TILE`, `SPRT`, `SONG`,
-  `FONT`, `MODB`, `MODN`, `DTAB`, `LANG`, `WRLD`, `STRS`. `VLAY` is written but not read; where things go in video memory is
+  `FONT`, `MODB`, `MODN`, `DTAB`, `LANG`, `WRLD`, `MIGR`, `STRS`. `VLAY` is written but not read; where things go in video memory is
   fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
 - **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the
   profile (GBA: 1024); 15 background palette banks (the 16th is the UI's); a pack pushed over the link has at most 512 chunks
@@ -239,6 +239,7 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `DTAB` | the records of one structure, read in place ([data-format.md](data-format.md) §3) |
 | `FONT` | one font, or a part of one, section 3.1 |
 | `LANG` | one language: translations of the pack's texts, section 3.2 |
+| `MIGR` | the save layouts of earlier versions ([state.md](state.md) §7) |
 | `WRLD` | world map: where the rooms lie, their cells' walls and doors ([world-format.md](world-format.md) §3) |
 
 Readers MUST skip chunk types they do not know.

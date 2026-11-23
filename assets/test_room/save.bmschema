@@ -1,0 +1,74 @@
+# The save game's layouts of earlier versions (docs/spec/state.md §7): a save written by one
+# of them is loaded by copying its fields by name into today's layout. `bmschema --add` adds
+# the layout of the engine it is built with. A field renamed since: `rename old new`.
+schema 0x27189968 "milestone-gba-hardware"
+ game.roomIndex u32 1
+ game.player.x fix 1
+ game.player.y fix 1
+ game.player.facing s8 1
+ game.player.safeX s32 1
+ game.player.safeY s32 1
+ game.deaths u32 1
+ game.roomChanges u32 1
+ game.hurts u32 1
+ game.saves u32 1
+ game.actors.storeCount u8 1
+ game.actors.storeKey u32 16
+ game.actors.storeValue s32 16
+ game.actors.itemCount u8 1
+ game.actors.items u32 4
+end
+schema 0xd1c7c498 "311888b"
+ game.roomIndex u32 1
+ game.player.x fix 1
+ game.player.y fix 1
+ game.player.facing s8 1
+ game.player.safeX s32 1
+ game.player.safeY s32 1
+ game.health s16 1
+ game.mana s16 1
+ game.savedRoom u32 1
+ game.savedX s32 1
+ game.savedY s32 1
+ game.deaths u32 1
+ game.roomChanges u32 1
+ game.hurts u32 1
+ game.saves u32 1
+ game.actors.storeCount u8 1
+ game.actors.storeKey u32 16
+ game.actors.storeValue s32 16
+ game.inventory.count u8 1
+ game.inventory.key u32 64
+ game.inventory.amount u8 64
+ game.inventory.equipped u32 8
+ game.inventory.quick u32 4
+ game.inventory.statBase s16 16
+end
+schema 0x42eb793c "d80f1cd"
+ game.roomIndex u32 1
+ game.player.x fix 1
+ game.player.y fix 1
+ game.player.facing s8 1
+ game.player.safeX s32 1
+ game.player.safeY s32 1
+ game.health s16 1
+ game.mana s16 1
+ game.mapExplored u8 64
+ game.mapRevealed u8 8
+ game.savedRoom u32 1
+ game.savedX s32 1
+ game.savedY s32 1
+ game.deaths u32 1
+ game.roomChanges u32 1
+ game.hurts u32 1
+ game.saves u32 1
+ game.actors.storeCount u8 1
+ game.actors.storeKey u32 16
+ game.actors.storeValue s32 16
+ game.inventory.count u8 1
+ game.inventory.key u32 64
+ game.inventory.amount u8 64
+ game.inventory.equipped u32 8
+ game.inventory.quick u32 4
+ game.inventory.statBase s16 16
+end

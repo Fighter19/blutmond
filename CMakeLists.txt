@@ -60,7 +60,8 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong
-  ${PROJECT_SOURCE_DIR}/assets/test_room/world.bmworld)
+  ${PROJECT_SOURCE_DIR}/assets/test_room/world.bmworld
+  ${PROJECT_SOURCE_DIR}/assets/test_room/save.bmschema)
 set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/boss_hall.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/ability_hall.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_lobby.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_wave.tmx
@@ -381,6 +382,10 @@ if(BM_PLATFORM STREQUAL "host")
   add_executable(bmexport tools/bmexport.cpp)
   target_link_libraries(bmexport PRIVATE bm_editor_model)
   target_compile_options(bmexport PRIVATE ${BM_WARNINGS})
+  # The save game's layout for the project's schema history (docs/spec/state.md §7).
+  add_executable(bmschema tools/bmschema.c)
+  target_link_libraries(bmschema PRIVATE blutmond)
+  target_compile_options(bmschema PRIVATE ${BM_WARNINGS})
   add_executable(bmcook tools/cooker/main.cpp)
   target_link_libraries(bmcook PRIVATE bm_cooker)
   target_compile_options(bmcook PRIVATE ${BM_WARNINGS})
@@ -632,6 +637,7 @@ if(BM_PLATFORM STREQUAL "host")
   add_executable(test_game tests/test_game.c apps/game/autopilot.c apps/game/game_live.c)
   target_link_libraries(test_game PRIVATE blutmond)
   target_include_directories(test_game PRIVATE apps/game)
+  target_compile_definitions(test_game PRIVATE "BM_TEST_DATA_DIR=\"${PROJECT_SOURCE_DIR}/tests/data\"")
   target_compile_options(test_game PRIVATE ${BM_WARNINGS})
   # The room as an owner of attachments: the second room with `attach = Wind`.
   add_test(NAME make_wind_room

@@ -48,6 +48,7 @@ AssetKind kindOf(const std::string &path)
   if (ext == ".bmfont") return AssetKind::Font;
   if (ext == ".bmlang") return AssetKind::Language;
   if (ext == ".bmworld") return AssetKind::World;
+  if (ext == ".bmschema") return AssetKind::Schema;
   if (ext == ".png" || ext == ".bmp" || ext == ".gif" || ext == ".tga") return AssetKind::Image;
   return AssetKind::Other;
 }
@@ -394,6 +395,13 @@ std::string worldPath(const AssetCatalog &catalog)
 {
   for (const AssetInfo &a : catalog.assets)
     if (a.kind == AssetKind::World && a.problem.empty()) return a.path;
+  return std::string();
+}
+
+std::string schemaPath(const AssetCatalog &catalog)
+{
+  for (const AssetInfo &a : catalog.assets)
+    if (a.kind == AssetKind::Schema && a.problem.empty()) return a.path;
   return std::string();
 }
 

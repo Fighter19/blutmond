@@ -1,6 +1,13 @@
 # Plan: versioning and incremental updates
 
-Status: plan, nothing built. Milestone M16 in [../PLAN.md](../PLAN.md).
+Status: step 2 built in part ([../spec/state.md](../spec/state.md) §7): the schema history is a
+project file (`save.bmschema`, written by `bmschema --add`, not by the cooker noticing a
+change), cooked into `MIGR`; a save game of a layout in it loads, fields copied by name and
+converted, `rename` lines followed; others are refused untouched. The test loads saves of the
+tag `milestone-gba-hardware` and of two later versions. Not yet: the save header's schema
+number, content build and runtime version; hand-written migrations beyond renames (a record
+renamed); snapshots and link states of another layout. Step 1 and steps 3 to 6 are open. Milestone M16 in
+[../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

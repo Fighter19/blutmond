@@ -197,3 +197,67 @@ BmStateReadResult bmStateRead(const BmStateBlock *pBlocks, uint32_t blockCount, 
   }
   return BM_STATE_OK;
 }
+
+uint32_t bmStateWrittenSchema(const uint8_t *pIn, uint32_t size)
+{
+  if (size < BM_STATE_HEADER_SIZE || get(pIn, 4) != STATE_MAGIC || pIn[4] != STATE_VERSION) return 0;
+  return get(pIn + 8, 4);
+}
+
+static uint32_t nameHash(const char *block, const char *field)
+{
+  uint32_t h = 2166136261u;
+  for (const char *p = block; *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+  h = (h ^ (uint8_t)'.') * 16777619u;
+  for (const char *p = field; *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+  return h;
+}
+
+// A value of an earlier type as today's: signed ones keep their sign.
+static uint32_t widen(uint32_t v, uint8_t from)
+{
+  if (from == BM_TYPE_S8) return (uint32_t)(int32_t)(int8_t)v;
+  if (from == BM_TYPE_S16) return (uint32_t)(int32_t)(int16_t)v;
+  return v;
+}
+
+BmStateReadResult bmStateMigrate(const BmStateBlock *pBlocks, uint32_t blockCount, const uint8_t *pIn, uint32_t size,
+                                 const uint8_t *pLayout, uint16_t fieldCount)
+{
+  if (size < BM_STATE_HEADER_SIZE || get(pIn, 4) != STATE_MAGIC || pIn[4] != STATE_VERSION) return BM_STATE_BAD_HEADER;
+  uint8_t mask = pIn[5];
+  uint32_t payload = get(pIn + 6, 2), need = 0;
+  for (uint16_t i = 0; i < fieldCount; i++) need += bmStateTypeSize(pLayout[i * 8 + 4]) * get(pLayout + i * 8 + 6, 2);
+  if (need != payload) return BM_STATE_OTHER_SCHEMA;
+  if (size < payload + BM_STATE_HEADER_SIZE || get(pIn + 12, 4) != bmCrc32(0, pIn + BM_STATE_HEADER_SIZE, payload)) return BM_STATE_BAD_CRC;
+  const uint8_t *p = pIn + BM_STATE_HEADER_SIZE;
+  for (uint16_t i = 0; i < fieldCount; i++)
+  {
+    uint32_t name = get(pLayout + i * 8, 4), oldCount = get(pLayout + i * 8 + 6, 2);
+    uint8_t oldType = pLayout[i * 8 + 4];
+    uint32_t oldSize = bmStateTypeSize(oldType);
+    // Today's field of that name (one the same flags would write).
+    const BmStateField *now = NULL;
+    uint8_t *base = NULL;
+    for (uint32_t b = 0; b < blockCount && now == NULL; b++)
+      for (uint16_t k = 0; k < pBlocks[b].fieldCount && now == NULL; k++)
+      {
+        const BmStateField *f = &pBlocks[b].pFields[k];
+        if (selected(f, mask) && nameHash(pBlocks[b].name, f->name) == name)
+        {
+          now = f;
+          base = (uint8_t *)pBlocks[b].pBase;
+        }
+      }
+    for (uint32_t k = 0; k < oldCount; k++)
+    {
+      if (now != NULL && k < now->count)
+      {
+        uint32_t stride = now->type == BM_TYPE_BOOL ? sizeof(bool) : bmStateTypeSize(now->type);
+        storeValue(base + now->offset + k * stride, now->type, widen(get(p, oldSize), oldType));
+      }
+      p += oldSize;
+    }
+  }
+  return BM_STATE_OK;
+}

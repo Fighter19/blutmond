@@ -30,7 +30,7 @@ struct ProjectFile
   bool removeRoom(const std::string &path);    // the file stays
 };
 
-enum class AssetKind { Room, Sprite, Script, Song, Data, Tileset, Image, Other, Font, Language, World };
+enum class AssetKind { Room, Sprite, Script, Song, Data, Tileset, Image, Other, Font, Language, World, Schema };
 
 struct AssetInfo
 {
@@ -87,6 +87,8 @@ std::vector<std::string> fontPaths(const AssetCatalog &catalog);
 std::vector<std::string> languagePaths(const AssetCatalog &catalog);
 /// The world map (.bmworld) of the project: the first one in its asset folders, or empty.
 std::string worldPath(const AssetCatalog &catalog);
+/// The save layouts of earlier versions (.bmschema) of the project, or empty.
+std::string schemaPath(const AssetCatalog &catalog);
 
 /// Writes a new, empty room in Tiled's format with the layers the cooker expects (background,
 /// main, collision, objects with a PlayerStart and a CameraZone).

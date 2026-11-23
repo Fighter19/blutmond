@@ -88,6 +88,9 @@ struct CookOptions
   std::string mainLanguage = "en", mainLanguageName = "English";
   /// The world map (.bmworld, world_asset.h); empty: the pack has none.
   std::string world;
+  /// The save layouts of earlier versions (.bmschema); empty: none (a save of another layout
+  /// is refused).
+  std::string schemaHistory;
   /// If set: the scripts are also compiled to native code with this GCC for the profile's
   /// machine (mondskript.md §12) and packed as a MODN chunk next to the bytecode.
   std::string nativeCompiler;

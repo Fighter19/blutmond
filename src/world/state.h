@@ -74,3 +74,15 @@ typedef enum BmStateReadResult {
 
 /// Reads data written by bmStateWrite with the same flag mask and schema.
 BmStateReadResult bmStateRead(const BmStateBlock *pBlocks, uint32_t blockCount, const uint8_t *pIn, uint32_t size);
+
+/// The schema hash serialised state was written with (0 if `pIn` holds none).
+uint32_t bmStateWrittenSchema(const uint8_t *pIn, uint32_t size);
+
+/// Reads data written by an earlier layout (docs/spec/state.md §7): `pLayout` lists the fields
+/// it holds, in its order, `fieldCount` entries of 8 bytes (u32 FNV-1a of "block.field", u8
+/// type, u8 0, u16 count; a MIGR chunk's). A field of the same name today gets the value,
+/// converted to its type (signed values sign-extended, a bool from any value not 0), as many
+/// elements as both have; fields it does not know keep what they hold, and what it holds that
+/// is gone now is passed over. The header and CRC are checked as by bmStateRead.
+BmStateReadResult bmStateMigrate(const BmStateBlock *pBlocks, uint32_t blockCount, const uint8_t *pIn, uint32_t size,
+                                 const uint8_t *pLayout, uint16_t fieldCount);

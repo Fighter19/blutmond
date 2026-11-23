@@ -106,6 +106,100 @@ uint32_t add(BmPackWriter &w, uint32_t id, BmChunkCategory category, uint16_t gr
   return bmPackWriterAdd(&w, id, category, group, b.data.data(), uint32_t(b.data.size()));
 }
 
+// The MIGR chunk (docs/spec/state.md §7) from a schema history:
+//   schema 0x1234abcd "label"
+//    game.player.x fix 1          the fields a save game of that layout holds, in its order
+//   end
+//   rename game.hp game.health     a field called so before is called so now
+// The chunk: u16 layouts, u16 0; per layout u32 schema hash, u16 fields, u8 flag mask (1:
+// save), u8 0, then per field u32 FNV-1a of "block.field" (as named now), u8 type, u8 0, u16 count.
+Bytes migrationChunk(const std::string &path, Report &report)
+{
+  std::ifstream in(path);
+  if (!in) throw std::runtime_error("cannot read " + path);
+  static const std::map<std::string, uint8_t> types = {{"u8", 0}, {"s8", 1}, {"u16", 2}, {"s16", 3}, {"u32", 4}, {"s32", 5}, {"bool", 6}, {"fix", 7}};
+  struct Field
+  {
+    std::string name;
+    uint8_t type;
+    uint16_t count;
+  };
+  struct Layout
+  {
+    uint32_t hash;
+    std::vector<Field> fields;
+  };
+  std::vector<Layout> layouts;
+  std::map<std::string, std::string> renames;
+  std::string line;
+  int number = 0;
+  bool inside = false;
+  auto fail = [&](const std::string &why) { throw std::runtime_error(path + ":" + std::to_string(number) + ": " + why); };
+  while (std::getline(in, line))
+  {
+    number++;
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    std::istringstream words(line);
+    std::string word;
+    if (!(words >> word) || word[0] == '#') continue;
+    if (word == "schema")
+    {
+      std::string hash;
+      words >> hash;
+      Layout l;
+      try
+      {
+        l.hash = uint32_t(std::stoul(hash, nullptr, 16));
+      }
+      catch (const std::exception &)
+      {
+        fail("'" + hash + "' is not a schema hash");
+      }
+      layouts.push_back(l);
+      inside = true;
+    }
+    else if (word == "end") inside = false;
+    else if (word == "rename")
+    {
+      std::string from, to;
+      if (!(words >> from >> to)) fail("rename old new");
+      renames[from] = to;
+    }
+    else if (inside)
+    {
+      std::string type;
+      unsigned count = 0;
+      if (!(words >> type >> count) || !types.count(type) || count == 0 || count > 0xFFFF) fail("expected: block.field type count");
+      layouts.back().fields.push_back({word, types.at(type), uint16_t(count)});
+    }
+    else fail("'" + word + "' outside a schema");
+  }
+  Bytes b;
+  b.u16(uint32_t(layouts.size()));
+  b.u16(0);
+  for (const Layout &l : layouts)
+  {
+    b.u32(l.hash);
+    b.u16(uint32_t(l.fields.size()));
+    b.u8(1);
+    b.u8(0);
+    for (const Field &f : l.fields)
+    {
+      // Renamed since: by the name it has now. Repeated renames are followed.
+      std::string name = f.name;
+      for (int k = 0; k < 16 && renames.count(name); k++) name = renames.at(name);
+      uint32_t h = 2166136261u;
+      for (char c : name) h = (h ^ uint8_t(c)) * 16777619u;
+      b.u32(h);
+      b.u8(f.type);
+      b.u8(0);
+      b.u16(f.count);
+    }
+  }
+  report.info("migration", path, std::to_string(layouts.size()) + " earlier save layouts, " + std::to_string(b.data.size()) + " bytes");
+  return b;
+}
+
 // Level data that is the same as an earlier room's (rooms made from the same map: the debug
 // rooms) is not written again: the room refers to the earlier chunk, which stays in the group
 // of the room that came first (pack-format.md §2).
@@ -1221,6 +1315,17 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     catch (const std::exception &e)
     {
       report.error("does-not-fit", options.world, e.what());
+    }
+  }
+  if (!options.schemaHistory.empty())
+  {
+    try
+    {
+      add(writer, BM_CHUNK_MIGR, BM_CATEGORY_META, 0, migrationChunk(options.schemaHistory, report));
+    }
+    catch (const std::exception &e)
+    {
+      report.error("does-not-fit", options.schemaHistory, e.what());
     }
   }
   add(writer, BM_CHUNK_STRS, BM_CATEGORY_TEXT, 0, strings.chunk());

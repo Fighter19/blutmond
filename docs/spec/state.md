@@ -163,6 +163,9 @@ In serialisation order. Count is the array length.
 | `actors.knock` | fix | 8 | snapshot |
 | `actors.steady` | u8 | 8 | snapshot |
 | `actors.spawned`, `actors.gone` | u8 | 8 each | snapshot |
+| `actors.vx`, `actors.vy`, `actors.fall` | fix | 8 each | snapshot |
+| `actors.life` | u16 | 8 | snapshot |
+| `actors.madeBy`, `actors.madeBySlot` | u8 | 8 each | snapshot |
 | `actors.seed` | u32 |  | snapshot |
 | `actors.storeCount` | u8 |  | save |
 | `actors.storeKey` | u32 | 16 | save |
@@ -252,14 +255,42 @@ beginning.
 - **State checksum** in the input sync: the CRC-32 of the whole serialised snapshot (header
   included) of block `game` alone.
 
-## 7. Planned, not built
+## 7. Save games across versions
+
+A save game written by an earlier version of the runtime (another schema hash) is loaded if
+the pack knows that version's layout:
+
+- **The history.** A text file of the project (`save.bmschema`, an asset like any other)
+  lists layouts: `schema 0x<hash> "<label>"`, then one line per field the save game holds,
+  in its order (`game.player.x fix 1`: block and field name, type, count), then `end`.
+  `rename old new` says a field has another name now. `bmschema --add save.bmschema
+  "<label>"` adds the layout of the engine it is built with (before a release, and whenever a
+  version whose saves should keep loading is published); the test level's history holds the
+  tag `milestone-gba-hardware` and the two versions that went out on `develop` before the
+  layout last changed.
+- **`MIGR`** (pack-format.md §3): the cooker writes the history as `u16` layouts, `u16` 0,
+  then per layout `u32` schema hash, `u16` fields, `u8` flag mask (1: save), `u8` 0, and per
+  field `u32` FNV-1a of `block.field` under its name of today, `u8` type, `u8` 0, `u16`
+  count.
+- **Loading** (`bmGameReadSaveGame`): the save's schema hash is today's: read as always.
+  Else, if `MIGR` has a layout with that hash: header and CRC are checked as always, then each
+  of its fields is read in turn; a field of today's save fields with the same name gets the
+  value, converted to its type (`s8` and `s16` sign-extended, `bool` true for anything not 0),
+  as many elements as both have; the others keep what a fresh start gave them (a field added
+  since: its start value); a field gone since is passed over. Else the save game is refused
+  and left as it is (a newer version's, or one the history lacks).
+- The next save writes today's layout.
+
+`tests/data/save_*.bin` are save games written by those three versions' engines at the first
+room's save point; the tests load them.
+
+## 8. Planned, not built
 
 - A schema chunk (`SCHM`) written by the cooker, and layouts generated from it.
 - State of scripted objects per class instead of fixed arrays of 8.
-- Migration between schema versions: a state of another schema is refused.
+- Migration of snapshots and link states (only save games are migrated), migrations written
+  by hand beyond renames, the save header's schema number, content build and runtime version
+  (versioning.md §7).
 - Save slots, a profile field and compression in the save game.
 - The state map in the editor shows the table with sizes and totals; it does not show values
   of a running game.
-| `actors.vx`, `actors.vy`, `actors.fall` | fix | 8 each | snapshot |
-| `actors.life` | u16 | 8 | snapshot |
-| `actors.madeBy`, `actors.madeBySlot` | u8 | 8 each | snapshot |

@@ -73,6 +73,7 @@ int main(int argc, char **argv)
       else if (path.size() > 7 && path.substr(path.size() - 7) == ".bmfont") options.fonts.push_back(path);
       else if (path.size() > 7 && path.substr(path.size() - 7) == ".bmlang") options.languages.push_back(path);
       else if (path.size() > 8 && path.substr(path.size() - 8) == ".bmworld") options.world = path;
+      else if (path.size() > 9 && path.substr(path.size() - 9) == ".bmschema") options.schemaHistory = path;
       else maps.push_back(bm::tmx::load(path));
     }
     options.profile = *profile;

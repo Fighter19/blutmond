@@ -87,6 +87,12 @@ Without a window (for tests and scripts): `--frames N`, `--headless`, `--autopla
 `--snapshot-at N file`, `--load file`, `--listen PORT`, `--follow`, `--until-frame N`,
 `--realtime`, `--random-keys N`. The comment at the top of `apps/game/main.c` describes them.
 
+**Save games across versions**: before publishing a version whose save games should keep
+loading after later changes, add its save layout to the project's history:
+`build/bmschema --add assets/test_room/save.bmschema "1.0"` (built with the engine of that
+version). A save of a layout in the history loads in later versions; one of an unknown layout
+is refused and left untouched.
+
 ## 3. The editor
 
 ```

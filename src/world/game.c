@@ -1524,7 +1524,28 @@ bool bmGameReadSaveGame(BmGame *g)
   bmHalSaveRead(0, buffer, sizeof(buffer));
   BmStateBlock block = bmGameStateBlock(g);
   // Only the `save` fields are read; everything else stays as bmGameStart left it.
-  if (bmStateRead(&block, 1, buffer, sizeof(buffer)) != BM_STATE_OK) return false;
+  BmStateReadResult r = bmStateRead(&block, 1, buffer, sizeof(buffer));
+  if (r == BM_STATE_OTHER_SCHEMA)
+  {
+    // Written by an earlier version: its layout is in the pack's MIGR chunk (state.md §7).
+    uint32_t written = bmStateWrittenSchema(buffer, sizeof(buffer));
+    int32_t c = bmPackFindChunk(g->pPack, BM_CHUNK_MIGR, 0);
+    uint32_t size = 0;
+    const uint8_t *m = c >= 0 ? bmPackChunkData(g->pPack, (uint32_t)c, &size) : NULL;
+    uint32_t at = 4;
+    for (uint16_t n = m != NULL && size >= 4 ? bmRead16(m) : 0; n > 0 && at + 8 <= size; n--)
+    {
+      uint16_t fields = bmRead16(m + at + 4);
+      if (at + 8 + fields * 8u > size) break;
+      if (bmRead32(m + at) == written && (m[at + 6] & BM_STATE_SAVE))
+      {
+        r = bmStateMigrate(&block, 1, buffer, sizeof(buffer), m + at + 8, fields);
+        break;
+      }
+      at += 8 + fields * 8u;
+    }
+  }
+  if (r != BM_STATE_OK) return false;
   g->player.vx = g->player.vy = 0;
   if (afterLoad(g, true) != BM_SUCCESS) return false;
   // Attachments are not in a save game: what is equipped brings its own again.

@@ -36,6 +36,7 @@ const char *kindName(AssetKind k)
   case AssetKind::Font: return "font";
   case AssetKind::Language: return "translation";
   case AssetKind::World: return "world map";
+  case AssetKind::Schema: return "save layouts";
   case AssetKind::Tileset: return "tileset";
   case AssetKind::Image: return "image";
   default: return "file";

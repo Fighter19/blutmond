@@ -812,6 +812,7 @@ struct Editor
     project.setFonts(fontPaths(projectPanel.catalog()));
     project.setLanguages(languagePaths(projectPanel.catalog()));
     project.setWorld(worldPath(projectPanel.catalog()));
+    project.setSchemaHistory(schemaPath(projectPanel.catalog()));
     worldPanel.setWorld(worldPath(projectPanel.catalog()));
     if (!projectPanel.file().assetDirs.empty()) worldPanel.newWorldDir = projectPanel.file().assetDirs[0];
     soundPanel.setSongs(songs);
