@@ -172,9 +172,9 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     else if (wasOnGround) b->vx = approach(b->vx, 0, p->friction);
     else b->vx = approach(b->vx, 0, p->airAccel / 2);
 
-    // Back on the ground (or a ladder, in water, at a wall one can jump off): the jumps in the
-    // air are there again.
-    if (wasOnGround || b->inWater || (p->wallSlide && b->wallTouch != 0)) b->airJumpsLeft = p->airJumps;
+    // Back on the ground (or a ladder, in water): the jumps in the air are there again. Not at
+    // a wall: one spent before a wall jump stays spent until the ground.
+    if (wasOnGround || b->inWater) b->airJumpsLeft = p->airJumps;
     // Jumping (with coyote time and a jump buffer); down + jump drops through platforms.
     if (b->jumpBuffer && (wasOnGround || b->coyote))
     {

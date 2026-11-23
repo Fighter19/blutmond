@@ -210,8 +210,8 @@ start:
    - `target = dx * 2.0`, halved (`/ 2`) in water. With `dx != 0`: `vx = approach(vx, target,
      wasOnGround ? 0.5 : 0.25)`. Without: `approach(vx, 0, 0.5)` on the ground,
      `approach(vx, 0, 0.125)` in the air.
-   - If `wasOnGround`, `inWater`, or wall slide and `wallTouch != 0` (a wall at hand, as the
-     last step left it): `airJumpsLeft = air jumps`.
+   - If `wasOnGround` or `inWater`: `airJumpsLeft = air jumps` (not at a wall: a jump in the
+     air spent before a wall jump stays spent until the ground).
    - If `jumpBuffer != 0` and (`wasOnGround` or `coyote != 0`): if `dy > 0`, `wasOnGround`
      and `findFloor(feet, feet, false)` is none (standing on a jump-through platform only):
      `dropThrough = 8`. Otherwise `vy = -jump speed`, `jumpCutDone = false`, event *jumped*.

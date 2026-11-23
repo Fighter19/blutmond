@@ -285,8 +285,9 @@ static void testDamageMaterialReported(void)
 }
 
 // Wall jumps and the double jump (runtime-core.md §5): a wall at hand is jumped off whether the
-// body rises or falls and whatever is held, before a jump in the air is spent; touching a wall
-// gives the jumps in the air back; a wall just left can still be jumped off for a few frames.
+// body rises or falls and whatever is held, before a jump in the air is spent; a wall does not
+// give the jumps in the air back (only the ground does); a wall just left can still be jumped
+// off for a few frames.
 static void testWallJumpsAndTheDoubleJump(void)
 {
   const char *rows[GH] = { "..........#.....", "..........#.....", "..........#.....", "..........#.....",
@@ -306,14 +307,15 @@ static void testWallJumpsAndTheDoubleJump(void)
   TEST_ASSERT(!b.onGround && b.vy < 0 && b.wallTouch == 1);
   uint32_t ev = run(&b, 1, jump);
   TEST_ASSERT((ev & BM_BODY_WALL_JUMPED) && !(ev & BM_BODY_AIR_JUMPED) && b.vx < 0 && b.airJumpsLeft == 1);
-  // Away from the wall: the double jump; drifting back to the wall: it is there again.
+  // Away from the wall: the double jump; back at the wall it is not given back, but the wall
+  // can still be jumped off.
   run(&b, 12, hold);
   ev = run(&b, 1, jump);
   TEST_ASSERT((ev & BM_BODY_AIR_JUMPED) && b.airJumpsLeft == 0);
   BmBodyInput right = {1, 0, false, true, false};
   for (int i = 0; i < 60 && b.wallTouch == 0; i++) run(&b, 1, right);
   run(&b, 1, right);
-  TEST_ASSERT(b.wallTouch == 1 && b.airJumpsLeft == 1);
+  TEST_ASSERT(b.wallTouch == 1 && b.airJumpsLeft == 0);
   // Just left (holding away for a few frames, out of reach): still a wall jump, not the double
   // jump; much later, the double jump.
   BmBodyInput left = {-1, 0, false, false, false};
@@ -322,10 +324,23 @@ static void testWallJumpsAndTheDoubleJump(void)
   TEST_ASSERT(b.wallTouch == 0 && b.wallCoyote != 0);
   BmBodyInput leftJump = {-1, 0, true, true, false};
   ev = run(&b, 1, leftJump);
-  TEST_ASSERT((ev & BM_BODY_WALL_JUMPED) && b.airJumpsLeft == 1);
+  TEST_ASSERT((ev & BM_BODY_WALL_JUMPED) && b.airJumpsLeft == 0);
+  // Much later, out of reach: no jump left in the air (spent before the wall); on the ground
+  // it is back.
   run(&b, 20, left);
   ev = run(&b, 1, leftJump);
-  TEST_ASSERT((ev & BM_BODY_AIR_JUMPED) && !(ev & BM_BODY_WALL_JUMPED));
+  TEST_ASSERT(!(ev & BM_BODY_JUMPED));
+  run(&b, 120, NONE);
+  TEST_ASSERT(b.onGround && b.airJumpsLeft == 1);
+  // Not spent before the wall: still there after the wall jump.
+  bmBodyPlace(&b, 160 - s_params.halfWidth, 96);
+  run(&b, 5, NONE);
+  run(&b, 1, jump);
+  run(&b, 4, hold);
+  run(&b, 1, jump);
+  run(&b, 12, hold);
+  ev = run(&b, 1, jump);
+  TEST_ASSERT((ev & BM_BODY_AIR_JUMPED) && b.airJumpsLeft == 0);
   // Without the ability: no wall jumps, the wall gives nothing back.
   s_params.wallSlide = 0;
   bmBodyPlace(&b, 160 - s_params.halfWidth, 96);
