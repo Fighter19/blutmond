@@ -62,6 +62,8 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/world.bmworld
   ${PROJECT_SOURCE_DIR}/assets/test_room/save.bmschema)
+# Samples the songs play (not given to the cooker: the songs name them), so a changed one cooks again.
+file(GLOB BM_TEST_LEVEL_SAMPLES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/assets/test_room/music/*.wav)
 set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/boss_hall.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/ability_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/guard_room.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/puzzle_room.tmx
@@ -244,7 +246,7 @@ if(BM_PLATFORM STREQUAL "gba")
   set(BM_TEST_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level")
   # The same level with the scripts also compiled to native code (mondskript.md section 12).
   set(BM_TEST_LEVEL_NATIVE_PACK ${CMAKE_BINARY_DIR}/test_level_native_gba.bmpk)
@@ -491,7 +493,7 @@ if(BM_PLATFORM STREQUAL "host")
   set(BM_GAME_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
   add_custom_command(OUTPUT ${BM_GAME_LEVEL_PACK}
     COMMAND bmcook --profile gba -o ${BM_GAME_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS bmcook ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS bmcook ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES}
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level for the game")
   add_custom_target(game_level_pack ALL DEPENDS ${BM_GAME_LEVEL_PACK})

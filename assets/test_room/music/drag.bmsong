@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <song version="1" bpm="150" length="3600" loop="0" effect="1" echo="0" echo-feedback="0">
- <instrument name="scrape" wave="noise" attack="3" decay="0" sustain="255" release="6" volume="80" pan="0"/>
+ <instrument name="scrape" wave="sample" sample="drag.wav" root="60" loop="1" attack="5" decay="0" sustain="255" release="8" volume="80" pan="0"/>
  <track name="scrape" instrument="scrape">
-  <note t="0" key="50" len="3600" vel="110"/>
+  <note t="0" key="55" len="3600" vel="100"/>
  </track>
 </song>

@@ -211,7 +211,8 @@ left). Per room up to 4 of each.
   falls, its speed growing by 1/4 pixel a frame up to 4, a pixel at a time onto what is below.
   Sounds: the effect `drag` while a block slides (started when it starts to slide, or again if
   another effect took its place; stopped when it stops, its notes fading with their release:
-  the test level's is one held, looping noise), `thud` when a falling one lands.
+  the test level's plays `drag.wav`, a looping sample of dark noise made by
+  `tools/make_drag_sound.py`), `thud` when a falling one lands.
 - A `PressurePlate` is pressed while a push block overlaps it or the player stands on it; it
   opens the `Gate` its `gate` names.
 - A `Gate` is solid (whole cells) until it is all the way open. Held open by a plate it slides
