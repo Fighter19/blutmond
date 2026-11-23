@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="18" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="impact" wave="noise" attack="0" decay="5" sustain="0" release="3" volume="220" pan="0"/>
+ <instrument name="body" wave="triangle" attack="0" decay="8" sustain="0" release="3" volume="200" pan="0"/>
+ <track name="impact" instrument="impact">
+  <note t="0" key="30" len="6" vel="127"/>
+ </track>
+ <track name="body" instrument="body">
+  <note t="0" key="28" len="8" vel="127"/>
+  <note t="4" key="24" len="10" vel="90"/>
+ </track>
+</song>

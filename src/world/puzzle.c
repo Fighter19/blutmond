@@ -14,6 +14,7 @@
 #define GRAVITY 64       // 1/256 pixels a frame, each frame
 #define FALL_SPEED 1024  // the most, 1/256 pixels a frame
 #define GATE_SPEED 2
+#define DRAG_EVERY 10    // frames between drag sounds while a block slides
 
 static const char *const s_animNames[4] = { "block", "gate", "plate", "plate_down" };
 
@@ -144,7 +145,8 @@ static int32_t towards(int32_t v, int32_t to, int32_t speed)
 
 // --- A frame --------------------------------------------------------------------------------
 
-static void moveBlock(BmGame *g, uint8_t b, int8_t dx)
+// Returns 1 if the block slid this frame, 2 if it landed from a fall.
+static int moveBlock(BmGame *g, uint8_t b, int8_t dx)
 {
   BmPuzzle *p = &g->puzzle;
   const BmObjectView *o = &g->objects[p->blockObject[b]];
@@ -155,8 +157,12 @@ static void moveBlock(BmGame *g, uint8_t b, int8_t dx)
     if (p->blockFall[b] < FALL_SPEED) p->blockFall[b] = (int16_t)(p->blockFall[b] + GRAVITY);
     for (int32_t n = (p->blockFall[b] + 255) / 256; n > 0 && !held(g, b) && freeAt(g, b, p->blockX[b], p->blockY[b] + 1); n--)
       p->blockY[b]++;
-    if (held(g, b) || !freeAt(g, b, p->blockX[b], p->blockY[b] + 1)) p->blockFall[b] = 0;
-    return;
+    if (held(g, b) || !freeAt(g, b, p->blockX[b], p->blockY[b] + 1))
+    {
+      p->blockFall[b] = 0;
+      return 2;
+    }
+    return 0;
   }
   p->blockFall[b] = 0;
   // The player on the ground walking into its side, as tall as it there: pushed, after a
@@ -170,14 +176,15 @@ static void moveBlock(BmGame *g, uint8_t b, int8_t dx)
   {
     p->blockPush[b] = 0;
     p->blockFraction[b] = 0;
-    return;
+    return 0;
   }
   p->pushing = dx;
   if (p->blockPush[b] < p->blockPushFrames[b])
   {
     p->blockPush[b]++;
-    return;
+    return 0;
   }
+  int16_t x0 = p->blockX[b];
   int32_t f = p->blockFraction[b] + PUSH_SPEED;
   for (; f >= 256; f -= 256)
   {
@@ -189,6 +196,8 @@ static void moveBlock(BmGame *g, uint8_t b, int8_t dx)
     p->blockX[b] = (int16_t)(p->blockX[b] + dx);
   }
   p->blockFraction[b] = (uint8_t)f;
+  // Sliding (it moved, or will next frame: 3/4 of a pixel a frame moves on most frames).
+  return p->blockX[b] != x0 || f != 0 ? 1 : 0;
 }
 
 void bmPuzzleFrame(BmGame *g, int8_t dx)
@@ -196,7 +205,22 @@ void bmPuzzleFrame(BmGame *g, int8_t dx)
   BmPuzzle *p = &g->puzzle;
   p->pushing = 0;
   if (p->blockCount == 0 && p->gateCount == 0 && p->plateCount == 0) return;
-  for (uint8_t b = 0; b < p->blockCount; b++) moveBlock(g, b, dx);
+  int sliding = 0, landed = 0;
+  for (uint8_t b = 0; b < p->blockCount; b++)
+  {
+    int m = moveBlock(g, b, dx);
+    sliding |= m == 1;
+    landed |= m == 2;
+  }
+  // The stone grinding along the floor: again and again while it slides; a thud on landing.
+  if (landed) bmSoundPlayEffect(&g->sound, "thud");
+  if (!sliding) p->dragTimer = 0;
+  else if (p->dragTimer == 0 || --p->dragTimer == 0)
+  {
+    if (!landed) bmSoundPlayEffectAt(&g->sound, "drag", (int8_t)(p->dragPitch ? -2 : 0));
+    p->dragPitch ^= 1;
+    p->dragTimer = DRAG_EVERY;
+  }
   // Plates: a block on them, or the player standing.
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
   uint8_t open = 0;

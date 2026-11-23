@@ -105,6 +105,8 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/debris.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/crate.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/puzzle.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/drag.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/thud.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/crate.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/crumble.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/fireball.bmsprite
