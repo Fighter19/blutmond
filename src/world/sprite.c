@@ -214,6 +214,16 @@ uint16_t bmAnimFrame(const BmSpriteSheet *s, const BmAnimState *st)
   return bmRead16(s->pSteps + (first + step) * STEP_SIZE);
 }
 
+uint32_t bmAnimLength(const BmSpriteSheet *s, uint8_t anim)
+{
+  if (anim >= s->animCount) return 0;
+  const uint8_t *an = s->pAnims + anim * ANIM_SIZE;
+  uint16_t first = bmRead16(an + 2), count = bmRead16(an + 4);
+  uint32_t total = 0;
+  for (uint16_t i = 0; i < count; i++) total += bmRead16(s->pSteps + (first + i) * STEP_SIZE + 2);
+  return total;
+}
+
 uint16_t bmAnimFrameAt(const BmSpriteSheet *s, uint8_t anim, uint32_t time)
 {
   if (anim >= s->animCount) return 0;

@@ -309,6 +309,28 @@ static uint8_t stretch(const BmGame *g, uint8_t f, Rect *pOut, uint8_t n)
   return n;
 }
 
+// The spark of a blocked hit (bmGameSpark): in the middle of where a hit rectangle overlaps a
+// guard box, or, where the guard box only stood in the way, on its edge facing the origin (at
+// the origin's height, kept inside the box).
+static void sparkAt(BmGame *g, const Rect *hit, uint8_t n, const Rect *guard, uint8_t gn, int32_t ox2, int32_t oy2)
+{
+  if (gn == 0) return;
+  for (uint8_t a = 0; a < n; a++)
+    for (uint8_t c = 0; c < gn; c++)
+    {
+      Rect o;
+      if (intersection(&hit[a], &guard[c], &o))
+      {
+        bmGameSpark(g, o.x + o.w / 2, o.y + o.h / 2);
+        return;
+      }
+    }
+  const Rect *r = &guard[0];
+  int32_t x = 2 * r->x + r->w > ox2 ? r->x : r->x + r->w - 1;
+  int32_t y = oy2 / 2 < r->y ? r->y : oy2 / 2 >= r->y + r->h ? r->y + r->h - 1 : oy2 / 2;
+  bmGameSpark(g, x, y);
+}
+
 // The live rectangles of a hit this frame.
 static uint8_t hitRects(const BmGame *g, uint8_t k, Rect *pOut)
 {
@@ -527,6 +549,7 @@ void bmHitsFrame(BmGame *g)
         uint8_t slot = h->slot[k];
         h->struck[k] = (uint16_t)(h->struck[k] | (1u << f));
         ownerOf(g, source, &slot);
+        sparkAt(g, hit, n, guard, gn, ox2, oy2);
         if (f != BM_HITS_PLAYER) bmActorsEvent(g, (uint8_t)(f - 1), BM_SCRIPT_EVENT_blocked, amount);
         else bmAttachmentsEach(g, BM_SCRIPT_EVENT_blocked, amount);
         if (source != BM_HITS_PLAYER) bmActorsEvent(g, (uint8_t)(source - 1), BM_SCRIPT_EVENT_guarded, amount);

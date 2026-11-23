@@ -100,6 +100,7 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/knight.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/knight.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/clang.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/spark.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/fireball.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/drop.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/door_panel.bmsprite

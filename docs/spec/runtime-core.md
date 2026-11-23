@@ -622,7 +622,10 @@ taken into the entry when it is armed (`arm` or `hit_box`) and set back to none.
    some overlap was found or a hit rectangle overlaps a guard rectangle, the hit is
    **blocked**: the bit of `f` is set, `f` gets `blocked(amount)` (the player: each of their
    attachments), the source object `guarded(amount)` and so does the attachment in the entry's
-   slot (or the one that made the projectile); then the next figure. Struck,
+   slot (or the one that made the projectile), and a spark starts (`bmGameSpark`, not state: the
+   pack's sprite `spark`, its first animation once, at the middle of the first overlap of a
+   hit rectangle and a guard rectangle, else on the first guard rectangle's edge facing the
+   origin at the origin's height kept inside it); then the next figure. Struck,
    `amount = max(1, damage)`: the bit of `f` is set; a hit that reflects and a projectile `f`: `f` turns (`vx`, `vy`, `facing` negated), takes the source's team, its maker
    becomes the source (and its attachment), its own hits' struck bits are cleared, and nothing
    more happens. A projectile's maker is the owner of its hits: if the hit is the

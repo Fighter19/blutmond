@@ -2153,7 +2153,19 @@ static void testTheKnightsShield(void)
   frames(2, 0);
   int32_t health = s_game.health;
   frames(1, BM_KEY_B);
-  frames(10, 0);
+  // A spark where the sword met the shield (bmGameSpark), for as long as its animation.
+  int sparkAt = -1, sparkFrames = 0;
+  for (int i = 0; i < 20; i++)
+  {
+    frames(1, 0);
+    for (int k = 0; k < BM_GAME_SPARKS; k++)
+      if (s_game.sparkAge[k] != 0)
+      {
+        sparkAt = s_game.sparkX[k];
+        sparkFrames++;
+      }
+  }
+  TEST_ASSERT(s_game.sparkSheet >= 0 && sparkAt >= kx + 3 && sparkAt <= kx + 11 && sparkFrames == 11);
   TEST_ASSERT(a->health[knight] == 9 && strcmp(stateOf(knight), "Flinching") != 0);
   // Its lunge at the player close ahead.
   frames(60, 0);

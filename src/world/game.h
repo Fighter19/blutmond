@@ -24,8 +24,9 @@
 #include "ui.h"
 
 #define BM_GAME_MAX_OBJECTS 64
-#define BM_GAME_MAX_SHEETS 10
+#define BM_GAME_MAX_SHEETS 12
 #define BM_GAME_MAX_OAM 48
+#define BM_GAME_SPARKS 4       // sparks where a guard box stopped a hit, at once
 #define BM_GAME_PLAYER_HEALTH 30   // the base the stat MaxHealth adds to (first-items.md §1)
 #define BM_GAME_PLAYER_MANA 20     // the base the stat MaxMana adds to
 #define BM_GAME_MANA_EVERY 90      // frames per point of mana coming back
@@ -147,6 +148,11 @@ typedef struct BmGame
   uint8_t sheetCount;
   BmSpriteSheet sheets[BM_GAME_MAX_SHEETS];
   int8_t playerSheet;                          // -1: the built-in figure
+  int8_t sparkSheet;                           // the sprite "spark" (a blocked hit), or -1
+  // Sparks being shown (bmGameSpark): where, and their age in frames (0: none). Only seen,
+  // not state.
+  int16_t sparkX[BM_GAME_SPARKS], sparkY[BM_GAME_SPARKS];
+  uint8_t sparkAge[BM_GAME_SPARKS];
   int8_t playerAnims[BM_PLAYER_ANIM_COUNT];
   int8_t objectSheet[BM_GAME_MAX_OBJECTS];     // sheet named like the object's class, or -1
   uint8_t objectDoorSide[BM_GAME_MAX_OBJECTS]; // a door's direction: 0 north (Up goes through), 1 east, 2 west, 3 other
@@ -184,6 +190,9 @@ typedef struct BmGame
 /// The dialogue box (say, the bottom five rows of the UI layer; until A is pressed): the
 /// speaker's name and a line of up to two rows (string ids, in the language chosen), and the
 /// speaker's portrait, a sprite of the pack by its name's string id (0xFFFF: none), at the box's left.
+/// A spark at room pixel (x, y): the first frames of the sprite "spark" (if the pack has one),
+/// as long as its first animation lasts. Shown where a guard box stopped a hit (hits.c).
+void bmGameSpark(BmGame *pGame, int32_t x, int32_t y);
 void bmGameSay(BmGame *pGame, uint16_t speaker, uint16_t line);
 void bmGameSayWith(BmGame *pGame, uint16_t speaker, uint16_t line, uint16_t portrait);
 /// The same with the speaker's voice (a sound effect's name, string id; 0xFFFF none), heard

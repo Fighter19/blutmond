@@ -56,6 +56,8 @@ BmResult bmSpriteSheetLoad(BmSpriteSheet *pSheet, uint16_t tileBase, uint8_t ban
 
 /// Index of the animation called `pName`, or -1.
 int32_t bmSpriteSheetAnim(const BmSpriteSheet *pSheet, const BmPack *pPack, const char *pName);
+/// Frames animation `anim` lasts, once through (0: none).
+uint32_t bmAnimLength(const BmSpriteSheet *pSheet, uint8_t anim);
 
 /// Starts animation `anim` unless it is the one playing (`restart` starts it over anyway).
 void bmAnimPlay(BmAnimState *pState, uint8_t anim, bool restart);

@@ -197,6 +197,7 @@ static void loadSprites(BmGame *g)
   uint16_t tileBase = 0;
   g->sheetCount = 0;
   g->playerSheet = -1;
+  g->sparkSheet = -1;
   for (uint32_t n = 0; g->sheetCount < BM_GAME_MAX_SHEETS; n++)
   {
     int32_t chunk = bmSpriteSheetChunk(g->pPack, n);
@@ -206,6 +207,7 @@ static void loadSprites(BmGame *g)
     if (bmSpriteSheetLoad(s, tileBase, g->sheetCount) != BM_SUCCESS) continue;
     tileBase = (uint16_t)(tileBase + s->tileCount);
     const char *name = bmPackString(g->pPack, s->nameId);
+    if (name != NULL && strcmp(name, "spark") == 0) g->sparkSheet = (int8_t)g->sheetCount;
     if (name != NULL && strcmp(name, "player") == 0)
     {
       static const char *const anims[BM_PLAYER_ANIM_COUNT] = { "idle", "run", "jump", "fall", "climb" };
@@ -329,6 +331,14 @@ static void updateSprites(BmGame *g)
     if (s >= 0)
       next = (uint8_t)(next + bmSpriteSheetDraw(&g->sheets[s], bmAnimFrameAt(&g->sheets[s], 0, g->frame), BM_GAME_PORTRAIT_X,
                                                 BM_GAME_PORTRAIT_Y, false, 0, next, 4));
+  }
+  // Sparks in front of the figures they are on, the player too.
+  for (uint8_t k = 0; k < BM_GAME_SPARKS && g->sparkSheet >= 0 && next < BM_GAME_MAX_OAM; k++)
+  {
+    if (g->sparkAge[k] == 0) continue;
+    const BmSpriteSheet *s = &g->sheets[g->sparkSheet];
+    next = (uint8_t)(next + bmSpriteSheetDraw(s, bmAnimFrameAt(s, 0, (uint32_t)(g->sparkAge[k] - 1)), g->sparkX[k] - camX,
+                                              g->sparkY[k] - camY, false, 1, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
   }
   if (g->playerSheet >= 0)
   {
@@ -494,6 +504,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   // The room being left takes its attachments with it (they get detached() while it is
   // still there). A state just loaded (not fresh) brings its own.
   if (fresh) bmAttachmentsLeaveRoom(g);
+  memset(g->sparkAge, 0, sizeof(g->sparkAge));
   if (fresh) bmHitsClear(g);
   BmResult r = bmRoomOpen(&g->room, g->pPack, index);
   if (r != BM_SUCCESS) return r;
@@ -651,6 +662,21 @@ static void goThroughDoor(BmGame *g, const BmObjectView *door)
   bmBodyPlace(&g->player, x, y);
   g->player.facing = facing;
   g->player.vx = vx;
+}
+
+void bmGameSpark(BmGame *g, int32_t x, int32_t y)
+{
+  if (g->sparkSheet < 0) return;
+  // A free one, else the oldest.
+  uint8_t k = 0;
+  for (uint8_t i = 0; i < BM_GAME_SPARKS; i++)
+  {
+    if (g->sparkAge[i] == 0) { k = i; break; }
+    if (g->sparkAge[i] > g->sparkAge[k]) k = i;
+  }
+  g->sparkX[k] = (int16_t)x;
+  g->sparkY[k] = (int16_t)y;
+  g->sparkAge[k] = 1;
 }
 
 void bmGameHurtPlayer(BmGame *g, int32_t damage)
@@ -1168,6 +1194,8 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   }
   bmAttachmentsBodyEvents(g, events);
   if (g->hurtTimer) g->hurtTimer--;
+  for (uint8_t k = 0; k < BM_GAME_SPARKS; k++)
+    if (g->sparkAge[k] != 0 && (g->sparkSheet < 0 || ++g->sparkAge[k] > bmAnimLength(&g->sheets[g->sparkSheet], 0))) g->sparkAge[k] = 0;
   if (g->doorCooldown) g->doorCooldown--;
   if (g->saveCooldown) g->saveCooldown--;
 

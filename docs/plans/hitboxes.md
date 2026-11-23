@@ -151,6 +151,9 @@ Once per game frame, after scripts and animations have run and before drawing:
      crosses no guard box. No such hurt box, but a guard box or a guarded hurt box touched:
      the figure gets `blocked(source)`, the source gets `guarded(target)`, and the hit is
      spent for this figure;
+     a spark shows where it was stopped: the sprite `spark` of the pack, its first animation
+     once, in the middle of where the hit overlaps the guard box (or, where the guard box only
+     stood in the way, on its edge facing the origin); not state (`bmGameSpark`);
    - else the figure is struck: amount through the damage rule and the figure's `damage_in`
      filters ([first-items.md](first-items.md) §1), then `hit(amount, element)` to the
      figure and `struck(target, amount)` to the source.
