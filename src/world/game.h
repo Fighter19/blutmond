@@ -24,9 +24,9 @@
 #include "ui.h"
 
 #define BM_GAME_MAX_OBJECTS 64
-#define BM_GAME_MAX_SHEETS 12
+#define BM_GAME_MAX_SHEETS 13   // palette banks 0-12 (13: hit flash, 14-15: built in)
 #define BM_GAME_MAX_OAM 48
-#define BM_GAME_SPARKS 4       // sparks where a guard box stopped a hit, at once
+#define BM_GAME_EFFECTS 8      // effects shown at once: sparks (a blocked hit), debris (a broken wall)
 #define BM_GAME_PLAYER_HEALTH 30   // the base the stat MaxHealth adds to (first-items.md §1)
 #define BM_GAME_PLAYER_MANA 20     // the base the stat MaxMana adds to
 #define BM_GAME_MANA_EVERY 90      // frames per point of mana coming back
@@ -57,6 +57,7 @@ typedef enum BmObjectKind {
   BM_OBJECT_DOOR,
   BM_OBJECT_TRIGGER,
   BM_OBJECT_SAVE_POINT,
+  BM_OBJECT_BREAKABLE,   // a wall or floor that a hit breaks (bmGameBreak)
 } BmObjectKind;
 
 typedef struct BmObjectView
@@ -149,10 +150,18 @@ typedef struct BmGame
   BmSpriteSheet sheets[BM_GAME_MAX_SHEETS];
   int8_t playerSheet;                          // -1: the built-in figure
   int8_t sparkSheet;                           // the sprite "spark" (a blocked hit), or -1
-  // Sparks being shown (bmGameSpark): where, and their age in frames (0: none). Only seen,
-  // not state.
-  int16_t sparkX[BM_GAME_SPARKS], sparkY[BM_GAME_SPARKS];
-  uint8_t sparkAge[BM_GAME_SPARKS];
+  int8_t debrisSheet;                          // the sprite "debris" (a broken wall), or -1
+  // Effects being shown (bmGameSpark, bmGameBreak): their sheet, where, and their age in frames
+  // (0: none). Only seen, not state.
+  int8_t effectSheet[BM_GAME_EFFECTS];
+  int16_t effectX[BM_GAME_EFFECTS], effectY[BM_GAME_EFFECTS];
+  uint8_t effectAge[BM_GAME_EFFECTS];
+  // Breakable objects of the room (room-format.md §5): per object, bit 7 broken, bits 0-1 what
+  // breaks it (BmBreakBy); the cells they leave and the holes in the room are made from these
+  // when the room is entered (broken ones are kept in actors' store: bmGameBreak).
+  uint8_t objectBreak[BM_GAME_MAX_OBJECTS];
+  uint8_t breakCount;
+  BmCellOverride breakCells[BM_ROOM_MAX_HOLES];
   int8_t playerAnims[BM_PLAYER_ANIM_COUNT];
   int8_t objectSheet[BM_GAME_MAX_OBJECTS];     // sheet named like the object's class, or -1
   uint8_t objectDoorSide[BM_GAME_MAX_OBJECTS]; // a door's direction: 0 north (Up goes through), 1 east, 2 west, 3 other
@@ -193,6 +202,23 @@ typedef struct BmGame
 /// A spark at room pixel (x, y): the first frames of the sprite "spark" (if the pack has one),
 /// as long as its first animation lasts. Shown where a guard box stopped a hit (hits.c).
 void bmGameSpark(BmGame *pGame, int32_t x, int32_t y);
+
+/// The same with the sprite named `name` (a string id): effect(#sprite) of scripts.
+void bmGameEffect(BmGame *pGame, uint16_t name, int32_t x, int32_t y);
+
+// What breaks a Breakable (its property `by`).
+typedef enum BmBreakBy {
+  BM_BREAK_ANY = 0,      // any hit of the player's
+  BM_BREAK_PIERCE = 1,   // a hit with #Pierce
+  BM_BREAK_ABOVE = 2,    // a hit coming from above it (a downward stab, the ground pound)
+} BmBreakBy;
+
+/// Breakable object `index` of the room breaks: its cells become its `cell` (empty unless it
+/// says `top` or `full`), the main and foreground layers show nothing there, debris flies
+/// (the sprite "debris"), the sound "crumble" plays, its `drop` (a record) is left behind as
+/// an object of class Drop, and it stays broken (kept in the save game). Nothing if it is
+/// broken already or not a Breakable.
+void bmGameBreak(BmGame *pGame, uint16_t index);
 void bmGameSay(BmGame *pGame, uint16_t speaker, uint16_t line);
 void bmGameSayWith(BmGame *pGame, uint16_t speaker, uint16_t line, uint16_t portrait);
 /// The same with the speaker's voice (a sound effect's name, string id; 0xFFFF none), heard

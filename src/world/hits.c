@@ -331,6 +331,28 @@ static void sparkAt(BmGame *g, const Rect *hit, uint8_t n, const Rect *guard, ui
   bmGameSpark(g, x, y);
 }
 
+// The room's Breakables a hit of the player's side touches break, when it is a hit that
+// breaks them (their `by`): any, one with #Pierce, one coming from above (its origin, in half
+// pixels, above their top).
+static void breakWith(BmGame *g, uint8_t k, const Rect *hit, uint8_t n, int32_t oy2)
+{
+  for (uint16_t i = 0; i < g->objectCount; i++)
+  {
+    const BmObjectView *o = &g->objects[i];
+    if (o->kind != BM_OBJECT_BREAKABLE || (g->objectBreak[i] & 0x80)) continue;
+    uint8_t by = g->objectBreak[i] & 3;
+    if (by == BM_BREAK_PIERCE && !(g->hits.flags[k] & BM_HIT_PIERCE)) continue;
+    if (by == BM_BREAK_ABOVE && oy2 >= 2 * o->y) continue;
+    Rect r = { o->x, o->y, o->w, o->h };
+    for (uint8_t a = 0; a < n; a++)
+      if (overlap(&hit[a], &r))
+      {
+        bmGameBreak(g, i);
+        break;
+      }
+  }
+}
+
 // The live rectangles of a hit this frame.
 static uint8_t hitRects(const BmGame *g, uint8_t k, Rect *pOut)
 {
@@ -516,6 +538,8 @@ void bmHitsFrame(BmGame *g)
     uint16_t name = h->name[k];
     int32_t ox2, oy2;
     originOf(g, source, &ox2, &oy2);
+    if (n != 0 && teamOf(g, source) == BM_HITS_PLAYER_TEAM) breakWith(g, k, hit, n, oy2);
+    if (h->source[k] != source) continue;
     // Figures in a fixed order: the player, then the objects by index.
     for (uint8_t f = 0; n != 0 && f < figureCount(g); f++)
     {

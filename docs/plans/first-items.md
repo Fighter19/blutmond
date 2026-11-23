@@ -41,8 +41,9 @@ lets things fall, 4 in the test level, not 6; landing strikes both sides for 6) 
 room: no script hears of a room change yet). A `Pedestal` gives each in the third room, the
 Hall of Abilities behind the boss hall (`ability_hall.tmx`): Double Jump and Second Wind on
 the floor, Dash on a ledge two jumps high, Wall Jump beyond a pit, Ground Pound atop a shaft
-climbed by wall jumps. Not yet: the chests, the cracked floor (breakable blocks are not
-built), player animations for the abilities; the Dash button is L, which also uses quick slot
+climbed by wall jumps. Breakable blocks are built (room-format.md §3.7: the guard room's secret
+wall; a `Breakable` with `by = above` is what the cracked floor will be). Not yet: the chests,
+the cracked floor itself, player animations for the abilities; the Dash button is L, which also uses quick slot
 1. Steps 6 and 7 are open. Milestone M15 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies

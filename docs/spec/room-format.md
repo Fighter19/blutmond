@@ -172,8 +172,28 @@ the `SHAP` chunk (§7).
 ### 3.7 Breakable and changing blocks
 
 Breakable, crumbling and switchable blocks are objects (§5), not materials. They change cells
-at run time through `collision.set(cell_x, cell_y, cell)`. The runtime stores such changes per
-persistent ID of the object that made them, so they survive saving.
+at run time; the runtime stores such changes per persistent ID of the object that made them, so
+they survive saving.
+
+Built: the engine class `Breakable` (§5). Its rectangle covers whole collision cells that the
+room's map draws (and makes solid) as usual. A hit of the player's side (the player's, or of
+what they made: a thrown knife) whose rectangle overlaps it breaks it, if `by` allows: `any`
+(the default), `pierce` (only a hit with `#Pierce`), `above` (only a hit whose origin is above
+its top: a downward stab, the ground pound). Broken, from then on (`bmGameBreak`,
+`src/world/game.c`):
+
+- its cells read as `cell`: `empty` (the default), `top` (jump-through) or `full`, with
+  material 0 (collision overrides, `BmCollision`; up to 8 broken ones a room);
+- the main and foreground layers show nothing over its rectangle, to whole 8 pixel cells (holes,
+  `bmRoomAddHole`); the background stays;
+- debris (the sprite `debris`, one per 16 pixel cell, as many as there are effect places), the
+  sound effect `crumble`, and its `drop` (a record name) left behind as an object of class
+  `Drop`;
+- the key room << 24 | persistent ID << 8 | 0xFF is kept with the value 1 among the `save`
+  values (`BmActors` store, shared with scripts' `save` variables, 16 in all): entering the room
+  again, or a save game loaded, breaks it again without debris, sound or drop.
+
+Not yet: `collision.set` from scripts, crumbling and switchable blocks.
 
 ### 3.8 Tiled mapping
 

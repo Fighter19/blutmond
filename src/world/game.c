@@ -26,6 +26,7 @@ static uint8_t kindOf(const char *cls)
   if (strcmp(cls, "Door") == 0) return BM_OBJECT_DOOR;
   if (strcmp(cls, "Trigger") == 0) return BM_OBJECT_TRIGGER;
   if (strcmp(cls, "SavePoint") == 0) return BM_OBJECT_SAVE_POINT;
+  if (strcmp(cls, "Breakable") == 0) return BM_OBJECT_BREAKABLE;
   return BM_OBJECT_OTHER;
 }
 
@@ -198,6 +199,7 @@ static void loadSprites(BmGame *g)
   g->sheetCount = 0;
   g->playerSheet = -1;
   g->sparkSheet = -1;
+  g->debrisSheet = -1;
   for (uint32_t n = 0; g->sheetCount < BM_GAME_MAX_SHEETS; n++)
   {
     int32_t chunk = bmSpriteSheetChunk(g->pPack, n);
@@ -208,6 +210,7 @@ static void loadSprites(BmGame *g)
     tileBase = (uint16_t)(tileBase + s->tileCount);
     const char *name = bmPackString(g->pPack, s->nameId);
     if (name != NULL && strcmp(name, "spark") == 0) g->sparkSheet = (int8_t)g->sheetCount;
+    if (name != NULL && strcmp(name, "debris") == 0) g->debrisSheet = (int8_t)g->sheetCount;
     if (name != NULL && strcmp(name, "player") == 0)
     {
       static const char *const anims[BM_PLAYER_ANIM_COUNT] = { "idle", "run", "jump", "fall", "climb" };
@@ -332,13 +335,13 @@ static void updateSprites(BmGame *g)
       next = (uint8_t)(next + bmSpriteSheetDraw(&g->sheets[s], bmAnimFrameAt(&g->sheets[s], 0, g->frame), BM_GAME_PORTRAIT_X,
                                                 BM_GAME_PORTRAIT_Y, false, 0, next, 4));
   }
-  // Sparks in front of the figures they are on, the player too.
-  for (uint8_t k = 0; k < BM_GAME_SPARKS && g->sparkSheet >= 0 && next < BM_GAME_MAX_OAM; k++)
+  // Effects (sparks, debris) in front of the figures they are on, the player too.
+  for (uint8_t k = 0; k < BM_GAME_EFFECTS && next < BM_GAME_MAX_OAM; k++)
   {
-    if (g->sparkAge[k] == 0) continue;
-    const BmSpriteSheet *s = &g->sheets[g->sparkSheet];
-    next = (uint8_t)(next + bmSpriteSheetDraw(s, bmAnimFrameAt(s, 0, (uint32_t)(g->sparkAge[k] - 1)), g->sparkX[k] - camX,
-                                              g->sparkY[k] - camY, false, 1, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
+    if (g->effectAge[k] == 0) continue;
+    const BmSpriteSheet *s = &g->sheets[g->effectSheet[k]];
+    next = (uint8_t)(next + bmSpriteSheetDraw(s, bmAnimFrameAt(s, 0, (uint32_t)(g->effectAge[k] - 1)), g->effectX[k] - camX,
+                                              g->effectY[k] - camY, false, 1, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
   }
   if (g->playerSheet >= 0)
   {
@@ -497,6 +500,8 @@ static void enterRoomSound(BmGame *g)
   roomAcoustics(g);
 }
 
+static void enterBreakables(BmGame *g);
+
 static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
 {
   // A pack pushed over the link: the UI's font is somewhere else now.
@@ -504,7 +509,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   // The room being left takes its attachments with it (they get detached() while it is
   // still there). A state just loaded (not fresh) brings its own.
   if (fresh) bmAttachmentsLeaveRoom(g);
-  memset(g->sparkAge, 0, sizeof(g->sparkAge));
+  memset(g->effectAge, 0, sizeof(g->effectAge));
   if (fresh) bmHitsClear(g);
   BmResult r = bmRoomOpen(&g->room, g->pPack, index);
   if (r != BM_SUCCESS) return r;
@@ -515,6 +520,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   g->physics.waterGravity = g->room.waterGravity;
   g->physics.waterMaxFallSpeed = g->room.waterMaxFallSpeed;
   readObjects(g);
+  enterBreakables(g);
   if (fresh)
   {
     bmEffectsEnterRoom(g);
@@ -664,19 +670,100 @@ static void goThroughDoor(BmGame *g, const BmObjectView *door)
   g->player.vx = vx;
 }
 
+// An effect: sheet `sheet`'s first animation once at room pixel (x, y), in a free place, else
+// the oldest one's.
+static void effectAt(BmGame *g, int8_t sheet, int32_t x, int32_t y)
+{
+  if (sheet < 0) return;
+  uint8_t k = 0;
+  for (uint8_t i = 0; i < BM_GAME_EFFECTS; i++)
+  {
+    if (g->effectAge[i] == 0) { k = i; break; }
+    if (g->effectAge[i] > g->effectAge[k]) k = i;
+  }
+  g->effectSheet[k] = sheet;
+  g->effectX[k] = (int16_t)x;
+  g->effectY[k] = (int16_t)y;
+  g->effectAge[k] = 1;
+}
+
 void bmGameSpark(BmGame *g, int32_t x, int32_t y)
 {
-  if (g->sparkSheet < 0) return;
-  // A free one, else the oldest.
-  uint8_t k = 0;
-  for (uint8_t i = 0; i < BM_GAME_SPARKS; i++)
+  effectAt(g, g->sparkSheet, x, y);
+}
+
+void bmGameEffect(BmGame *g, uint16_t name, int32_t x, int32_t y)
+{
+  effectAt(g, sheetNamed(g, name), x, y);
+}
+
+// --- Breakable walls and floors -------------------------------------------------------------
+
+static uint32_t breakKey(const BmGame *g, uint16_t i)
+{
+  return ((g->roomIndex & 0xFF) << 24) | ((uint32_t)g->objects[i].persistentId << 8) | 0xFF;
+}
+
+// What a Breakable leaves: its `cell` in its cells, a hole in the room's pictures.
+static void applyBreak(BmGame *g, uint16_t i)
+{
+  const BmObjectView *o = &g->objects[i];
+  g->objectBreak[i] |= 0x80;
+  if (g->breakCount >= BM_ROOM_MAX_HOLES) return;
+  const char *cell = bmGameObjectProperty(g, o, "cell");
+  uint8_t shape = 0;
+  if (cell != NULL && strcmp(cell, "top") == 0) shape = BM_SHAPE_FULL | BM_CELL_SOLID_TOP;
+  else if (cell != NULL && strcmp(cell, "full") == 0) shape = BM_SHAPE_FULL | BM_CELL_SOLID_TOP | BM_CELL_SOLID_SIDES;
+  int32_t c = g->collision.cellSize;
+  BmCellOverride *r = &g->breakCells[g->breakCount++];
+  r->x0 = (int16_t)(o->x / c);
+  r->y0 = (int16_t)(o->y / c);
+  r->x1 = (int16_t)((o->x + o->w + c - 1) / c);
+  r->y1 = (int16_t)((o->y + o->h + c - 1) / c);
+  r->shape = shape;
+  r->material = 0;
+  g->collision.pOverrides = g->breakCells;
+  g->collision.overrideCount = g->breakCount;
+  bmRoomAddHole(&g->room, o->x, o->y, o->w, o->h);
+}
+
+// The room's Breakables when it is entered: what breaks them, and the broken ones broken.
+static void enterBreakables(BmGame *g)
+{
+  g->breakCount = 0;
+  for (uint16_t i = 0; i < g->objectCount; i++)
   {
-    if (g->sparkAge[i] == 0) { k = i; break; }
-    if (g->sparkAge[i] > g->sparkAge[k]) k = i;
+    g->objectBreak[i] = 0;
+    if (g->objects[i].kind != BM_OBJECT_BREAKABLE) continue;
+    const char *by = bmGameObjectProperty(g, &g->objects[i], "by");
+    g->objectBreak[i] = (uint8_t)(by != NULL && strcmp(by, "pierce") == 0 ? BM_BREAK_PIERCE : by != NULL && strcmp(by, "above") == 0 ? BM_BREAK_ABOVE : BM_BREAK_ANY);
+    bool found = false;
+    bmActorsStoreGet(g, breakKey(g, i), &found);
+    if (found) applyBreak(g, i);
   }
-  g->sparkX[k] = (int16_t)x;
-  g->sparkY[k] = (int16_t)y;
-  g->sparkAge[k] = 1;
+}
+
+static uint32_t recordKey(const char *s)
+{
+  uint32_t h = 2166136261u;
+  for (; s != NULL && *s; s++) h = (h ^ (uint8_t)*s) * 16777619u;
+  return h;
+}
+
+void bmGameBreak(BmGame *g, uint16_t i)
+{
+  if (i >= g->objectCount || g->objects[i].kind != BM_OBJECT_BREAKABLE || (g->objectBreak[i] & 0x80)) return;
+  const BmObjectView *o = &g->objects[i];
+  if (!bmActorsStorePut(g, breakKey(g, i), 1)) bm_script_errors++;   // more kept than this version holds
+  applyBreak(g, i);
+  // Debris from every cell of it (as many as there are places for).
+  for (int32_t y = o->y; y < o->y + o->h; y += 16)
+    for (int32_t x = o->x; x < o->x + o->w; x += 16)
+      effectAt(g, g->debrisSheet, x + 8, y + 8);
+  bmSoundPlayEffect(&g->sound, "crumble");
+  const char *drop = bmGameObjectProperty(g, o, "drop");
+  if (drop != NULL && drop[0] != 0)
+    bmActorsSpawnNamed(g, "Drop", BM_FIX(o->x + o->w / 2), BM_FIX(o->y + o->h), recordKey(drop));
 }
 
 void bmGameHurtPlayer(BmGame *g, int32_t damage)
@@ -1194,8 +1281,8 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   }
   bmAttachmentsBodyEvents(g, events);
   if (g->hurtTimer) g->hurtTimer--;
-  for (uint8_t k = 0; k < BM_GAME_SPARKS; k++)
-    if (g->sparkAge[k] != 0 && (g->sparkSheet < 0 || ++g->sparkAge[k] > bmAnimLength(&g->sheets[g->sparkSheet], 0))) g->sparkAge[k] = 0;
+  for (uint8_t k = 0; k < BM_GAME_EFFECTS; k++)
+    if (g->effectAge[k] != 0 && ++g->effectAge[k] > bmAnimLength(&g->sheets[g->effectSheet[k]], 0)) g->effectAge[k] = 0;
   if (g->doorCooldown) g->doorCooldown--;
   if (g->saveCooldown) g->saveCooldown--;
 

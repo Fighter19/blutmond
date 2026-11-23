@@ -129,7 +129,8 @@ typedef enum BmScriptType {
   X(fly,               VOID, 2, FIX,   FIX,   VOID,  VOID, 0) \
   X(fall,              VOID, 1, FIX,   VOID,  VOID,  VOID, 0) \
   X(lifetime,          VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
-  X(alive,             INT,  1, NAME,  VOID,  VOID,  VOID, 0)
+  X(alive,             INT,  1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(effect,            VOID, 1, NAME,  VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -185,6 +186,8 @@ typedef enum BmScriptType {
 // move an object (it gets wall() when its middle enters a solid cell) and destroy it after that
 // many frames; an object made with spawn takes the team of whoever made it, and an attachment
 // that made it hears struck() of its hits too; alive(#Class) counts that class's objects.
+// effect(#sprite): that sprite's first animation once at the object's anchor, in front of the
+// figures (as the engine's sparks and debris: bmGameEffect); only seen, not state.
 //
 // Filters (attachable-scripts.md §3): the player's attachments get damage_in(amount) in slot
 // order before the player is struck (after defence and resistance), damage_out(amount) before
@@ -320,7 +323,7 @@ typedef enum BmScriptEvent {
 #define BM_SCRIPT_ACTOR_ONLY(X) \
   X(finish_anim) X(play_anim) X(anim_done) X(player_distance) X(move_toward_player) X(move_toward) \
   X(enter_door) X(hide) X(show) X(face_player) X(touching_player) X(destroy) X(spawn_with) X(floor_y) \
-  X(set_affinity) X(set_knockback) X(fly) X(fall) X(lifetime)
+  X(set_affinity) X(set_knockback) X(fly) X(fall) X(lifetime) X(effect)
 
 // Field flags in the class table: the storage flags of docs/spec/state.md.
 #define BM_SCRIPT_FIELD_SAVE 1

@@ -2158,10 +2158,10 @@ static void testTheKnightsShield(void)
   for (int i = 0; i < 20; i++)
   {
     frames(1, 0);
-    for (int k = 0; k < BM_GAME_SPARKS; k++)
-      if (s_game.sparkAge[k] != 0)
+    for (int k = 0; k < BM_GAME_EFFECTS; k++)
+      if (s_game.effectAge[k] != 0 && s_game.effectSheet[k] == s_game.sparkSheet)
       {
-        sparkAt = s_game.sparkX[k];
+        sparkAt = s_game.effectX[k];
         sparkFrames++;
       }
   }
@@ -2208,6 +2208,83 @@ static void testBackThroughADoorAtOnce(void)
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
 }
 
+// Breakable walls and crates (room-format.md §5, assets/test_room/guard_room.tmx): the lower
+// part of the pillar at the guard room's west end breaks to the Short Sword; it opens on the
+// alcove with a heart behind it and stays open (the save game keeps it); the crate breaks and
+// leaves its potion.
+static void goToTheGuardRoom(void)
+{
+  bmBodyPlace(&s_game.player, 24, 160);
+  for (int f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_LEFT);
+  frames(20, 0);
+}
+
+static bool solidCell(int cx, int cy)
+{
+  uint8_t shape, material;
+  bmCollisionCell(&s_game.collision, cx, cy, &shape, &material);
+  return (shape & 15) != 0;
+}
+
+static void testBreakableWallsAndCrates(void)
+{
+  start();
+  memset(bmHalHostSaveMemory(), 0xFF, BM_HAL_SAVE_SIZE);
+  bmBodyPlace(&s_game.player, 80, 160);
+  frames(5, 0);
+  goToTheGuardRoom();
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
+  int wall = doorNamed("secret_wall");
+  TEST_ASSERT(wall >= 0 && s_game.objects[wall].kind == BM_OBJECT_BREAKABLE && !(s_game.objectBreak[wall] & 0x80));
+  TEST_ASSERT(solidCell(3, 7) && solidCell(3, 9) && solidCell(3, 6));
+  // One that only a piercing hit breaks: the sword does not.
+  s_game.objectBreak[wall] = BM_BREAK_PIERCE;
+  bmBodyPlace(&s_game.player, 72, 160);
+  s_game.player.facing = -1;
+  frames(2, 0);
+  frames(1, BM_KEY_B);
+  frames(20, 0);
+  TEST_ASSERT(!(s_game.objectBreak[wall] & 0x80) && solidCell(3, 8));
+  // Any hit: broken. Its cells are empty, the pillar above stays; debris, a hole in the room.
+  s_game.objectBreak[wall] = BM_BREAK_ANY;
+  frames(1, BM_KEY_B);
+  int debris = 0;
+  for (int i = 0; i < 8; i++)
+  {
+    frames(1, 0);
+    for (int k = 0; k < BM_GAME_EFFECTS; k++) debris += s_game.effectAge[k] != 0 && s_game.effectSheet[k] == s_game.debrisSheet;
+  }
+  TEST_ASSERT(s_game.objectBreak[wall] & 0x80);
+  TEST_ASSERT(!solidCell(3, 7) && !solidCell(3, 8) && !solidCell(3, 9) && solidCell(3, 6));
+  TEST_ASSERT(s_game.debrisSheet >= 0 && debris >= 3 && s_game.room.holeCount == 1);
+  // Through it, to the heart behind.
+  int heart = actorOfClass("Pickup");
+  TEST_ASSERT(heart >= 0 && !s_game.actors.hidden[heart]);
+  frames(40, BM_KEY_LEFT);
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) < 48 && s_game.actors.hidden[heart]);
+  // The crate: broken, its potion left behind.
+  int crate = actorOfClass("Crate");
+  TEST_ASSERT(crate >= 0 && !s_game.actors.hidden[crate] && actorOfClass("Drop") < 0);
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[crate]) - 14, 160);
+  s_game.player.facing = 1;
+  frames(2, 0);
+  frames(1, BM_KEY_B);
+  frames(10, 0);
+  TEST_ASSERT(s_game.actors.hidden[crate] && actorOfClass("Drop") >= 0);
+  // Kept: a save game, a new game from it, back to the guard room: still open, the crate gone.
+  TEST_ASSERT(bmGameWriteSaveGame(&s_game));
+  start();
+  TEST_ASSERT(bmGameReadSaveGame(&s_game));
+  frames(3, 0);
+  if (strcmp(bmGameRoomId(&s_game), "test_room") != 0) TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
+  else goToTheGuardRoom();
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
+  wall = doorNamed("secret_wall");
+  TEST_ASSERT((s_game.objectBreak[wall] & 0x80) && !solidCell(3, 8) && s_game.room.holeCount == 1);
+  TEST_ASSERT(s_game.actors.hidden[actorOfClass("Crate")]);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -2235,6 +2312,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheSwordDefeatsTheBat);
   RUN_TEST(testTheKnightsShield);
   RUN_TEST(testBackThroughADoorAtOnce);
+  RUN_TEST(testBreakableWallsAndCrates);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
   RUN_TEST(testTheWorldMap);

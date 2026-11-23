@@ -36,9 +36,19 @@ enum {
 #define BM_CELL_SOLID_TOP 0x40
 #define BM_CELL_SOLID_SIDES 0x80
 
+// Cells that read as another cell from now on (a wall broken, game.h): cells x0 to x1 - 1,
+// y0 to y1 - 1, as the two bytes shape and material.
+typedef struct BmCellOverride
+{
+  int16_t x0, y0, x1, y1;
+  uint8_t shape, material;
+} BmCellOverride;
+
 typedef struct BmCollision
 {
   const uint8_t *pCells;   // 2 bytes per cell, row major (in the pack)
+  const BmCellOverride *pOverrides;   // looked at before the cells (none: NULL)
+  uint8_t overrideCount;
   uint16_t width, height;  // in cells
   uint8_t cellSize;        // 16 or 8
   uint8_t edgesSolid;      // room edges (left, right, top) act as walls

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="16" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="rubble" wave="noise" attack="0" decay="6" sustain="0" release="3" volume="200" pan="0"/>
+ <track name="rubble" instrument="rubble">
+  <note t="0" key="48" len="4" vel="127"/>
+  <note t="4" key="43" len="4" vel="100"/>
+  <note t="8" key="40" len="6" vel="70"/>
+ </track>
+</song>

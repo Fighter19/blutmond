@@ -13,6 +13,8 @@
 
 // Each layer takes two of the screen blocks 26-31 for its map.
 #define BM_ROOM_MAX_LAYERS 3
+// Holes: parts of the main and foreground layers shown empty (a wall broken, game.h).
+#define BM_ROOM_MAX_HOLES 8
 
 typedef enum BmRoomRole {
   BM_ROOM_ROLE_BACKGROUND = 0,
@@ -50,6 +52,10 @@ typedef struct BmRoom
   uint8_t layerCount;
   BmRoomLayer layers[BM_ROOM_MAX_LAYERS];
   int32_t cameraX, cameraY;
+  // Holes in map cells of 8 pixels: x0, y0, x1, y1 (x1, y1 not in it). Not in the pack: the
+  // game makes them (bmRoomAddHole) and makes them again when it shows the room anew.
+  uint8_t holeCount;
+  int16_t holes[BM_ROOM_MAX_HOLES][4];
 } BmRoom;
 
 /// Number of rooms (ROOM chunks) in a pack.
@@ -67,6 +73,11 @@ BmResult bmRoomOpenWith(BmRoom *pRoom, const BmPack *pPack, uint32_t index, uint
 /// Uploads the room's palettes and tiles, sets up its backgrounds and shows it with the camera
 /// at (x, y) (top-left corner of the screen, clamped to the room).
 BmResult bmRoomShow(BmRoom *pRoom, int32_t cameraX, int32_t cameraY);
+
+/// A hole of (x, y, w, h) room pixels (to whole 8 pixel cells) in the main and foreground
+/// layers: their cells there are shown empty from now on, also where they are on screen now.
+/// False when the room has BM_ROOM_MAX_HOLES already.
+bool bmRoomAddHole(BmRoom *pRoom, int32_t x, int32_t y, int32_t w, int32_t h);
 
 /// Moves the camera: scrolls the backgrounds and streams map cells that came into view.
 void bmRoomSetCamera(BmRoom *pRoom, int32_t cameraX, int32_t cameraY);

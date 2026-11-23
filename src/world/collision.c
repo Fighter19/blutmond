@@ -40,6 +40,8 @@ bool bmCollisionInit(BmCollision *pCollision, const uint8_t *pChunk, uint32_t si
   pCollision->cellSize = pChunk[4];
   pCollision->edgesSolid = edgesSolid ? 1 : 0;
   pCollision->pCells = pChunk + 8;
+  pCollision->pOverrides = NULL;
+  pCollision->overrideCount = 0;
   return (pCollision->cellSize == 16 || pCollision->cellSize == 8) &&
          size >= 8u + (uint32_t)pCollision->width * pCollision->height * 2u;
 }
@@ -53,6 +55,16 @@ void bmCollisionCell(const BmCollision *pCollision, int32_t cx, int32_t cy, uint
     *pShape = wall ? (uint8_t)(BM_SHAPE_FULL | BM_CELL_SOLID_TOP | BM_CELL_SOLID_SIDES) : 0;
     *pMaterial = 0;
     return;
+  }
+  for (uint8_t k = 0; k < pCollision->overrideCount; k++)
+  {
+    const BmCellOverride *o = &pCollision->pOverrides[k];
+    if (cx >= o->x0 && cx < o->x1 && cy >= o->y0 && cy < o->y1)
+    {
+      *pShape = o->shape;
+      *pMaterial = o->material;
+      return;
+    }
   }
   const uint8_t *p = pCollision->pCells + ((uint32_t)cy * pCollision->width + (uint32_t)cx) * 2u;
   *pShape = p[0];

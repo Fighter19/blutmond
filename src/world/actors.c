@@ -713,6 +713,9 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_abs:
     *result = absolute(args[0]);
     break;
+  case BM_SCRIPT_API_effect:
+    bmGameEffect(g, (uint16_t)args[0], BM_FIX_INT(a->x[i]), BM_FIX_INT(a->y[i]));
+    break;
   case BM_SCRIPT_API_play_sound:
     bmSoundPlayEffect(&g->sound, bmPackString(g->pPack, (uint16_t)args[0]));
     break;
@@ -1297,14 +1300,58 @@ static void resetMotion(BmActors *a, uint8_t i)
   a->madeBySlot[i] = BM_HITS_NO_SLOT;
 }
 
+int32_t bmActorsStoreGet(const BmGame *g, uint32_t key, bool *pFound)
+{
+  const BmActors *a = &g->actors;
+  for (uint8_t k = 0; k < a->storeCount; k++)
+    if (a->storeKey[k] == key)
+    {
+      if (pFound) *pFound = true;
+      return a->storeValue[k];
+    }
+  if (pFound) *pFound = false;
+  return 0;
+}
+
+bool bmActorsStorePut(BmGame *g, uint32_t key, int32_t value)
+{
+  BmActors *a = &g->actors;
+  for (uint8_t k = 0; k < a->storeCount; k++)
+    if (a->storeKey[k] == key)
+    {
+      a->storeValue[k] = value;
+      return true;
+    }
+  if (a->storeCount >= BM_ACTORS_STORE) return false;
+  a->storeKey[a->storeCount] = key;
+  a->storeValue[a->storeCount++] = value;
+  return true;
+}
+
+static bool spawnNamed(BmGame *g, const char *name, int32_t x, int32_t y, uint32_t record);
+
 bool bmActorsSpawn(BmGame *g, uint16_t className, int32_t x, int32_t y, uint32_t record)
+{
+  return spawnNamed(g, bmPackString(g->pPack, className), x, y, record);
+}
+
+bool bmActorsSpawnNamed(BmGame *g, const char *name, int32_t x, int32_t y, uint32_t record)
+{
+  // Made by the room (the engine): on no side, no maker to tell.
+  uint8_t current = g->actors.current;
+  g->actors.current = BM_ACTORS_ROOM;
+  bool made = spawnNamed(g, name, x, y, record);
+  g->actors.current = current;
+  return made;
+}
+
+static bool spawnNamed(BmGame *g, const char *name, int32_t x, int32_t y, uint32_t record)
 {
   BmActors *a = &g->actors;
   // Who makes it: an object, the player (one of its attachments), or the room.
   uint8_t maker = a->current < a->count ? (uint8_t)(1 + a->current) : a->current == BM_ACTORS_OWNER ? BM_HITS_PLAYER : BM_HITS_FREE;
   uint8_t makerSlot = a->current == BM_ACTORS_OWNER ? a->currentSlot : BM_HITS_NO_SLOT;
   uint8_t makerTeam = maker == BM_HITS_PLAYER ? BM_HITS_PLAYER_TEAM : maker != BM_HITS_FREE ? a->team[maker - 1] : 0;
-  const char *name = bmPackString(g->pPack, className);
   int32_t cls = name != NULL ? classNamed(g, name) : -1;
   if (!a->hasModule || cls < 0) return false;
   // A place after the room's objects: one destroyed (not the one running now: it is stored

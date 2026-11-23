@@ -121,28 +121,51 @@ static uint16_t layerEntry(const BmRoomLayer *pLayer, int32_t x, int32_t y)
   return bmRead16(pLayer->pEntries + ((uint32_t)y * pLayer->width8 + (uint32_t)x) * 2u);
 }
 
+// Whether map cell (x, y) of a layer lies in one of the room's holes (only the main and the
+// foreground layer have them).
+static bool inHole(const BmRoom *pRoom, const BmRoomLayer *pLayer, int32_t x, int32_t y)
+{
+  if (pLayer->role == BM_ROOM_ROLE_BACKGROUND) return false;
+  for (uint8_t k = 0; k < pRoom->holeCount; k++)
+  {
+    const int16_t *h = pRoom->holes[k];
+    if (x >= h[0] && x < h[2] && y >= h[1] && y < h[3]) return true;
+  }
+  return false;
+}
+
+// Whether row y of a layer crosses a hole.
+static bool rowHoled(const BmRoom *pRoom, const BmRoomLayer *pLayer, int32_t y)
+{
+  if (pLayer->role == BM_ROOM_ROLE_BACKGROUND) return false;
+  for (uint8_t k = 0; k < pRoom->holeCount; k++)
+    if (y >= pRoom->holes[k][1] && y < pRoom->holes[k][3]) return true;
+  return false;
+}
+
 // Writes room cell (x, y) of a layer to its place in the hardware ring map.
-static void writeCell(const BmRoomLayer *pLayer, int32_t x, int32_t y)
+static void writeCell(const BmRoom *pRoom, const BmRoomLayer *pLayer, int32_t x, int32_t y)
 {
   uint32_t hx = (uint32_t)x & (HW_COLS - 1);
   uint32_t hy = (uint32_t)y & (HW_ROWS - 1);
   uint8_t block = (uint8_t)(FIRST_SCREEN_BLOCK + pLayer->bg * 2 + (hx >= 32 ? 1 : 0));
-  uint16_t entry = layerEntry(pLayer, x, y);
+  uint16_t entry = inHole(pRoom, pLayer, x, y) ? 0 : layerEntry(pLayer, x, y);
   bmMapLoad(block, (uint16_t)(hy * 32 + (hx & 31)), &entry, 1);
 }
 
-static void writeColumn(const BmRoomLayer *pLayer, int32_t x)
+static void writeColumn(const BmRoom *pRoom, const BmRoomLayer *pLayer, int32_t x)
 {
   for (int32_t y = pLayer->windowY; y < pLayer->windowY + WINDOW_ROWS; y++)
   {
-    writeCell(pLayer, x, y);
+    writeCell(pRoom, pLayer, x, y);
   }
 }
 
 // A row in runs: the cells that lie side by side in one screen block go in one write (on the
 // GBA a map write has a cost of its own; a room shown anew writes 66 rows).
-static void writeRow(const BmRoomLayer *pLayer, int32_t y)
+static void writeRow(const BmRoom *pRoom, const BmRoomLayer *pLayer, int32_t y)
 {
+  bool holed = rowHoled(pRoom, pLayer, y);
   uint32_t hy = (uint32_t)y & (HW_ROWS - 1);
   int32_t x = pLayer->windowX, end = pLayer->windowX + WINDOW_COLS;
   // The room's row found once (as layerEntry; cell by cell this was most of a room's showing).
@@ -156,9 +179,10 @@ static void writeRow(const BmRoomLayer *pLayer, int32_t y)
     // All in the room: straight from the pack (bmHalVramWrite copies whatever the alignment).
     uint16_t entries[32];
     const uint16_t *pFrom = (const uint16_t *)(const void *)(row + x * 2);
-    if (row == NULL || x < 0 || x + run > pLayer->width8)
+    if (row == NULL || x < 0 || x + run > pLayer->width8 || holed)
     {
-      for (int32_t k = 0; k < run; k++) entries[k] = row != NULL && x + k >= 0 && x + k < pLayer->width8 ? bmRead16(row + (x + k) * 2) : 0;
+      for (int32_t k = 0; k < run; k++)
+        entries[k] = row != NULL && x + k >= 0 && x + k < pLayer->width8 && !(holed && inHole(pRoom, pLayer, x + k, y)) ? bmRead16(row + (x + k) * 2) : 0;
       pFrom = entries;
     }
     bmMapLoad(block, (uint16_t)(hy * 32 + (hx & 31)), pFrom, (uint32_t)run);
@@ -171,7 +195,7 @@ static int32_t floorDiv8(int32_t v)
   return v >= 0 ? v / 8 : -((-v + 7) / 8);
 }
 
-static void updateLayer(BmRoomLayer *pLayer, int32_t cameraX, int32_t cameraY)
+static void updateLayer(const BmRoom *pRoom, BmRoomLayer *pLayer, int32_t cameraX, int32_t cameraY)
 {
   // Layer scroll from the camera and the parallax factor (fix 24.8).
   int32_t lx = (int32_t)(((int64_t)cameraX * pLayer->parallaxX) >> 8);
@@ -187,7 +211,7 @@ static void updateLayer(BmRoomLayer *pLayer, int32_t cameraX, int32_t cameraY)
     pLayer->windowY = wy;
     for (int32_t y = wy; y < wy + WINDOW_ROWS; y++)
     {
-      writeRow(pLayer, y);
+      writeRow(pRoom, pLayer, y);
     }
     pLayer->loaded = true;
   }
@@ -197,22 +221,22 @@ static void updateLayer(BmRoomLayer *pLayer, int32_t cameraX, int32_t cameraY)
     while (pLayer->windowX < wx)
     {
       pLayer->windowX++;
-      writeColumn(pLayer, pLayer->windowX + WINDOW_COLS - 1);
+      writeColumn(pRoom, pLayer, pLayer->windowX + WINDOW_COLS - 1);
     }
     while (pLayer->windowX > wx)
     {
       pLayer->windowX--;
-      writeColumn(pLayer, pLayer->windowX);
+      writeColumn(pRoom, pLayer, pLayer->windowX);
     }
     while (pLayer->windowY < wy)
     {
       pLayer->windowY++;
-      writeRow(pLayer, pLayer->windowY + WINDOW_ROWS - 1);
+      writeRow(pRoom, pLayer, pLayer->windowY + WINDOW_ROWS - 1);
     }
     while (pLayer->windowY > wy)
     {
       pLayer->windowY--;
-      writeRow(pLayer, pLayer->windowY);
+      writeRow(pRoom, pLayer, pLayer->windowY);
     }
   }
   pLayer->scrollX = (int16_t)(lx & 511);
@@ -232,8 +256,29 @@ void bmRoomSetCamera(BmRoom *pRoom, int32_t cameraX, int32_t cameraY)
   pRoom->cameraY = clampCamera(cameraY, pRoom->heightPx, BM_HAL_SCREEN_HEIGHT);
   for (uint8_t i = 0; i < pRoom->layerCount; i++)
   {
-    updateLayer(&pRoom->layers[i], pRoom->cameraX, pRoom->cameraY);
+    updateLayer(pRoom, &pRoom->layers[i], pRoom->cameraX, pRoom->cameraY);
   }
+}
+
+bool bmRoomAddHole(BmRoom *pRoom, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+  if (pRoom->holeCount >= BM_ROOM_MAX_HOLES || w <= 0 || h <= 0) return false;
+  int16_t *hole = pRoom->holes[pRoom->holeCount++];
+  hole[0] = (int16_t)floorDiv8(x);
+  hole[1] = (int16_t)floorDiv8(y);
+  hole[2] = (int16_t)floorDiv8(x + w + 7);
+  hole[3] = (int16_t)floorDiv8(y + h + 7);
+  // What is on screen of it now: those cells written again.
+  for (uint8_t i = 0; i < pRoom->layerCount; i++)
+  {
+    const BmRoomLayer *pLayer = &pRoom->layers[i];
+    if (!pLayer->loaded || pLayer->role == BM_ROOM_ROLE_BACKGROUND) continue;
+    for (int32_t cy = hole[1]; cy < hole[3]; cy++)
+      for (int32_t cx = hole[0]; cx < hole[2]; cx++)
+        if (cx >= pLayer->windowX && cx < pLayer->windowX + WINDOW_COLS && cy >= pLayer->windowY && cy < pLayer->windowY + WINDOW_ROWS)
+          writeCell(pRoom, pLayer, cx, cy);
+  }
+  return true;
 }
 
 BmResult bmRoomShow(BmRoom *pRoom, int32_t cameraX, int32_t cameraY)

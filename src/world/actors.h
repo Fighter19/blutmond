@@ -125,6 +125,15 @@ void bmActorsBox(const struct BmGame *pGame, uint8_t actor, int32_t *pX, int32_t
 /// `record` if that is not 0. It gets spawn(). False if there is no such class or no place.
 bool bmActorsSpawn(struct BmGame *pGame, uint16_t className, int32_t x, int32_t y, uint32_t record);
 
+/// The same for the engine, by the class's name: made by the room.
+bool bmActorsSpawnNamed(struct BmGame *pGame, const char *pClassName, int32_t x, int32_t y, uint32_t record);
+
+/// The values kept in the save game (`save` variables, broken walls) by key: room << 24 |
+/// persistent id << 8 | field (0xFF: the engine's own, a Breakable broken). Get: 0 and
+/// *pFound false if there is none. Put: false when all BM_ACTORS_STORE are in use.
+int32_t bmActorsStoreGet(const struct BmGame *pGame, uint32_t key, bool *pFound);
+bool bmActorsStorePut(struct BmGame *pGame, uint32_t key, int32_t value);
+
 /// Object `actor` is gone: not drawn, not run, its hits end; its place is free.
 /// The index in the class table of the scripted class with this name, or -1.
 int32_t bmActorsClassNamed(const struct BmGame *pGame, const char *name);
