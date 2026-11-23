@@ -896,6 +896,10 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
   std::map<std::string, uint16_t> roomPackIndex;
   std::map<std::string, uint8_t> roomArea;
   SharedChunks shared;
+  // Per room the maps and collision it reads, with their sizes: compressed afterwards where
+  // every room that reads them fits the runtime's unpack buffer (BM_PACK_ROOM_UNPACK_BYTES).
+  std::vector<std::vector<std::pair<uint32_t, uint32_t>>> roomLevelChunks;
+  std::vector<std::string> roomLevelIds;
 
   // The string table (group 0) is written last, once all names are known; the runtime finds
   // it by its chunk id.
@@ -953,9 +957,18 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       // The runtime gives each layer two of six screen blocks.
       if (room->layers.size() > 3)
         report.error("layers", map.path, "a room can have at most 3 graphics layers (it has " + std::to_string(room->layers.size()) + ")");
+      std::vector<std::pair<uint32_t, uint32_t>> levelChunks;
       for (const GraphicsLayer &gl : room->layers)
-        layerChunks.emplace_back(&gl, shared.add(writer, BM_CHUNK_TMAP, BM_CATEGORY_LEVEL, roomGroup, mapChunk(gl, area, profile)));
-      uint32_t collChunk = shared.add(writer, BM_CHUNK_COLL, BM_CATEGORY_LEVEL, roomGroup, collisionChunk(map, report));
+      {
+        Bytes m = mapChunk(gl, area, profile);
+        layerChunks.emplace_back(&gl, shared.add(writer, BM_CHUNK_TMAP, BM_CATEGORY_LEVEL, roomGroup, m));
+        levelChunks.emplace_back(layerChunks.back().second, uint32_t(m.data.size()));
+      }
+      Bytes coll = collisionChunk(map, report);
+      uint32_t collChunk = shared.add(writer, BM_CHUNK_COLL, BM_CATEGORY_LEVEL, roomGroup, coll);
+      levelChunks.emplace_back(collChunk, uint32_t(coll.data.size()));
+      roomLevelChunks.push_back(levelChunks);
+      roomLevelIds.push_back(room->id);
       uint16_t objectCount = 0;
       uint32_t objsChunk = add(writer, BM_CHUNK_OBJS, BM_CATEGORY_OBJECTS, roomGroup, objectsChunk(map, strings, report, objectCount));
 
@@ -1009,6 +1022,33 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       roomPackIndex[room->id] = uint16_t(roomPackIndex.size());
       add(writer, BM_CHUNK_ROOM, BM_CATEGORY_LEVEL, roomGroup, r);
     }
+  }
+
+  // Maps and collision compressed (pack-format.md §4): a chunk is, if every room that reads it
+  // has all its compressed chunks fit the runtime's buffer together, as the runtime unpacks them.
+  {
+    std::map<uint32_t, bool> fits;
+    for (const auto &chunks : roomLevelChunks)
+    {
+      uint32_t need = 0;
+      for (const auto &[chunk, size] : chunks) need += (size + 3u) & ~3u;
+      for (const auto &[chunk, size] : chunks)
+        fits[chunk] = (fits.count(chunk) ? fits[chunk] : true) && need <= BM_PACK_ROOM_UNPACK_BYTES;
+      if (need > BM_PACK_ROOM_UNPACK_BYTES)
+        report.info("uncompressed", "room '" + roomLevelIds[size_t(&chunks - roomLevelChunks.data())] + "'",
+                    "maps and collision take " + std::to_string(need) + " bytes unpacked, more than the runtime's buffer (" +
+                    std::to_string(BM_PACK_ROOM_UNPACK_BYTES) + "): stored uncompressed");
+    }
+    uint32_t before = 0, after = 0;
+    for (const auto &[chunk, ok] : fits)
+    {
+      if (!ok) continue;
+      before += writer.pChunks[chunk].entry.size;
+      bmPackWriterCompress(&writer, chunk);
+      after += writer.pChunks[chunk].entry.size;
+    }
+    if (before != 0)
+      report.info("compressed", "project", "maps and collision: " + std::to_string(before) + " bytes compressed to " + std::to_string(after));
   }
 
   // Sprites: global for now (every room may use every sprite).

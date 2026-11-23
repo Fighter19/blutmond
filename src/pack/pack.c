@@ -125,10 +125,12 @@ bool bmPackGetChunk(const BmPack *pPack, uint32_t index, BmChunkEntry *pEntry)
 
 int32_t bmPackFindChunk(const BmPack *pPack, uint32_t id, uint32_t start)
 {
-  BmChunkEntry e;
-  for (uint32_t i = start; bmPackGetChunk(pPack, i, &e); i++)
+  // Only the ids are read (the whole entry, byte by byte, made a room's scripts slow to find).
+  if (pPack->pData == NULL) return -1;
+  const uint8_t *p = pPack->pData + pPack->header.tocOffset;
+  for (uint32_t i = start; i < pPack->header.chunkCount; i++)
   {
-    if (e.id == id)
+    if (bmRead32(p + i * BM_PACK_CHUNK_ENTRY_SIZE) == id)
     {
       return (int32_t)i;
     }
@@ -148,6 +150,64 @@ const uint8_t *bmPackChunkData(const BmPack *pPack, uint32_t index, uint32_t *pS
     *pSize = e.size;
   }
   return pPack->pData + e.offset;
+}
+
+uint32_t bmLz77Unpack(const uint8_t *pIn, uint32_t inSize, uint8_t *pOut, uint32_t outSize)
+{
+  if (inSize < 4 || pIn[0] != 0x10) return 0;
+  uint32_t size = bmRead32(pIn) >> 8, i = 4, o = 0;
+  if (size > outSize) return 0;
+#ifdef BM_PLATFORM_GBA
+  // The BIOS (LZ77UnCompReadNormalWrite8bit): this C, as Thumb code from EWRAM, took 44 cycles
+  // a byte (880,000 for a room); IWRAM has no room for it. It wants the data 4-byte aligned
+  // (chunks are) and keeps interrupts as they are. It writes no more than the header says.
+  if (((uintptr_t)pIn & 3) == 0)
+  {
+    register const uint8_t *r0 __asm__("r0") = pIn;
+    register uint8_t *r1 __asm__("r1") = pOut;
+    __asm__ volatile("swi 0x11" : "+r"(r0), "+r"(r1) : : "r2", "r3", "memory");
+    (void)inSize;
+    return size;
+  }
+#endif
+  while (o < size)
+  {
+    if (i >= inSize) return 0;
+    uint32_t flags = pIn[i++];
+    for (uint32_t b = 0; b < 8 && o < size; b++, flags <<= 1)
+    {
+      if (!(flags & 0x80))
+      {
+        if (i >= inSize) return 0;
+        pOut[o++] = pIn[i++];
+        continue;
+      }
+      if (i + 1 >= inSize) return 0;
+      uint32_t length = (pIn[i] >> 4) + 3u, distance = (((pIn[i] & 15u) << 8) | pIn[i + 1]) + 1u;
+      i += 2;
+      if (distance > o) return 0;
+      if (length > size - o) length = size - o;
+      // Byte by byte: a copy may overlap what it writes (a run).
+      for (const uint8_t *pFrom = pOut + o - distance; length != 0; length--) pOut[o++] = *pFrom++;
+    }
+  }
+  return size;
+}
+
+const uint8_t *bmPackChunkUnpack(const BmPack *pPack, uint32_t index, uint8_t *pOut, uint32_t outSize, uint32_t *pSize)
+{
+  BmChunkEntry e;
+  if (!bmPackGetChunk(pPack, index, &e)) return NULL;
+  const uint8_t *p = pPack->pData + e.offset;
+  if (e.compression == BM_PACK_COMPRESSION_NONE)
+  {
+    if (pSize != NULL) *pSize = e.size;
+    return p;
+  }
+  if (e.compression != BM_PACK_COMPRESSION_LZ77 || pOut == NULL || e.unpackedSize > outSize) return NULL;
+  if (bmLz77Unpack(p, e.size, pOut, outSize) != e.unpackedSize) return NULL;
+  if (pSize != NULL) *pSize = e.unpackedSize;
+  return pOut;
 }
 
 const char *bmPackString(const BmPack *pPack, uint16_t id)
@@ -218,6 +278,67 @@ uint32_t bmPackWriterAdd(BmPackWriter *pWriter, uint32_t id, BmChunkCategory cat
     memcpy(c->pData, pData, size);
   }
   return pWriter->chunkCount++;
+}
+
+uint32_t bmLz77Pack(const uint8_t *pIn, uint32_t size, uint8_t *pOut)
+{
+  put32(pOut, 0x10u | (size << 8));
+  uint32_t o = 4, i = 0;
+  while (i < size)
+  {
+    uint32_t flagsAt = o++;
+    uint8_t flags = 0;
+    for (uint32_t b = 0; b < 8 && i < size; b++)
+    {
+      // The longest match in the 4096 bytes before (the nearest of equal length), 3 to 18.
+      uint32_t best = 0, bestDistance = 0;
+      for (uint32_t d = 1; d <= 4096 && d <= i && best < 18; d++)
+      {
+        uint32_t n = 0;
+        while (n < 18 && i + n < size && pIn[i + n] == pIn[i + n - d]) n++;
+        if (n > best)
+        {
+          best = n;
+          bestDistance = d;
+        }
+      }
+      if (best >= 3)
+      {
+        flags |= (uint8_t)(0x80u >> b);
+        pOut[o++] = (uint8_t)(((best - 3) << 4) | ((bestDistance - 1) >> 8));
+        pOut[o++] = (uint8_t)(bestDistance - 1);
+        i += best;
+      }
+      else
+      {
+        pOut[o++] = pIn[i++];
+      }
+    }
+    pOut[flagsAt] = flags;
+  }
+  return o;
+}
+
+bool bmPackWriterCompress(BmPackWriter *pWriter, uint32_t index)
+{
+  if (index >= pWriter->chunkCount) return false;
+  BmPackWriterChunk *c = &pWriter->pChunks[index];
+  if (c->entry.compression != BM_PACK_COMPRESSION_NONE) return false;
+  uint32_t size = c->entry.size;
+  uint8_t *pPacked = malloc(4 + size + size / 8 + 1);
+  uint32_t packed = bmLz77Pack(c->pData, size, pPacked);
+  if (packed >= size)
+  {
+    free(pPacked);
+    return false;
+  }
+  free(c->pData);
+  c->pData = pPacked;
+  c->entry.size = packed;
+  c->entry.unpackedSize = size;
+  c->entry.compression = BM_PACK_COMPRESSION_LZ77;
+  c->entry.hash = bmCrc32(0, pPacked, packed);
+  return true;
 }
 
 uint8_t *bmPackWriterFinish(const BmPackWriter *pWriter, uint32_t *pSize)

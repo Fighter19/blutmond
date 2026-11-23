@@ -2,8 +2,35 @@
 @ Copyright (C) 2025 Blutmond contributors
 @
 @ Interrupt handler, called by the BIOS (IRQ mode, ARM). Acknowledges the interrupts in
-@ IF and in the BIOS's copy (for VBlankIntrWait), counts VBlanks, starts the frame's sound
-@ (hal_gba.c) and runs the link handler.
+@ IF and in the BIOS's copy (for VBlankIntrWait), counts VBlanks, restarts the line tables and
+@ starts the frame's sound (hal_gba.c), feeds the third line table and runs the link handler.
+
+@ Line table \slot at the vertical blank (bm_hal_lines, hal_gba.c): next becomes shown, its
+@ register gets line 0's value, and DMA channel \dma (at I/O offset \cnt: SAD, DAD, CNT_L,
+@ CNT_H) copies the next line's at every H-blank. r0: the I/O base; r2, r3, r12 are used.
+.macro restart_line_table slot, cnt
+    ldr     r2, =bm_hal_lines + \slot * 8
+    ldmia   r2, {r3, r12}           @ next: register, values
+    add     r2, r2, #24
+    stmia   r2, {r3, r12}           @ shown
+    .if \cnt
+    mov     r2, #0
+    strh    r2, [r0, #\cnt + 10]    @ CNT_H: off
+    .endif
+    cmp     r3, #0
+    beq     9f
+    ldrh    r2, [r12], #2           @ line 0's value now; the DMA from line 1 on
+    strh    r2, [r3]
+    .if \cnt
+    str     r12, [r0, #\cnt]        @ SAD
+    str     r3, [r0, #\cnt + 4]     @ DAD
+    mov     r2, #1
+    strh    r2, [r0, #\cnt + 8]     @ CNT_L: one halfword
+    ldr     r2, =0xA240             @ on, at H-blank, repeating, fixed destination
+    strh    r2, [r0, #\cnt + 10]
+    .endif
+9:
+.endm
 
     .section .iwram.text, "ax"
     .arm
@@ -24,6 +51,9 @@ bm_irq_handler:
     ldr     r3, [r2]
     add     r3, r3, #1
     str     r3, [r2]
+    restart_line_table 0, 0xB0      @ DMA 0
+    restart_line_table 1, 0xD4      @ DMA 3
+    restart_line_table 2, 0         @ the H-blank interrupt below
     @ Sound: DMA 1 and 2 start again on the pair handed over, or on silence if none was.
     ldr     r2, =bm_hal_audio_next
     ldr     r3, [r2, #8]            @ on?
@@ -50,13 +80,13 @@ bm_irq_handler:
     ldrh    r3, [r0, #6]            @ VCOUNT: the line just drawn
     cmp     r3, #160
     bcs     1f                      @ not in the vertical blank
-    ldr     r2, =bm_hal_line2
-    ldr     r12, [r2]               @ the register
-    cmp     r12, #0
+    ldr     r2, =bm_hal_lines + 40      @ shown[2]
+    ldmia   r2, {r2, r12}           @ the register, the values
+    cmp     r2, #0
     beq     1f
-    add     r3, r2, r3, lsl #1
-    ldrh    r3, [r3, #10]           @ values[line + 1] (values start at offset 8)
-    strh    r3, [r12]
+    add     r3, r12, r3, lsl #1
+    ldrh    r3, [r3, #2]            @ values[line + 1]
+    strh    r3, [r2]
 1:
     tst     r1, #0x80               @ serial?
     bxeq    lr

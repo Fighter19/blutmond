@@ -183,7 +183,9 @@ void Project::analyse()
   BmPack pack;
   if (bmPackOpen(&pack, pack_.data(), uint32_t(pack_.size()), true) != BM_PACK_OK) return;
   BmRoom room;
-  if (bmRoomOpen(&room, &pack, 0) != BM_SUCCESS) return;
+  // Its own buffer for the unpacked maps: the game the editor runs has the shared one.
+  std::vector<uint32_t> unpacked(BM_PACK_ROOM_UNPACK_BYTES / 4);
+  if (bmRoomOpenWith(&room, &pack, 0, reinterpret_cast<uint8_t *>(unpacked.data()), BM_PACK_ROOM_UNPACK_BYTES) != BM_SUCCESS) return;
 
   // Palette and tiles straight from the chunks.
   uint32_t size = 0;
@@ -207,7 +209,8 @@ void Project::analyse()
   hardware_.mapBytesMax = 6 * 2048;
 
   // Collision and objects.
-  const uint8_t *coll = bmPackChunkData(&pack, room.collisionChunk, &size);
+  const uint8_t *coll = room.pCollision;
+  size = room.collisionSize;
   if (coll && size >= 8)
   {
     collisionW_ = bmRead16(coll);
@@ -292,7 +295,9 @@ Rgba Project::renderScreen(int cameraX, int cameraY, int *pClampedX, int *pClamp
   if (pack_.empty() || roomImage_.width == 0) return out;
   BmPack pack;
   BmRoom room;
-  if (bmPackOpen(&pack, pack_.data(), uint32_t(pack_.size()), false) != BM_PACK_OK || bmRoomOpen(&room, &pack, 0) != BM_SUCCESS)
+  std::vector<uint32_t> unpacked(BM_PACK_ROOM_UNPACK_BYTES / 4);
+  if (bmPackOpen(&pack, pack_.data(), uint32_t(pack_.size()), false) != BM_PACK_OK ||
+      bmRoomOpenWith(&room, &pack, 0, reinterpret_cast<uint8_t *>(unpacked.data()), BM_PACK_ROOM_UNPACK_BYTES) != BM_SUCCESS)
     return out;
   ensureRuntime();
   bmHalHostReset();

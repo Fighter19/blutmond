@@ -78,10 +78,70 @@ static void testRejectsDamagedPacks(void)
   free(data);
 }
 
+static void testLz77(void)
+{
+  // Runs (overlapping copies), repeats far back, noise, and sizes around the group of 8.
+  static uint8_t in[9000], packed[9000 + 9000 / 8 + 8], out[9000];
+  uint32_t seed = 1;
+  for (uint32_t i = 0; i < sizeof(in); i++)
+  {
+    seed = seed * 1664525u + 1013904223u;
+    in[i] = i < 3000 ? (uint8_t)(i / 700) : i < 6000 ? in[i - 2900] : (uint8_t)(seed >> 24);
+  }
+  const uint32_t sizes[] = { 0, 1, 2, 3, 8, 9, 17, 1000, 6000, 9000 };
+  for (uint32_t k = 0; k < sizeof(sizes) / sizeof(sizes[0]); k++)
+  {
+    uint32_t n = bmLz77Pack(in, sizes[k], packed);
+    memset(out, 0xAA, sizeof(out));
+    TEST_ASSERT(bmLz77Unpack(packed, n, out, sizeof(out)) == sizes[k]);
+    TEST_ASSERT(memcmp(in, out, sizes[k]) == 0);
+  }
+  uint32_t n = bmLz77Pack(in, 3000, packed);
+  TEST_ASSERT(n < 3000 / 6);                                    // the runs compress well (18 bytes a match at most)
+  TEST_ASSERT(bmLz77Unpack(packed, n, out, 2999) == 0);          // larger than the room for it
+  TEST_ASSERT(bmLz77Unpack(packed, n - 1, out, sizeof(out)) == 0);   // cut short
+  packed[0] = 0x11;
+  TEST_ASSERT(bmLz77Unpack(packed, n, out, sizeof(out)) == 0);   // another method
+}
+
+static void testCompressedChunk(void)
+{
+  static uint8_t map[4000];
+  for (uint32_t i = 0; i < sizeof(map); i++) map[i] = (uint8_t)(i % 64 < 8 ? i : 0);
+  BmPackWriter w;
+  bmPackWriterInit(&w, BM_FOURCC('G', 'B', 'A', ' '), BM_PACK_LAYOUT_ROM);
+  bmPackWriterAdd(&w, BM_CHUNK_TMAP, BM_CATEGORY_LEVEL, 256, map, sizeof(map));
+  bmPackWriterAdd(&w, BM_CHUNK_COLL, BM_CATEGORY_LEVEL, 256, "ab", 2);
+  TEST_ASSERT(bmPackWriterCompress(&w, 0));
+  TEST_ASSERT(!bmPackWriterCompress(&w, 1));                     // no smaller: stays as it is
+  uint32_t size = 0;
+  uint8_t *data = bmPackWriterFinish(&w, &size);
+  bmPackWriterFree(&w);
+
+  BmPack pack;
+  TEST_ASSERT(bmPackOpen(&pack, data, size, true) == BM_PACK_OK);
+  BmChunkEntry e;
+  TEST_ASSERT(bmPackGetChunk(&pack, 0, &e));
+  TEST_ASSERT(e.compression == BM_PACK_COMPRESSION_LZ77 && e.unpackedSize == sizeof(map) && e.size < sizeof(map) / 4);
+  TEST_ASSERT(e.hash == bmCrc32(0, pack.pData + e.offset, e.size));
+  TEST_ASSERT(bmPackChunkData(&pack, 0, NULL) == NULL);          // not readable in place
+
+  static uint8_t buffer[sizeof(map)];
+  uint32_t unpacked = 0;
+  TEST_ASSERT(bmPackChunkUnpack(&pack, 0, buffer, sizeof(buffer), &unpacked) == buffer);
+  TEST_ASSERT(unpacked == sizeof(map) && memcmp(buffer, map, sizeof(map)) == 0);
+  TEST_ASSERT(bmPackChunkUnpack(&pack, 0, buffer, sizeof(buffer) - 1, &unpacked) == NULL);
+  const uint8_t *p = bmPackChunkUnpack(&pack, 1, buffer, sizeof(buffer), &unpacked);
+  TEST_ASSERT(p != buffer && unpacked == 2 && memcmp(p, "ab", 2) == 0);   // in place
+  free(data);
+}
+
 int main(void)
 {
   RUN_TEST(testCrc32KnownValue);
   RUN_TEST(testWriteAndRead);
   RUN_TEST(testRejectsDamagedPacks);
+  RUN_TEST(testLz77);
+  RUN_TEST(testCompressedChunk);
   return TEST_RESULT();
 }

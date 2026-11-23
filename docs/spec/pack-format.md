@@ -26,8 +26,16 @@ chunk formats named in section 3.
   table, the chunks and the zero padding between them.
 - **`hash`** of a chunk: the same CRC-32 of its `size` bytes.
 - **Chunks** follow the table in table order, each padded with zeros to a multiple of 4.
-- **Compression** is not built: the cooker writes 0 and `unpacked_size = size`; the reader
-  gives no data for a chunk with another value.
+- **Compression**: the cooker compresses `TMAP` and `COLL` chunks with LZ77 (1, section 4)
+  where that makes them smaller, and only those whose rooms fit the runtime's unpack buffer:
+  every room that reads the chunk must have all its `TMAP`s and its `COLL` (each counted
+  once per use, rounded up to 4 bytes) at most `BM_PACK_ROOM_UNPACK_BYTES` (24 KB) unpacked.
+  A larger room's chunks stay uncompressed and are read in place. Every other chunk is
+  written with 0 and `unpacked_size = size`. `hash` and `size` are of the compressed bytes.
+  Entering a room unpacks its compressed chunks into the buffer (on the GBA with the BIOS,
+  `LZ77UnCompWram`: about 310,000 cycles for the test level's largest room, 20 KB);
+  `bmPackChunkData` gives no data for a compressed chunk, `bmPackChunkUnpack` does. On the
+  test level: 55 KB of maps and collision become 7 KB, the pack 122 KB becomes 74 KB.
 - **Categories**: 0 level, 1 graphics, 2 objects, 3 actors, 4 player, 5 scripts, 6 music,
   7 sound effects, 8 text, 9 meta. The runtime does not read them.
 - **Groups**: 0 global; `1 + n` for the n-th area; `256 + n` for the n-th room. The runtime
@@ -326,10 +334,10 @@ breaks between any two characters rather than at spaces.
 | Value | Method | Notes |
 |---|---|---|
 | 0 | none | |
-| 1 | LZ77, GBA BIOS format | can be decompressed straight to VRAM with the BIOS (`LZ77UnCompVram`) |
+| 1 | LZ77, GBA BIOS format | u32 `0x10 \| unpacked_size << 8`, then groups of a flag byte (high bit first) and eight items: a literal byte, or for a set flag two bytes: length - 3 in the top 4 bits, distance - 1 in the other 12 (copies may overlap). Unpacked into EWRAM with the BIOS (`LZ77UnCompWram`); `LZ77UnCompVram` would need distances of 2 or more |
 | 2 | LZ4 block format | faster to decompress into EWRAM |
 
-The cooker picks per chunk; tile data for VRAM SHOULD use 1.
+The cooker uses 1 for `TMAP` and `COLL` (section 0); 2 is not built.
 
 ## 5. Delta transfer
 

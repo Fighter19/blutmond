@@ -16,19 +16,28 @@ extern volatile uint32_t bm_vblank_count;
 extern void bm_irq_handler(void);
 static bool s_irqReady;
 
-// Line tables: register offset and values per slot. One extra entry because the H-blank
-// transfer of the last line reads one value past the end. Slots 0 and 1 are fed by H-blank
-// DMA (channels 0 and 3), slot 2 by the H-blank interrupt (irq.S), which reads bm_hal_line2:
-// the register's address, then the values.
-static uint16_t s_lineReg[BM_HAL_LINE_TABLES] = { 0xFFFF, 0xFFFF, 0xFFFF };
-static uint16_t s_lineValues[2][GBA_SCREEN_HEIGHT + 1] BM_EWRAM_BSS;
-typedef struct LineTable2
+// Line tables. Slots 0 and 1 are fed by H-blank DMA (channels 0 and 3), slot 2 by the H-blank
+// interrupt. The vertical-blank interrupt (irq.S) restarts them all from bm_hal_lines: it takes
+// `next` as `shown` and writes line 0's value; every H-blank then writes the next line's. So a
+// frame that runs late shows the last table again, rather than the DMA reading on past its end.
+// Two buffers per slot: a new table is written into the one not shown, and is shown from the
+// next vertical blank on, never torn. One extra entry each because the H-blank transfer of the
+// last line reads one value past the end.
+typedef struct LineSlot
 {
-  volatile uint16_t *pReg;
-  uint32_t reserved;
-  uint16_t values[GBA_SCREEN_HEIGHT + 1];
-} LineTable2;
-LineTable2 bm_hal_line2 BM_IWRAM_DATA = { 0, 0, { 0 } };
+  volatile uint16_t *pReg;     // NULL: off
+  const uint16_t *pValues;
+} LineSlot;
+struct
+{
+  LineSlot next[BM_HAL_LINE_TABLES];    // offset 0: what the next vertical blank shows
+  LineSlot shown[BM_HAL_LINE_TABLES];   // offset 24: what is shown now (written by irq.S)
+} bm_hal_lines;   // IWRAM (.bss)
+// The DMA slots' buffers in EWRAM. The third slot's too, unless the program has its own
+// (apps/game/main.c: in IWRAM for a multiboot image, whose EWRAM is short); its own section,
+// so that this one is dropped then.
+static uint16_t s_lineValuesDma[2][2][GBA_SCREEN_HEIGHT + 1] BM_EWRAM_BSS;
+__attribute__((weak, section(".sbss.bm_hal_line_values_irq"))) uint16_t bm_hal_line_values_irq[2][GBA_SCREEN_HEIGHT + 1];
 
 const char *bmHalPlatformName(void)
 {
@@ -79,30 +88,6 @@ uint16_t bmHalPaletteRead(uint16_t index)
   return index < BM_HAL_PALETTE_SIZE ? GBA_PALETTE[index] : 0;
 }
 
-static void restartLineTables(void)
-{
-  // Line 0 gets its value now; every H-blank then copies the value for the next line.
-  GBA_REG_DMA0CNT_H = 0;
-  if (s_lineReg[0] != 0xFFFF)
-  {
-    GBA_REG16(s_lineReg[0]) = s_lineValues[0][0];
-    GBA_REG_DMA0SAD = (uint32_t)&s_lineValues[0][1];
-    GBA_REG_DMA0DAD = GBA_IO + s_lineReg[0];
-    GBA_REG_DMA0CNT_L = 1;
-    GBA_REG_DMA0CNT_H = GBA_DMA_ENABLE | GBA_DMA_START_HBLANK | GBA_DMA_REPEAT | GBA_DMA_DEST_FIXED;
-  }
-  GBA_REG_DMA3CNT_H = 0;
-  if (s_lineReg[1] != 0xFFFF)
-  {
-    GBA_REG16(s_lineReg[1]) = s_lineValues[1][0];
-    GBA_REG_DMA3SAD = (uint32_t)&s_lineValues[1][1];
-    GBA_REG_DMA3DAD = GBA_IO + s_lineReg[1];
-    GBA_REG_DMA3CNT_L = 1;
-    GBA_REG_DMA3CNT_H = GBA_DMA_ENABLE | GBA_DMA_START_HBLANK | GBA_DMA_REPEAT | GBA_DMA_DEST_FIXED;
-  }
-  if (s_lineReg[2] != 0xFFFF) GBA_REG16(s_lineReg[2]) = bm_hal_line2.values[0];
-}
-
 uint16_t bmHalVideoLine(void)
 {
   return GBA_REG16(0x006) & 0xFF;
@@ -138,9 +123,23 @@ uint32_t bmHalCycles(void)
 // late handed none over: then a frame of silence plays (rather than the DMA reading on past
 // the buffer, over the other pair: old sound again). The buffers are a little longer than a
 // frame, so a DMA request that falls just before the restart reads silence too.
+//
+// That must not happen while the sound plays: 16 samples of silence, and the frame's last 16
+// lost, are a click (heard as crackling over a quiet held note). The FIFOs ask for 16 bytes
+// every 16 samples, exactly every 12 lines (16 * 924 = 12 * 1232 cycles), so where those
+// requests fall against the vertical blank stays as it was when the sound started. Started
+// from the interrupt handler, the first came within a sample of the restart, and a handler a
+// little later than that first one (it varies on the device) let one in before the restart.
+// Started on line 214 instead, the first request comes some 6 lines after each blank: the
+// restart may be that late (measured in mGBA by delaying it; line 218 would be the worst).
 
 #define AUDIO_BUFFER (BM_HAL_AUDIO_FRAME_SAMPLES + 16)
-static int8_t s_audio[2][2][AUDIO_BUFFER];   // in fast memory: written once per sample
+#define AUDIO_START_LINE 214
+#define AUDIO_DMA (GBA_DMA_ENABLE | GBA_DMA_START_FIFO | GBA_DMA_32BIT | GBA_DMA_REPEAT | GBA_DMA_DEST_FIXED)
+// In fast memory: written once per sample. Aligned like the silence: the DMA moves words and
+// leaves out the address's low two bits, so an odd address had each frame start with the bytes
+// before it and lose its last ones (a buzz of 60 a second, loudest on low held notes).
+static int8_t s_audio[2][2][AUDIO_BUFFER] __attribute__((aligned(4)));
 static uint8_t s_audioFill;   // the pair being filled
 static bool s_audioOn;
 static bool s_audioFilled;    // the pair was given out this frame (bmHalAudioBuffers)
@@ -152,15 +151,34 @@ void bmHalAudioStart(void)
 {
   if (s_audioOn) return;
   GBA_REG_SOUNDCNT_X = 0x80;     // sound on
-  // Both direct sound channels at full volume, timer 0; A on the left, B on the right; FIFOs reset.
-  GBA_REG_SOUNDCNT_H = 0x0004 | 0x0008 | 0x0200 | 0x0800 | 0x1000 | 0x8000;
   GBA_REG_TM0CNT_H = 0;
   GBA_REG_TM0CNT_L = (uint16_t)(65536 - 924);
-  GBA_REG_TM0CNT_H = 0x80;
   GBA_REG_DMA1DAD = GBA_FIFO_A;
   GBA_REG_DMA2DAD = GBA_FIFO_B;
-  s_audioOn = true;
-  bm_hal_audio_next.on = 1;
+  GBA_REG_DMA1SAD = (uint32_t)bm_hal_audio_silence;
+  GBA_REG_DMA2SAD = (uint32_t)bm_hal_audio_silence;
+  // Both direct sound channels at full volume, timer 0; A on the left, B on the right. The
+  // FIFOs are emptied and the timer started on a chosen line (AUDIO_START_LINE), with
+  // interrupts off for those few writes, so the FIFO requests fall where they should.
+  for (;;)
+  {
+    while (GBA_REG_VCOUNT != AUDIO_START_LINE) {}
+    uint16_t ime = GBA_REG_IME;
+    GBA_REG_IME = 0;
+    if (GBA_REG_VCOUNT != AUDIO_START_LINE)
+    {
+      GBA_REG_IME = ime;   // an interrupt took the line: the next frame's
+      continue;
+    }
+    GBA_REG_SOUNDCNT_H = 0x0004 | 0x0008 | 0x0200 | 0x0800 | 0x1000 | 0x8000;
+    GBA_REG_DMA1CNT_H = AUDIO_DMA;
+    GBA_REG_DMA2CNT_H = AUDIO_DMA;
+    GBA_REG_TM0CNT_H = 0x80;
+    s_audioOn = true;
+    bm_hal_audio_next.on = 1;
+    GBA_REG_IME = ime;
+    break;
+  }
 }
 
 void bmHalAudioBuffers(int8_t **ppLeft, int8_t **ppRight)
@@ -187,7 +205,12 @@ uint32_t bmHalVideoWaitVBlank(void)
   // BIOS VBlankIntrWait: halts the CPU until the next VBlank interrupt. The returned count
   // comes from the interrupt handler, so missed frames show up as gaps.
   __asm__ volatile("swi 0x05" ::: "r0", "r1", "r2", "r3", "memory");
-  restartLineTables();
+  // The third table switched off and no longer shown: no more H-blank interrupts.
+  if (bm_hal_lines.shown[2].pReg == NULL && bm_hal_lines.next[2].pReg == NULL && (GBA_REG_IE & GBA_IRQ_HBLANK))
+  {
+    GBA_REG_IE &= (uint16_t)~GBA_IRQ_HBLANK;
+    GBA_REG_DISPSTAT &= (uint16_t)~GBA_DISPSTAT_HBLANK_IRQ;
+  }
   return bm_vblank_count;
 }
 
@@ -215,10 +238,14 @@ uint16_t bmHalVideoReadReg(uint16_t offset)
 
 uint32_t bmHalVideoSnapshotPart(uint32_t offset, uint8_t *pOut, uint32_t size)
 {
-  BmPpuSnapshotSource source = {
-    s_regs, (const volatile uint8_t *)GBA_VRAM, GBA_PALETTE, GBA_OAM, { s_lineReg[0], s_lineReg[1], s_lineReg[2] },
-    { s_lineValues[0], s_lineValues[1], bm_hal_line2.values },
-  };
+  BmPpuSnapshotSource source = { s_regs, (const volatile uint8_t *)GBA_VRAM, GBA_PALETTE, GBA_OAM, { 0 }, { NULL } };
+  for (uint32_t t = 0; t < BM_HAL_LINE_TABLES; t++)
+  {
+    // The tables as last set.
+    const LineSlot *l = &bm_hal_lines.next[t];
+    source.lineRegs[t] = l->pReg != NULL ? (uint16_t)((uint32_t)l->pReg - GBA_IO) : 0xFFFF;
+    source.pLineValues[t] = l->pValues;
+  }
   return bmPpuSnapshotPart(&source, offset, pOut, size);
 }
 
@@ -228,7 +255,23 @@ void bmHalVramWrite(uint32_t offset, const void *pData, uint32_t size)
   {
     return;
   }
+  // Video memory takes 16- and 32-bit writes only. Aligned (tiles in a pack are): words; a
+  // room's tiles took ten times as long built from bytes.
+  if ((((uintptr_t)pData | offset) & 3) == 0)
+  {
+    volatile uint32_t *pDst = (volatile uint32_t *)(GBA_VRAM + offset);
+    const uint32_t *pSrc = (const uint32_t *)pData;
+    for (uint32_t words = size / 4; words != 0; words--) *pDst++ = *pSrc++;
+    if (size & 2) *(volatile uint16_t *)pDst = *(const uint16_t *)pSrc;
+    return;
+  }
   volatile uint16_t *pDst = (volatile uint16_t *)(GBA_VRAM + offset);
+  if (((uintptr_t)pData & 1) == 0)
+  {
+    const uint16_t *pSrc = (const uint16_t *)pData;
+    for (uint32_t i = 0; i < size / 2; i++) pDst[i] = pSrc[i];
+    return;
+  }
   const uint8_t *pSrc = (const uint8_t *)pData;
   for (uint32_t i = 0; i < size / 2; i++)
   {
@@ -254,35 +297,38 @@ void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues)
   {
     return;
   }
+  LineSlot *pNext = &bm_hal_lines.next[slot];
   if (pValues == NULL || reg >= BM_PPU_REG_SIZE)
   {
-    s_lineReg[slot] = 0xFFFF;
-    if (slot == 0) GBA_REG_DMA0CNT_H = 0;
-    if (slot == 1) GBA_REG_DMA3CNT_H = 0;
-    if (slot == 2)
-    {
-      GBA_REG_IE &= (uint16_t)~GBA_IRQ_HBLANK;
-      GBA_REG_DISPSTAT &= (uint16_t)~GBA_DISPSTAT_HBLANK_IRQ;
-      bm_hal_line2.pReg = 0;
-    }
+    // Off from the next vertical blank on (the H-blank interrupt then stops in bmHalVideoWaitVBlank).
+    uint16_t ime = GBA_REG_IME;
+    GBA_REG_IME = 0;
+    pNext->pReg = NULL;
+    pNext->pValues = NULL;
+    GBA_REG_IME = ime;
     return;
   }
-  uint16_t *pTo = slot == 2 ? bm_hal_line2.values : s_lineValues[slot];
-  if (slot == 2)
-  {
-    // Not while the interrupt reads them: from the next frame on, as the DMA slots.
-    GBA_REG_IE &= (uint16_t)~GBA_IRQ_HBLANK;
-  }
+  initInterrupts();
+  // A table set earlier this frame and not shown yet is dropped first: a vertical blank while
+  // this one is written shows the current one again, and the buffer not shown stays free.
+  uint16_t ime = GBA_REG_IME;
+  GBA_REG_IME = 0;
+  *pNext = bm_hal_lines.shown[slot];
+  GBA_REG_IME = ime;
+  uint16_t(*pBuffers)[GBA_SCREEN_HEIGHT + 1] = slot == 2 ? bm_hal_line_values_irq : s_lineValuesDma[slot];
+  uint16_t *pTo = bm_hal_lines.shown[slot].pValues == pBuffers[0] ? pBuffers[1] : pBuffers[0];
   for (uint32_t y = 0; y < GBA_SCREEN_HEIGHT; y++)
   {
     pTo[y] = pValues[y];
   }
   pTo[GBA_SCREEN_HEIGHT] = pValues[GBA_SCREEN_HEIGHT - 1];
-  s_lineReg[slot] = reg;
+  ime = GBA_REG_IME;
+  GBA_REG_IME = 0;
+  pNext->pReg = &GBA_REG16(reg);
+  pNext->pValues = pTo;
+  GBA_REG_IME = ime;
   if (slot == 2)
   {
-    initInterrupts();
-    bm_hal_line2.pReg = &GBA_REG16(reg);
     GBA_REG_DISPSTAT |= GBA_DISPSTAT_HBLANK_IRQ;
     GBA_REG_IE |= GBA_IRQ_HBLANK;
   }

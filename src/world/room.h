@@ -26,7 +26,7 @@ typedef struct BmRoomLayer
   uint8_t priority;
   uint8_t bg;             // hardware background it is shown on
   uint16_t width8, height8;
-  const uint8_t *pEntries; // map entries in the pack (little endian u16)
+  const uint8_t *pEntries; // map entries (little endian u16): in the pack, or unpacked
   int32_t parallaxX, parallaxY;  // fix 24.8
 
   // Streaming state: the window of map cells currently in the hardware map.
@@ -45,6 +45,8 @@ typedef struct BmRoom
   uint16_t objectCount;
   uint16_t musicId;          // string id of the room's song, 0xFFFF: none
   uint16_t tilesChunk, paletteChunk, collisionChunk, objectsChunk;
+  const uint8_t *pCollision;   // the COLL chunk's data: in the pack, or unpacked
+  uint32_t collisionSize;
   uint8_t layerCount;
   BmRoomLayer layers[BM_ROOM_MAX_LAYERS];
   int32_t cameraX, cameraY;
@@ -53,8 +55,14 @@ typedef struct BmRoom
 /// Number of rooms (ROOM chunks) in a pack.
 uint32_t bmRoomCount(const BmPack *pPack);
 
-/// Reads the `index`-th room of a pack. Nothing is shown yet.
+/// Reads the `index`-th room of a pack. Nothing is shown yet. Its compressed maps and
+/// collision are unpacked into one buffer of BM_PACK_ROOM_UNPACK_BYTES that all rooms opened
+/// so share: the room opened before it is not to be used any more.
 BmResult bmRoomOpen(BmRoom *pRoom, const BmPack *pPack, uint32_t index);
+
+/// The same, unpacking into `pBuffer` (`size` bytes, 4-byte aligned), which must stay while
+/// the room is used: for a room opened beside the game's (the editor's preview).
+BmResult bmRoomOpenWith(BmRoom *pRoom, const BmPack *pPack, uint32_t index, uint8_t *pBuffer, uint32_t size);
 
 /// Uploads the room's palettes and tiles, sets up its backgrounds and shows it with the camera
 /// at (x, y) (top-left corner of the screen, clamped to the room).

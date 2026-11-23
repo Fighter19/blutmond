@@ -498,9 +498,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   BmResult r = bmRoomOpen(&g->room, g->pPack, index);
   if (r != BM_SUCCESS) return r;
   g->roomIndex = index;
-  uint32_t size = 0;
-  const uint8_t *coll = bmPackChunkData(g->pPack, g->room.collisionChunk, &size);
-  if (!bmCollisionInit(&g->collision, coll, size, (g->room.flags & 1) != 0)) return BM_ERROR_INVALID_ARGUMENT;
+  if (!bmCollisionInit(&g->collision, g->room.pCollision, g->room.collisionSize, (g->room.flags & 1) != 0)) return BM_ERROR_INVALID_ARGUMENT;
   g->physics.gravity = g->room.gravity;
   g->physics.maxFallSpeed = g->room.maxFallSpeed;
   g->physics.waterGravity = g->room.waterGravity;

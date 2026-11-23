@@ -994,10 +994,10 @@ static uint32_t loadModules(BmGame *g)
   for (int32_t chunk = bmPackFindChunk(g->pPack, BM_CHUNK_MODB, 0); chunk >= 0 && n < BM_ACTORS_MODULES;
        chunk = bmPackFindChunk(g->pPack, BM_CHUNK_MODB, (uint32_t)chunk + 1))
   {
-    uint32_t size = 0;
-    const uint8_t *p = bmPackChunkData(g->pPack, (uint32_t)chunk, &size);
     BmChunkEntry entry;
-    if (p == NULL || !bmPackGetChunk(g->pPack, (uint32_t)chunk, &entry)) continue;
+    if (!bmPackGetChunk(g->pPack, (uint32_t)chunk, &entry) || entry.compression != BM_PACK_COMPRESSION_NONE) continue;
+    uint32_t size = entry.size;
+    const uint8_t *p = g->pPack->pData + entry.offset;   // as bmPackChunkData
     // The module that was verified when the pack was first used: no need to do it again.
     if (n < a->moduleCount && a->pVerified[n] == p && a->verifiedHash[n] == entry.hash)
     {
