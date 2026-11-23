@@ -135,6 +135,21 @@ int32_t bmPackFindChunk(const BmPack *pPack, uint32_t id, uint32_t start);
 /// In-place data of an uncompressed chunk, or NULL (bad index, compressed chunk).
 const uint8_t *bmPackChunkData(const BmPack *pPack, uint32_t index, uint32_t *pSize);
 
+/// A chunk's data, compressed or not: an uncompressed one in place, an LZ77 one unpacked into
+/// `pOut` (at most `outSize` bytes). NULL if it does not fit, is damaged or of another method.
+const uint8_t *bmPackChunkUnpack(const BmPack *pPack, uint32_t index, uint8_t *pOut, uint32_t outSize, uint32_t *pSize);
+
+/// Unpacks LZ77 in the GBA BIOS format (section 4 of pack-format.md): a u32 of 0x10 and the
+/// unpacked size << 8, then groups of a flag byte (high bit first) and eight items: a byte,
+/// or for a set flag two bytes, length - 3 in the top 4 bits, distance - 1 in the other 12.
+/// Returns the unpacked size, 0 if the data is damaged or larger than `outSize`.
+uint32_t bmLz77Unpack(const uint8_t *pIn, uint32_t inSize, uint8_t *pOut, uint32_t outSize);
+
+/// The most a room's compressed maps and collision take unpacked, together (each rounded up
+/// to 4 bytes): the runtime has a buffer of this size for them (room.h). The cooker leaves
+/// the chunks of a larger room uncompressed; those are read in place.
+#define BM_PACK_ROOM_UNPACK_BYTES (24u * 1024u)
+
 /// String `id` from the pack's string table (STRS), NUL-terminated, or NULL.
 const char *bmPackString(const BmPack *pPack, uint16_t id);
 
@@ -171,6 +186,14 @@ void bmPackWriterFree(BmPackWriter *pWriter);
 /// Adds a chunk (data is copied); returns its index in the table of contents.
 uint32_t bmPackWriterAdd(BmPackWriter *pWriter, uint32_t id, BmChunkCategory category, uint16_t group,
                          const void *pData, uint32_t size);
+
+/// LZ77-compresses chunk `index` (data, size, hash: of the compressed bytes) if that makes
+/// it smaller; returns whether it did.
+bool bmPackWriterCompress(BmPackWriter *pWriter, uint32_t index);
+
+/// LZ77 in the BIOS format (bmLz77Unpack); `pOut` takes at least 4 + size + size / 8 + 1
+/// bytes. Returns the compressed size.
+uint32_t bmLz77Pack(const uint8_t *pIn, uint32_t size, uint8_t *pOut);
 
 /// Builds the pack. Returns a malloc'ed buffer (caller frees) and its size.
 uint8_t *bmPackWriterFinish(const BmPackWriter *pWriter, uint32_t *pSize);
