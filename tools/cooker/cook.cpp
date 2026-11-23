@@ -17,6 +17,7 @@ extern "C" {
 #include "world_asset.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <map>
@@ -1053,6 +1054,8 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
 
   // Sprites: global for now (every room may use every sprite).
   std::set<std::string> spriteNames;
+  std::map<std::string, std::pair<int, int>> spriteMemory;   // name: tiles, palettes (the room report)
+  std::map<std::string, std::string> classSprites;           // a script class's sprite
   for (const std::string &path : options.sprites)
   {
     try
@@ -1069,7 +1072,10 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       Bytes b;
       std::vector<uint16_t> boxNames;
       for (const std::string &n : cooked.boxNames) boxNames.push_back(strings.id(n));
-      b.data = sprite::chunk(s, cooked, strings.id(s.name), names, boxNames);
+      std::vector<uint16_t> paletteNames{strings.id("default")};
+      for (const std::string &n : cooked.paletteNames) paletteNames.push_back(strings.id(n));
+      b.data = sprite::chunk(s, cooked, strings.id(s.name), names, boxNames, paletteNames);
+      spriteMemory[s.name] = {int(cooked.tiles.size()), int(paletteNames.size())};
       add(writer, BM_CHUNK_SPRT, BM_CATEGORY_ACTORS, 0, b);
     }
     catch (const std::exception &e)
@@ -1178,6 +1184,8 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
         bytes += cm.data.size();
       }
       for (const script::ClassInfo &c : module.classes) words += size_t(c.codeWords);
+      for (const script::ClassInfo &c : module.classes)
+        if (!c.sprite.empty()) classSprites[c.name] = c.sprite;
       report.info("script", "modules", std::to_string(module.classes.size()) + " classes, " + std::to_string(words * 2) + " bytes of code, " +
                                          std::to_string(bytes) + " bytes in the pack");
       for (const script::StructInfo &s : module.structs)
@@ -1315,6 +1323,53 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       }
       if (!l.path.empty()) report.info("text", l.path, "language " + l.code + ": " + std::to_string(entries.size()) + " texts translated");
       add(writer, BM_CHUNK_LANG, BM_CATEGORY_TEXT, 0, b);
+    }
+  }
+  // Sprite memory per room (layered-sprites.md §3): what a room loads when it is entered (its
+  // objects' sprites, door panels, the puzzle's, each in the palettes its objects ask for) on
+  // top of the player's sheet and the built-in graphics; effects and objects made later come
+  // on top of that.
+  if (!spriteMemory.empty())
+  {
+    auto lower = [](std::string t) {
+      for (char &ch : t) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+      return t;
+    };
+    std::map<std::string, std::string> byLower;
+    for (const auto &e : spriteMemory) byLower[lower(e.first)] = e.first;
+    const int playerTiles = spriteMemory.count("player") ? spriteMemory["player"].first : 0;
+    const int freeTiles = 1024 - 12 - playerTiles, banks = 12;   // bank 0: the player's
+    for (const RoomWork &r : rooms)
+    {
+      std::map<std::string, std::set<std::string>> used;   // sprite: palettes
+      for (const tmx::ObjectGroup &og : r.map->objectGroups)
+        for (const tmx::Object &o : og.objects)
+        {
+          std::string sprite;
+          auto cs = classSprites.find(o.type);
+          if (cs != classSprites.end()) sprite = cs->second;
+          else if (byLower.count(lower(o.type))) sprite = byLower[lower(o.type)];
+          auto panel = o.properties.find("panel");
+          if (panel != o.properties.end()) sprite = panel->second;
+          if (o.type == "PushBlock" || o.type == "Gate" || o.type == "PressurePlate") sprite = "puzzle";
+          if (sprite.empty() || !spriteMemory.count(sprite) || sprite == "player") continue;
+          auto pal = o.properties.find("palette");
+          used[sprite].insert(pal != o.properties.end() ? pal->second : "default");
+        }
+      int tiles = 0, pairs = 0;
+      std::string list;
+      for (const auto &u : used)
+      {
+        tiles += spriteMemory[u.first].first;
+        pairs += int(u.second.size());
+        list += (list.empty() ? "" : ", ") + u.first + (u.second.size() > 1 ? " (" + std::to_string(u.second.size()) + " palettes)" : "");
+      }
+      std::string line = std::to_string(tiles) + " of " + std::to_string(freeTiles) + " sprite tiles, " + std::to_string(pairs) + " of " +
+                         std::to_string(banks) + " palette banks" + (list.empty() ? "" : ": " + list);
+      if (tiles > freeTiles || pairs > banks)
+        report.warning("sprite-memory", "room '" + r.id + "'", line + " (more than there is: some are not drawn)");
+      else
+        report.info("sprite-memory", "room '" + r.id + "'", line);
     }
   }
   if (shared.savedBytes != 0)

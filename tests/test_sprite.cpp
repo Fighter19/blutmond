@@ -15,6 +15,7 @@ extern "C" {
 
 #include "test.h"
 
+#include <cmath>
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -219,6 +220,49 @@ static void testBoxes()
   TEST_ASSERT(problem({{sprite::BoxKind::Hurt, "", {0, 0, 300, 4}}}).find("at most 255") != std::string::npos);
 }
 
+// Palettes (sprite-format.md version 3): swaps and a second image give other colours to the
+// same slots; they go through the file and into the chunk with their names.
+static void testPalettes()
+{
+  sprite::Sprite s = sprite::load(s_assets + "/test_room/bat.bmsprite");
+  TEST_ASSERT(s.palettes.size() == 1 && s.palettes[0].name == "red" && s.palettes[0].swaps.size() == 3);
+  Report report;
+  sprite::Cooked c = sprite::cook(s, *profileByName("gba"), report);
+  TEST_ASSERT(!report.hasErrors() && c.variants.size() == 1 && c.paletteNames[0] == "red");
+  auto bgr = [](int r, int g, int b) {
+    auto q = [](int v) { return int(std::lround(v * 31.0 / 255.0)); };
+    return uint16_t(q(r) | q(g) << 5 | q(b) << 10);
+  };
+  int body = -1;
+  for (int k = 1; k < 16; k++)
+    if (c.palette[size_t(k)] == bgr(0x6b, 0x42, 0x8c)) body = k;
+  TEST_ASSERT(body > 0 && c.variants[0][size_t(body)] == bgr(0xb0, 0x28, 0x38));
+  // A second image: every pixel's colour inverted; each slot takes its pixels' new colour.
+  sprite::PaletteVariant inv;
+  inv.name = "inverted";
+  inv.image = std::make_shared<Image>(*s.image);
+  for (size_t i = 0; i < inv.image->rgba.size(); i += 4)
+    for (int ch = 0; ch < 3; ch++) inv.image->rgba[i + size_t(ch)] = uint8_t(255 - inv.image->rgba[i + size_t(ch)]);
+  s.palettes.push_back(inv);
+  Report r2;
+  sprite::Cooked d = sprite::cook(s, *profileByName("gba"), r2);
+  TEST_ASSERT(!r2.hasErrors() && d.variants.size() == 2 && d.variants[1][size_t(body)] == bgr(255 - 0x6b, 255 - 0x42, 255 - 0x8c));
+  // Into the chunk: two palettes after the default, their names after them.
+  std::vector<uint8_t> b = sprite::chunk(s, d, 1, {2}, {}, {10, 11, 12});
+  TEST_ASSERT(b[12] == 56 && b[52] == 3);
+  uint32_t paletteAt = uint32_t(b[28] | b[29] << 8 | b[30] << 16 | b[31] << 24);
+  TEST_ASSERT((b[paletteAt + 32 + body * 2] | b[paletteAt + 32 + body * 2 + 1] << 8) == bgr(0xb0, 0x28, 0x38));
+  TEST_ASSERT(b[paletteAt + 96] == 10 && b[paletteAt + 98] == 11 && b[paletteAt + 100] == 12);
+  // Saved and loaded again: the palette and its swaps.
+  fs::create_directories(s_work);
+  fs::copy_file(s_assets + "/test_room/bat.png", s_work + "/bat.png", fs::copy_options::overwrite_existing);
+  s.palettes.pop_back();
+  s.path = s_work + "/bat_copy.bmsprite";
+  TEST_ASSERT(sprite::save(s));
+  sprite::Sprite t = sprite::load(s.path);
+  TEST_ASSERT(t.palettes.size() == 1 && t.palettes[0].name == "red" && t.palettes[0].swaps == s.palettes[0].swaps);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 3) return 2;
@@ -228,6 +272,7 @@ int main(int argc, char **argv)
   RUN_TEST(testCook);
   RUN_TEST(testRuntime);
   RUN_TEST(testBoxes);
+  RUN_TEST(testPalettes);
   fs::remove_all(s_work);
   return TEST_RESULT();
 }

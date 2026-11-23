@@ -2338,6 +2338,73 @@ static void testThePushBlockPuzzle(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// layered-sprites.md steps 1 and 2: sheets go into sprite memory room by room, palette banks
+// are given out per sheet and palette. In the gatehouse a bat and a red Fast Bat use one
+// sheet and two banks (the red one holding the swapped colours); the knight's sheet is not
+// loaded there, in the guard room it is and the bats' banks are free again.
+static int sheetOf(const char *name)
+{
+  for (uint8_t k = 0; k < s_game.sheetCount; k++)
+  {
+    const char *n = bmPackString(&s_pack, s_game.sheets[k].nameId);
+    if (n != NULL && strcmp(n, name) == 0) return k;
+  }
+  return -1;
+}
+
+static int banksOf(int sheet, int palette)
+{
+  int n = 0;
+  for (int b = 0; b < BM_GAME_BANKS; b++) n += s_game.bankSheet[b] == sheet && (palette < 0 || s_game.bankPalette[b] == palette);
+  return n;
+}
+
+static void testSheetsAndPalettesPerRoom(void)
+{
+  startWith(s_data, s_size, "puzzle_room");
+  frames(3, 0);
+  const BmActors *a = &s_game.actors;
+  int bat = sheetOf("bat"), knight = sheetOf("knight");
+  TEST_ASSERT(bat >= 0 && knight >= 0 && s_game.sheets[bat].paletteCount == 2);
+  int bats = 0, red = -1;
+  for (int i = 0; i < a->count; i++)
+    if (a->sheet[i] == bat)
+    {
+      bats++;
+      if (a->palette[i] == 1) red = i;
+    }
+  TEST_ASSERT(bats == 2 && red >= 0);
+  TEST_ASSERT(banksOf(bat, 0) == 1 && banksOf(bat, 1) == 1 && banksOf(bat, -1) == 2);
+  // The red bank has the swapped body colour (#b02838 as BGR555).
+  int bank = -1;
+  for (int b = 0; b < BM_GAME_BANKS; b++)
+    if (s_game.bankSheet[b] == bat && s_game.bankPalette[b] == 1) bank = b;
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  bool swapped = false;
+  for (int c = 1; c < 16; c++) swapped |= ppu->palette[256 + bank * 16 + c] == (21 | 5 << 5 | 7 << 10);
+  TEST_ASSERT(swapped);
+  TEST_ASSERT(s_game.sheetTile[knight] == BM_GAME_NO_TILES && s_game.sheetTile[bat] != BM_GAME_NO_TILES);
+  // Into the guard room: the knight's sheet is there, the bats' banks are free.
+  bmBodyPlace(&s_game.player, 470, 160);
+  for (int f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_RIGHT);
+  frames(5, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
+  TEST_ASSERT(s_game.sheetTile[knight] != BM_GAME_NO_TILES && banksOf(knight, 0) == 1 && banksOf(bat, -1) == 0);
+  TEST_ASSERT(s_game.spriteMisses == 0);
+  // set_palette and flash from a script (the wind pack's Painter).
+  if (s_windData != NULL)
+  {
+    startWith(s_windData, s_windSize, "test_room_2");
+    int p = spawnAs("Painter", 120, 160, BM_ACTORS_ROOM);
+    TEST_ASSERT(p >= 0 && s_game.actors.palette[p] == 1 && s_game.actors.flash[p] == 5);
+    frames(3, 0);
+    TEST_ASSERT(s_game.actors.flash[p] == 2);
+    frames(3, 0);
+    TEST_ASSERT(s_game.actors.flash[p] == 0);
+  }
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -2367,6 +2434,7 @@ int main(int argc, char **argv)
   RUN_TEST(testBackThroughADoorAtOnce);
   RUN_TEST(testBreakableWallsAndCrates);
   RUN_TEST(testThePushBlockPuzzle);
+  RUN_TEST(testSheetsAndPalettesPerRoom);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
   RUN_TEST(testTheWorldMap);

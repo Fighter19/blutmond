@@ -4,6 +4,11 @@
  <box kind="hit" name="bite" x="-3" y="-4" w="6" h="4"/>
  <frame x="0" y="0" w="16" h="16" ax="8" ay="12"/>
  <frame x="16" y="0" w="16" h="16" ax="8" ay="12"/>
+ <palette name="red">
+  <swap from="#6b428c" to="#b02838"/>
+  <swap from="#422963" to="#64141e"/>
+  <swap from="#ffe763" to="#fff8c8"/>
+ </palette>
  <animation name="idle" loop="1">
   <step frame="0" duration="8"/>
   <step frame="1" duration="8"/>

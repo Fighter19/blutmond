@@ -139,7 +139,7 @@ uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
   for (uint16_t i = 0; i < g->objectCount && used < maxOam && matrix < 32; i++)
   {
     const BmObjectView *o = &g->objects[i];
-    if (o->kind != BM_OBJECT_DOOR || g->objectSheet[i] < 0) continue;
+    if (o->kind != BM_OBJECT_DOOR || bmGameSheetBank(g, g->objectSheet[i], 0) < 0) continue;
     // Off screen (with room for a panel swung open): nothing to do.
     int32_t ox = o->x - g->room.cameraX, oy = o->y - g->room.cameraY;
     if (ox + o->w < -64 || ox > BM_HAL_SCREEN_WIDTH + 64 || oy + o->h < 0 || oy > BM_HAL_SCREEN_HEIGHT + 64) continue;

@@ -54,6 +54,18 @@ struct Animation
   std::vector<Step> steps;
 };
 
+/// Another palette of the same pixels (docs/plans/layered-sprites.md §2): a second image of the
+/// sheet with other colours (paired with the default ones by position), or single colours
+/// swapped.
+struct PaletteVariant
+{
+  std::string name;
+  std::string imageAttr;              // as written in the file (relative), or empty
+  std::string imagePath;              // absolute
+  std::shared_ptr<Image> image;
+  std::vector<std::pair<uint32_t, uint32_t>> swaps;   // RGB from, to
+};
+
 struct Sprite
 {
   std::string path;                   // the .bmsprite file
@@ -65,6 +77,7 @@ struct Sprite
   std::vector<NamedBox> boxes;        // of every frame that has none of that kind
   std::vector<Frame> frames;
   std::vector<Animation> animations;
+  std::vector<PaletteVariant> palettes;   // besides the sheet's own ("default")
 };
 
 /// Loads a sprite file and its sheet. Throws std::runtime_error on errors.
@@ -95,6 +108,8 @@ struct Cooked
 {
   std::vector<std::string> boxNames;  // every name of a hit or guard box, in order of use
   std::vector<uint16_t> palette;      // 16 entries, 0 transparent
+  std::vector<std::string> paletteNames;           // of the variants, in file order
+  std::vector<std::vector<uint16_t>> variants;     // 16 entries each, the same slots
   std::vector<std::array<uint8_t, 64>> tiles;  // palette indices
   std::vector<CookedFrame> frames;
   int maxPieces = 0;                  // hardware sprites the largest frame needs
@@ -106,7 +121,8 @@ Cooked cook(const Sprite &sprite, const Profile &profile, Report &report);
 
 /// The SPRT chunk (pack-format.md): `nameId` is the sprite's name in the string table,
 /// `animationNames` the string ids of its animations, `boxNameIds` those of cooked.boxNames.
+/// `paletteNameIds` those of "default" and then cooked.paletteNames.
 std::vector<uint8_t> chunk(const Sprite &sprite, const Cooked &cooked, uint16_t nameId, const std::vector<uint16_t> &animationNames,
-                           const std::vector<uint16_t> &boxNameIds = {});
+                           const std::vector<uint16_t> &boxNameIds = {}, const std::vector<uint16_t> &paletteNameIds = {});
 
 }  // namespace bm::sprite

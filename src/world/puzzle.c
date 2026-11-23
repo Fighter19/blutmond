@@ -247,10 +247,10 @@ void bmPuzzleOverrides(BmGame *g)
   g->collision.overrideCount = n;
 }
 
-uint8_t bmPuzzleDraw(const BmGame *g, uint8_t firstOam, uint8_t maxOam)
+uint8_t bmPuzzleDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
 {
   const BmPuzzle *p = &g->puzzle;
-  if (p->sheet < 0) return 0;
+  if (bmGameSheetBank(g, p->sheet, 0) < 0) return 0;
   const BmSpriteSheet *s = &g->sheets[p->sheet];
   int32_t camX = g->room.cameraX, camY = g->room.cameraY;
   uint8_t used = 0;

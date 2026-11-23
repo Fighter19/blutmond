@@ -25,7 +25,10 @@
 #include "ui.h"
 
 #define BM_GAME_MAX_OBJECTS 64
-#define BM_GAME_MAX_SHEETS 13   // palette banks 0-12 (13: hit flash, 14-15: built in)
+#define BM_GAME_MAX_SHEETS 24   // sprites in a pack (their data; what is in sprite memory: bmGameSheetBank)
+#define BM_GAME_BANKS 13        // sprite palette banks given out (13: hit flash, 14-15: built in)
+#define BM_GAME_OBJ_TILES 1024  // sprite memory, in tiles
+#define BM_GAME_NO_TILES 0xFFFF
 #define BM_GAME_MAX_OAM 48
 #define BM_GAME_MAX_OVERRIDES (BM_ROOM_MAX_HOLES + BM_PUZZLE_BLOCKS + BM_PUZZLE_GATES)
 #define BM_GAME_EFFECTS 8      // effects shown at once: sparks (a blocked hit), debris (a broken wall)
@@ -151,6 +154,14 @@ typedef struct BmGame
   uint32_t spritesCrc;
   uint8_t sheetCount;
   BmSpriteSheet sheets[BM_GAME_MAX_SHEETS];
+  // What is in sprite memory (layered-sprites.md §2, §3): each sheet's first tile there
+  // (BM_GAME_NO_TILES: not loaded), the next free tile and where the room's part starts (after
+  // the built-in graphics and the player's sheet, which stay); which sheet and palette each
+  // bank holds (0xFF: free). Derived, not state: a room gives them out again.
+  uint16_t sheetTile[BM_GAME_MAX_SHEETS];
+  uint16_t tileNext, tileFloor;
+  uint8_t bankSheet[BM_GAME_BANKS], bankPalette[BM_GAME_BANKS];
+  uint16_t spriteMisses;                       // sheets or banks that did not fit (counted)
   int8_t playerSheet;                          // -1: the built-in figure
   int8_t sparkSheet;                           // the sprite "spark" (a blocked hit), or -1
   int8_t debrisSheet;                          // the sprite "debris" (a broken wall), or -1
@@ -208,6 +219,12 @@ typedef struct BmGame
 /// The dialogue box (say, the bottom five rows of the UI layer; until A is pressed): the
 /// speaker's name and a line of up to two rows (string ids, in the language chosen), and the
 /// speaker's portrait, a sprite of the pack by its name's string id (0xFFFF: none), at the box's left.
+/// The palette bank sheet `sheet` is drawn with in palette `palette` (0: its own; one it does
+/// not have: its own), loading its tiles into sprite memory and the palette into a free bank
+/// the first time in a room. -1 if the sheet does not fit (counted in spriteMisses); with
+/// no bank free, a bank with another palette of the sheet.
+int8_t bmGameSheetBank(BmGame *pGame, int8_t sheet, uint8_t palette);
+
 /// A spark at room pixel (x, y): the first frames of the sprite "spark" (if the pack has one),
 /// as long as its first animation lasts. Shown where a guard box stopped a hit (hits.c).
 void bmGameSpark(BmGame *pGame, int32_t x, int32_t y);

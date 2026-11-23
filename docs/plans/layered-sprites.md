@@ -1,6 +1,17 @@
 # Plan: layered sprites and variants
 
-Status: plan, nothing built. Milestone M18 in [../PLAN.md](../PLAN.md).
+Status: steps 1 and 2 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
+a palette table in `SPRT` version 3 ([../spec/sprite-format.md](../spec/sprite-format.md)), the
+room object's property `palette`, `set_palette` and `flash` in scripts. Sheets: every sheet's
+data opened once per pack, sprite memory and banks given out room by room per (sheet, palette)
+pair, the player's sheet staying ([../spec/runtime-core.md](../spec/runtime-core.md) §9); the
+cooker's report says per room what it loads (`sprite-memory`). The test level's Gatehouse has a
+bat and a red Fast Bat, one sheet in two banks. Where it differs from sections 2 and 3: banks 0
+to 12 are given out (13 is the flash, as before; the UI uses a background bank), bank 0 is the
+player's; nothing is freed inside a room, only when a room is entered; colour rules (`ramp`,
+`tint`), `tint` and `fade` and streamed animations are not built; a sheet that does not fit is
+not drawn (and counted) rather than drawn as the placeholder. Steps 3 to 7 are open. Milestone
+M18 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

@@ -713,6 +713,16 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_abs:
     *result = absolute(args[0]);
     break;
+  case BM_SCRIPT_API_set_palette:
+  {
+    // A palette of its sprite by name; one it does not have: its own.
+    int32_t palette = a->sheet[i] >= 0 ? bmSpriteSheetPalette(&g->sheets[a->sheet[i]], g->pPack, bmPackString(g->pPack, (uint16_t)args[0])) : -1;
+    a->palette[i] = (uint8_t)(palette < 0 ? 0 : palette);
+    break;
+  }
+  case BM_SCRIPT_API_flash:
+    a->flash[i] = (uint8_t)(args[0] < 0 ? 0 : args[0] > 255 ? 255 : args[0]);
+    break;
   case BM_SCRIPT_API_effect:
     bmGameEffect(g, (uint16_t)args[0], BM_FIX_INT(a->x[i]), BM_FIX_INT(a->y[i]));
     break;
@@ -1215,6 +1225,10 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->steady[i] = 0;
     a->team[i] = 0;
     a->invulnerable[i] = 0;
+    // Its palette: the room object's property `palette` (a palette of its sprite), else its own.
+    int32_t palette = a->sheet[i] >= 0 ? bmSpriteSheetPalette(&g->sheets[a->sheet[i]], g->pPack, bmGameObjectProperty(g, objectOf(g, i), "palette")) : -1;
+    a->palette[i] = (uint8_t)(palette < 0 ? 0 : palette);
+    a->flash[i] = 0;
     resetMotion(a, i);
     BmAnimState none = { 0, 0, 0, 0 };
     setAnim(a, i, &none);
@@ -1281,12 +1295,15 @@ uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
       used++;
       continue;
     }
+    // Its palette's bank (given out the first time in the room); one that does not fit: not drawn.
+    int8_t bank = bmGameSheetBank(g, a->sheet[i], a->palette[i]);
+    if (bank < 0) continue;
     const BmSpriteSheet *s = &g->sheets[a->sheet[i]];
     BmAnimState st = animOf(a, i);
-    // Just struck: drawn in the flash bank (hits.h).
-    bool flash = a->invulnerable[i] > BM_HITS_INVULNERABLE - BM_HITS_FLASH_FRAMES;
+    // Just struck, or flash(frames): drawn in the flash bank (hits.h).
+    bool flash = a->invulnerable[i] > BM_HITS_INVULNERABLE - BM_HITS_FLASH_FRAMES || a->flash[i] != 0;
     used = (uint8_t)(used + bmSpriteSheetDrawBank(s, bmAnimFrame(s, &st), BM_FIX_INT(a->x[i]) - g->room.cameraX, BM_FIX_INT(a->y[i]) - g->room.cameraY,
-                                                  a->facing[i] < 0, 1, flash ? BM_HITS_FLASH_BANK : s->bank, (uint8_t)(firstOam + used),
+                                                  a->facing[i] < 0, 1, flash ? BM_HITS_FLASH_BANK : (uint8_t)bank, (uint8_t)(firstOam + used),
                                                   (uint8_t)(maxOam - used)));
   }
   return used;
@@ -1378,6 +1395,8 @@ static bool spawnNamed(BmGame *g, const char *name, int32_t x, int32_t y, uint32
   a->steady[i] = 0;
   a->team[i] = makerTeam;   // its hits are on the side of who made it
   a->invulnerable[i] = 0;
+  a->palette[i] = 0;
+  a->flash[i] = 0;
   resetMotion(a, i);
   a->madeBy[i] = maker;
   a->madeBySlot[i] = makerSlot;

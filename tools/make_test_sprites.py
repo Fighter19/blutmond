@@ -283,9 +283,10 @@ def sheet(frames, columns, w, h):
     return img
 
 
-def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=()):
+def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=(), palettes=()):
     """`boxes`: sprite-wide boxes (kind, name, x, y, w, h); `extra`: frames of other sizes
-    after the regular ones, as (x, y, w, h, ax, ay)."""
+    after the regular ones, as (x, y, w, h, ax, ay); `palettes`: other palettes of the same
+    pixels, as (name, [(from, to), ...]) colour swaps (#rrggbb)."""
     out = ['<?xml version="1.0" encoding="UTF-8"?>', '<sprite version="1" image="%s">' % image]
     out.append(' <hitbox x="%d" y="%d" w="%d" h="%d"/>' % hitbox)
     for kind, name, bx, by, bw, bh in boxes:
@@ -302,6 +303,11 @@ def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, 
             out.append(' </frame>')
         else:
             out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>' % f[:6])
+    for name, swaps in palettes:
+        out.append(' <palette name="%s">' % name)
+        for a, b in swaps:
+            out.append('  <swap from="%s" to="%s"/>' % (a, b))
+        out.append(' </palette>')
     for name, loop, steps in animations:
         out.append(' <animation name="%s" loop="%d">' % (name, 1 if loop else 0))
         for frame, duration in steps:
@@ -461,7 +467,10 @@ def main():
     sheet(BAT_FRAMES, 2, 16, 16).save(os.path.join(out, "bat.png"))
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [
         ("idle", True, [(0, 8), (1, 8)]),
-    ], boxes=[("hit", "bite", -3, -4, 6, 4)])
+    ], boxes=[("hit", "bite", -3, -4, 6, 4)], palettes=[
+        # The red bat (the Fast Bat's): the same drawing, its colours swapped.
+        ("red", [("#6b428c", "#b02838"), ("#422963", "#64141e"), ("#ffe763", "#fff8c8")]),
+    ])
     for f in MOON_FRAMES:
         assert len(f) == 32 and all(len(r) == 32 for r in f), f
     sheet(MOON_FRAMES, 3, 32, 32).save(os.path.join(out, "moon_bat.png"))

@@ -5,6 +5,7 @@
 #include "xml.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -139,6 +140,24 @@ Sprite load(const std::string &path)
     fr.boxes = boxes(f);
     s.frames.push_back(fr);
   }
+  for (const xml::Element *pe : root->childrenNamed("palette"))
+  {
+    PaletteVariant v;
+    v.name = pe->attr("name");
+    if (v.name.empty() || v.name == "default") throw std::runtime_error(path + ": a palette needs a name other than 'default'");
+    v.imageAttr = pe->attr("image");
+    if (!v.imageAttr.empty())
+    {
+      v.imagePath = (fs::path(path).parent_path() / v.imageAttr).lexically_normal().string();
+      v.image = std::make_shared<Image>(loadImage(v.imagePath));
+    }
+    auto rgb = [&](const std::string &t) -> uint32_t {
+      if (t.size() != 7 || t[0] != '#') throw std::runtime_error(path + ": palette '" + v.name + "': a colour is #rrggbb, not '" + t + "'");
+      return uint32_t(std::stoul(t.substr(1), nullptr, 16));
+    };
+    for (const xml::Element *sw : pe->childrenNamed("swap")) v.swaps.push_back({rgb(sw->attr("from")), rgb(sw->attr("to"))});
+    s.palettes.push_back(v);
+  }
   for (const xml::Element *a : root->childrenNamed("animation"))
   {
     Animation an;
@@ -181,6 +200,25 @@ bool save(const Sprite &s, std::string *pError)
     if (f.ownHitbox) out << "  <hitbox x=\"" << f.hitbox.x << "\" y=\"" << f.hitbox.y << "\" w=\"" << f.hitbox.w << "\" h=\"" << f.hitbox.h << "\"/>\n";
     writeBoxes(f.boxes, "  ");
     out << " </frame>\n";
+  }
+  for (const PaletteVariant &v : s.palettes)
+  {
+    out << " <palette name=\"" << v.name << "\"";
+    if (!v.imageAttr.empty()) out << " image=\"" << v.imageAttr << "\"";
+    if (v.swaps.empty())
+    {
+      out << "/>\n";
+      continue;
+    }
+    out << ">\n";
+    char from[8], to[8];
+    for (const auto &sw : v.swaps)
+    {
+      std::snprintf(from, sizeof from, "#%06x", unsigned(sw.first & 0xFFFFFF));
+      std::snprintf(to, sizeof to, "#%06x", unsigned(sw.second & 0xFFFFFF));
+      out << "  <swap from=\"" << from << "\" to=\"" << to << "\"/>\n";
+    }
+    out << " </palette>\n";
   }
   for (const Animation &a : s.animations)
   {
@@ -246,6 +284,57 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
   {
     out.palette[i + 1] = sorted[i];
     indexOf[sorted[i]] = uint8_t(i + 1);
+  }
+
+  // Palette variants: the same slots, other colours. From a second image, each slot takes the
+  // colour its pixels have there (pixels of one slot that disagree are reported); from swaps,
+  // a slot whose source colour is swapped takes the new one. Other slots keep theirs.
+  auto bgr = [](uint32_t rgb) {
+    auto q = [](uint32_t v) { return uint16_t(std::lround(float(v) * 31.0f / 255.0f)); };
+    return uint16_t(q((rgb >> 16) & 255) | (q((rgb >> 8) & 255) << 5) | (q(rgb & 255) << 10));
+  };
+  for (const PaletteVariant &v : s.palettes)
+  {
+    std::vector<uint16_t> pal = out.palette;
+    if (v.image)
+    {
+      const Image &vi = *v.image;
+      if (vi.width != img.width || vi.height != img.height)
+        report.error("does-not-fit", s.path, "palette '" + v.name + "': " + v.imageAttr + " is not the sheet's size");
+      std::vector<int> seen(16, -1);
+      bool told = false;
+      for (const Frame &f : s.frames)
+        for (int y = 0; y < f.h; y++)
+          for (int x = 0; x < f.w; x++)
+          {
+            uint16_t c = colourAt(f.x + x, f.y + y);
+            int px = f.x + x, py = f.y + y;
+            if (c == NONE || px >= vi.width || py >= vi.height) continue;
+            const uint8_t *q = vi.pixel(px, py);
+            uint16_t to = bgr(uint32_t(q[0]) << 16 | uint32_t(q[1]) << 8 | q[2]);
+            uint8_t slot = indexOf[c];
+            if (seen[slot] >= 0 && seen[slot] != to && !told)
+            {
+              report.warning("palette-pairs", s.path, "palette '" + v.name + "': the pixels of one colour have different colours in " + v.imageAttr +
+                                                          " (the first is used)");
+              told = true;
+            }
+            if (seen[slot] < 0) seen[slot] = to;
+          }
+      for (int k = 1; k < 16; k++)
+        if (seen[size_t(k)] >= 0) pal[size_t(k)] = uint16_t(seen[size_t(k)]);
+    }
+    for (const auto &sw : v.swaps)
+    {
+      uint16_t from = bgr(sw.first);
+      auto it = indexOf.find(from);
+      if (it == indexOf.end())
+        report.warning("palette-pairs", s.path, "palette '" + v.name + "': the sheet has no colour to swap like that");
+      else
+        pal[it->second] = bgr(sw.second);
+    }
+    out.paletteNames.push_back(v.name);
+    out.variants.push_back(pal);
   }
 
   // Frames into pieces. Identical pieces (the same run of tiles) are stored once.
@@ -363,7 +452,7 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
 }
 
 std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, const std::vector<uint16_t> &animationNames,
-                           const std::vector<uint16_t> &boxNameIds)
+                           const std::vector<uint16_t> &boxNameIds, const std::vector<uint16_t> &paletteNameIds)
 {
   std::vector<uint8_t> b;
   auto u8 = [&](int v) { b.push_back(uint8_t(v)); };
@@ -383,11 +472,14 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   bool isPacked = packed.size() < tileBytes.size();
   const std::vector<uint8_t> &tileData = isPacked ? packed : tileBytes;
 
-  // Version 2: the header goes on with the boxes' tables (a version 1 chunk has a 36-byte
-  // header, so its frames start at 36).
-  const uint32_t header = 52;
+  // Version 3: the header goes on with the boxes' tables (version 2: 52 bytes; a version 1
+  // chunk has a 36-byte header, so its frames start at 36) and the number of palettes; the
+  // palettes (the default first) are followed by their names.
+  const uint32_t header = 56;
+  const uint32_t palettes = 1 + uint32_t(c.variants.size());
   uint32_t framesAt = header, piecesAt = framesAt + uint32_t(c.frames.size()) * 12, animsAt = piecesAt + uint32_t(pieces) * 6;
-  uint32_t stepsAt = animsAt + uint32_t(s.animations.size()) * 8, paletteAt = stepsAt + uint32_t(steps) * 4, tilesAt = paletteAt + 32;
+  uint32_t stepsAt = animsAt + uint32_t(s.animations.size()) * 8, paletteAt = stepsAt + uint32_t(steps) * 4;
+  uint32_t tilesAt = paletteAt + palettes * 32 + palettes * 2;
   uint32_t boxIndexAt = tilesAt + uint32_t((tileData.size() + 1) & ~size_t(1)), boxesAt = boxIndexAt + uint32_t(c.frames.size()) * 2;
   uint32_t namesAt = boxesAt + uint32_t(boxes) * 6;
 
@@ -409,6 +501,8 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   u16(uint32_t(boxes));
   u8(int(c.boxNames.size()));
   u8(isPacked ? 1 : 0);   // flags: bit 0 the tiles are packed
+  u16(palettes);
+  u16(0);
 
   uint32_t pieceStart = 0;
   for (const CookedFrame &f : c.frames)
@@ -456,6 +550,9 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
       u16(uint32_t(std::max(1, st.duration)));
     }
   for (int i = 0; i < 16; i++) u16(c.palette[size_t(i)]);
+  for (const auto &v : c.variants)
+    for (int i = 0; i < 16; i++) u16(i == 0 ? 0 : v[size_t(i)]);
+  for (uint32_t k = 0; k < palettes; k++) u16(k < paletteNameIds.size() ? paletteNameIds[k] : 0xFFFF);
   for (uint8_t v : tileData) u8(v);
   if (tileData.size() % 2) u8(0);
   uint32_t boxStart = 0;

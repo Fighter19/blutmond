@@ -184,19 +184,81 @@ static void bindObjectSprites(BmGame *g)
   }
 }
 
+// The tiles the built-in graphics take at the start of sprite memory: the figure (8), the
+// placeholder frame (4).
+#define BUILTIN_TILES 12
+
+// Forgets every sheet in sprite memory but the player's and gives back the banks
+// (layered-sprites.md §3): a room loads what it shows.
+static void forgetSprites(BmGame *g)
+{
+  for (uint8_t k = 0; k < g->sheetCount; k++)
+    if (k != g->playerSheet) g->sheetTile[k] = BM_GAME_NO_TILES;
+  memset(g->bankSheet, 0xFF, sizeof(g->bankSheet));
+  g->tileNext = g->tileFloor;
+  if (g->playerSheet >= 0)
+  {
+    g->bankSheet[0] = (uint8_t)g->playerSheet;
+    g->bankPalette[0] = 0;
+    g->sheets[g->playerSheet].bank = 0;
+  }
+}
+
+int8_t bmGameSheetBank(BmGame *g, int8_t sheet, uint8_t palette)
+{
+  if (sheet < 0 || (uint8_t)sheet >= g->sheetCount) return -1;
+  BmSpriteSheet *s = &g->sheets[sheet];
+  if (palette >= s->paletteCount) palette = 0;
+  for (uint8_t b = 0; b < BM_GAME_BANKS; b++)
+    if (g->bankSheet[b] == (uint8_t)sheet && g->bankPalette[b] == palette) return (int8_t)b;
+  // Its tiles first; a sheet that does not fit is not drawn.
+  if (g->sheetTile[sheet] == BM_GAME_NO_TILES)
+  {
+    if ((uint32_t)g->tileNext + s->tileCount > BM_GAME_OBJ_TILES || bmSpriteSheetLoadTiles(s, g->tileNext) != BM_SUCCESS)
+    {
+      g->spriteMisses++;
+      return -1;
+    }
+    g->sheetTile[sheet] = g->tileNext;
+    g->tileNext = (uint16_t)(g->tileNext + s->tileCount);
+  }
+  else
+  {
+    s->tileBase = g->sheetTile[sheet];
+  }
+  // A free bank; with none, one with another palette of the sheet will do.
+  int8_t bank = -1;
+  for (uint8_t b = 0; b < BM_GAME_BANKS && bank < 0; b++)
+    if (g->bankSheet[b] == 0xFF) bank = (int8_t)b;
+  if (bank < 0)
+  {
+    g->spriteMisses++;
+    for (uint8_t b = 0; b < BM_GAME_BANKS; b++)
+      if (g->bankSheet[b] == (uint8_t)sheet) return (int8_t)b;
+    return -1;
+  }
+  g->bankSheet[bank] = (uint8_t)sheet;
+  g->bankPalette[bank] = palette;
+  bmSpriteSheetLoadPalette(s, palette, (uint8_t)bank);
+  if (palette == 0) s->bank = (uint8_t)bank;
+  return bank;
+}
+
 static void loadSprites(BmGame *g)
 {
-  // Once per pack: the sheets stay in sprite memory across room changes.
+  // Once per pack: every sheet's data (what logic reads: frames, boxes, animations). What is
+  // in sprite memory is given out room by room (bmGameSheetBank).
   if (g->pSpritesFrom == g->pPack->pData && g->spritesCrc == g->pPack->header.crc32)
   {
+    forgetSprites(g);
     bindObjectSprites(g);
     return;
   }
   g->pSpritesFrom = g->pPack->pData;
   g->spritesCrc = g->pPack->header.crc32;
 
-  // Sheets from the pack first, one palette bank each; the built-in graphics after them.
-  uint16_t tileBase = 0;
+  // The built-in graphics at the start of sprite memory, the player's sheet after them (it
+  // stays), the rest from there on as rooms need them.
   g->sheetCount = 0;
   g->playerSheet = -1;
   g->sparkSheet = -1;
@@ -207,8 +269,7 @@ static void loadSprites(BmGame *g)
     if (chunk < 0) break;
     BmSpriteSheet *s = &g->sheets[g->sheetCount];
     if (bmSpriteSheetOpen(s, g->pPack, (uint32_t)chunk) != BM_SUCCESS) continue;
-    if (bmSpriteSheetLoad(s, tileBase, g->sheetCount) != BM_SUCCESS) continue;
-    tileBase = (uint16_t)(tileBase + s->tileCount);
+    g->sheetTile[g->sheetCount] = BM_GAME_NO_TILES;
     const char *name = bmPackString(g->pPack, s->nameId);
     if (name != NULL && strcmp(name, "spark") == 0) g->sparkSheet = (int8_t)g->sheetCount;
     if (name != NULL && strcmp(name, "debris") == 0) g->debrisSheet = (int8_t)g->sheetCount;
@@ -224,7 +285,15 @@ static void loadSprites(BmGame *g)
     }
     g->sheetCount++;
   }
-  g->builtinTile = tileBase;
+  g->builtinTile = 0;
+  g->tileFloor = BUILTIN_TILES;
+  if (g->playerSheet >= 0 && bmSpriteSheetLoadTiles(&g->sheets[g->playerSheet], BUILTIN_TILES) == BM_SUCCESS)
+  {
+    g->sheetTile[g->playerSheet] = BUILTIN_TILES;
+    g->tileFloor = (uint16_t)(BUILTIN_TILES + g->sheets[g->playerSheet].tileCount);
+    bmSpriteSheetLoadPalette(&g->sheets[g->playerSheet], 0, 0);
+  }
+  forgetSprites(g);
   bindObjectSprites(g);
 
   uint8_t tiles[8][32];
@@ -332,14 +401,14 @@ static void updateSprites(BmGame *g)
   if (g->dialogue != 0 && g->screens.count == 0 && g->dialoguePortrait != 0xFFFF)
   {
     int8_t s = sheetNamed(g, g->dialoguePortrait);
-    if (s >= 0)
+    if (bmGameSheetBank(g, s, 0) >= 0)
       next = (uint8_t)(next + bmSpriteSheetDraw(&g->sheets[s], bmAnimFrameAt(&g->sheets[s], 0, g->frame), BM_GAME_PORTRAIT_X,
                                                 BM_GAME_PORTRAIT_Y, false, 0, next, 4));
   }
   // Effects (sparks, debris) in front of the figures they are on, the player too.
   for (uint8_t k = 0; k < BM_GAME_EFFECTS && next < BM_GAME_MAX_OAM; k++)
   {
-    if (g->effectAge[k] == 0) continue;
+    if (g->effectAge[k] == 0 || bmGameSheetBank(g, g->effectSheet[k], 0) < 0) continue;
     const BmSpriteSheet *s = &g->sheets[g->effectSheet[k]];
     next = (uint8_t)(next + bmSpriteSheetDraw(s, bmAnimFrameAt(s, 0, (uint32_t)(g->effectAge[k] - 1)), g->effectX[k] - camX,
                                               g->effectY[k] - camY, false, 1, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
@@ -376,6 +445,7 @@ static void updateSprites(BmGame *g)
     if (bmActorsOwnObject(g, i)) continue;
     if (g->objectSheet[i] >= 0)
     {
+      if (bmGameSheetBank(g, g->objectSheet[i], 0) < 0) continue;
       const BmSpriteSheet *s = &g->sheets[g->objectSheet[i]];
       next = (uint8_t)(next + bmSpriteSheetDraw(s, bmAnimFrameAt(s, 0, g->frame), o->x - camX, o->y - camY, false, 1, next,
                                                 (uint8_t)(BM_GAME_MAX_OAM - next)));
@@ -504,6 +574,19 @@ static void enterRoomSound(BmGame *g)
 
 static void enterBreakables(BmGame *g);
 
+// What the room shows from the start into sprite memory now, not on its first frame: its
+// objects' sprites (in their palettes), the puzzle's. Effects and objects made later load
+// when they are first drawn.
+static void preloadSprites(BmGame *g)
+{
+  for (uint16_t i = 0; i < g->objectCount; i++)
+    if (g->objectSheet[i] >= 0) bmGameSheetBank(g, g->objectSheet[i], 0);
+  const BmActors *a = &g->actors;
+  for (uint8_t i = 0; a->hasModule && i < a->count; i++)
+    if (!a->gone[i] && a->sheet[i] >= 0) bmGameSheetBank(g, a->sheet[i], a->palette[i]);
+  bmGameSheetBank(g, g->puzzle.sheet, 0);
+}
+
 static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
 {
   // A pack pushed over the link: the UI's font is somewhere else now.
@@ -549,6 +632,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   bmActorsVerifyInUse(g);   // the rest of the scripts is verified in spare time (main.c)
   enterRoomSound(g);
   bmMapEnterRoom(g);
+  preloadSprites(g);
   return bmRoomShow(&g->room, 0, 0);
 }
 
@@ -1491,6 +1575,8 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.hidden, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.touching, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.anim, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.palette, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.flash, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animFinished, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animStep, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),

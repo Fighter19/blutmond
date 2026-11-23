@@ -600,5 +600,8 @@ void bmHitsFrame(BmGame *g)
   }
   BmActors *a = &g->actors;
   for (uint8_t i = 0; a->hasModule && i < a->count; i++)
+  {
     if (a->invulnerable[i]) a->invulnerable[i]--;
+    if (a->flash[i]) a->flash[i]--;
+  }
 }

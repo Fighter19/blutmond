@@ -1,6 +1,6 @@
 # Sprite format
 
-Version 2, draft.
+Version 3, draft.
 
 A sprite is a source asset ([asset-model.md](asset-model.md)): a **sheet image** plus a
 **sprite file** (`.bmsprite`, XML) that says where the frames are and how they are played.
@@ -30,6 +30,8 @@ The file name without its extension is the sprite's **name**; the game finds spr
 | `box` (in `sprite` or `frame`) | `kind` (`hurt`, `hit`, `guard`), `name`, `x`, `y`, `w`, `h` | a box for fighting ([../plans/hitboxes.md](../plans/hitboxes.md) §2): `hurt` where the figure can be hit, `hit` where it hits while a script arms it, `guard` where a hit is blocked. Relative to the anchor, x and y from -128 to 127, w and h up to 255. `hit` and `guard` boxes have a name; boxes of one name belong together. In `sprite`: the boxes of every frame that has none of that kind of its own. At most 4 of a kind per frame and 8 names per sprite |
 | `animation` | `name`, `loop` (1 or 0) | a named sequence. An animation that does not loop stays on its last step and reports that it has finished |
 | `step` | `frame`, `duration` | show a frame for `duration` game frames (60 per second on the GBA), at least 1 |
+| `palette` | `name`, `image` (optional) | another palette of the same pixels ([../plans/layered-sprites.md](../plans/layered-sprites.md) §2): the sheet's colours (slots) take the colours their pixels have in `image` (a sheet of the same size), or those its `swap` children give. Not `default`, which is the sheet's own |
+| `swap` (in `palette`) | `from`, `to` (`#rrggbb`) | the slot of colour `from` takes colour `to` |
 
 Colour overrides of the sheet image (asset-model.md, Overrides) apply to sprites too.
 
@@ -51,6 +53,7 @@ For the GBA profile a sprite becomes one `SPRT` chunk ([pack-format.md](pack-for
 u16 name (string id)   u16 frames   u16 animations   u16 tiles   u16 pieces   u16 steps
 u32 offset of: frames, pieces, animations, steps, palette, tiles      (from the chunk start)
 u32 offset of: box index, boxes, box names   u16 boxes   u8 box names   u8 flags (bit 0: the tiles are packed)
+u16 palettes   u16 0
 
 frame (12 bytes):     u16 first piece, u8 piece count, u8 box count,
                       s8 hitbox x, y, u8 hitbox w, h,
@@ -59,7 +62,9 @@ piece (6 bytes):      s8 dx, dy (top left, relative to the anchor),
                       u8 shape (bits 0-1: square, wide, tall) | size << 2, u8 0, u16 first tile
 animation (8 bytes):  u16 name (string id), u16 first step, u16 step count, u8 loop, u8 0
 step (4 bytes):       u16 frame, u16 duration
-palette:              16 × u16 BGR555 (entry 0 is transparent and written as 0)
+palette:              palettes × 16 × u16 BGR555 (entry 0 is transparent and written as 0), the
+                      default first; then palettes × u16 string id of their names ("default"
+                      first)
 tiles:                32 bytes each: 8 rows of 4 bytes, the left pixel of each pair in the low
                       four bits. The tiles of a piece follow each other row by row. Packed
                       (flags bit 0): the same bytes as LZ77 below, then a byte of padding if
@@ -75,9 +80,11 @@ Shape and size give the piece's pixels as on the hardware: square 8, 16, 32, 64;
 not drawn. Everything is little endian and the chunk is padded to four bytes. The runtime
 does not use the bounds.
 
-The header is 52 bytes. A chunk of version 1 has the 36 bytes up to the tiles' offset only,
-with its frames at offset 36, and no boxes; the runtime tells the two apart by where the
-frames start (at least 52: version 2) and reads a version 1 chunk as one without boxes. A
+The header is 56 bytes. A chunk of version 1 has the 36 bytes up to the tiles' offset only,
+with its frames at offset 36, and no boxes; one of version 2 the 52 bytes up to the flags, and
+one palette. The runtime tells them apart by where the frames start (at least 52: version 2,
+at least 56: version 3) and reads a version 1 chunk as one without boxes, a version 1 or 2
+chunk as one with the default palette alone. A
 frame's boxes are its own of a kind, else the sprite's of that kind, worked out by the cooker.
 
 A reader MUST check that every piece, step and frame reference lies inside its table before
@@ -85,8 +92,9 @@ using the chunk.
 
 ## At run time
 
-- A sheet is loaded by copying its tiles into sprite memory and its palette into an OBJ bank;
-  the sheets of a pack stay loaded across room changes.
+- A sheet is loaded by copying its tiles into sprite memory and a palette into an OBJ bank,
+  when a room shows it; a sheet can be in several banks at once, one per palette in use
+  ([runtime-core.md](runtime-core.md) §9).
 - Mirroring (facing left) flips every piece and mirrors its position, the hitbox and the
   boxes around the anchor; a sprite needs only frames that face right.
 - The position in an animation (animation, step, frames shown) is plain data and part of the
@@ -107,6 +115,7 @@ using the chunk.
 - 1.1: tile bytes, piece sizes; the run-time rules moved to runtime-core.md.
 - 2: hurt, hit and guard boxes in the file and in `SPRT` (box index, boxes, box names).
 - 2.1: packed tiles (the flags byte, which was 0).
+- 3: palettes: `palette` and `swap` in the file, a palette table with names in `SPRT`.
 
 ## Packed tiles
 

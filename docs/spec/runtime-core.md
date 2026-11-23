@@ -533,11 +533,19 @@ bits. An attachment of the player reads the player's `x`, `y`, `facing`, `health
 
 ## 9. Sprites on screen
 
-**Loading**, once per pack: the `SPRT` chunks in pack order, at most 8. Each sheet's tiles go
-to sprite tile memory after the previous sheet's (the first at tile 0), its 16 colours to
-sprite palette bank = its number. A sheet that is invalid or would pass tile 1024 is skipped.
-After the sheets come the built-in figure (8 tiles, bank 14) and the placeholder frame (4
-tiles, bank 15). Sprite tiles are mapped one-dimensionally.
+**Loading** ([../plans/layered-sprites.md](../plans/layered-sprites.md) §2, §3). Once per pack
+every `SPRT` chunk is opened in pack order, at most 24 (an invalid one is skipped): what logic
+reads (frames, boxes, animations) is there from then on. Sprite memory holds the built-in figure
+(tiles 0-7, bank 14) and the placeholder frame (tiles 8-11, bank 15), then the player's sheet
+(bank 0), which stays; the rest is given out room by room. When a room is entered, every other
+sheet is forgotten and banks 1 to 12 are free; then the room's objects' sheets (in the palettes
+their objects have), door panels and the puzzle's are loaded. A sheet not loaded yet is loaded
+the first time it is drawn (an effect, an object made at run time): its tiles after the last
+loaded ones (a sheet that would pass tile 1024 is not drawn), and each (sheet, palette) pair
+takes the lowest free bank of 0 to 12, its 16 colours that palette's (with none free: a bank
+with another palette of the sheet; none: not drawn). What did not fit is counted
+(`spriteMisses`). Which sheet is where is derived, not state. Sprite tiles are mapped
+one-dimensionally.
 
 **Animation state**: `anim`, `finished`, `step`, `timer`.
 
@@ -557,7 +565,9 @@ not 0. Else in the air: `jump` if `vy < 0`, else `fall`. Else `run` if `|vx| > 3
 `x = hflip ? sx - dx - w : sx + dx`, `y = sy + dy`, with the piece's size from the hardware
 table (shape 0: 8, 16, 32, 64 square; shape 1 wide: 16x8, 32x8, 32x16, 64x32; shape 2 tall:
 8x16, 8x32, 16x32, 32x64). A piece entirely off the screen takes no hardware sprite. Tile =
-the sheet's first tile + the piece's tile; palette bank = the sheet's; priority 1.
+the sheet's first tile + the piece's tile; palette bank = the bank of the sheet in the
+figure's palette (an object's `palette`: the room object's property `palette`, a palette of its
+sprite by name, or `set_palette`; else 0, the sheet's own); priority 1.
 
 **Order of the 48 hardware sprites used:**
 
@@ -668,7 +678,8 @@ room), and its maker and the maker's attachment slot are kept (`madeBy`, `madeBy
 `alive(#Class)` counts the objects of that class that are not gone.
 
 **The flash**: an object with a sheet whose `invulnerable > 12` (the first 8 frames after it
-was struck) is drawn with sprite palette bank 13, whose 16 colours are all white (31, 31, 31),
+was struck, or while its `flash(frames)` lasts) is drawn with sprite palette bank 13, whose 16
+colours are all white (31, 31, 31),
 instead of its sheet's bank.
 
 ## 11. Screens and the UI layer

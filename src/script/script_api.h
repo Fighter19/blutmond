@@ -130,7 +130,9 @@ typedef enum BmScriptType {
   X(fall,              VOID, 1, FIX,   VOID,  VOID,  VOID, 0) \
   X(lifetime,          VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(alive,             INT,  1, NAME,  VOID,  VOID,  VOID, 0) \
-  X(effect,            VOID, 1, NAME,  VOID,  VOID,  VOID, 0)
+  X(effect,            VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(set_palette,       VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(flash,             VOID, 1, INT,   VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -188,6 +190,9 @@ typedef enum BmScriptType {
 // that made it hears struck() of its hits too; alive(#Class) counts that class's objects.
 // effect(#sprite): that sprite's first animation once at the object's anchor, in front of the
 // figures (as the engine's sparks and debris: bmGameEffect); only seen, not state.
+// set_palette(#name): the object is drawn with that palette of its sprite (layered-sprites.md
+// §2; one it does not have: its own), as the room object's property `palette` does.
+// flash(frames): it is drawn all white for that many frames.
 //
 // Filters (attachable-scripts.md §3): the player's attachments get damage_in(amount) in slot
 // order before the player is struck (after defence and resistance), damage_out(amount) before
@@ -323,7 +328,7 @@ typedef enum BmScriptEvent {
 #define BM_SCRIPT_ACTOR_ONLY(X) \
   X(finish_anim) X(play_anim) X(anim_done) X(player_distance) X(move_toward_player) X(move_toward) \
   X(enter_door) X(hide) X(show) X(face_player) X(touching_player) X(destroy) X(spawn_with) X(floor_y) \
-  X(set_affinity) X(set_knockback) X(fly) X(fall) X(lifetime) X(effect)
+  X(set_affinity) X(set_knockback) X(fly) X(fall) X(lifetime) X(effect) X(set_palette) X(flash)
 
 // Field flags in the class table: the storage flags of docs/spec/state.md.
 #define BM_SCRIPT_FIELD_SAVE 1

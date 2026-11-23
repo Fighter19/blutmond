@@ -4,11 +4,14 @@
  */
 #include "sprite.h"
 
+#include <string.h>
+
 #include "hal.h"
 #include "video.h"
 
 #define HEADER_SIZE 36
 #define HEADER_SIZE_V2 52   // version 2: the boxes' tables follow the version 1 header
+#define HEADER_SIZE_V3 56   // version 3: and the number of palettes
 #define BOX_SIZE 6
 #define FRAME_SIZE 12
 #define PIECE_SIZE 6
@@ -70,6 +73,15 @@ BmResult bmSpriteSheetOpen(BmSpriteSheet *s, const BmPack *pPack, uint32_t chunk
     s->pBoxNames = p + namesAt;
     for (uint16_t f = 0; f < s->frameCount; f++)
       if ((uint32_t)bmRead16(s->pBoxIndex + f * 2) + s->pFrames[f * FRAME_SIZE + 3] > s->boxCount) return BM_ERROR_INVALID_ARGUMENT;
+  }
+  // Version 3: the number of palettes (byte 52), the default one first, their names after them.
+  s->paletteCount = 1;
+  if (at[0] >= HEADER_SIZE_V3 && size >= HEADER_SIZE_V3)
+  {
+    uint16_t n = bmRead16(p + 52);
+    if (n == 0 || n > BM_SPRITE_MAX_PALETTES || at[4] + (uint32_t)n * 34 > size) return BM_ERROR_INVALID_ARGUMENT;
+    s->paletteCount = (uint8_t)n;
+    s->pPaletteNames = s->pPalette + n * 32;
   }
   // Every reference must stay inside its table, so drawing never reads outside the chunk.
   for (uint16_t f = 0; f < s->frameCount; f++)
@@ -158,16 +170,40 @@ static BmResult unpackTiles(const BmSpriteSheet *s, uint16_t tileBase)
   return BM_SUCCESS;
 }
 
+BmResult bmSpriteSheetLoadTiles(BmSpriteSheet *s, uint16_t tileBase)
+{
+  if ((uint32_t)tileBase + s->tileCount > 1024) return BM_ERROR_INVALID_ARGUMENT;
+  s->tileBase = tileBase;
+  return s->packed ? unpackTiles(s, tileBase) : bmTilesLoadObj(tileBase, s->pTiles, (uint32_t)s->tileCount * 32);
+}
+
+void bmSpriteSheetLoadPalette(const BmSpriteSheet *s, uint8_t palette, uint8_t bank)
+{
+  if (palette >= s->paletteCount) palette = 0;
+  BmColor colours[16];
+  for (int i = 0; i < 16; i++) colours[i].color = bmRead16(s->pPalette + palette * 32 + i * 2);
+  bmPaletteLoadObj((uint16_t)(bank * 16), colours, 16);
+}
+
+int32_t bmSpriteSheetPalette(const BmSpriteSheet *s, const BmPack *pPack, const char *pName)
+{
+  if (pName == NULL) return -1;
+  if (strcmp(pName, "default") == 0) return 0;
+  for (uint8_t k = 1; k < s->paletteCount && s->pPaletteNames != NULL; k++)
+  {
+    const char *n = bmPackString(pPack, bmRead16(s->pPaletteNames + k * 2));
+    if (n != NULL && strcmp(n, pName) == 0) return k;
+  }
+  return -1;
+}
+
 BmResult bmSpriteSheetLoad(BmSpriteSheet *s, uint16_t tileBase, uint8_t bank)
 {
   if ((uint32_t)tileBase + s->tileCount > 1024 || bank > 15) return BM_ERROR_INVALID_ARGUMENT;
-  s->tileBase = tileBase;
   s->bank = bank;
-  BmResult r = s->packed ? unpackTiles(s, tileBase) : bmTilesLoadObj(tileBase, s->pTiles, (uint32_t)s->tileCount * 32);
+  BmResult r = bmSpriteSheetLoadTiles(s, tileBase);
   if (r != BM_SUCCESS) return r;
-  BmColor colours[16];
-  for (int i = 0; i < 16; i++) colours[i].color = bmRead16(s->pPalette + i * 2);
-  bmPaletteLoadObj((uint16_t)(bank * 16), colours, 16);
+  bmSpriteSheetLoadPalette(s, 0, bank);
   return BM_SUCCESS;
 }
 

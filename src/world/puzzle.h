@@ -62,4 +62,4 @@ void bmPuzzleFrame(struct BmGame *pGame, int8_t dx);
 void bmPuzzleOverrides(struct BmGame *pGame);
 
 /// Draws blocks, plates and gates; returns the hardware sprites used from `firstOam`.
-uint8_t bmPuzzleDraw(const struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
+uint8_t bmPuzzleDraw(struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam);

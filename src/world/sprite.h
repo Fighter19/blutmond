@@ -11,6 +11,8 @@
 #include "pack.h"
 #include "shared.h"
 
+#define BM_SPRITE_MAX_PALETTES 16
+
 typedef struct BmSpriteSheet
 {
   const uint8_t *pData;
@@ -23,6 +25,9 @@ typedef struct BmSpriteSheet
   const uint8_t *pBoxIndex, *pBoxes, *pBoxNames;
   uint16_t boxCount;
   uint8_t boxNameCount;
+  // Version 3: palettes (the default first), 16 colours each, and their names (string ids).
+  uint8_t paletteCount;
+  const uint8_t *pPaletteNames;   // NULL: only the default
   // Where it was loaded.
   uint16_t tileBase;
   uint8_t bank;
@@ -53,6 +58,16 @@ BmResult bmSpriteSheetFind(BmSpriteSheet *pSheet, const BmPack *pPack, const cha
 
 /// Copies the tiles to sprite memory from tile `tileBase` and the palette into OBJ bank `bank`.
 BmResult bmSpriteSheetLoad(BmSpriteSheet *pSheet, uint16_t tileBase, uint8_t bank);
+
+/// Its tiles alone into sprite memory at `tileBase` (sets tileBase).
+BmResult bmSpriteSheetLoadTiles(BmSpriteSheet *pSheet, uint16_t tileBase);
+
+/// Its palette `palette` (0: the default; one it does not have: the default) into OBJ bank
+/// `bank`.
+void bmSpriteSheetLoadPalette(const BmSpriteSheet *pSheet, uint8_t palette, uint8_t bank);
+
+/// The number of its palette named `pName` ("default": 0), or -1.
+int32_t bmSpriteSheetPalette(const BmSpriteSheet *pSheet, const BmPack *pPack, const char *pName);
 
 /// Index of the animation called `pName`, or -1.
 int32_t bmSpriteSheetAnim(const BmSpriteSheet *pSheet, const BmPack *pPack, const char *pName);

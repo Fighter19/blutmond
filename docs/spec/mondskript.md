@@ -274,7 +274,9 @@ or `hit_box` of the figure that calls them. An object moves itself with `fly(vx,
 is on its maker's side, and an attachment that made it hears `struck()` of its hits;
 `alive(#Class)` limits how many there are (runtime-core.md §10). `effect(#sprite)` shows that
 sprite's first animation once at the object's anchor, in front of the figures (debris of a
-broken crate: `scripts/crate.ms`); only seen, not state.
+broken crate: `scripts/crate.ms`); only seen, not state. `set_palette(#name)` draws the object
+in that palette of its sprite (sprite-format.md `palette`; one it does not have: its own), as
+the room object's property `palette` does; `flash(frames)` draws it all white for that long.
 
 **Capabilities, filters, actions.** `add_stat(Stat.AirJumps, 1)` from an attachment gives the
 player a jump in the air, `add_stat(Stat.WallSlide, 1)` slides down walls and jumps off them
