@@ -4,6 +4,8 @@
  */
 #include "body.h"
 
+#define WALL_COYOTE_FRAMES 6   // a jump off a wall just left
+
 #include <limits.h>
 
 void bmBodyDefaultParams(BmBodyParams *p)
@@ -170,8 +172,9 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     else if (wasOnGround) b->vx = approach(b->vx, 0, p->friction);
     else b->vx = approach(b->vx, 0, p->airAccel / 2);
 
-    // Back on the ground (or a ladder, in water): the jumps in the air are there again.
-    if (wasOnGround || b->inWater) b->airJumpsLeft = p->airJumps;
+    // Back on the ground (or a ladder, in water, at a wall one can jump off): the jumps in the
+    // air are there again.
+    if (wasOnGround || b->inWater || (p->wallSlide && b->wallTouch != 0)) b->airJumpsLeft = p->airJumps;
     // Jumping (with coyote time and a jump buffer); down + jump drops through platforms.
     if (b->jumpBuffer && (wasOnGround || b->coyote))
     {
@@ -193,15 +196,19 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
       b->coyote = 0;
       b->jumpBuffer = 0;
     }
-    else if (b->jumpBuffer && b->wallSide != 0 && p->wallSlide)
+    else if (b->jumpBuffer && p->wallSlide && (b->wallTouch != 0 || b->wallCoyote != 0))
     {
-      // Off the wall slid on: up, and pushed away from it.
+      // Off a wall at hand (rising or falling, whatever is held), or one just left: up, and
+      // pushed away from it. Before a jump in the air, so a wall never costs the double jump.
+      int8_t side = b->wallTouch != 0 ? b->wallTouch : b->wallCoyoteSide;
       b->vy = -s * p->jumpSpeed;
-      b->vx = -b->wallSide * p->wallJumpPush;
-      b->facing = (int8_t)-b->wallSide;
+      b->vx = -side * p->wallJumpPush;
+      b->facing = (int8_t)-side;
       b->jumpCutDone = false;
       b->jumpBuffer = 0;
       b->wallSide = 0;
+      b->wallTouch = 0;
+      b->wallCoyote = 0;
       events |= BM_BODY_JUMPED | BM_BODY_WALL_JUMPED;
     }
     else if (b->jumpBuffer && b->airJumpsLeft != 0)
@@ -259,6 +266,31 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
   {
     int32_t edge = in.dx > 0 ? px + p->halfWidth : px - p->halfWidth - 1;
     if (wallAt(c, edge, feet, p, s, false)) b->wallSide = in.dx;
+  }
+  // A wall at hand to jump off: in the air, within 3 pixels on either side (the one held
+  // towards first); one just left stays at hand for a few frames.
+  b->wallTouch = 0;
+  if (p->wallSlide && !wasOnGround && !b->climbing && !b->inWater)
+  {
+    int8_t first = in.dx != 0 ? in.dx : b->facing;
+    for (int k = 0; k < 2 && b->wallTouch == 0; k++)
+    {
+      int8_t side = (int8_t)(k == 0 ? first : -first);
+      for (int32_t d = 0; d < 3 && b->wallTouch == 0; d++)
+      {
+        int32_t edge = side > 0 ? px + p->halfWidth + d : px - p->halfWidth - 1 - d;
+        if (wallAt(c, edge, feet, p, s, false)) b->wallTouch = side;
+      }
+    }
+  }
+  if (b->wallTouch != 0)
+  {
+    b->wallCoyote = WALL_COYOTE_FRAMES;
+    b->wallCoyoteSide = b->wallTouch;
+  }
+  else if (b->wallCoyote != 0)
+  {
+    b->wallCoyote--;
   }
 
   // --- Vertical movement, floors and ceilings ---

@@ -68,6 +68,9 @@ typedef struct BmBody
   bool flipped;
   uint8_t airJumpsLeft;        // jumps in the air left until the ground (or a ladder, water)
   int8_t wallSide;             // sliding on a wall: -1 on the left, 1 on the right, 0 not
+  int8_t wallTouch;            // in the air within 3 pixels of a wall (wall slide): its side, 0 none
+  uint8_t wallCoyote;          // frames a jump off the wall last touched is still possible
+  int8_t wallCoyoteSide;       // that wall's side
 } BmBody;
 
 void bmBodyPlace(BmBody *pBody, int32_t x, int32_t y);

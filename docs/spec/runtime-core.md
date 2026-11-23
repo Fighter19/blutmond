@@ -210,14 +210,17 @@ start:
    - `target = dx * 2.0`, halved (`/ 2`) in water. With `dx != 0`: `vx = approach(vx, target,
      wasOnGround ? 0.5 : 0.25)`. Without: `approach(vx, 0, 0.5)` on the ground,
      `approach(vx, 0, 0.125)` in the air.
-   - If `wasOnGround` or `inWater`: `airJumpsLeft = air jumps`.
+   - If `wasOnGround`, `inWater`, or wall slide and `wallTouch != 0` (a wall at hand, as the
+     last step left it): `airJumpsLeft = air jumps`.
    - If `jumpBuffer != 0` and (`wasOnGround` or `coyote != 0`): if `dy > 0`, `wasOnGround`
      and `findFloor(feet, feet, false)` is none (standing on a jump-through platform only):
      `dropThrough = 8`. Otherwise `vy = -jump speed`, `jumpCutDone = false`, event *jumped*.
      In both cases `onGround = false`, `wasOnGround = false`, `coyote = 0`, `jumpBuffer = 0`.
-     Else if `jumpBuffer != 0`, `wallSide != 0` and wall slide: a jump off the wall: `vy =
-     -jump speed`, `vx = -wallSide * 2.0`, `facing = -wallSide`, `jumpCutDone = false`,
-     `jumpBuffer = 0`, `wallSide = 0`, events *jumped* and *wall jumped*. Else if `jumpBuffer
+     Else if `jumpBuffer != 0`, wall slide and (`wallTouch != 0` or `wallCoyote != 0`): a jump
+     off the wall, with `side = wallTouch` if it is not 0, else `wallCoyoteSide`: `vy = -jump
+     speed`, `vx = -side * 2.0`, `facing = -side`, `jumpCutDone = false`, `jumpBuffer = 0`,
+     `wallSide = wallTouch = wallCoyote = 0`, events *jumped* and *wall jumped* (before a
+     jump in the air: a wall at hand never costs one). Else if `jumpBuffer
      != 0` and `airJumpsLeft != 0`: `vy = -jump speed`, `airJumpsLeft -= 1`, `jumpCutDone =
      false`, `jumpBuffer = 0`, events *jumped* and *air jumped*.
    - If jump is not held, `vy < 0` and not `jumpCutDone`: `vy = fixMul(vy, 0.5)`,
@@ -230,7 +233,12 @@ start:
    cell`, `nx = FIX(cellX - 6)` moving right or `FIX(cellX + cell + 6)` moving left; `vx = 0`.
    `x = nx`, `px = INT(x)`. Then `wallSide = 0`, and with wall slide, not `wasOnGround`, not
    climbing, not in water, `dx != 0` and `vy >= 0`: if `wall(dx > 0 ? px + 6 : px - 7, feet)`
-   (as in the air), `wallSide = dx`.
+   (as in the air), `wallSide = dx`. Then `wallTouch = 0`, and with wall slide, not
+   `wasOnGround`, not climbing, not in water: for the side `dx` (if 0: `facing`) and then the
+   other, the first with `wall(px + 6 + d, feet)` (right) or `wall(px - 7 - d, feet)` (left)
+   for some `d` of 0, 1, 2 (as in the air) gives `wallTouch` (1 right, -1 left), whether the
+   body rises or falls and whatever is held. If `wallTouch != 0`: `wallCoyote = 6`,
+   `wallCoyoteSide = wallTouch`; else if `wallCoyote != 0`: decrement it.
 8. **Up and down.** `ny = y + vy`.
    - `vy < 0`: `head = INT(ny) - 28`. For the columns `px - 6`, `px`, `px + 5` in this order:
      if `solid(column, head)`: `ny = FIX((floorDiv(head, cell) + 1) * cell + 28)`, `vy = 0`,
