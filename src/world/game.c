@@ -1237,6 +1237,13 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     // A door in the back wall only with Up (touch() as the player walks in does nothing).
     bool backWall = index < g->objectCount && g->objectDoorSide[index] == 0;
     if (g->doorCooldown == 0 && index < g->objectCount && (!backWall || (pressed & BM_KEY_UP))) useDoor(g, index);
+    else if (g->doorCooldown != 0)
+    {
+      // Just come through a door, and already into one (straight back): its touch() comes
+      // again until the cooldown is over, or the player would have to step out and in again.
+      for (uint8_t k = 0; k < g->actors.count; k++)
+        if (g->actors.object[k] == index) g->actors.touching[k] = 0;
+    }
   }
   // Through the door being walked through, when the walk is over or skipped.
   if (g->doorSeq != 0 && (doorSkip || g->doorTimer >= (g->objectDoorSide[g->doorSeq - 1] == 1 || g->objectDoorSide[g->doorSeq - 1] == 2 ? DOOR_WALK_FRAMES : DOOR_FACING_FRAMES)))

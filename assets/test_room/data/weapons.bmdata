@@ -6,7 +6,7 @@ record ShortSword {
   description = "A plain blade. The weapon everyone starts with."
   price = 50
   attack = 3
-  reach = 18
+  reach = 21   # as far as the blade of the slash picture reaches (player.png)
   startup = 4
   recovery = 10
 }

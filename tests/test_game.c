@@ -309,7 +309,7 @@ static void testTheItemTables(void)
     if (strcmp(n, "element") == 0) element = bmDataRead(&w, r, d.offset, (BmDataType)d.type);
     if (strcmp(n, "stats") == 0) bonus = bmDataRead(&w, r, (uint16_t)(d.offset + 4), BM_DATA_SHORT);   // stats.attack
   }
-  TEST_ASSERT(attack == 5 && reach == 18 && element == 1 && bonus == 2);   // reach from ShortSword
+  TEST_ASSERT(attack == 5 && reach == 21 && element == 1 && bonus == 2);   // reach from ShortSword
 }
 
 static uint16_t stringIdOf(const char *text)
@@ -2162,7 +2162,7 @@ static void testTheKnightsShield(void)
   frames(90, 0);
   kx = BM_FIX_INT(a->x[knight]);
   TEST_ASSERT(a->facing[knight] == 1);
-  bmBodyPlace(&s_game.player, kx - 20, 160);
+  bmBodyPlace(&s_game.player, kx - 30, 160);   // the tip of the blade at its back
   s_game.player.facing = 1;
   frames(20, 0);
   TEST_ASSERT(a->facing[knight] == 1);
@@ -2180,6 +2180,20 @@ static void testTheKnightsShield(void)
   frames(20, 0);
   TEST_ASSERT(a->facing[knight] == 1);
   TEST_ASSERT(bm_script_errors == 0);
+}
+
+// Through a door and straight back: the player can walk back through it at once.
+static void testBackThroughADoorAtOnce(void)
+{
+  start();
+  bmBodyPlace(&s_game.player, 24, 160);
+  int f = 0;
+  for (; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
+  for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "test_room") != 0; f++) frames(1, BM_KEY_RIGHT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room") == 0);
+  for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
 }
 
 int main(int argc, char **argv)
@@ -2208,6 +2222,7 @@ int main(int argc, char **argv)
   RUN_TEST(testGuardsAndProjectiles);
   RUN_TEST(testTheSwordDefeatsTheBat);
   RUN_TEST(testTheKnightsShield);
+  RUN_TEST(testBackThroughADoorAtOnce);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
   RUN_TEST(testTheWorldMap);

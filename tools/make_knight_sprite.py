@@ -265,8 +265,14 @@ def sword_low(c, dx, dy):
 
 # --- Frames ---------------------------------------------------------------------------------
 
-def figure(rear=(0, 0), front=(0, 0), dx=0, dy=0, shield='front', sword='idle'):
+def figure(rear=(0, 0), front=(0, 0), dx=0, dy=0, shield='front', sword='idle', parts='all'):
+    """parts: 'all' (the picture), 'body' (what can be struck: all but the shield ahead and a
+    sword held out), 'shield' (the shield ahead alone)."""
     c = Canvas()
+    if parts == 'shield':
+        if shield == 'front':
+            shield_front(c, dx, dy)
+        return c.px
     if shield == 'back':
         shield_back(c, dx, dy)
     if sword == 'idle':
@@ -274,35 +280,58 @@ def figure(rear=(0, 0), front=(0, 0), dx=0, dy=0, shield='front', sword='idle'):
     legs(c, rear, front)
     torso(c, dx, dy)
     helm(c, dx, dy)
-    if sword == 'raised':
+    if sword == 'raised' and parts == 'all':
         sword_raised(c, dx, dy)
-    else:
+    elif sword != 'raised':
         pauldron(c, dx, dy)
-    if sword == 'thrust':
-        sword_thrust(c, dx, dy)
-    elif sword == 'low':
-        sword_low(c, dx, dy)
-    if shield == 'front':
-        shield_front(c, dx, dy)
+    if parts == 'all':
+        if sword == 'thrust':
+            sword_thrust(c, dx, dy)
+        elif sword == 'low':
+            sword_low(c, dx, dy)
+        if shield == 'front':
+            shield_front(c, dx, dy)
     return c.px
 
 
-HURT = ('hurt', '', -5, -28, 9, 28)
-GUARD = ('guard', 'shield', 4, -23, 8, 18)
+def bounds(px):
+    """The drawn pixels' bounding box relative to the anchor: (x, y, w, h), or None."""
+    xs = [x for row in px for x, ch in enumerate(row) if ch != '.']
+    ys = [y for y, row in enumerate(px) for ch in row if ch != '.']
+    if not xs:
+        return None
+    x0, y0 = min(xs), min(ys)
+    return (x0 - ANCHOR[0], y0 - ANCHOR[1], max(xs) - x0 + 1, max(ys) - y0 + 1)
+
+
+def frame(hit=None, **pose):
+    """A frame's picture and boxes, worked out from the drawing: the hurt box over the body
+    (up to the shield, so that it lies behind it), the guard box over the shield ahead, and
+    the hit box `sword` if given."""
+    hx, hy, hw, hh = bounds(figure(parts='body', **pose))
+    boxes = []
+    shield = bounds(figure(parts='shield', **pose))
+    if shield is not None:
+        hw = min(hw, shield[0] - hx)   # the body ends where the shield begins
+        boxes.append(('guard', 'shield') + shield)
+    boxes.insert(0, ('hurt', '', hx, hy, hw, hh))
+    if hit is not None:
+        boxes.append(('hit', 'sword') + hit)
+    return (figure(**pose), boxes)
+
 
 # (pixels, boxes)
 FRAMES = [
-    (figure(), [HURT, GUARD]),                                              # 0 idle
-    (figure(dy=1), [HURT, GUARD]),                                          # 1 idle, breathing
-    (figure(rear=(-2, 0), front=(2, 0)), [HURT, GUARD]),                    # 2 walk
-    (figure(rear=(0, 2), dy=-1), [HURT, GUARD]),                            # 3
-    (figure(rear=(2, 0), front=(-2, 0)), [HURT, GUARD]),                    # 4
-    (figure(front=(0, 2), dy=-1), [HURT, GUARD]),                           # 5
-    (figure(rear=(-1, 0), dx=-1, sword='raised'), [('hurt', '', -6, -28, 9, 28), ('guard', 'shield', 3, -23, 8, 18)]),   # 6 wind-up
-    (figure(rear=(-2, 0), front=(2, 0), dx=2, shield='back', sword='thrust'),
-     [('hurt', '', -3, -28, 9, 28), ('hit', 'sword', 7, -19, 13, 6)]),      # 7 the strike
-    (figure(rear=(-1, 0), front=(1, 0), dx=1, shield='back', sword='low'), [('hurt', '', -4, -28, 9, 28)]),   # 8 recovering
-    (figure(dx=-1, dy=1), [('hurt', '', -6, -27, 9, 27), ('guard', 'shield', 3, -22, 8, 18)]),               # 9 flinch
+    frame(),                                                       # 0 idle
+    frame(dy=1),                                                   # 1 idle, breathing
+    frame(rear=(-2, 0), front=(2, 0)),                             # 2 walk
+    frame(rear=(0, 2), dy=-1),                                     # 3
+    frame(rear=(2, 0), front=(-2, 0)),                             # 4
+    frame(front=(0, 2), dy=-1),                                    # 5
+    frame(rear=(-1, 0), dx=-1, sword='raised'),                    # 6 wind-up
+    frame(rear=(-2, 0), front=(2, 0), dx=2, shield='back', sword='thrust', hit=(7, -19, 13, 6)),   # 7 the strike
+    frame(rear=(-1, 0), front=(1, 0), dx=1, shield='back', sword='low'),   # 8 recovering
+    frame(dx=-1, dy=1),                                            # 9 flinch
 ]
 
 ANIMATIONS = [
