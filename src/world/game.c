@@ -275,13 +275,15 @@ static void loadSprites(BmGame *g)
     if (name != NULL && strcmp(name, "debris") == 0) g->debrisSheet = (int8_t)g->sheetCount;
     if (name != NULL && strcmp(name, "player") == 0)
     {
-      static const char *const anims[BM_PLAYER_ANIM_COUNT] = { "idle", "run", "jump", "fall", "climb" };
+      static const char *const anims[BM_PLAYER_ANIM_COUNT] = { "idle", "run", "jump", "fall", "climb", "push" };
       g->playerSheet = (int8_t)g->sheetCount;
       for (int i = 0; i < BM_PLAYER_ANIM_COUNT; i++)
       {
         int32_t a = bmSpriteSheetAnim(s, g->pPack, anims[i]);
         g->playerAnims[i] = (int8_t)(a < 0 ? 0 : a);
       }
+      // Without a push animation, pushing looks like running.
+      if (bmSpriteSheetAnim(s, g->pPack, "push") < 0) g->playerAnims[BM_PLAYER_ANIM_PUSH] = g->playerAnims[BM_PLAYER_ANIM_RUN];
     }
     g->sheetCount++;
   }
@@ -376,6 +378,7 @@ static void animatePlayer(BmGame *g)
     advance = p->vy != 0 || p->vx != 0;
   }
   else if (!p->onGround) which = p->vy < 0 ? BM_PLAYER_ANIM_JUMP : BM_PLAYER_ANIM_FALL;
+  else if (g->puzzle.pushing != 0) which = BM_PLAYER_ANIM_PUSH;   // against a push block (puzzle.h)
   else if (p->vx > BM_FIX(1) / 8 || p->vx < -(BM_FIX(1) / 8)) which = BM_PLAYER_ANIM_RUN;
   bmAnimPlay(&g->playerAnim, (uint8_t)g->playerAnims[which], false);
   if (advance) bmAnimTick(&g->sheets[g->playerSheet], &g->playerAnim);
@@ -1352,6 +1355,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     params.runSpeed = (bm_fix)(params.runSpeed * (percent < 10 ? 10 : percent) / 100);
   }
   uint32_t events = 0;
+  g->puzzle.pushing = 0;   // bmPuzzleFrame says when the player pushes
   if (g->doorSeq != 0 && in.dx != 0)
   {
     // Through a side door: walking at running speed out over the room's edge, the walls and
@@ -1653,8 +1657,8 @@ static const BmStateField s_gameFields[] = {
   F(screens.repeat, BM_TYPE_U8, BM_STATE_TRANSIENT),
   BM_STATE_ARRAY(BmGame, puzzle.blockX, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
   BM_STATE_ARRAY(BmGame, puzzle.blockY, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
-  BM_STATE_ARRAY(BmGame, puzzle.blockToX, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
-  BM_STATE_ARRAY(BmGame, puzzle.blockToY, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
+  BM_STATE_ARRAY(BmGame, puzzle.blockFraction, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
+  BM_STATE_ARRAY(BmGame, puzzle.blockFall, BM_TYPE_S16, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
   BM_STATE_ARRAY(BmGame, puzzle.blockPush, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
   BM_STATE_ARRAY(BmGame, puzzle.gateLift, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_PUZZLE_GATES),
   F(puzzle.pressed, BM_TYPE_U8, BM_STATE_SNAPSHOT),

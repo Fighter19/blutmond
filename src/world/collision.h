@@ -44,15 +44,27 @@ typedef struct BmCellOverride
   uint8_t shape, material;
 } BmCellOverride;
 
+// A solid box anywhere, to the pixel (a push block, puzzle.h): solid on top and at its sides.
+typedef struct BmSolidBox
+{
+  int16_t x, y, w, h;
+} BmSolidBox;
+
 typedef struct BmCollision
 {
   const uint8_t *pCells;   // 2 bytes per cell, row major (in the pack)
   const BmCellOverride *pOverrides;   // looked at before the cells (none: NULL)
   uint8_t overrideCount;
+  const BmSolidBox *pBoxes;           // solid besides the cells (none: NULL)
+  uint8_t boxCount;
   uint16_t width, height;  // in cells
   uint8_t cellSize;        // 16 or 8
   uint8_t edgesSolid;      // room edges (left, right, top) act as walls
 } BmCollision;
+
+/// The solid box (if any) that column x crosses between yTop and yBottom (inclusive): its
+/// edges are where a body stops, not the cell's. False if none.
+bool bmCollisionBoxAt(const BmCollision *pCollision, int32_t x, int32_t yTop, int32_t yBottom, BmSolidBox *pBox);
 
 /// Reads a COLL chunk. Returns false if it is malformed.
 bool bmCollisionInit(BmCollision *pCollision, const uint8_t *pChunk, uint32_t size, bool edgesSolid);

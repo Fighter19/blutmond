@@ -109,6 +109,31 @@ PLAYER_FRAMES = [
     player_frame(TORSO_ARMS_UP_R, legs(0, 0, lift_l=3)),             # 9 climb
 ]
 
+# Pushing (a push block, src/world/puzzle.h): leaning into it, both arms straight ahead, the
+# back leg braced far behind.
+TORSO_PUSH = [
+    ".....444444.....", "....44444444....", "...444555544444.", "...445555544333.",
+    "...44555554.33..", "....4555554.....", "....4555554.....", "....4555554.....",
+    ".....444444.....",
+]
+
+
+def leaning(rows, n):
+    """Head and torso (the first 17 rows) n pixels ahead (to the right)."""
+    return [("." * n + r[:16 - n]) if i < 17 else r for i, r in enumerate(rows)]
+
+
+# The arms of TORSO_PUSH reach to column 14; leaning 1 more keeps the hands in the frame.
+
+
+PUSH_FRAMES = [
+    leaning(player_frame(TORSO_PUSH, legs(-4, 1)), 1),
+    leaning(player_frame(TORSO_PUSH, legs(-3, 2, lift_r=1), bob=1), 1),
+    leaning(player_frame(TORSO_PUSH, legs(-4, 0)), 1),
+    leaning(player_frame(TORSO_PUSH, legs(-2, 1, lift_l=2), bob=1), 1),
+]
+
+
 def slash_frame(torso, blade):
     """32x32: the player on the left 16 columns, a sword drawn by `blade` (x, y, colour)."""
     rows = [list(r + "." * 16) for r in player_frame(torso, legs(-2, 2))]
@@ -442,6 +467,10 @@ def main():
     for y in range(32):
         for x in range(32):
             img.putpixel((128 + x, 64 + y), PALETTE[THRUST_AHEAD[y][x]])
+    for i, frame in enumerate(PUSH_FRAMES):
+        for y in range(32):
+            for x in range(16):
+                img.putpixel((160 + i * 16 + x, 64 + y), PALETTE[frame[y][x]])
     img.save(os.path.join(out, "player.png"))
     extra = [(32 + i * 32, 32, 32, 32, 8, 32) for i in range(len(SLASH_FRAMES))]
     extra += [(i * 16, 64, 16, 48, 8, 48) for i in range(2)]        # 13, 14: the lance up
@@ -450,6 +479,7 @@ def main():
     extra += [(i * 32, 112, 32, 48, 16, 48, [] if i == 0 else [("hit", "blade") + SLASH_UP_ARC[i][1]]) for i in range(4)]   # 19-22: arc up
     extra += [(128 + i * 32, 112, 32, 48, 16, 32, [] if i == 0 else [("hit", "blade") + SLASH_DOWN_ARC[i][1]]) for i in range(4)]   # 23-26: arc down
     extra += [(128, 64, 32, 32, 8, 32)]                               # 27: the lance ahead
+    extra += [(160 + i * 16, 64, 16, 32, 8, 32) for i in range(4)]    # 28-31: pushing
     sprite_file(os.path.join(out, "player.bmsprite"), "player.png", len(PLAYER_FRAMES), 8, 16, 32, (8, 32), (-5, -30, 10, 30), [
         ("idle", True, [(0, 40), (1, 40)]),
         ("run", True, [(2, 6), (3, 6), (4, 6), (5, 6)]),
@@ -463,6 +493,7 @@ def main():
         ("slash_up", False, [(19, 4), (20, 3), (21, 3), (22, 4)]),
         ("slash_down", False, [(23, 4), (24, 3), (25, 3), (26, 8)]),
         ("thrust", False, [(17, 4), (27, 10)]),
+        ("push", True, [(28, 10), (29, 10), (30, 10), (31, 10)]),
     ], extra=extra)
     sheet(BAT_FRAMES, 2, 16, 16).save(os.path.join(out, "bat.png"))
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [

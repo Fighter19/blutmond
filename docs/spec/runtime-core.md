@@ -557,9 +557,10 @@ one-dimensionally.
 - The frame shown is the step's frame.
 
 **The player**, with a sheet named exactly `player`: animations `idle`, `run`, `jump`, `fall`,
-`climb` (a missing one is animation 0). Climbing: `climb`, ticking only while `vx` or `vy` is
-not 0. Else in the air: `jump` if `vy < 0`, else `fall`. Else `run` if `|vx| > 32/256`. Else
-`idle`. Play, then tick.
+`climb`, `push` (a missing one is animation 0; `push`: `run`). Climbing: `climb`, ticking only
+while `vx` or `vy` is not 0. Else in the air: `jump` if `vy < 0`, else `fall`. Else `push` while
+pushing a push block (room-format.md §3.9). Else `run` if `|vx| > 32/256`. Else `idle`. Play,
+then tick.
 
 **Drawing a frame** at screen position `(sx, sy)` = position minus camera: for each piece,
 `x = hflip ? sx - dx - w : sx + dx`, `y = sy + dy`, with the piece's size from the hardware

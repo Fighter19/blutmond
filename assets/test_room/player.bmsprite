@@ -41,6 +41,10 @@
   <box kind="hit" name="blade" x="-14" y="-11" w="18" h="14"/>
  </frame>
  <frame x="128" y="64" w="32" h="32" ax="8" ay="32"/>
+ <frame x="160" y="64" w="16" h="32" ax="8" ay="32"/>
+ <frame x="176" y="64" w="16" h="32" ax="8" ay="32"/>
+ <frame x="192" y="64" w="16" h="32" ax="8" ay="32"/>
+ <frame x="208" y="64" w="16" h="32" ax="8" ay="32"/>
  <animation name="idle" loop="1">
   <step frame="0" duration="40"/>
   <step frame="1" duration="40"/>
@@ -93,5 +97,11 @@
  <animation name="thrust" loop="0">
   <step frame="17" duration="4"/>
   <step frame="27" duration="10"/>
+ </animation>
+ <animation name="push" loop="1">
+  <step frame="28" duration="10"/>
+  <step frame="29" duration="10"/>
+  <step frame="30" duration="10"/>
+  <step frame="31" duration="10"/>
  </animation>
 </sprite>

@@ -10,9 +10,9 @@
 #include "game.h"
 #include "sprite.h"
 
-#define STEP 16          // a push moves a block this far
-#define PUSH_SPEED 1     // pixels a frame
-#define FALL_SPEED 4
+#define PUSH_SPEED 192   // 1/256 pixels a frame
+#define GRAVITY 64       // 1/256 pixels a frame, each frame
+#define FALL_SPEED 1024  // the most, 1/256 pixels a frame
 #define GATE_SPEED 2
 
 static const char *const s_animNames[4] = { "block", "gate", "plate", "plate_down" };
@@ -34,11 +34,13 @@ void bmPuzzleEnterRoom(BmGame *g, bool fresh)
       uint8_t b = p->blockCount++;
       p->blockObject[b] = i;
       const char *frames = bmGameObjectProperty(g, o, "push_frames");
-      p->blockPushFrames[b] = (uint8_t)(frames != NULL ? atoi(frames) : 12);
+      p->blockPushFrames[b] = (uint8_t)(frames != NULL ? atoi(frames) : 6);
       if (fresh)
       {
-        p->blockX[b] = p->blockToX[b] = o->x;
-        p->blockY[b] = p->blockToY[b] = o->y;
+        p->blockX[b] = o->x;
+        p->blockY[b] = o->y;
+        p->blockFraction[b] = 0;
+        p->blockFall[b] = 0;
         p->blockPush[b] = 0;
       }
     }
@@ -78,68 +80,60 @@ void bmPuzzleEnterRoom(BmGame *g, bool fresh)
 
 // --- Where things are -----------------------------------------------------------------------
 
-// The cells (x0, y0, x1, y1: x1, y1 not in it) a block covers, where it is and where it goes.
-static void blockCells(const BmGame *g, uint8_t b, int32_t *c)
-{
-  const BmPuzzle *p = &g->puzzle;
-  const BmObjectView *o = &g->objects[p->blockObject[b]];
-  int32_t cs = g->collision.cellSize;
-  int32_t x0 = p->blockX[b] < p->blockToX[b] ? p->blockX[b] : p->blockToX[b];
-  int32_t y0 = p->blockY[b] < p->blockToY[b] ? p->blockY[b] : p->blockToY[b];
-  int32_t x1 = (p->blockX[b] > p->blockToX[b] ? p->blockX[b] : p->blockToX[b]) + o->w;
-  int32_t y1 = (p->blockY[b] > p->blockToY[b] ? p->blockY[b] : p->blockToY[b]) + o->h;
-  c[0] = x0 / cs;
-  c[1] = y0 / cs;
-  c[2] = (x1 + cs - 1) / cs;
-  c[3] = (y1 + cs - 1) / cs;
-}
-
 static bool gateClosed(const BmGame *g, uint8_t k)
 {
   return g->puzzle.gateLift[k] < g->objects[g->puzzle.gateObject[k]].h;
 }
 
-// Whether cell (cx, cy) holds something a block cannot move into: the room's edges (and its
-// bottom), the map's solid cells unless a broken wall left them empty, other blocks, closed
-// gates.
-static bool cellTaken(const BmGame *g, int32_t cx, int32_t cy, uint8_t self)
+// Whether a block may be where it would cover (x, y, w, h): every cell there free of what is
+// solid at its sides (the map, a broken wall's cells as it left them, closed gates), inside
+// the room, no other block, not the player.
+static bool freeAt(const BmGame *g, uint8_t self, int32_t x, int32_t y)
 {
-  const BmCollision *c = &g->collision;
-  if (cx < 0 || cy < 0 || cx >= c->width || cy >= c->height) return true;
   const BmPuzzle *p = &g->puzzle;
+  const BmObjectView *o = &g->objects[p->blockObject[self]];
+  const BmCollision *c = &g->collision;
+  int32_t cs = c->cellSize;
+  if (x < 0 || y < 0 || x + o->w > c->width * cs || y + o->h > c->height * cs) return false;
+  for (int32_t cy = y / cs; cy <= (y + o->h - 1) / cs; cy++)
+    for (int32_t cx = x / cs; cx <= (x + o->w - 1) / cs; cx++)
+    {
+      uint8_t shape, material;
+      bmCollisionCell(c, cx, cy, &shape, &material);
+      if ((shape & 15) != 0 && (shape & BM_CELL_SOLID_SIDES)) return false;
+    }
   for (uint8_t b = 0; b < p->blockCount; b++)
   {
-    int32_t r[4];
-    if (b == self) continue;
-    blockCells(g, b, r);
-    if (cx >= r[0] && cx < r[2] && cy >= r[1] && cy < r[3]) return true;
+    const BmObjectView *bo = &g->objects[p->blockObject[b]];
+    if (b != self && overlaps(x, y, o->w, o->h, p->blockX[b], p->blockY[b], bo->w, bo->h)) return false;
   }
-  int32_t cs = c->cellSize;
-  for (uint8_t k = 0; k < p->gateCount; k++)
-  {
-    const BmObjectView *o = &g->objects[p->gateObject[k]];
-    if (gateClosed(g, k) && overlaps(cx * cs, cy * cs, cs, cs, o->x, o->y, o->w, o->h)) return true;
-  }
-  for (uint8_t k = 0; k < g->breakCount; k++)
-  {
-    const BmCellOverride *o = &g->breakCells[k];
-    if (cx >= o->x0 && cx < o->x1 && cy >= o->y0 && cy < o->y1) return (o->shape & 15) != 0;
-  }
-  return (c->pCells[((uint32_t)cy * c->width + (uint32_t)cx) * 2u] & 15) != 0;
-}
-
-// Whether a block of object o's size at (x, y) fits: no cell of it taken, not into the player.
-static bool fits(const BmGame *g, uint8_t b, int32_t x, int32_t y)
-{
-  const BmObjectView *o = &g->objects[g->puzzle.blockObject[b]];
-  int32_t cs = g->collision.cellSize;
-  if (x < 0 || x + o->w > g->collision.width * cs) return false;
-  for (int32_t cy = y / cs; cy < (y + o->h + cs - 1) / cs; cy++)
-    for (int32_t cx = x / cs; cx < (x + o->w + cs - 1) / cs; cx++)
-      if (cellTaken(g, cx, cy, b)) return false;
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
   int32_t hw = g->playerParams.halfWidth, h = g->playerParams.height;
   return !overlaps(x, y, o->w, o->h, px - hw, py - h, hw * 2, h);
+}
+
+// Whether something holds block b up: a floor (a cell solid on top) under any part of it,
+// another block, the room's bottom.
+static bool held(const BmGame *g, uint8_t b)
+{
+  const BmPuzzle *p = &g->puzzle;
+  const BmObjectView *o = &g->objects[p->blockObject[b]];
+  const BmCollision *c = &g->collision;
+  int32_t cs = c->cellSize, bottom = p->blockY[b] + o->h;
+  if (bottom >= c->height * cs) return true;
+  if (bottom % cs == 0)
+    for (int32_t cx = p->blockX[b] / cs; cx <= (p->blockX[b] + o->w - 1) / cs; cx++)
+    {
+      uint8_t shape, material;
+      bmCollisionCell(c, cx, bottom / cs, &shape, &material);
+      if ((shape & 15) != 0 && (shape & BM_CELL_SOLID_TOP) && !(shape & BM_CELL_VFLIP)) return true;
+    }
+  for (uint8_t k = 0; k < p->blockCount; k++)
+  {
+    const BmObjectView *ko = &g->objects[p->blockObject[k]];
+    if (k != b && p->blockY[k] == bottom && overlaps(p->blockX[b], 0, o->w, 1, p->blockX[k], 0, ko->w, 1)) return true;
+  }
+  return false;
 }
 
 static int32_t towards(int32_t v, int32_t to, int32_t speed)
@@ -154,21 +148,19 @@ static void moveBlock(BmGame *g, uint8_t b, int8_t dx)
 {
   BmPuzzle *p = &g->puzzle;
   const BmObjectView *o = &g->objects[p->blockObject[b]];
-  if (p->blockX[b] != p->blockToX[b] || p->blockY[b] != p->blockToY[b])
+  // Nothing under it: it falls, faster each frame, a pixel at a time until something holds it.
+  if (!held(g, b))
   {
-    bool falling = p->blockY[b] != p->blockToY[b];
-    p->blockX[b] = (int16_t)towards(p->blockX[b], p->blockToX[b], PUSH_SPEED);
-    p->blockY[b] = (int16_t)towards(p->blockY[b], p->blockToY[b], FALL_SPEED);
-    if (!falling || p->blockY[b] != p->blockToY[b]) return;
-  }
-  // Nothing under it: it falls a cell.
-  if (fits(g, b, p->blockX[b], p->blockY[b] + STEP))
-  {
-    p->blockToY[b] = (int16_t)(p->blockY[b] + STEP);
     p->blockPush[b] = 0;
+    if (p->blockFall[b] < FALL_SPEED) p->blockFall[b] = (int16_t)(p->blockFall[b] + GRAVITY);
+    for (int32_t n = (p->blockFall[b] + 255) / 256; n > 0 && !held(g, b) && freeAt(g, b, p->blockX[b], p->blockY[b] + 1); n--)
+      p->blockY[b]++;
+    if (held(g, b) || !freeAt(g, b, p->blockX[b], p->blockY[b] + 1)) p->blockFall[b] = 0;
     return;
   }
-  // The player on the ground walking into its side, as tall as it there: pushed.
+  p->blockFall[b] = 0;
+  // The player on the ground walking into its side, as tall as it there: pushed, after a
+  // moment, for as long as they keep at it.
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
   int32_t hw = g->playerParams.halfWidth, h = g->playerParams.height;
   int32_t bx = p->blockX[b], by = p->blockY[b];
@@ -177,19 +169,32 @@ static void moveBlock(BmGame *g, uint8_t b, int8_t dx)
   if (!against)
   {
     p->blockPush[b] = 0;
+    p->blockFraction[b] = 0;
     return;
   }
-  if (p->blockPush[b] < 255) p->blockPush[b]++;
-  if (p->blockPush[b] >= p->blockPushFrames[b] && fits(g, b, bx + dx * STEP, by))
+  p->pushing = dx;
+  if (p->blockPush[b] < p->blockPushFrames[b])
   {
-    p->blockToX[b] = (int16_t)(bx + dx * STEP);
-    p->blockPush[b] = 0;
+    p->blockPush[b]++;
+    return;
   }
+  int32_t f = p->blockFraction[b] + PUSH_SPEED;
+  for (; f >= 256; f -= 256)
+  {
+    if (!freeAt(g, b, p->blockX[b] + dx, p->blockY[b]))
+    {
+      f = 0;
+      break;
+    }
+    p->blockX[b] = (int16_t)(p->blockX[b] + dx);
+  }
+  p->blockFraction[b] = (uint8_t)f;
 }
 
 void bmPuzzleFrame(BmGame *g, int8_t dx)
 {
   BmPuzzle *p = &g->puzzle;
+  p->pushing = 0;
   if (p->blockCount == 0 && p->gateCount == 0 && p->plateCount == 0) return;
   for (uint8_t b = 0; b < p->blockCount; b++) moveBlock(g, b, dx);
   // Plates: a block on them, or the player standing.
@@ -225,16 +230,10 @@ void bmPuzzleFrame(BmGame *g, int8_t dx)
 
 void bmPuzzleOverrides(BmGame *g)
 {
-  const BmPuzzle *p = &g->puzzle;
+  BmPuzzle *p = &g->puzzle;
   uint8_t n = 0;
   for (uint8_t k = 0; k < g->breakCount && n < BM_GAME_MAX_OVERRIDES; k++) g->overrides[n++] = g->breakCells[k];
   const uint8_t solid = BM_SHAPE_FULL | BM_CELL_SOLID_TOP | BM_CELL_SOLID_SIDES;
-  for (uint8_t b = 0; b < p->blockCount && n < BM_GAME_MAX_OVERRIDES; b++)
-  {
-    int32_t r[4];
-    blockCells(g, b, r);
-    g->overrides[n++] = (BmCellOverride){ (int16_t)r[0], (int16_t)r[1], (int16_t)r[2], (int16_t)r[3], solid, 0 };
-  }
   int32_t cs = g->collision.cellSize;
   for (uint8_t k = 0; k < p->gateCount && n < BM_GAME_MAX_OVERRIDES; k++)
   {
@@ -245,6 +244,13 @@ void bmPuzzleOverrides(BmGame *g)
   }
   g->collision.pOverrides = g->overrides;
   g->collision.overrideCount = n;
+  for (uint8_t b = 0; b < p->blockCount; b++)
+  {
+    const BmObjectView *o = &g->objects[p->blockObject[b]];
+    p->boxes[b] = (BmSolidBox){ p->blockX[b], p->blockY[b], (int16_t)o->w, (int16_t)o->h };
+  }
+  g->collision.pBoxes = p->boxes;
+  g->collision.boxCount = p->blockCount;
 }
 
 uint8_t bmPuzzleDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)

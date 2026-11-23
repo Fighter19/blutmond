@@ -30,7 +30,7 @@
 #define BM_GAME_OBJ_TILES 1024  // sprite memory, in tiles
 #define BM_GAME_NO_TILES 0xFFFF
 #define BM_GAME_MAX_OAM 48
-#define BM_GAME_MAX_OVERRIDES (BM_ROOM_MAX_HOLES + BM_PUZZLE_BLOCKS + BM_PUZZLE_GATES)
+#define BM_GAME_MAX_OVERRIDES (BM_ROOM_MAX_HOLES + BM_PUZZLE_GATES)
 #define BM_GAME_EFFECTS 8      // effects shown at once: sparks (a blocked hit), debris (a broken wall)
 #define BM_GAME_PLAYER_HEALTH 30   // the base the stat MaxHealth adds to (first-items.md §1)
 #define BM_GAME_PLAYER_MANA 20     // the base the stat MaxMana adds to
@@ -52,7 +52,7 @@ typedef enum BmLockAir { BM_LOCK_STEER = 0, BM_LOCK_AIR_KEEP, BM_LOCK_DRIFT } Bm
 #define BM_GAME_PORTRAIT_CELLS 5   // the name and the line start this many cells further right
 
 /// Animations the engine's player looks for in the sprite called "player".
-enum { BM_PLAYER_ANIM_IDLE, BM_PLAYER_ANIM_RUN, BM_PLAYER_ANIM_JUMP, BM_PLAYER_ANIM_FALL, BM_PLAYER_ANIM_CLIMB, BM_PLAYER_ANIM_COUNT };
+enum { BM_PLAYER_ANIM_IDLE, BM_PLAYER_ANIM_RUN, BM_PLAYER_ANIM_JUMP, BM_PLAYER_ANIM_FALL, BM_PLAYER_ANIM_CLIMB, BM_PLAYER_ANIM_PUSH, BM_PLAYER_ANIM_COUNT };
 
 typedef enum BmObjectKind {
   BM_OBJECT_OTHER = 0,   // a game class (placeholder until scripts exist)

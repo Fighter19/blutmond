@@ -42,6 +42,8 @@ bool bmCollisionInit(BmCollision *pCollision, const uint8_t *pChunk, uint32_t si
   pCollision->pCells = pChunk + 8;
   pCollision->pOverrides = NULL;
   pCollision->overrideCount = 0;
+  pCollision->pBoxes = NULL;
+  pCollision->boxCount = 0;
   return (pCollision->cellSize == 16 || pCollision->cellSize == 8) &&
          size >= 8u + (uint32_t)pCollision->width * pCollision->height * 2u;
 }
@@ -99,7 +101,21 @@ static int32_t scaledHeight(const BmCollision *pCollision, uint8_t b0, int32_t x
   return pCollision->cellSize == 16 ? h : h / 2;
 }
 
+static int32_t cellFloor(const BmCollision *pCollision, int32_t x, int32_t yFrom, int32_t yTo, bool jumpThrough);
+
 int32_t bmCollisionFloor(const BmCollision *pCollision, int32_t x, int32_t yFrom, int32_t yTo, bool jumpThrough)
+{
+  // The cells' floor, or a solid box's top in the column if that is higher.
+  int32_t floor = cellFloor(pCollision, x, yFrom, yTo, jumpThrough);
+  for (uint8_t k = 0; k < pCollision->boxCount; k++)
+  {
+    const BmSolidBox *b = &pCollision->pBoxes[k];
+    if (x >= b->x && x < b->x + b->w && b->y >= yFrom && b->y <= yTo && b->y < floor) floor = b->y;
+  }
+  return floor;
+}
+
+static int32_t cellFloor(const BmCollision *pCollision, int32_t x, int32_t yFrom, int32_t yTo, bool jumpThrough)
 {
   int32_t cs = pCollision->cellSize;
   int32_t cx = floorDiv(x, cs);
@@ -136,8 +152,27 @@ int32_t bmCollisionFloor(const BmCollision *pCollision, int32_t x, int32_t yFrom
   return INT32_MAX;
 }
 
+bool bmCollisionBoxAt(const BmCollision *pCollision, int32_t x, int32_t yTop, int32_t yBottom, BmSolidBox *pBox)
+{
+  for (uint8_t k = 0; k < pCollision->boxCount; k++)
+  {
+    const BmSolidBox *b = &pCollision->pBoxes[k];
+    if (x >= b->x && x < b->x + b->w && yTop < b->y + b->h && yBottom >= b->y)
+    {
+      *pBox = *b;
+      return true;
+    }
+  }
+  return false;
+}
+
 bool bmCollisionSolidSides(const BmCollision *pCollision, int32_t x, int32_t y)
 {
+  for (uint8_t k = 0; k < pCollision->boxCount; k++)
+  {
+    const BmSolidBox *b = &pCollision->pBoxes[k];
+    if (x >= b->x && x < b->x + b->w && y >= b->y && y < b->y + b->h) return true;
+  }
   int32_t cs = pCollision->cellSize;
   int32_t cx = floorDiv(x, cs), cy = floorDiv(y, cs);
   uint8_t b0, material;

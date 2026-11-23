@@ -2295,9 +2295,12 @@ static void testThePushBlockPuzzle(void)
   startWith(s_data, s_size, "puzzle_room");
   frames(5, 0);
   const BmPuzzle *p = &s_game.puzzle;
+  const BmCollision *c = &s_game.collision;
   TEST_ASSERT(p->blockCount == 1 && p->gateCount == 1 && p->plateCount == 1 && p->plateGate[0] == 0 && p->sheet >= 0);
   TEST_ASSERT(p->blockX[0] == 320 && p->blockY[0] == 112 && p->gateLift[0] == 0);
-  TEST_ASSERT(solidCell(4, 8) && solidCell(20, 7) && !solidCell(22, 7));   // the gate, the block
+  // The gate's cells; the block solid to the pixel (320 to 351), not to the cell.
+  TEST_ASSERT(solidCell(4, 8) && bmCollisionSolidSides(c, 320, 120) && bmCollisionSolidSides(c, 351, 140) && !bmCollisionSolidSides(c, 352, 120));
+  TEST_ASSERT(bmCollisionFloor(c, 330, 100, 150, false) == 112);   // its top is a floor
   // The player alone on the plate: open while there, shut again when gone.
   bmBodyPlace(&s_game.player, 176, 160);
   frames(30, 0);
@@ -2305,18 +2308,35 @@ static void testThePushBlockPuzzle(void)
   bmBodyPlace(&s_game.player, 260, 160);
   frames(30, 0);
   TEST_ASSERT(p->pressed == 0 && p->gateLift[0] == 0 && solidCell(4, 8));
-  // A moment against it does not move it; held, it goes a cell at a time.
+  // A moment against it does not move it; held, it moves smoothly (at most a pixel a frame,
+  // 3/4 of one on the whole), the player leaning into it with the push animation.
   bmBodyPlace(&s_game.player, 362, 144);
-  frames(5, BM_KEY_LEFT);
-  TEST_ASSERT(p->blockX[0] == 320);
-  frames(30, BM_KEY_LEFT);
-  TEST_ASSERT(p->blockX[0] < 320 && p->blockX[0] >= 304 && p->blockY[0] == 112);
-  // On to the step's end: it falls to the floor.
-  int f = 0;
-  for (; f < 600 && p->blockY[0] != 128; f++) frames(1, BM_KEY_LEFT);
-  TEST_ASSERT(p->blockY[0] == 128 || p->blockToY[0] == 128);
+  frames(6, BM_KEY_LEFT);
+  TEST_ASSERT(p->blockX[0] == 320 && p->pushing == -1);
   frames(10, BM_KEY_LEFT);
-  TEST_ASSERT(p->blockX[0] == 224 && p->blockY[0] == 128 && solidCell(14, 9) && !solidCell(20, 8));
+  int x0 = p->blockX[0], steps = 0;
+  for (int i = 0; i < 40; i++)
+  {
+    int before = p->blockX[0];
+    frames(1, BM_KEY_LEFT);
+    steps += before - p->blockX[0] > 1;
+  }
+  TEST_ASSERT(steps == 0 && x0 - p->blockX[0] >= 28 && x0 - p->blockX[0] <= 32 && p->blockY[0] == 112);
+  TEST_ASSERT(p->pushing == -1 && s_game.playerAnim.anim == (uint8_t)s_game.playerAnims[BM_PLAYER_ANIM_PUSH]);
+  int32_t px = BM_FIX_INT(s_game.player.x);
+  TEST_ASSERT(px - s_game.playerParams.halfWidth - (p->blockX[0] + 32) <= 1);   // right against it
+  // Let go: it stays.
+  int x1 = p->blockX[0];
+  frames(20, 0);
+  TEST_ASSERT(p->blockX[0] == x1 && p->pushing == 0);
+  // Off the step's end (x 256): it falls, faster and faster, onto the floor.
+  int f = 0;
+  for (; f < 600 && p->blockY[0] == 112; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(p->blockX[0] + 32 <= 256 && p->blockX[0] >= 220);
+  int fallFrames = 0;
+  for (; fallFrames < 60 && p->blockY[0] != 128; fallFrames++) frames(1, 0);
+  TEST_ASSERT(p->blockY[0] == 128 && fallFrames >= 3 && fallFrames <= 10 && p->blockFall[0] == 0);
+  TEST_ASSERT(bmCollisionSolidSides(c, p->blockX[0] + 4, 140) && !bmCollisionSolidSides(c, p->blockX[0] + 4, 120));
   // Along the floor onto the plate.
   for (f = 0; f < 600 && p->pressed == 0; f++) frames(1, BM_KEY_LEFT);
   TEST_ASSERT(p->pressed == 1);

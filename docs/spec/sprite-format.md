@@ -101,7 +101,8 @@ using the chunk.
   game state ([state.md](state.md)), so save states and link transfers continue animations
   where they were.
 - The engine's player uses the sprite named `player` with the animations `idle`, `run`,
-  `jump`, `fall` and `climb` (missing ones fall back to the first). A scripted object uses
+  `jump`, `fall`, `climb` and `push` (against a push block; missing ones fall back to the
+  first, `push` to `run`). A scripted object uses
   the sprite its class names, or the one named like the class (ignoring case), and its script
   chooses the animation (`play_anim`). An unscripted object with a sprite named like its
   class shows that sprite's first animation.

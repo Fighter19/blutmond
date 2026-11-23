@@ -237,8 +237,16 @@ uint32_t bmBodyStep(BmBody *b, const BmBodyParams *p, const BmCollision *c, cons
     int32_t edge = b->vx > 0 ? nPx + p->halfWidth - 1 : nPx - p->halfWidth;
     if (wallAt(c, edge, feet, p, s, wasOnGround))
     {
-      int32_t cellX = floorDiv(edge, cs) * cs;
-      nx = b->vx > 0 ? (bm_fix)(cellX - p->halfWidth) * 256 : (bm_fix)(cellX + cs + p->halfWidth) * 256;
+      // Against a cell: at its edge; against a solid box (a push block): at the box's.
+      int32_t wallX = floorDiv(edge, cs) * cs, wallW = cs;
+      BmSolidBox box;
+      int32_t top = s > 0 ? feet - p->height + 1 : feet, bottom = s > 0 ? feet - 1 : feet + p->height - 1;
+      if (bmCollisionBoxAt(c, edge, top, bottom, &box))
+      {
+        wallX = box.x;
+        wallW = box.w;
+      }
+      nx = b->vx > 0 ? (bm_fix)(wallX - p->halfWidth) * 256 : (bm_fix)(wallX + wallW + p->halfWidth) * 256;
       b->vx = 0;
       events |= BM_BODY_HIT_WALL;
     }
