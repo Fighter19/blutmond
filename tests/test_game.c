@@ -2334,7 +2334,27 @@ static void testThePushBlockPuzzle(void)
   int x1 = p->blockX[0];
   frames(20, 0);
   TEST_ASSERT(p->blockX[0] == x1 && p->pushing == 0 && strcmp(effectPlaying(), "drag") != 0);   // let go: the sound stops
+  // From the left as well: the player goes along with it, right against it, and the camera
+  // that follows them moves a pixel at a time, as from the right (not in jerks of 2).
+  for (int dir = 1; dir >= -1; dir -= 2)
+  {
+    bmBodyPlace(&s_game.player, dir > 0 ? p->blockX[0] - 8 : p->blockX[0] + 40, 144);
+    frames(20, 0);
+    int xs = p->blockX[0], jumps = 0, apart = 0;
+    int32_t cam = s_game.room.cameraX;
+    for (int i = 0; i < 60; i++)
+    {
+      frames(1, dir > 0 ? BM_KEY_RIGHT : BM_KEY_LEFT);
+      jumps += abs(s_game.room.cameraX - cam) > 1;
+      cam = s_game.room.cameraX;
+      int32_t qx = BM_FIX_INT(s_game.player.x), hw = s_game.playerParams.halfWidth;
+      if (i >= 15) apart += dir > 0 ? qx + hw != p->blockX[0] : qx - hw != p->blockX[0] + 32;
+    }
+    TEST_ASSERT(dir * (p->blockX[0] - xs) >= 30 && jumps == 0 && apart == 0);
+  }
   // Off the step's end (x 256): it falls, faster and faster, onto the floor.
+  bmBodyPlace(&s_game.player, p->blockX[0] + 40, 144);
+  frames(10, 0);
   int f = 0;
   for (; f < 600 && p->blockY[0] == 112; f++) frames(1, BM_KEY_LEFT);
   TEST_ASSERT(p->blockX[0] + 32 <= 256 && p->blockX[0] >= 220);

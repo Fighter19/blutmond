@@ -195,6 +195,14 @@ static int moveBlock(BmGame *g, uint8_t b, int8_t dx)
     p->blockX[b] = (int16_t)(p->blockX[b] + dx);
   }
   p->blockFraction[b] = (uint8_t)f;
+  // The player goes with it, against its side at its speed: not left behind and catching up
+  // in jerks (the camera follows them), the same either way.
+  if (p->blockX[b] != x0)
+  {
+    int32_t contact = dx > 0 ? p->blockX[b] - hw : p->blockX[b] + o->w + hw;
+    g->player.x = BM_FIX(contact);
+    g->player.vx = dx * PUSH_SPEED;
+  }
   // Sliding (it moved, or will next frame: 3/4 of a pixel a frame moves on most frames).
   return p->blockX[b] != x0 || f != 0 ? 1 : 0;
 }
