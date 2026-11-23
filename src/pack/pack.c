@@ -125,10 +125,12 @@ bool bmPackGetChunk(const BmPack *pPack, uint32_t index, BmChunkEntry *pEntry)
 
 int32_t bmPackFindChunk(const BmPack *pPack, uint32_t id, uint32_t start)
 {
-  BmChunkEntry e;
-  for (uint32_t i = start; bmPackGetChunk(pPack, i, &e); i++)
+  // Only the ids are read (the whole entry, byte by byte, made a room's scripts slow to find).
+  if (pPack->pData == NULL) return -1;
+  const uint8_t *p = pPack->pData + pPack->header.tocOffset;
+  for (uint32_t i = start; i < pPack->header.chunkCount; i++)
   {
-    if (e.id == id)
+    if (bmRead32(p + i * BM_PACK_CHUNK_ENTRY_SIZE) == id)
     {
       return (int32_t)i;
     }

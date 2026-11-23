@@ -222,7 +222,23 @@ void bmHalVramWrite(uint32_t offset, const void *pData, uint32_t size)
   {
     return;
   }
+  // Video memory takes 16- and 32-bit writes only. Aligned (tiles in a pack are): words; a
+  // room's tiles took ten times as long built from bytes.
+  if ((((uintptr_t)pData | offset) & 3) == 0)
+  {
+    volatile uint32_t *pDst = (volatile uint32_t *)(GBA_VRAM + offset);
+    const uint32_t *pSrc = (const uint32_t *)pData;
+    for (uint32_t words = size / 4; words != 0; words--) *pDst++ = *pSrc++;
+    if (size & 2) *(volatile uint16_t *)pDst = *(const uint16_t *)pSrc;
+    return;
+  }
   volatile uint16_t *pDst = (volatile uint16_t *)(GBA_VRAM + offset);
+  if (((uintptr_t)pData & 1) == 0)
+  {
+    const uint16_t *pSrc = (const uint16_t *)pData;
+    for (uint32_t i = 0; i < size / 2; i++) pDst[i] = pSrc[i];
+    return;
+  }
   const uint8_t *pSrc = (const uint8_t *)pData;
   for (uint32_t i = 0; i < size / 2; i++)
   {

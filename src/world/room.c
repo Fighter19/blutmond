@@ -125,15 +125,23 @@ static void writeRow(const BmRoomLayer *pLayer, int32_t y)
 {
   uint32_t hy = (uint32_t)y & (HW_ROWS - 1);
   int32_t x = pLayer->windowX, end = pLayer->windowX + WINDOW_COLS;
+  // The room's row found once (as layerEntry; cell by cell this was most of a room's showing).
+  const uint8_t *row = y >= 0 && y < pLayer->height8 ? pLayer->pEntries + (uint32_t)y * pLayer->width8 * 2u : NULL;
   while (x < end)
   {
     uint32_t hx = (uint32_t)x & (HW_COLS - 1);
     int32_t run = 32 - (int32_t)(hx & 31);
     if (run > end - x) run = end - x;
-    uint16_t entries[32];
-    for (int32_t k = 0; k < run; k++) entries[k] = layerEntry(pLayer, x + k, y);
     uint8_t block = (uint8_t)(FIRST_SCREEN_BLOCK + pLayer->bg * 2 + (hx >= 32 ? 1 : 0));
-    bmMapLoad(block, (uint16_t)(hy * 32 + (hx & 31)), entries, (uint32_t)run);
+    // All in the room: straight from the pack (bmHalVramWrite copies whatever the alignment).
+    uint16_t entries[32];
+    const uint16_t *pFrom = (const uint16_t *)(const void *)(row + x * 2);
+    if (row == NULL || x < 0 || x + run > pLayer->width8)
+    {
+      for (int32_t k = 0; k < run; k++) entries[k] = row != NULL && x + k >= 0 && x + k < pLayer->width8 ? bmRead16(row + (x + k) * 2) : 0;
+      pFrom = entries;
+    }
+    bmMapLoad(block, (uint16_t)(hy * 32 + (hx & 31)), pFrom, (uint32_t)run);
     x += run;
   }
 }

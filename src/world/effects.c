@@ -198,11 +198,14 @@ void bmEffectsPresent(BmGame *g)
   uint8_t slots = 0;   // line-table slots in use this frame
   if (wave)
   {
-    // Every background of the room sways; the UI layer stays.
+    // Every background of the room sways; the UI layer stays. The wave once per line, not
+    // once per line and layer (that took 80,000 cycles, a third of a GBA frame).
+    static uint8_t s_wave[BM_HAL_SCREEN_HEIGHT + 1];
+    for (int32_t y = 0; y <= BM_HAL_SCREEN_HEIGHT; y++) s_wave[y] = (uint8_t)bmEffectsWaveAt(g, y);
     for (uint8_t i = 0; i < g->room.layerCount && i < 3; i++)
     {
       const BmRoomLayer *l = &g->room.layers[i];
-      for (int32_t y = 0; y <= BM_HAL_SCREEN_HEIGHT; y++) s_lines[i][y] = (uint16_t)((l->scrollX + bmEffectsWaveAt(g, y)) & 511);
+      for (int32_t y = 0; y <= BM_HAL_SCREEN_HEIGHT; y++) s_lines[i][y] = (uint16_t)((l->scrollX + s_wave[y]) & 511);
       bmVideoSetLineTable(i, BM_PPU_BGHOFS(l->bg), s_lines[i]);
       slots |= (uint8_t)(1u << i);
     }
