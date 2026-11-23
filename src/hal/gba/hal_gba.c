@@ -123,9 +123,23 @@ uint32_t bmHalCycles(void)
 // late handed none over: then a frame of silence plays (rather than the DMA reading on past
 // the buffer, over the other pair: old sound again). The buffers are a little longer than a
 // frame, so a DMA request that falls just before the restart reads silence too.
+//
+// That must not happen while the sound plays: 16 samples of silence, and the frame's last 16
+// lost, are a click (heard as crackling over a quiet held note). The FIFOs ask for 16 bytes
+// every 16 samples, exactly every 12 lines (16 * 924 = 12 * 1232 cycles), so where those
+// requests fall against the vertical blank stays as it was when the sound started. Started
+// from the interrupt handler, the first came within a sample of the restart, and a handler a
+// little later than that first one (it varies on the device) let one in before the restart.
+// Started on line 214 instead, the first request comes some 6 lines after each blank: the
+// restart may be that late (measured in mGBA by delaying it; line 218 would be the worst).
 
 #define AUDIO_BUFFER (BM_HAL_AUDIO_FRAME_SAMPLES + 16)
-static int8_t s_audio[2][2][AUDIO_BUFFER];   // in fast memory: written once per sample
+#define AUDIO_START_LINE 214
+#define AUDIO_DMA (GBA_DMA_ENABLE | GBA_DMA_START_FIFO | GBA_DMA_32BIT | GBA_DMA_REPEAT | GBA_DMA_DEST_FIXED)
+// In fast memory: written once per sample. Aligned like the silence: the DMA moves words and
+// leaves out the address's low two bits, so an odd address had each frame start with the bytes
+// before it and lose its last ones (a buzz of 60 a second, loudest on low held notes).
+static int8_t s_audio[2][2][AUDIO_BUFFER] __attribute__((aligned(4)));
 static uint8_t s_audioFill;   // the pair being filled
 static bool s_audioOn;
 static bool s_audioFilled;    // the pair was given out this frame (bmHalAudioBuffers)
@@ -137,15 +151,34 @@ void bmHalAudioStart(void)
 {
   if (s_audioOn) return;
   GBA_REG_SOUNDCNT_X = 0x80;     // sound on
-  // Both direct sound channels at full volume, timer 0; A on the left, B on the right; FIFOs reset.
-  GBA_REG_SOUNDCNT_H = 0x0004 | 0x0008 | 0x0200 | 0x0800 | 0x1000 | 0x8000;
   GBA_REG_TM0CNT_H = 0;
   GBA_REG_TM0CNT_L = (uint16_t)(65536 - 924);
-  GBA_REG_TM0CNT_H = 0x80;
   GBA_REG_DMA1DAD = GBA_FIFO_A;
   GBA_REG_DMA2DAD = GBA_FIFO_B;
-  s_audioOn = true;
-  bm_hal_audio_next.on = 1;
+  GBA_REG_DMA1SAD = (uint32_t)bm_hal_audio_silence;
+  GBA_REG_DMA2SAD = (uint32_t)bm_hal_audio_silence;
+  // Both direct sound channels at full volume, timer 0; A on the left, B on the right. The
+  // FIFOs are emptied and the timer started on a chosen line (AUDIO_START_LINE), with
+  // interrupts off for those few writes, so the FIFO requests fall where they should.
+  for (;;)
+  {
+    while (GBA_REG_VCOUNT != AUDIO_START_LINE) {}
+    uint16_t ime = GBA_REG_IME;
+    GBA_REG_IME = 0;
+    if (GBA_REG_VCOUNT != AUDIO_START_LINE)
+    {
+      GBA_REG_IME = ime;   // an interrupt took the line: the next frame's
+      continue;
+    }
+    GBA_REG_SOUNDCNT_H = 0x0004 | 0x0008 | 0x0200 | 0x0800 | 0x1000 | 0x8000;
+    GBA_REG_DMA1CNT_H = AUDIO_DMA;
+    GBA_REG_DMA2CNT_H = AUDIO_DMA;
+    GBA_REG_TM0CNT_H = 0x80;
+    s_audioOn = true;
+    bm_hal_audio_next.on = 1;
+    GBA_REG_IME = ime;
+    break;
+  }
 }
 
 void bmHalAudioBuffers(int8_t **ppLeft, int8_t **ppRight)
