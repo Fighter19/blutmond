@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="knight.png">
+ <hitbox x="-5" y="-28" w="10" h="28"/>
+ <frame x="0" y="0" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-5" y="-28" w="9" h="28"/>
+  <box kind="guard" name="shield" x="4" y="-23" w="8" h="18"/>
+ </frame>
+ <frame x="32" y="0" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-5" y="-28" w="9" h="28"/>
+  <box kind="guard" name="shield" x="4" y="-23" w="8" h="18"/>
+ </frame>
+ <frame x="64" y="0" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-5" y="-28" w="9" h="28"/>
+  <box kind="guard" name="shield" x="4" y="-23" w="8" h="18"/>
+ </frame>
+ <frame x="96" y="0" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-5" y="-28" w="9" h="28"/>
+  <box kind="guard" name="shield" x="4" y="-23" w="8" h="18"/>
+ </frame>
+ <frame x="0" y="32" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-5" y="-28" w="9" h="28"/>
+  <box kind="guard" name="shield" x="4" y="-23" w="8" h="18"/>
+ </frame>
+ <frame x="32" y="32" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-5" y="-28" w="9" h="28"/>
+  <box kind="guard" name="shield" x="4" y="-23" w="8" h="18"/>
+ </frame>
+ <frame x="64" y="32" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-6" y="-28" w="9" h="28"/>
+  <box kind="guard" name="shield" x="3" y="-23" w="8" h="18"/>
+ </frame>
+ <frame x="96" y="32" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-3" y="-28" w="9" h="28"/>
+  <box kind="hit" name="sword" x="7" y="-19" w="13" h="6"/>
+ </frame>
+ <frame x="0" y="64" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-4" y="-28" w="9" h="28"/>
+ </frame>
+ <frame x="32" y="64" w="32" h="32" ax="12" ay="32">
+  <box kind="hurt" x="-6" y="-27" w="9" h="27"/>
+  <box kind="guard" name="shield" x="3" y="-22" w="8" h="18"/>
+ </frame>
+ <animation name="idle" loop="1">
+  <step frame="0" duration="30"/>
+  <step frame="1" duration="30"/>
+ </animation>
+ <animation name="walk" loop="1">
+  <step frame="2" duration="8"/>
+  <step frame="3" duration="8"/>
+  <step frame="4" duration="8"/>
+  <step frame="5" duration="8"/>
+ </animation>
+ <animation name="attack" loop="0">
+  <step frame="6" duration="18"/>
+  <step frame="7" duration="8"/>
+  <step frame="8" duration="16"/>
+ </animation>
+ <animation name="flinch" loop="0">
+  <step frame="9" duration="12"/>
+ </animation>
+</sprite>

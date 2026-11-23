@@ -17,3 +17,17 @@ record FastBat : Bat {
   speed = 1.25
   give_up_distance = 160
 }
+
+# A knight with a shield (scripts/knight.ms): it blocks from the front and turns after
+# patience x 8 frames; give_up_distance is how far it leaves the place it stands.
+record Knight {
+  damage = 2
+  health = 9
+  speed = 0.5
+  wake_distance = 96
+  give_up_distance = 64
+  patience = 5
+  drop = Potion
+  drop_chance = 50
+  hit_sound = "hit_dummy"
+}

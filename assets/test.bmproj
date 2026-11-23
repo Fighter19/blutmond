@@ -4,6 +4,7 @@
  <room path="test_room/room2.tmx"/>
  <room path="test_room/boss_hall.tmx"/>
  <room path="test_room/ability_hall.tmx"/>
+ <room path="test_room/guard_room.tmx"/>
  <room path="test_room/debug_lobby.tmx"/>
  <room path="test_room/debug_wave.tmx"/>
  <room path="test_room/debug_spotlight.tmx"/>

@@ -63,7 +63,7 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/world.bmworld
   ${PROJECT_SOURCE_DIR}/assets/test_room/save.bmschema)
 set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/boss_hall.tmx
-  ${PROJECT_SOURCE_DIR}/assets/test_room/ability_hall.tmx
+  ${PROJECT_SOURCE_DIR}/assets/test_room/ability_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/guard_room.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_lobby.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_wave.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_spotlight.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_pulse.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx)
@@ -97,6 +97,9 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/moon_bat.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/fireball.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/moon_bat.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/knight.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/knight.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/clang.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/fireball.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/drop.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/door_panel.bmsprite

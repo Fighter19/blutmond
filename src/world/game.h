@@ -24,7 +24,7 @@
 #include "ui.h"
 
 #define BM_GAME_MAX_OBJECTS 64
-#define BM_GAME_MAX_SHEETS 8
+#define BM_GAME_MAX_SHEETS 10
 #define BM_GAME_MAX_OAM 48
 #define BM_GAME_PLAYER_HEALTH 30   // the base the stat MaxHealth adds to (first-items.md §1)
 #define BM_GAME_PLAYER_MANA 20     // the base the stat MaxMana adds to

@@ -1073,11 +1073,11 @@ static void testTheWorldMap(void)
 {
   start();
   frames(3, 0);
-  // test_room (4 x 1 cells), test_room_2 (2 x 1) and the boss hall (2 x 1) in a row, the hall of
-  // abilities (2 x 2) behind it; the debug rooms are hidden.
-  TEST_ASSERT(s_game.map.pChunk != NULL && s_game.map.roomCount == 4 && s_game.map.cellCount == 12);
+  // The guard room (2 x 1 cells), test_room (4 x 1), test_room_2 (2 x 1) and the boss hall
+  // (2 x 1) in a row, the hall of abilities (2 x 2) behind it; the debug rooms are hidden.
+  TEST_ASSERT(s_game.map.pChunk != NULL && s_game.map.roomCount == 5 && s_game.map.cellCount == 14);
   TEST_ASSERT(s_game.map.room == 0);
-  TEST_ASSERT(exploredCells() == 1 && bmMapPercent(&s_game) == 8);
+  TEST_ASSERT(exploredCells() == 1 && bmMapPercent(&s_game) == 7);
   // The HUD's map: the player's cell in the middle (26, 2), marked, in the room they are in.
   uint16_t look = 0;
   TEST_ASSERT(mapCodeAt(26, 2, &look));
@@ -1088,7 +1088,7 @@ static void testTheWorldMap(void)
   frames(60, BM_KEY_RIGHT);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
   frames(5, 0);
-  TEST_ASSERT(s_game.map.room == 1 && exploredCells() == 3 && bmMapPercent(&s_game) == 25);
+  TEST_ASSERT(s_game.map.room == 1 && exploredCells() == 3 && bmMapPercent(&s_game) == 21);
   // The door shows on the HUD's map: test_room's last cell, left of the player, has a door east.
   TEST_ASSERT(mapCodeAt(25, 2, &look) && (look & 0x22) == 0x22 && ((look >> 8) & 3) == BM_UI_MAP_ROOM_KIND);
   TEST_ASSERT(mapCodeAt(26, 2, &look) && (look & 0x88) == 0x88);   // and west in the player's cell
@@ -1098,7 +1098,7 @@ static void testTheWorldMap(void)
   press(BM_KEY_DOWN);
   press(BM_KEY_DOWN);
   press(BM_KEY_A);
-  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Map") && uiShows("25"));
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Map") && uiShows("21"));
   TEST_ASSERT(mapCellsIn(2, 4, 26, 14) == 3);
   // The player's cell blinks: drawn again with the frame.
   int marked = 0;
@@ -2126,6 +2126,62 @@ static uint8_t *readFile(const char *path, uint32_t *pSize)
   return data;
 }
 
+// The knight of the guard room (assets/test_room/scripts/knight.ms, west of the first room): its
+// shield stops the Short Sword from the front; from behind the sword strikes, it flinches and
+// turns; it turns to a player behind it only after a while; its lunge strikes a player close
+// ahead.
+static void testTheKnightsShield(void)
+{
+  start();
+  const uint32_t sword = keyOf("ShortSword");
+  bmBodyPlace(&s_game.player, 80, 160);
+  frames(5, 0);
+  TEST_ASSERT(s_game.inventory.equipped[0] == sword);
+  bmBodyPlace(&s_game.player, 24, 160);
+  frames(60, BM_KEY_LEFT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
+  BmActors *a = &s_game.actors;
+  int knight = actorOfClass("Knight");
+  TEST_ASSERT(knight >= 0 && a->health[knight] == 9 && a->facing[knight] == 1);
+  int32_t kx = BM_FIX_INT(a->x[knight]);
+  // From the front, the sword over the shield and the body behind it: blocked. (Its lunge held
+  // back meanwhile: Rest, its third variable.)
+  int32_t *kf = &a->fields[knight * BM_SCRIPT_MAX_FIELDS];   // Kind, Behind, Rest, Walking
+  kf[2] = 40;
+  bmBodyPlace(&s_game.player, kx + 16, 160);
+  s_game.player.facing = -1;
+  frames(2, 0);
+  int32_t health = s_game.health;
+  frames(1, BM_KEY_B);
+  frames(10, 0);
+  TEST_ASSERT(a->health[knight] == 9 && strcmp(stateOf(knight), "Flinching") != 0);
+  // Its lunge at the player close ahead.
+  frames(60, 0);
+  TEST_ASSERT(s_game.health == health - 2);
+  // Behind it: it does not turn at once ...
+  frames(90, 0);
+  kx = BM_FIX_INT(a->x[knight]);
+  TEST_ASSERT(a->facing[knight] == 1);
+  bmBodyPlace(&s_game.player, kx - 20, 160);
+  s_game.player.facing = 1;
+  frames(20, 0);
+  TEST_ASSERT(a->facing[knight] == 1);
+  // ... and the sword strikes its back: it flinches and turns.
+  frames(1, BM_KEY_B);
+  frames(8, 0);
+  TEST_ASSERT(a->health[knight] == 6 && strcmp(stateOf(knight), "Flinching") == 0);
+  frames(20, 0);
+  TEST_ASSERT(a->facing[knight] == -1);
+  // Left alone behind it, it turns after 40 frames.
+  frames(60, 0);
+  bmBodyPlace(&s_game.player, BM_FIX_INT(a->x[knight]) + 40, 160);
+  frames(30, 0);
+  TEST_ASSERT(a->facing[knight] == -1);
+  frames(20, 0);
+  TEST_ASSERT(a->facing[knight] == 1);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -2151,6 +2207,7 @@ int main(int argc, char **argv)
   RUN_TEST(testCapabilitiesAndFilters);
   RUN_TEST(testGuardsAndProjectiles);
   RUN_TEST(testTheSwordDefeatsTheBat);
+  RUN_TEST(testTheKnightsShield);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
   RUN_TEST(testTheWorldMap);

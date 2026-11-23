@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="10" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="clang" wave="pulse12" attack="0" decay="3" sustain="0" release="2" volume="150" pan="0"/>
+ <track name="clang" instrument="clang">
+  <note t="0" key="96" len="2" vel="120"/>
+  <note t="2" key="91" len="3" vel="90"/>
+ </track>
+</song>
