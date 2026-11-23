@@ -14,7 +14,6 @@
 #define GRAVITY 64       // 1/256 pixels a frame, each frame
 #define FALL_SPEED 1024  // the most, 1/256 pixels a frame
 #define GATE_SPEED 2
-#define DRAG_EVERY 10    // frames between drag sounds while a block slides
 
 static const char *const s_animNames[4] = { "block", "gate", "plate", "plate_down" };
 
@@ -212,15 +211,12 @@ void bmPuzzleFrame(BmGame *g, int8_t dx)
     sliding |= m == 1;
     landed |= m == 2;
   }
-  // The stone grinding along the floor: again and again while it slides; a thud on landing.
+  // The stone dragging along the floor: one held noise (drag loops) from when a block starts
+  // to slide until it stops; started again if another effect took its place meanwhile. A thud
+  // on landing.
   if (landed) bmSoundPlayEffect(&g->sound, "thud");
-  if (!sliding) p->dragTimer = 0;
-  else if (p->dragTimer == 0 || --p->dragTimer == 0)
-  {
-    if (!landed) bmSoundPlayEffectAt(&g->sound, "drag", (int8_t)(p->dragPitch ? -2 : 0));
-    p->dragPitch ^= 1;
-    p->dragTimer = DRAG_EVERY;
-  }
+  if (sliding && !landed && !bmSoundEffectIs(&g->sound, "drag")) bmSoundPlayEffect(&g->sound, "drag");
+  if (!sliding && bmSoundEffectIs(&g->sound, "drag")) bmSoundStopEffect(&g->sound);
   // Plates: a block on them, or the player standing.
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
   uint8_t open = 0;

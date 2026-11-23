@@ -209,8 +209,9 @@ left). Per room up to 4 of each.
   broken wall's as it left them, closed gates), another block, the room's edge, the player.
   With nothing under any part of it (a cell solid on top, another block, the room's bottom) it
   falls, its speed growing by 1/4 pixel a frame up to 4, a pixel at a time onto what is below.
-  Sounds: the effect `drag` while a block slides (played again every 10 frames, two semitones
-  lower every other time, so it grinds on), `thud` when a falling one lands.
+  Sounds: the effect `drag` while a block slides (started when it starts to slide, or again if
+  another effect took its place; stopped when it stops, its notes fading with their release:
+  the test level's is one held, looping noise), `thud` when a falling one lands.
 - A `PressurePlate` is pressed while a push block overlaps it or the player stands on it; it
   opens the `Gate` its `gate` names.
 - A `Gate` is solid (whole cells) until it is all the way open. Held open by a plate it slides

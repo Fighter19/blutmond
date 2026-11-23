@@ -18,8 +18,8 @@
 // closed; open (a plate pressed) it slides up out of the way at 2 pixels a frame, and back down
 // when no plate holds it, unless the player is under it.
 //
-// Sounds: "drag" while a block slides along (again every 10 frames, a little higher or lower
-// by turns), "thud" when a falling one lands.
+// Sounds: "drag" while a block slides along (started when it starts, stopped when it stops: a
+// looping effect), "thud" when a falling one lands.
 //
 // Drawn with the sprite "puzzle" (animations block, gate, plate, plate_down; frames anchored
 // at their top left). Where things are is state (snapshots), not kept in the save game: a
@@ -58,9 +58,6 @@ typedef struct BmPuzzle
   // animation; the blocks as solid boxes for the collision grid.
   int8_t pushing;
   BmSolidBox boxes[BM_PUZZLE_BLOCKS];
-  // Not state either: frames until the drag sound is played again while a block slides, and
-  // which of its two pitches comes next.
-  uint8_t dragTimer, dragPitch;
 } BmPuzzle;
 
 /// The room's blocks, plates and gates when it is entered; `fresh` (not a state just loaded):

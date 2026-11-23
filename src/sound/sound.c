@@ -214,6 +214,19 @@ bool bmSoundPlayEffectAt(BmSound *s, const char *pName, int8_t semitones)
   return true;
 }
 
+void bmSoundStopEffect(BmSound *s)
+{
+  startPlayer(s, 1, NULL, 0, 0);
+}
+
+bool bmSoundEffectIs(const BmSound *s, const char *pName)
+{
+  const BmSoundPlayer *p = &s->players[1];
+  if (!p->playing || s->pPack == NULL || pName == NULL) return false;
+  const char *n = bmPackString(s->pPack, p->nameId);
+  return n != NULL && strcmp(n, pName) == 0;
+}
+
 void bmSoundFadeMusic(BmSound *s, uint16_t volume, uint16_t frames, bool stop)
 {
   s->musicTarget = volume > 256 ? 256 : volume;

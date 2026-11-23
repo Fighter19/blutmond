@@ -137,6 +137,13 @@ bool bmSoundPlayEffect(BmSound *pSound, const char *pName);
 /// The same with every note `semitones` higher (negative: lower): a speaker's voice blip.
 bool bmSoundPlayEffectAt(BmSound *pSound, const char *pName, int8_t semitones);
 
+/// Stops the effect playing: its notes fade out with their release (a looping effect, such as
+/// a block dragged along: puzzle.h).
+void bmSoundStopEffect(BmSound *pSound);
+
+/// Whether the effect playing is the song named `pName`.
+bool bmSoundEffectIs(const BmSound *pSound, const char *pName);
+
 /// Fades the music to `volume` (0-256) in `frames` frames (0: at once); with `stop`, the music
 /// stops when it gets to 0. Starting a song as music sets the volume to 256 again.
 void bmSoundFadeMusic(BmSound *pSound, uint16_t volume, uint16_t frames, bool stop);

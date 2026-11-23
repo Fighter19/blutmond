@@ -1,13 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<song version="1" bpm="150" length="12" loop="-1" effect="1" echo="0" echo-feedback="0">
- <instrument name="scrape" wave="noise" attack="1" decay="5" sustain="40" release="2" volume="140" pan="0"/>
- <instrument name="grind" wave="triangle" attack="0" decay="6" sustain="0" release="2" volume="90" pan="0"/>
+<song version="1" bpm="150" length="3600" loop="0" effect="1" echo="0" echo-feedback="0">
+ <instrument name="scrape" wave="noise" attack="3" decay="0" sustain="255" release="6" volume="80" pan="0"/>
  <track name="scrape" instrument="scrape">
-  <note t="0" key="38" len="6" vel="110"/>
-  <note t="6" key="35" len="6" vel="90"/>
- </track>
- <track name="grind" instrument="grind">
-  <note t="0" key="31" len="5" vel="80"/>
-  <note t="6" key="30" len="5" vel="60"/>
+  <note t="0" key="50" len="3600" vel="110"/>
  </track>
 </song>

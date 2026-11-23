@@ -2314,23 +2314,26 @@ static void testThePushBlockPuzzle(void)
   frames(6, BM_KEY_LEFT);
   TEST_ASSERT(p->blockX[0] == 320 && p->pushing == -1 && strcmp(effectPlaying(), "drag") != 0);   // not sliding yet: quiet
   frames(10, BM_KEY_LEFT);
-  int x0 = p->blockX[0], steps = 0, dragging = 0;
+  int x0 = p->blockX[0], steps = 0, dragging = 0, restarts = 0;
+  uint32_t tick = s_game.sound.players[1].tick;
   for (int i = 0; i < 40; i++)
   {
     int before = p->blockX[0];
     frames(1, BM_KEY_LEFT);
     steps += before - p->blockX[0] > 1;
-    dragging += strcmp(effectPlaying(), "drag") == 0;   // the stone grinding along, all the while
+    dragging += strcmp(effectPlaying(), "drag") == 0;   // the stone dragging along, all the while
+    restarts += s_game.sound.players[1].tick < tick;    // one held noise, not started again and again
+    tick = s_game.sound.players[1].tick;
   }
   TEST_ASSERT(steps == 0 && x0 - p->blockX[0] >= 28 && x0 - p->blockX[0] <= 32 && p->blockY[0] == 112);
-  TEST_ASSERT(dragging >= 38);
+  TEST_ASSERT(dragging == 40 && restarts == 0);
   TEST_ASSERT(p->pushing == -1 && s_game.playerAnim.anim == (uint8_t)s_game.playerAnims[BM_PLAYER_ANIM_PUSH]);
   int32_t px = BM_FIX_INT(s_game.player.x);
   TEST_ASSERT(px - s_game.playerParams.halfWidth - (p->blockX[0] + 32) <= 1);   // right against it
   // Let go: it stays.
   int x1 = p->blockX[0];
   frames(20, 0);
-  TEST_ASSERT(p->blockX[0] == x1 && p->pushing == 0 && strcmp(effectPlaying(), "drag") != 0);   // let go: the sound ends
+  TEST_ASSERT(p->blockX[0] == x1 && p->pushing == 0 && strcmp(effectPlaying(), "drag") != 0);   // let go: the sound stops
   // Off the step's end (x 256): it falls, faster and faster, onto the floor.
   int f = 0;
   for (; f < 600 && p->blockY[0] == 112; f++) frames(1, BM_KEY_LEFT);
