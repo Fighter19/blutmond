@@ -256,7 +256,8 @@ start:
     and `(px, feet)` are both normal: `safeX = px`, `safeY = feet`.
 
 `place(x, y)` sets the body to `FIX(x)`, `FIX(y)` with everything else 0, `facing = 1`,
-`safeX = x`, `safeY = y`.
+`safeX = x`, `safeY = y`. The grapple moves the player with `place` but keeps `safeX` and
+`safeY`: an anchor (or a ledge before they stand on it) is no safe place.
 
 ## 6. Hurt, respawn, doors, start
 

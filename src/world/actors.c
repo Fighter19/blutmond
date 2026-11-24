@@ -1391,6 +1391,9 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     if (!fresh && keepObject(g, i)) continue;
     BmVmInstance inst;
     bmVmInstanceInit(moduleOf(a, i), &inst, a->classInModule[a->classIndex[i]]);
+    // A push block left where it starts (puzzle.h): on top of the block.
+    int32_t top;
+    if (bmPuzzleBlockAt(g, BM_FIX_INT(a->homeX[i]), BM_FIX_INT(a->homeY[i]), &top)) a->homeY[i] = BM_FIX(top);
     a->x[i] = a->homeX[i];
     a->y[i] = a->homeY[i];
     a->facing[i] = 1;

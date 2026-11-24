@@ -219,9 +219,12 @@ left). Per room up to 4 of each.
   up at 2 pixels a frame; when nothing holds it, it comes down again, unless the player is
   under it. Drawn behind the main layer, so it goes up into the wall above it.
 - Where the blocks are (to 1/256 of a pixel across), how fast they fall, how far each gate is
-  up and which plates are pressed are state
-  (snapshots), not kept in the save game: a room's puzzle is as it was made when the room is
-  entered again.
+  up and which plates are pressed are state (snapshots). A block at rest away from its place
+  in the room is also kept in the store of kept values (`actors.store`, key `room << 24 |
+  persistent id << 8 | 0xFE`, value `x | y << 16`; in the save game, as broken walls are):
+  entered again, the room has it there, and a gate that a plate under such a block holds open
+  is open from the start. A scripted object whose anchor a block covers when the room is
+  entered starts on the block's top (its `home_y` too).
 
 ### 3.8 Tiled mapping
 

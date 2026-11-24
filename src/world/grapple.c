@@ -20,6 +20,16 @@
 #define HAND_Y 20         // the hand: this far above the feet
 #define CONE_COS2 67      // cos(35 degrees)^2, in hundredths
 
+// Moves the body there, keeping the last safe place it stood on (an anchor in the air is
+// none: a fall from it respawns where the player last stood).
+static void placeKeepingSafe(BmBody *b, int32_t x, int32_t y)
+{
+  int32_t sx = b->safeX, sy = b->safeY;
+  bmBodyPlace(b, x, y);
+  b->safeX = sx;
+  b->safeY = sy;
+}
+
 static const char *const s_animNames[3] = { "hook", "link", "anchor" };
 
 static uint32_t isqrt(uint32_t v)
@@ -319,7 +329,7 @@ static void pullPlayer(BmGame *g, uint16_t pressed)
     if (q->target == BM_GRAPPLE_LEDGE)
     {
       // Up onto the ledge, standing on it.
-      bmBodyPlace(b, q->targetX + q->side * (hw + 2), q->targetY);
+      placeKeepingSafe(b, q->targetX + q->side * (hw + 2), q->targetY);
       b->facing = q->side;
       q->phase = BM_GRAPPLE_BACK;
       return;
@@ -327,7 +337,7 @@ static void pullPlayer(BmGame *g, uint16_t pressed)
     if (playerFits(g, gx, gy))
     {
       int8_t facing = b->facing;
-      bmBodyPlace(b, gx, gy);
+      placeKeepingSafe(b, gx, gy);
       b->facing = facing;
     }
     if (q->target == BM_GRAPPLE_ANCHOR)

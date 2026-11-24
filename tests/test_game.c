@@ -2376,12 +2376,29 @@ static void testThePushBlockPuzzle(void)
   frames(20, BM_KEY_LEFT | BM_KEY_A);
   frames(90, BM_KEY_LEFT);
   TEST_ASSERT(s_game.actors.hidden[key] && BM_FIX_INT(s_game.player.x) < 64 && p->gateLift[0] == 48);
-  // Entered again, the puzzle is as it was made.
+  // Entered again, the block is where it was left (on the plate), and the gate it holds open
+  // is open from the start.
+  int leftX = p->blockX[0], leftY = p->blockY[0];
   bmBodyPlace(&s_game.player, 470, 160);
   for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_RIGHT);
   frames(30, 0);
   for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "puzzle_room") != 0; f++) frames(1, BM_KEY_LEFT);
-  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "puzzle_room") == 0 && p->blockX[0] == 320 && p->blockY[0] == 112 && p->gateLift[0] == 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "puzzle_room") == 0 && p->blockX[0] == leftX && p->blockY[0] == leftY);
+  TEST_ASSERT(p->gateLift[0] == 48 && p->pressed == 1);
+  // A save game keeps it too (the store is saved): a new game from the save has it there.
+  uint32_t blockKey = ((s_game.roomIndex & 0xFF) << 24) | ((uint32_t)s_game.objects[p->blockObject[0]].persistentId << 8) | 0xFE;
+  bool found = false;
+  TEST_ASSERT(bmActorsStoreGet(&s_game, blockKey, &found) == (int32_t)((uint16_t)leftX | (uint32_t)leftY << 16) && found);
+  // Left where a bat starts (as if it had been pushed there): the bat starts on top of it.
+  bmBodyPlace(&s_game.player, 470, 160);
+  for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_RIGHT);
+  frames(30, 0);
+  TEST_ASSERT(bmActorsStorePut(&s_game, blockKey, (int32_t)(364 | 40u << 16)));
+  for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "puzzle_room") != 0; f++) frames(1, BM_KEY_LEFT);
+  int bat = -1;
+  for (int i = 0; i < s_game.actors.count; i++)
+    if (s_game.actors.object[i] != 0xFF && strcmp(s_game.objects[s_game.actors.object[i]].name, "bat") == 0) bat = i;
+  TEST_ASSERT(bat >= 0 && BM_FIX_INT(s_game.actors.homeY[bat]) == 40);   // its place (380, 56) was inside the block (364..396, 40..72)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
@@ -2847,6 +2864,8 @@ static void testTheGrapple(void)
   int32_t y0 = BM_FIX_INT(b->y);
   for (int i = 0; i < 60 && q->phase == BM_GRAPPLE_PULL_PLAYER; i++) frames(1, 0);
   TEST_ASSERT(abs(BM_FIX_INT(b->x) - 280) <= 8 && BM_FIX_INT(b->y) < y0 && BM_FIX_INT(b->y) < 120 && b->vy < 0);
+  // An anchor in the air is no safe place: a fall from there starts again where they stood.
+  TEST_ASSERT(b->safeX >= 352 && b->safeY == 160);
   grappleShot(BM_KEY_LEFT);
   TEST_ASSERT(q->target == BM_GRAPPLE_ANCHOR && q->targetX == 160);
   for (int i = 0; i < 80 && q->phase != BM_GRAPPLE_BACK; i++) frames(1, 0);

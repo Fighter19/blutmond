@@ -22,6 +22,15 @@ static bool overlaps(int32_t ax, int32_t ay, int32_t aw, int32_t ah, int32_t bx,
   return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
 }
 
+// Where a moved block was left (actors.h's store, kept with the save game like broken
+// walls): its key, and its place as one value.
+static uint32_t blockKey(const BmGame *g, uint16_t object)
+{
+  return ((g->roomIndex & 0xFF) << 24) | ((uint32_t)g->objects[object].persistentId << 8) | 0xFE;
+}
+
+static void plates(BmGame *g, uint8_t *pOpen);
+
 void bmPuzzleEnterRoom(BmGame *g, bool fresh)
 {
   BmPuzzle *p = &g->puzzle;
@@ -37,8 +46,11 @@ void bmPuzzleEnterRoom(BmGame *g, bool fresh)
       p->blockPushFrames[b] = (uint8_t)(frames != NULL ? atoi(frames) : 6);
       if (fresh)
       {
-        p->blockX[b] = o->x;
-        p->blockY[b] = o->y;
+        // Where it was left when the room was last there, else where the room puts it.
+        bool found = false;
+        int32_t at = bmActorsStoreGet(g, blockKey(g, i), &found);
+        p->blockX[b] = found ? (int16_t)(at & 0xFFFF) : o->x;
+        p->blockY[b] = found ? (int16_t)(at >> 16) : o->y;
         p->blockFraction[b] = 0;
         p->blockFall[b] = 0;
         p->blockPush[b] = 0;
@@ -63,7 +75,14 @@ void bmPuzzleEnterRoom(BmGame *g, bool fresh)
     for (uint8_t q = 0; gate != NULL && q < p->gateCount; q++)
       if (strcmp(g->objects[p->gateObject[q]].name, gate) == 0) p->plateGate[k] = q;
   }
-  if (fresh) p->pressed = 0;
+  if (fresh)
+  {
+    // Gates a block left on a plate holds open are open already.
+    uint8_t open = 0;
+    plates(g, &open);
+    for (uint8_t k = 0; k < p->gateCount; k++)
+      if (open & (1u << k)) p->gateLift[k] = (uint8_t)g->objects[p->gateObject[k]].h;
+  }
   p->sheet = -1;
   for (uint8_t s = 0; s < g->sheetCount; s++)
   {
@@ -225,23 +244,22 @@ void bmPuzzleFrame(BmGame *g, int8_t dx)
   if (landed) bmSoundPlayEffect(&g->sound, "thud");
   if (sliding && !landed && !bmSoundEffectIs(&g->sound, "drag")) bmSoundPlayEffect(&g->sound, "drag");
   if (!sliding && bmSoundEffectIs(&g->sound, "drag")) bmSoundStopEffect(&g->sound);
+  // A block at rest away from where the room puts it is kept there (the store), so the room
+  // has it there when it is entered again.
+  for (uint8_t b = 0; b < p->blockCount; b++)
+  {
+    if (p->blockFall[b] != 0 || p->blockFraction[b] != 0) continue;
+    const BmObjectView *o = &g->objects[p->blockObject[b]];
+    int32_t at = (int32_t)((uint16_t)p->blockX[b] | ((uint32_t)(uint16_t)p->blockY[b] << 16));
+    bool found = false;
+    int32_t kept = bmActorsStoreGet(g, blockKey(g, p->blockObject[b]), &found);
+    if (found ? kept == at : (p->blockX[b] == o->x && p->blockY[b] == o->y)) continue;
+    if (!bmActorsStorePut(g, blockKey(g, p->blockObject[b]), at)) bm_script_errors++;   // more kept than this version holds
+  }
   // Plates: a block on them, or the player standing.
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
   uint8_t open = 0;
-  p->pressed = 0;
-  for (uint8_t k = 0; k < p->plateCount; k++)
-  {
-    const BmObjectView *o = &g->objects[p->plateObject[k]];
-    bool down = g->player.onGround && px >= o->x && px < o->x + o->w && py > o->y && py <= o->y + o->h;
-    for (uint8_t b = 0; b < p->blockCount && !down; b++)
-    {
-      const BmObjectView *bo = &g->objects[p->blockObject[b]];
-      down = overlaps(p->blockX[b], p->blockY[b], bo->w, bo->h, o->x, o->y, o->w, o->h);
-    }
-    if (!down) continue;
-    p->pressed |= (uint8_t)(1u << k);
-    if (p->plateGate[k] != 0xFF) open |= (uint8_t)(1u << p->plateGate[k]);
-  }
+  plates(g, &open);
   // Gates: up while held open; down otherwise, unless the player is under them.
   int32_t hw = g->playerParams.halfWidth, h = g->playerParams.height;
   for (uint8_t k = 0; k < p->gateCount; k++)
@@ -254,6 +272,43 @@ void bmPuzzleFrame(BmGame *g, int8_t dx)
       p->gateLift[k] = (uint8_t)towards(p->gateLift[k], 0, GATE_SPEED);
   }
   bmPuzzleOverrides(g);
+}
+
+// Which plates are pressed (a block on them, or the player standing), and the gates they open.
+static void plates(BmGame *g, uint8_t *pOpen)
+{
+  BmPuzzle *p = &g->puzzle;
+  int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
+  p->pressed = 0;
+  *pOpen = 0;
+  for (uint8_t k = 0; k < p->plateCount; k++)
+  {
+    const BmObjectView *o = &g->objects[p->plateObject[k]];
+    bool down = g->player.onGround && px >= o->x && px < o->x + o->w && py > o->y && py <= o->y + o->h;
+    for (uint8_t b = 0; b < p->blockCount && !down; b++)
+    {
+      const BmObjectView *bo = &g->objects[p->blockObject[b]];
+      down = overlaps(p->blockX[b], p->blockY[b], bo->w, bo->h, o->x, o->y, o->w, o->h);
+    }
+    if (!down) continue;
+    p->pressed |= (uint8_t)(1u << k);
+    if (p->plateGate[k] != 0xFF) *pOpen |= (uint8_t)(1u << p->plateGate[k]);
+  }
+}
+
+bool bmPuzzleBlockAt(const BmGame *g, int32_t x, int32_t y, int32_t *pTop)
+{
+  const BmPuzzle *p = &g->puzzle;
+  for (uint8_t b = 0; b < p->blockCount; b++)
+  {
+    const BmObjectView *o = &g->objects[p->blockObject[b]];
+    if (x >= p->blockX[b] && x < p->blockX[b] + o->w && y > p->blockY[b] && y <= p->blockY[b] + o->h)
+    {
+      *pTop = p->blockY[b];
+      return true;
+    }
+  }
+  return false;
 }
 
 void bmPuzzleOverrides(BmGame *g)

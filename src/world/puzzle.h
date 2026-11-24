@@ -22,8 +22,10 @@
 // looping effect), "thud" when a falling one lands.
 //
 // Drawn with the sprite "puzzle" (animations block, gate, plate, plate_down; frames anchored
-// at their top left). Where things are is state (snapshots), not kept in the save game: a
-// puzzle is as it was made when its room is entered again.
+// at their top left). Where things are is state (snapshots). A block left at rest away from
+// its place in the room is kept there (actors.h's store, with the save game, as broken walls
+// are): the room has it there when it is entered again; a gate a plate under it holds open is
+// open then. An object of the room whose place a block covers starts on top of the block.
 
 #include "shared.h"
 #include "collision.h"
@@ -72,6 +74,9 @@ void bmPuzzleFrame(struct BmGame *pGame, int8_t dx);
 /// Makes the collision overrides again (broken walls, closed gates) and the blocks' solid
 /// boxes.
 void bmPuzzleOverrides(struct BmGame *pGame);
+
+/// Whether a block covers the point (x, y) (an anchor: the feet); its top in *pTop.
+bool bmPuzzleBlockAt(const struct BmGame *pGame, int32_t x, int32_t y, int32_t *pTop);
 
 /// Draws blocks, plates and gates; returns the hardware sprites used from `firstOam`.
 uint8_t bmPuzzleDraw(struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
