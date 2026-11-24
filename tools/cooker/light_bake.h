@@ -56,7 +56,11 @@ struct Light
   // Mode `layer`: what the light layer's 15 values stand for (room property `light_index`):
   // shared (default) a pixel's light for one of a few light directions, scaled per bank;
   // fitted its own light, levels fitted per bank; normals one of 15 directions.
-  enum class Index { Shared, Fitted, Normals } index = Index::Shared;
+  // stream: normals in the tiles, the light per band and line streamed into the palette (H-blank
+  // DMA, cartridge images only).
+  enum class Index { Shared, Fitted, Normals, Stream } index = Index::Shared;
+  int streamNormals = 7;        // Stream: 7 (two bands a bank) or 15 (room property `light_normals`)
+  int bandWidth = 24;           // Stream: a band's width in pixels (room property `light_band`)
   bool fitted = true;           // Shared or Fitted: the values are levels of light
   int directions = 8;           // Shared: how many light directions (room property `light_directions`)
   float tolerance = 0.1f;       // Shared: a cell across which the light changes more (of full light) gets a tile of its own

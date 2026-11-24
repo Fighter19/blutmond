@@ -54,6 +54,12 @@ bm_irq_handler:
     restart_line_table 0, 0xB0      @ DMA 0
     restart_line_table 1, 0xD4      @ DMA 3
     restart_line_table 2, 0         @ the H-blank interrupt below
+    @ The palette stream (bm_hal_stream, hal_gba.c), from ROM: once a frame, and IWRAM is full.
+    stmfd   sp!, {lr}               @ the BIOS's return address
+    ldr     r2, =bm_hal_stream_vblank
+    mov     lr, pc
+    bx      r2
+    ldmfd   sp!, {lr}
     @ Sound: DMA 1 and 2 start again on the pair handed over, or on silence if none was.
     ldr     r2, =bm_hal_audio_next
     ldr     r3, [r2, #8]            @ on?
@@ -113,3 +119,37 @@ bm_irq_handler:
     .global bm_vblank_count
 bm_vblank_count:
     .word   0
+
+@ The palette stream at the vertical blank (bm_hal_stream, hal_gba.c): next becomes shown; row 0
+@ into palette memory now, DMA channel 3 (off since line table 1 restarted) the next rows at
+@ every H-blank. r0: the I/O base, kept; r1 kept.
+    .section .text.bm_hal_stream_vblank, "ax"
+    .arm
+    .align 2
+    .global bm_hal_stream_vblank
+bm_hal_stream_vblank:
+    stmfd   sp!, {r1, r4, r5, r6, lr}
+    ldr     r2, =bm_hal_stream
+    ldmia   r2, {r3, r4, r5}        @ next: rows, first, count
+    add     r6, r2, #12
+    stmia   r6, {r3, r4, r5}        @ shown
+    cmp     r3, #0
+    beq     8f
+    mov     r6, #0x05000000
+    add     r6, r6, r4, lsl #1      @ palette entry `first`
+    mov     r12, r5
+7:
+    ldrh    r2, [r3], #2            @ row 0
+    strh    r2, [r6], #2
+    subs    r12, r12, #1
+    bne     7b
+    sub     r6, r6, r5, lsl #1      @ back to entry `first`; r3 is at row 1
+    str     r3, [r0, #0xD4]         @ DMA3SAD
+    str     r6, [r0, #0xD8]         @ DMA3DAD
+    strh    r5, [r0, #0xDC]         @ DMA3CNT_L: a row
+    ldr     r2, =0xA260             @ on, at H-blank, repeating, destination incremented and reloaded
+    strh    r2, [r0, #0xDE]
+8:
+    ldmfd   sp!, {r1, r4, r5, r6, lr}
+    bx      lr
+    .ltorg

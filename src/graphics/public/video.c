@@ -40,6 +40,7 @@ void bmVideoInit(void)
   {
     bmHalLineTableSet(i, 0, NULL);
   }
+  bmHalPaletteStream(0, 0, NULL);
   for (int i = 0; i < BM_SPRITE_COUNT; i++)
   {
     s_oam[i * 4 + 0] = 0x0200;  // hidden
@@ -226,6 +227,11 @@ void bmBlendSet(BmBlendEffect effect, uint8_t first, uint8_t second, uint8_t eva
   bmHalVideoWriteReg(BM_PPU_BLDCNT, (uint16_t)((first & 0x3F) | (((unsigned)effect & 3) << 6) | ((second & 0x3F) << 8)));
   bmHalVideoWriteReg(BM_PPU_BLDALPHA, (uint16_t)((eva > 16 ? 16 : eva) | ((evb > 16 ? 16 : evb) << 8)));
   bmHalVideoWriteReg(BM_PPU_BLDY, (uint16_t)(evy > 16 ? 16 : evy));
+}
+
+void bmVideoSetPaletteStream(uint16_t first, uint16_t count, const uint16_t *pRows)
+{
+  bmHalPaletteStream(first, count, pRows);
 }
 
 BmResult bmVideoSetLineTable(uint8_t slot, uint16_t reg, const uint16_t *pValues)

@@ -14,6 +14,7 @@ void bmLightEnterRoom(BmGame *g)
 {
   g->light.mode = BM_LIGHT_NONE;
   bmUiSetLightLayer(-1);
+  bmUiSetLightWeight(16, true);
 }
 
 int32_t bmLightIntensity(const BmLight *pLight, uint32_t frame)

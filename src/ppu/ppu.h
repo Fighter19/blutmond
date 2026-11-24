@@ -90,6 +90,10 @@ typedef struct BmPpuState
   uint16_t palette[BM_PPU_PALETTE_SIZE];
   uint16_t oam[BM_PPU_OAM_SIZE];
   BmPpuLineTable lineTables[BM_PPU_LINE_TABLES];
+  // A palette stream (bmHalPaletteStream): line y is drawn with entries [streamFirst,
+  // streamFirst + streamCount) from pStreamRows + y * streamCount. NULL: none. Not in snapshots.
+  const uint16_t *pStreamRows;
+  uint16_t streamFirst, streamCount;
 } BmPpuState;
 
 /// Power-on state: all zero, line tables unused.

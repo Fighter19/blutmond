@@ -58,7 +58,9 @@ Map-level custom properties:
 | `muffle` | int | preset's | a low pass over everything heard: 0 none - 255 most |
 | `lighting` | string | `palette` | how the room's `Light` object lights its tiles: `palette` (baked into the room's colours) or `layer` (a light layer added over the room) (below) |
 | `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
-| `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light) or `normals` (directions) (below) |
+| `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light), `normals` (directions) or `stream` (directions, the light streamed line by line) (below) |
+| `light_normals` | int | 7 | with `light_index = stream`: 7 (two bands a bank) or 15 directions |
+| `light_band` | int | 24 | with `light_index = stream`: the bands' mean width in pixels (widened when the banks would not do) |
 | `light_directions` | int | 8 | with `light_index = shared`: how many light directions its tiles are made for |
 | `light_tolerance` | float | 0.1 | with `light_index = shared`: a cell across which a flat surface's light changes by more than this (of full light) gets a tile of its own (near the light) |
 
@@ -110,6 +112,14 @@ only layers without parallax are lit. The two modes:
     takes the nearest level. Each frame a bank's colours are
     `intensity × gain × light colour × level`. Smooth to the pixel, but most lit cells need a
     tile of their own.
+  - `stream`: one of 7 (or 15) normals, as `normals`, so a brick is one tile wherever it is;
+    the light is not in the banks but **streamed** into them line by line (H-blank DMA,
+    runtime-core.md §12). The lit columns are cut into bands, narrower near the lights (half
+    by steps of the light's square root along the wall at the lights' height, half evenly), a
+    band per half bank (7 normals) or per bank (15); each 8x8 cell takes its column's band.
+    For every room pixel row and band the cooker writes the band's colours:
+    `light colour × intensity × (1 + flicker) × gain × max(0, N·F)` with F the lights'
+    direction and falloff at the band's middle column on that row. Shadowed pixels are empty.
   - `normals`: one of 15 normals (the cooker's clusters of the room's normals). The cells
     inside the light's radius are grouped into regions (by the light's strength there first
     and its direction second), a region per bank, whose colours are, each frame,
@@ -516,6 +526,8 @@ little endian; offsets are from the start of the chunk.
         layer:   { s8 x, y, z; u8 0; } normal[15]    // 127 = 1.0
                  { s16 x, y, z; u16 0; } region[bank_count]   // falloff × direction, 4096 = 1.0
         fitted:  u16 level[bank_count][15]           // 4096 = 1.0
+        stream (count bit 6): u16 rows, u16 stride (bank_count × 16), u16 band width, u16 0,
+                 u16 colour[rows][stride]            // BGR555, a row per room pixel row and one more
 'COLL'  u16 width, height;                 // in cells
         u8  cell_size; u8 pad[3];
         u8  cells[width * height][2];      // row major, §3.2
@@ -566,4 +578,5 @@ room IDs and song names.
 - 0.2.3: room acoustics: `acoustics`, `echo`, `echo_feedback`, `echo_damping`, `muffle`.
 - 0.2.4: light: the `Light` object (up to 4, flickering together), room properties `lighting` and `ambient`, tileset property
   `normal`, `LITE` (in the place of `ROOM`'s reserved field), the light layer (role 3);
-  `light_index` (shared or fitted levels of light, bit 7 of `LITE`'s count), `light_directions`.
+  `light_index` (shared or fitted levels of light, bit 7 of `LITE`'s count), `light_directions`;
+  `light_index = stream` (bit 6), `light_normals`, `light_band`.

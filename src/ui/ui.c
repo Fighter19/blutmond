@@ -602,10 +602,18 @@ void bmUiRebind(BmUi *ui, const BmPack *pPack)
 }
 
 static int8_t s_lightBg = -1;
+static uint8_t s_lightEva = 16;
+static bool s_lightUi = true;
 
 void bmUiSetLightLayer(int8_t bg)
 {
   s_lightBg = bg;
+}
+
+void bmUiSetLightWeight(uint8_t eva, bool ui)
+{
+  s_lightEva = eva > 16 ? 16 : eva;
+  s_lightUi = ui;
 }
 
 void bmUiBlend(void)
@@ -615,7 +623,8 @@ void bmUiBlend(void)
     // A room lit with a light layer (light.h): it is added over the room, and so is the UI,
     // at full weight (one pair of weights serves both).
     uint8_t room = (uint8_t)((BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2)) & ~BM_LAYER_BG(s_lightBg));
-    bmBlendSet(BM_BLEND_ALPHA, (uint8_t)(BM_LAYER_BG(BM_UI_BG) | BM_LAYER_BG(s_lightBg)), (uint8_t)(room | BM_LAYER_OBJ | BM_LAYER_BACKDROP), 16, 16, 0);
+    uint8_t first = (uint8_t)((s_lightUi ? BM_LAYER_BG(BM_UI_BG) : 0) | BM_LAYER_BG(s_lightBg));
+    bmBlendSet(BM_BLEND_ALPHA, first, (uint8_t)(room | BM_LAYER_OBJ | BM_LAYER_BACKDROP), s_lightEva, 16, 0);
     return;
   }
   bmBlendSet(BM_BLEND_ALPHA, BM_LAYER_BG(BM_UI_BG), BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2) | BM_LAYER_OBJ | BM_LAYER_BACKDROP,

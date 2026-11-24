@@ -95,8 +95,11 @@ Light find(const tmx::Map &map, Report &report)
   std::string index = map.property("light_index", "shared");
   if (index == "fitted") l.index = Light::Index::Fitted;
   else if (index == "normals") l.index = Light::Index::Normals;
-  else if (index != "shared") report.error("lighting", map.path, "unknown light_index '" + index + "' (shared, fitted, normals)");
-  l.fitted = l.index != Light::Index::Normals;
+  else if (index == "stream") l.index = Light::Index::Stream;
+  else if (index != "shared") report.error("lighting", map.path, "unknown light_index '" + index + "' (shared, fitted, normals, stream)");
+  l.fitted = l.index == Light::Index::Shared || l.index == Light::Index::Fitted;
+  l.streamNormals = map.property("light_normals", "7") == "15" ? 15 : 7;
+  l.bandWidth = std::clamp(std::atoi(map.property("light_band", "24").c_str()), 8, 255);
   l.directions = std::clamp(std::atoi(map.property("light_directions", "8").c_str()), 1, 64);
   l.tolerance = std::clamp(float(std::atof(map.property("light_tolerance", "0.1").c_str())), 0.0f, 1.0f);
   return l;

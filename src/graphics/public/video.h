@@ -153,5 +153,10 @@ void bmBlendSet(BmBlendEffect effect, uint8_t first, uint8_t second, uint8_t eva
 /// bmBgSetLineScrollX uses slot 0.
 BmResult bmVideoSetLineTable(uint8_t slot, uint16_t reg, const uint16_t *pValues);
 
+/// A palette stream: line y is drawn with BG palette entries [first, first + count) from
+/// `pRows + y * count` (bmHalPaletteStream; on the GBA it takes line table slot 1's DMA
+/// channel). NULL: off.
+void bmVideoSetPaletteStream(uint16_t first, uint16_t count, const uint16_t *pRows);
+
 /// Waits for the next frame and copies the shadow OAM to the hardware.
 uint32_t bmVideoWaitFrame(void);

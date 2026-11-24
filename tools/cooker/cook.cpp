@@ -1040,6 +1040,208 @@ Bytes paletteLightChunk(const RoomWork &room, const AreaWork &area, Report &repo
 std::pair<Bytes, Bytes> buildFittedLayer(const RoomWork &room, AreaWork &area, Report &report, const GraphicsLayer *main, const GraphicsLayer *back,
                                          int w8, int h8);
 
+// Mode `layer`, values streamed (light_index = stream): the tiles hold normals only (7 or 15,
+// clustered from the room's), so a brick is one tile wherever it is; the cells are grouped into
+// bands by their x, and each band's colours are streamed into the palette line by line (H-blank
+// DMA): for every room row and band, per normal `light colour × most intensity × gain ×
+// max(0, N·F)` with F the lights' direction and falloff at the band's middle on that row. With
+// 7 normals two bands share a bank (values 1-7 and 9-15). Shadowed pixels are empty. The
+// runtime flickers the light with the blend weight of the light layer.
+std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, Report &report, const GraphicsLayer *main, const GraphicsLayer *back,
+                                         int w8, int h8)
+{
+  const light::Light &l = room.light;
+  int wpx = w8 * 8, hpx = h8 * 8;
+  auto state = [&](int x, int y, light::Vec3 *pN) -> int {
+    for (const GraphicsLayer *gl : {main, back})
+    {
+      if (gl == nullptr || gl->pixelState.empty()) continue;
+      size_t at = size_t(y) * size_t(wpx) + size_t(x);
+      if (gl->pixelState[at] == 0) continue;
+      if (pN) *pN = gl->normals[at];
+      return gl->pixelState[at];
+    }
+    return 0;
+  };
+  // The normals.
+  std::map<std::tuple<int, int, int>, std::pair<light::Vec3, float>> counts;
+  for (int y = 0; y < hpx; y++)
+    for (int x = 0; x < wpx; x++)
+    {
+      light::Vec3 n;
+      if (state(x, y, &n) != 2 || light::term(l, float(x) + 0.5f, float(y) + 0.5f, light::Vec3{0, 0, 1}) <= 0) continue;
+      auto key = std::make_tuple(int(std::lround(n.x * 16)), int(std::lround(n.y * 16)), int(std::lround(n.z * 16)));
+      counts[key].first = n;
+      counts[key].second += 1;
+    }
+  std::vector<light::Vec3> pts;
+  std::vector<float> wts;
+  for (const auto &[k, e] : counts) pts.push_back(e.first), wts.push_back(e.second);
+  const int perBank = l.streamNormals == 7 ? 2 : 1;
+  std::vector<light::Vec3> normals = light::cluster(pts, wts, l.streamNormals);
+  for (light::Vec3 &n : normals) n = light::normalize(n);
+  // The bands: across what the lights reach, as many as the banks left hold.
+  float x0 = 1e30f, x1 = -1e30f;
+  for (const light::Source &src : l.sources)
+  {
+    x0 = std::min(x0, src.x - l.radius);
+    x1 = std::max(x1, src.x + l.radius);
+  }
+  x0 = std::max(0.0f, std::floor(x0 / 8) * 8);
+  x1 = std::min(float(wpx), x1);
+  int firstBank = int(area.banks.size());
+  int banksLeft = std::max(1, 15 - firstBank);
+  int bandWidth = std::max(8, l.bandWidth / 8 * 8);
+  int bands = int(std::ceil((x1 - x0) / float(bandWidth)));
+  if ((bands + perBank - 1) / perBank > banksLeft)
+  {
+    bandWidth = int(std::ceil((x1 - x0) / float(banksLeft * perBank) / 8.0f)) * 8;
+    bands = int(std::ceil((x1 - x0) / float(bandWidth)));
+    report.info("lighting", room.map->path, "light layer (stream): the bands made " + std::to_string(bandWidth) + " pixels wide to fit the banks");
+  }
+  int banks = (bands + perBank - 1) / perBank;
+  // The band edges where the light changes, not only evenly: along a wall facing the viewer at
+  // the lights' height, bands are narrower near a light, where the light changes fast. Per 8 pixel column its band; per band the column it is lit as.
+  int columns = int((x1 - x0) / 8.0f);
+  std::vector<float> profile(size_t(std::max(columns, 1)), 0.0f);
+  for (int c = 0; c < columns; c++)
+    for (const light::Source &src : l.sources)
+      profile[size_t(c)] = std::max(profile[size_t(c)], light::termFrom(l, src, x0 + float(c * 8 + 4), src.y, light::Vec3{0, 0, 1}));
+  // Half by the steps of light as the eye sees them (square roots), half evenly: so the dim
+  // tails get bands of their own too.
+  float steps = 0;
+  for (int c = 1; c < columns; c++) steps += std::abs(std::sqrt(profile[size_t(c)]) - std::sqrt(profile[size_t(c - 1)]));
+  float even = columns > 1 ? steps / float(columns - 1) : 1.0f;
+  std::vector<float> walked(size_t(std::max(columns, 1)), 0.0f);
+  for (int c = 1; c < columns; c++)
+    walked[size_t(c)] = walked[size_t(c - 1)] + std::abs(std::sqrt(profile[size_t(c)]) - std::sqrt(profile[size_t(c - 1)])) + even;
+  float total = columns > 0 ? walked[size_t(columns - 1)] : 0.0f;
+  std::vector<int> bandOfColumn(size_t(std::max(columns, 1)), 0);
+  for (int c = 0; c < columns; c++)
+    bandOfColumn[size_t(c)] = total > 0 ? std::min(bands - 1, int(walked[size_t(c)] / total * float(bands))) : 0;
+  std::vector<float> bandX(size_t(bands), x0);
+  for (int b = 0; b < bands; b++)
+  {
+    int first = -1, last = -1;
+    for (int c = 0; c < columns; c++)
+      if (bandOfColumn[size_t(c)] == b) { if (first < 0) first = c; last = c; }
+    bandX[size_t(b)] = first < 0 ? x0 : x0 + float(first + last) * 4.0f + 4.0f;
+  }
+
+  Bytes m;
+  m.u16(uint32_t(w8));
+  m.u16(uint32_t(h8));
+  m.u8(0);
+  m.u8(0);
+  m.u16(0);
+  std::map<std::array<uint8_t, 64>, uint32_t> tileOf;
+  size_t litCells = 0, edgeCells = 0, streamPixels = 0;
+  double streamError = 0;
+  for (int cy = 0; cy < h8; cy++)
+    for (int cx = 0; cx < w8; cx++)
+    {
+      int column = int((float(cx * 8) - x0) / 8.0f);
+      int band = column >= 0 && column < columns ? bandOfColumn[size_t(column)] : -1;
+      bool reached = false;
+      for (const light::Source &src : l.sources)
+      {
+        float dx = src.x - float(cx * 8 + 4), dy = src.y - float(cy * 8 + 4);
+        reached |= light::falloff(l, dx * dx + dy * dy) > 0;
+      }
+      if (band < 0 || band >= bands || !reached)
+      {
+        m.u16(0);
+        continue;
+      }
+      std::array<uint8_t, 64> t{};
+      bool any = false, edge = false;
+      for (int p = 0; p < 64; p++)
+      {
+        light::Vec3 n;
+        int px = cx * 8 + p % 8, py = cy * 8 + p / 8;
+        if (state(px, py, &n) != 2) continue;
+        // Empty where every light that reaches it is shadowed.
+        bool lit = false, shadowed = false;
+        for (const light::Source &src : l.sources)
+        {
+          float dx = src.x - (float(px) + 0.5f), dy = src.y - (float(py) + 0.5f);
+          if (light::falloff(l, dx * dx + dy * dy) <= 0) continue;
+          if (room.solid.shadowedFrom(float(px) + 0.5f, float(py) + 0.5f, l, src)) shadowed = true;
+          else lit = true;
+        }
+        edge |= shadowed;
+        float truth = room.solid.lit(float(px) + 0.5f, float(py) + 0.5f, l, n);
+        if (!lit)
+        {
+          streamError += truth;
+          streamPixels++;
+          continue;
+        }
+        int k = light::nearest(normals, n);
+        t[size_t(p)] = uint8_t(1 + k + (perBank == 2 && (band & 1) ? 8 : 0));
+        light::Vec3 F = light::scaledDirection(l, bandX[size_t(band)], float(py) + 0.5f);
+        streamError += std::abs(truth - std::max(0.0f, light::dot(normals[size_t(k)], F)));
+        streamPixels++;
+        any = true;
+      }
+      if (!any)
+      {
+        m.u16(0);
+        continue;
+      }
+      litCells++;
+      edgeCells += edge;
+      auto it = tileOf.find(t);
+      uint32_t tile;
+      if (it != tileOf.end()) tile = it->second;
+      else
+      {
+        tile = uint32_t(area.uniqueTiles.size() + area.rawTiles.size());
+        area.rawTiles.push_back(t);
+        tileOf[t] = tile;
+      }
+      m.u16(tile | uint32_t(firstBank + band / perBank) << 12);
+    }
+
+  // The rows: one per room pixel row and one more (a screen at the bottom reads one past it).
+  float most = l.intensity * (1.0f + l.flicker) * l.gain;
+  float lc[3] = {float(l.colour & 31), float((l.colour >> 5) & 31), float((l.colour >> 10) & 31)};
+  int rows = hpx + 1, stride = banks * 16;
+  Bytes table;
+  for (int y = 0; y < rows; y++)
+  {
+    float fy = float(std::min(y, hpx - 1)) + 0.5f;
+    for (int b = 0; b < banks; b++)
+      for (int e = 0; e < 16; e++)
+      {
+        int half = perBank == 2 ? e / 8 : 0, k = perBank == 2 ? e % 8 : e;
+        int band = b * perBank + half;
+        uint16_t c = 0;
+        if (k != 0 && k - 1 < int(normals.size()) && band < bands)
+        {
+          light::Vec3 F = light::scaledDirection(l, bandX[size_t(band)], fy);
+          float v = std::max(0.0f, light::dot(normals[size_t(k - 1)], F)) * most;
+          auto ch = [&](int i) { return uint32_t(std::clamp(int(std::lround(lc[i] * v)), 0, 31)); };
+          c = uint16_t(ch(0) | ch(1) << 5 | ch(2) << 10);
+        }
+        table.u16(c);
+      }
+  }
+  Bytes lite;
+  lightHead(lite, l, 0x40 | uint32_t(normals.size()), uint32_t(firstBank), uint32_t(banks));
+  lite.u16(uint32_t(rows));
+  lite.u16(uint32_t(stride));
+  lite.u16(uint32_t(bandWidth));
+  lite.u16(0);
+  lite.data.insert(lite.data.end(), table.data.begin(), table.data.end());
+  report.info("lighting", room.map->path, "light layer (stream): " + std::to_string(tileOf.size()) + " normal tiles (" + std::to_string(edgeCells) +
+              " cells on a shadow's edge), " + std::to_string(normals.size()) + " normals, " + std::to_string(bands) + " bands (narrower near the light) in " + std::to_string(banks) + " banks from bank " + std::to_string(firstBank) + ", " +
+              std::to_string(stride) + " colours a line, " + std::to_string(table.data.size()) + " bytes of rows, " + std::to_string(litCells) + " lit cells, mean error " +
+              std::to_string(streamPixels ? streamError / double(streamPixels) : 0.0));
+  lightSources(lite, l);
+  return {m, lite};
+}
+
 // Mode `layer`, values shared (light_index = shared): a cell's light is split in two. Its
 // pattern, how much each pixel faces the light, comes from the pixel's normal and one of a few
 // light directions (the cells' directions clustered: `light_directions`), in 15 steps; the
@@ -1449,6 +1651,7 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
       report.error("lighting", room.map->path, "a room lit with the light layer has no foreground layer (the light layer takes its place)");
   }
   int w8 = main ? main->width8 : back ? back->width8 : 0, h8 = main ? main->height8 : back ? back->height8 : 0;
+  if (l.index == light::Light::Index::Stream) return buildStreamLayer(room, area, report, main, back, w8, h8);
   if (l.index == light::Light::Index::Shared) return buildSharedLayer(room, area, report, main, back, w8, h8);
   if (l.index == light::Light::Index::Fitted) return buildFittedLayer(room, area, report, main, back, w8, h8);
   int wpx = w8 * 8;

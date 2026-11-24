@@ -198,6 +198,14 @@ void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues)
   memcpy(pTable->values, pValues, sizeof(pTable->values));
 }
 
+void bmHalPaletteStream(uint16_t first, uint16_t count, const uint16_t *pRows)
+{
+  ensureInit();
+  s_ppu.pStreamRows = count != 0 ? pRows : NULL;
+  s_ppu.streamFirst = first;
+  s_ppu.streamCount = count;
+}
+
 uint32_t bmHalVideoSnapshotPart(uint32_t offset, uint8_t *pOut, uint32_t size)
 {
   ensureInit();

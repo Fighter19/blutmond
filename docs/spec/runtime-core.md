@@ -878,6 +878,14 @@ if the last room was lit). Every frame after the effects:
   shown and blended (first targets the UI layer and the light layer, second the rest, EVA 16,
   EVB 16: the UI's boxes are then added at full weight too) while no screen is open, no room
   effect and no teleport; else it is hidden.
+- `layer` with the light streamed: each frame the palette stream (`bmVideoSetPaletteStream`)
+  is pointed at the row of the camera's top line, so line y of the screen is drawn with the
+  light layer's banks of room row `cameraY + y`. The flicker is the light layer's blend weight:
+  EVA = 16 × intensity / (intensity × (1 + flicker)); the UI layer is then not blended (one
+  weight for both). Hidden, the stream is off. On the GBA the stream is DMA channel 3 in
+  H-blank mode (the line table slot 1's channel, which lit rooms do not use) from the pack's
+  rows: 112 colours a line in the torch hall, about 48,000 cycles a frame the CPU waits for
+  it. The multiboot images have no light at all.
 - Several lights (up to 4) flicker together: the tiles have their sum baked in, and a
   sprite slot sums `max(0, N·L) × reach` over the lights. A sheet whose every slot is
   emissive is written once. Shadow rays are kept for the last 8 places (4 px steps) they

@@ -39,6 +39,20 @@ struct
 static uint16_t s_lineValuesDma[2][2][GBA_SCREEN_HEIGHT + 1] BM_EWRAM_BSS;
 __attribute__((weak, section(".sbss.bm_hal_line_values_irq"))) uint16_t bm_hal_line_values_irq[2][GBA_SCREEN_HEIGHT + 1];
 
+// The palette stream (bmHalPaletteStream), taken at the vertical blank by irq.S as the line
+// tables are: it copies row 0 into palette memory and starts DMA channel 3 on the next rows,
+// one row an H-blank.
+typedef struct PaletteStream
+{
+  const uint16_t *pRows;   // NULL: off
+  uint32_t first, count;
+} PaletteStream;
+struct
+{
+  PaletteStream next;      // offset 0
+  PaletteStream shown;     // offset 12
+} bm_hal_stream BM_EWRAM_BSS;
+
 const char *bmHalPlatformName(void)
 {
   return "gba";
@@ -296,6 +310,18 @@ void bmHalOamWrite(uint32_t first, const uint16_t *pData, uint32_t count)
   {
     GBA_OAM[first + i] = pData[i];
   }
+}
+
+void bmHalPaletteStream(uint16_t first, uint16_t count, const uint16_t *pRows)
+{
+  bool on = pRows != NULL && count != 0 && first + count <= 256;
+  if (on) initInterrupts();   // (off: like a line table, without starting the interrupts)
+  uint16_t ime = GBA_REG_IME;
+  GBA_REG_IME = 0;
+  bm_hal_stream.next.pRows = on ? pRows : NULL;
+  bm_hal_stream.next.first = first;
+  bm_hal_stream.next.count = count;
+  GBA_REG_IME = ime;
 }
 
 void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues)

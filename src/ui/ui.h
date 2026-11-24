@@ -157,6 +157,10 @@ void bmUiBlend(void);
 /// A room's light layer on background `bg` (light.h), -1 none: bmUiBlend blends it too.
 void bmUiSetLightLayer(int8_t bg);
 
+/// The light layer's weight in that blend (16 full) and whether the UI is blended too (it
+/// shares the weight: a streamed light flickers with it, so the UI is then not).
+void bmUiSetLightWeight(uint8_t eva, bool ui);
+
 /// Once a frame, in the vertical blank: background 3 on or off, the rows of the map that
 /// changed.
 void bmUiPresent(BmUi *pUi);

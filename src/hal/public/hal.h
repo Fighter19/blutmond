@@ -101,6 +101,13 @@ void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size);
 /// `pValues == NULL` switches the line table off.
 void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues);
 
+/// A palette stream (lighting.md, the streamed light layer): from the next frame on, line y is
+/// drawn with palette entries [first, first + count) taken from `pRows + y * count` (BG
+/// entries 0-255). On the GBA, row 0 is copied in the vertical blank and DMA channel 3 copies
+/// the next row in every H-blank (so it takes line table slot 1's channel while on). The rows
+/// must stay readable while shown, 161 of them. NULL switches it off.
+void bmHalPaletteStream(uint16_t first, uint16_t count, const uint16_t *pRows);
+
 /// The line the display is drawing now (0-227 on the GBA; 160 and up is the vertical blank).
 /// A frame starts at line 160, so this tells how much of a frame's time has been used.
 uint16_t bmHalVideoLine(void);

@@ -1,0 +1,109 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="12" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="6">
+ <properties>
+  <property name="music" value="castle" />
+  <property name="room_id" value="torch_hall_stream" />
+  <property name="title" value="Torch hall: streamed" />
+  <property name="lighting" value="layer" />
+  <property name="ambient" value="0.3" />
+  <property name="acoustics" value="hall" />
+  <property name="light_index" value="stream" />
+ </properties>
+ <tileset firstgid="1" name="torch_tiles" tilewidth="16" tileheight="16" tilecount="10" columns="8">
+  <properties>
+   <property name="normal" value="torch_tiles_n.png" />
+  </properties>
+  <image source="torch_tiles.png" width="128" height="32" />
+ </tileset>
+ <tileset firstgid="11" source="../engine/blutmond_collision.tsx" />
+ <tileset firstgid="41" source="../engine/blutmond_material.tsx" />
+ <layer id="1" name="background" width="30" height="12">
+  <properties>
+   <property name="role" value="background" />
+  </properties>
+  <data encoding="csv">
+2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,
+1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,
+1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,
+1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,
+1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,
+1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,
+2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,1,1,1,1,1
+</data>
+ </layer>
+ <layer id="2" name="main" width="30" height="12">
+  <properties>
+   <property name="role" value="main" />
+  </properties>
+  <data encoding="csv">
+9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,
+10,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,
+10,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,10,
+10,0,0,0,0,0,0,0,0,0,0,0,0,0,7,8,0,0,0,0,0,0,0,0,0,0,0,0,0,10,
+10,0,0,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,10,
+10,0,0,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,10,
+10,0,0,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,10,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,5,6,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,
+4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4
+</data>
+ </layer>
+ <layer id="3" name="collision" width="30" height="12" opacity="0.5">
+  <properties>
+   <property name="role" value="collision" />
+  </properties>
+  <data encoding="csv">
+12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,
+12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,
+12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,
+12,0,0,0,0,0,0,0,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0,0,0,0,0,0,0,12,
+12,0,0,0,0,0,0,0,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0,0,0,0,0,0,0,12,
+12,0,0,0,0,0,0,0,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0,0,0,0,0,0,0,12,
+12,0,0,0,0,0,0,0,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0,0,0,0,0,0,0,12,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,12,12,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,
+12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12
+</data>
+ </layer>
+ <objectgroup id="5" name="objects">
+  <properties>
+   <property name="role" value="objects" />
+  </properties>
+  <object id="1" name="room" type="CameraZone" x="0" y="0" width="480" height="192" />
+  <object id="2" name="torch_light" type="Light" x="184" y="74">
+   <point />
+   <properties>
+    <property name="colour" value="#ffb060" />
+    <property name="radius" value="160" />
+    <property name="height" value="16" />
+    <property name="intensity" value="1.25" />
+    <property name="flicker" value="0.3" />
+    <property name="flicker_speed" value="5" />
+    <property name="gain" value="0.55" />
+   </properties>
+  </object>
+  <object id="3" name="torch" type="Torch" x="184" y="88">
+   <point />
+  </object>
+  <object id="4" name="bat" type="Bat" x="360" y="40">
+   <point />
+  </object>
+  <object id="5" name="exit_west" type="Door" x="0" y="112" width="16" height="48">
+   <properties>
+    <property name="target_room" value="torch_hall_normals" />
+    <property name="target_door" value="exit_east" />
+    <property name="direction" value="west" />
+    <property name="panel" value="door_panel" />
+   </properties>
+  </object>
+ </objectgroup>
+</map>

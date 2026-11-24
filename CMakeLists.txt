@@ -75,6 +75,10 @@ set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_layer.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_fitted.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
+# The PC and browser game's pack adds the streamed torch hall (its rows of light are 43 KB; the
+# packs the tests compare and push between devices, the cartridge's and the multiboot pack leave
+# it out). On the GBA it comes pushed over the link into the cartridge game (light_mgba_*).
+set(BM_TEST_LEVEL_CART_ROOMS ${BM_TEST_LEVEL_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_stream.tmx)
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/torch.ms
@@ -528,8 +532,8 @@ if(BM_PLATFORM STREQUAL "host")
   endif()
   set(BM_GAME_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
   add_custom_command(OUTPUT ${BM_GAME_LEVEL_PACK}
-    COMMAND bmcook --profile gba -o ${BM_GAME_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS bmcook ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES}
+    COMMAND bmcook --profile gba -o ${BM_GAME_LEVEL_PACK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS bmcook ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES}
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png
     COMMENT "Cooking the test level for the game")
   add_custom_target(game_level_pack ALL DEPENDS ${BM_GAME_LEVEL_PACK})
@@ -702,7 +706,8 @@ if(BM_PLATFORM STREQUAL "host")
       ${PROJECT_SOURCE_DIR}/tests/scripts/aimer.ms ${PROJECT_SOURCE_DIR}/tests/scripts/spark_shot.ms ${PROJECT_SOURCE_DIR}/tests/scripts/lock_on.ms
       ${PROJECT_SOURCE_DIR}/tests/scripts/circler.ms)
   set_tests_properties(cook_test_level_wind PROPERTIES FIXTURES_REQUIRED wind_room FIXTURES_SETUP test_level_wind)
-  add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk ${cooked}/test_level_wind_gba.bmpk ${cooked})
+  # The game's own pack: with the streamed torch hall.
+  add_test(NAME test_game COMMAND test_game ${CMAKE_BINARY_DIR}/test_level_gba.bmpk ${cooked}/test_level_wind_gba.bmpk ${cooked})
   set_tests_properties(test_game PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_wind")
   # Live reload: a variant of the level with one background tile changed.
   add_test(NAME make_room_variant
@@ -1055,9 +1060,9 @@ if(BM_PLATFORM STREQUAL "host")
       set_tests_properties(live_mgba_hot PROPERTIES FIXTURES_REQUIRED test_level_variant FIXTURES_SETUP live_mgba_hot)
       # The light (docs/plans/lighting.md) on the GBA: in both torch halls a frame's light stays
       # within its budget in processor cycles (the room's banks, the sprites' banks), from ROM.
-      foreach(hall torch_hall torch_hall_layer torch_hall_fitted torch_hall_normals)
+      foreach(hall torch_hall torch_hall_layer torch_hall_fitted torch_hall_normals torch_hall_stream)
         add_test(NAME light_mgba_${hall}
-          COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${cooked}/test_level_gba.bmpk restart:${hall} run 120
+          COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${CMAKE_BINARY_DIR}/test_level_gba.bmpk restart:${hall} run 120
             check "${elf}:bm_light_cycles+0<=40000" check "${elf}:bm_light_cycles+4<=20000" screenshot ${out}/light_${hall}.ppm)
         set_tests_properties(light_mgba_${hall} PROPERTIES FIXTURES_REQUIRED test_level_pack)
       endforeach()

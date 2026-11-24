@@ -45,6 +45,19 @@ room's video memory, and 1 bank. The UI's tiles (char block 2) and map (screen b
 sprite memory (32 KB) are the same in every hall: the sprites' normals only regroup their
 colours, the player's and the bat's sheets keep their tiles.
 
+**The streamed light layer** (`light_index = stream`, the fifth torch hall; PC, browser and,
+pushed over the link, the cartridge game, not multiboot): the tiles hold one of 7 normals
+(72 tiles, a brick one tile wherever it is), and the light is streamed into the light layer's
+banks line by line by H-blank DMA from a table in the pack, a row per room pixel row: exact
+from line to line, by bands of 8 to 40 pixels across (narrower near the torch). The flicker is
+the light layer's blend weight, so the UI is not see-through there. Measured in mGBA against
+the other light layers: 19 room + 72 light tiles (15,200 B of video memory, 34 %), 1 + 7
+banks, 43 KB of rows in the pack, mean error 0.025 (normals 0.061, shared 0.020). The light's
+code drops from 32,400 to 3,000 cycles a frame, but the DMA stalls the CPU for about 48,000
+(112 colours a line, about 3 cycles each from ROM): a game frame takes 172 of its 228 lines
+against 157 with the other light layers. Fewer bands or 7 normals instead of 15 are the
+ways to cheaper; streaming only the lines the light reaches is the next.
+
 **Two torches** (measured in two-screen halls, torches 240 px apart, pillar between them; the
 comparison page has the pictures): up to 4 lights per room, flickering together, so every
 mode still bakes one sum. Palettes grows from 750 to 908 tiles (89 % of the 1024), shared from

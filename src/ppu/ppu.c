@@ -48,7 +48,7 @@ typedef struct LinePixel
 } LinePixel;
 
 // Background n of a mode 0 screen, one line.
-static void renderTextBg(const BmPpuState *pState, const uint16_t *regs, int n, int y, LinePixel out[BM_PPU_WIDTH])
+static void renderTextBg(const BmPpuState *pState, const uint16_t *pal, const uint16_t *regs, int n, int y, LinePixel out[BM_PPU_WIDTH])
 {
   uint16_t cnt = regs[BM_PPU_BGCNT(n) / 2];
   uint32_t charBase = ((cnt >> 2) & 3u) * 0x4000u;
@@ -88,7 +88,7 @@ static void renderTextBg(const BmPpuState *pState, const uint16_t *regs, int n, 
       continue;
     }
     uint16_t paletteIndex = bpp8 ? index : (uint16_t)(((entry >> 12) << 4) | index);
-    out[x] = (LinePixel){ pState->palette[paletteIndex] & 0x7FFF, priority, true, false };
+    out[x] = (LinePixel){ pal[paletteIndex] & 0x7FFF, priority, true, false };
   }
 }
 
@@ -102,7 +102,7 @@ static const uint8_t s_objSizes[3][4][2] = {
 // Regular (non-affine) sprites, one line. Per pixel the sprite with the lowest OAM index wins;
 // its priority is then compared with the backgrounds (as on the GBA).
 // Sprites in OBJ window mode draw nothing; where they have a pixel, `objWindow` is set.
-static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, LinePixel out[BM_PPU_WIDTH], bool objWindow[BM_PPU_WIDTH])
+static void renderObjs(const BmPpuState *pState, const uint16_t *pal, const uint16_t *regs, int y, LinePixel out[BM_PPU_WIDTH], bool objWindow[BM_PPU_WIDTH])
 {
   bool map1D = (regs[BM_PPU_DISPCNT / 2] & BM_PPU_DISPCNT_OBJ_1D) != 0;
 
@@ -167,7 +167,7 @@ static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, Li
           continue;
         }
         uint16_t paletteIndex = (uint16_t)(256 + (bpp8 ? index : ((bank << 4) | index)));
-        out[x] = (LinePixel){ pState->palette[paletteIndex] & 0x7FFF, priority, true, objMode == 1 };
+        out[x] = (LinePixel){ pal[paletteIndex] & 0x7FFF, priority, true, objMode == 1 };
       }
       continue;
     }
@@ -204,7 +204,7 @@ static void renderObjs(const BmPpuState *pState, const uint16_t *regs, int y, Li
         continue;
       }
       uint16_t paletteIndex = (uint16_t)(256 + (bpp8 ? index : ((bank << 4) | index)));
-      out[x] = (LinePixel){ pState->palette[paletteIndex] & 0x7FFF, priority, true, objMode == 1 };
+      out[x] = (LinePixel){ pal[paletteIndex] & 0x7FFF, priority, true, objMode == 1 };
     }
   }
 }
@@ -261,7 +261,16 @@ void bmPpuRenderLine(const BmPpuState *pState, int y, uint16_t out[BM_PPU_WIDTH]
     return;
   }
 
-  uint16_t backdrop = pState->palette[0] & 0x7FFF;
+  // The palette of this line: a stream replaces some entries line by line.
+  uint16_t streamed[BM_PPU_PALETTE_SIZE];
+  const uint16_t *pal = pState->palette;
+  if (pState->pStreamRows != NULL && pState->streamCount != 0 && pState->streamFirst + pState->streamCount <= 256)
+  {
+    memcpy(streamed, pState->palette, sizeof(streamed));
+    memcpy(streamed + pState->streamFirst, pState->pStreamRows + (size_t)y * pState->streamCount, pState->streamCount * sizeof(uint16_t));
+    pal = streamed;
+  }
+  uint16_t backdrop = pal[0] & 0x7FFF;
   for (int x = 0; x < BM_PPU_WIDTH; x++) out[x] = backdrop;
 
   int mode = dispcnt & BM_PPU_DISPCNT_MODE_MASK;
@@ -276,7 +285,7 @@ void bmPpuRenderLine(const BmPpuState *pState, int y, uint16_t out[BM_PPU_WIDTH]
   {
     if (dispcnt & BM_PPU_DISPCNT_BG(n))
     {
-      renderTextBg(pState, regs, n, y, bg[n]);
+      renderTextBg(pState, pal, regs, n, y, bg[n]);
     }
   }
 
@@ -286,7 +295,7 @@ void bmPpuRenderLine(const BmPpuState *pState, int y, uint16_t out[BM_PPU_WIDTH]
   memset(objWindow, 0, sizeof(objWindow));
   if (dispcnt & BM_PPU_DISPCNT_OBJ)
   {
-    renderObjs(pState, regs, y, obj, objWindow);
+    renderObjs(pState, pal, regs, y, obj, objWindow);
   }
 
   // Windows: per pixel, which layers show and whether colour effects apply. WIN0 before WIN1

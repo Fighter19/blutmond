@@ -44,6 +44,9 @@ typedef struct BmLight
   bool wasLit;               // the sprites' banks hold lit colours (reloaded when that ends)
   bool fresh;                // the room was just entered: every bank is set
   bool fitted;               // layer mode: the values are levels of light, not normals
+  bool stream;               // layer mode: the light layer's banks are streamed line by line
+  const uint16_t *pStream;   // ... these rows of colours (streamRows of streamStride)
+  uint16_t streamRows, streamStride;
   const uint8_t *pPalette;   // the room's palette (PALE) as drawn ...
   uint8_t paletteFirst, paletteBanks;   // ... from bank `paletteFirst` on
   uint16_t litBanks;         // palette mode: the room's banks with lit colours
