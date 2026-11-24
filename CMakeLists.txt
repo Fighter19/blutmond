@@ -109,6 +109,7 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/spark.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/debris.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/crate.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/bat_armour.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/puzzle.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/drag.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/thud.bmsong
@@ -1053,12 +1054,12 @@ if(BM_PLATFORM STREQUAL "host")
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         # The full level, also on a multiboot GBA: the variant does not fit beside the embedded
         # pack there and replaces it (src/link/live.h). Into the boss hall within the run; on a
-        # multiboot GBA the pack is fitted around the first room (runtime-abi.md §0), and the
-        # boss hall is not among the rooms that fit: the run stays in the second room.
+        # multiboot GBA the pack is fitted around the first room (runtime-abi.md §0): beside
+        # the scripts, songs and sprites only that room fits, and the run stays in it.
         set(level test_level)
         set(rooms 2)
         if(image MATCHES "_mb$")
-          set(rooms 1)
+          set(rooms 0)
         endif()
         add_test(NAME live_mgba_bit_errors_${image}
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/${image}.gba --errors 2000 2000 run 30 hello

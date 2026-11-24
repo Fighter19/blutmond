@@ -1,6 +1,6 @@
 # Plan: layered sprites and variants
 
-Status: steps 1 to 4 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
+Status: steps 1 to 5 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
 a palette table in `SPRT` version 3 ([../spec/sprite-format.md](../spec/sprite-format.md)), the
 room object's property `palette`, `set_palette` and `flash` in scripts. Sheets: every sheet's
 data opened once per pack, sprite memory and banks given out room by room per (sheet, palette)
@@ -34,7 +34,20 @@ layer toward an angle: `layer_track` toward a target waits for handles, step 6),
 to the right), not angles from forward; any layer whose animation is a direction set is
 aimed, so `layer_play(#torso, #aim)` makes the torso aim without an `aim` mode; phases
 (`aim_cast`) are a second direction set the script plays; `angle_to(target)` waits for
-handles. A layer's state is 13 bytes of snapshot. Steps 5 to 7 are open. Milestone M18 in
+handles. A layer's state is 13 bytes of snapshot.
+
+Step 5 built: a room object with `kind` and no class ([../spec/room-format.md](../spec/room-format.md)
+§5): the record's first `attach` field is its class, `look`, `palette`, `extra` and `extra_at`
+how it looks, and the class's first `record<S>` variable starts as the record. The test level's
+Guard Room has an Iron Bat: `kind = IronBat`, a Fast Bat in red with an armour sheet (two
+frames) drawn over its body at the bat's point `body`, and 12 health; no class, no new body
+sheet. Equipment that shows: an armour's `look_palette` recolours the player's layers (the
+chain mail: the coat in steel). Where it differs: the fields are found by name in any table
+(no `EnemyKind` structure the engine knows; the test level adds them to `Enemy`); an object
+has one extra layer, not a figure of its own (objects as figures, with `figure look`, are left
+for later); a weapon layer filled by the equipped weapon is not built (the test level's
+weapons are drawn into the player's frames); the Data tab does nothing new (a kind is a record
+like any other, made there by copying a row). Steps 6 and 7 are open. Milestone M18 in
 [../PLAN.md](../PLAN.md).
 
 ## Dependencies

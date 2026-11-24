@@ -334,7 +334,17 @@ def aim_frame(angle):
 AIM_FRAMES = [aim_frame(a) for a in AIM_ANGLES]
 
 
-def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=(), palettes=()):
+# The Iron Bat's armour (layered-sprites.md §5): a cap and a band drawn over the bat's body,
+# placed at the bat's point `body`; its frames go with the bat's (sync).
+BAT_ARMOUR = [
+    "................", "................", "................", "................",
+    "......qqqq......", ".....pqqqqp.....", ".....p....p.....", "................",
+    "................", ".....pppppp.....", "................", "................",
+    "................", "................", "................", "................",
+]
+
+
+def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=(), palettes=(), points=()):
     """`boxes`: sprite-wide boxes (kind, name, x, y, w, h); `extra`: frames of other sizes
     after the regular ones, as (x, y, w, h, ax, ay); `palettes`: other palettes of the same
     pixels, as (name, [(from, to), ...]) colour swaps (#rrggbb)."""
@@ -342,6 +352,8 @@ def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, 
     out.append(' <hitbox x="%d" y="%d" w="%d" h="%d"/>' % hitbox)
     for kind, name, bx, by, bw, bh in boxes:
         out.append(' <box kind="%s" name="%s" x="%d" y="%d" w="%d" h="%d"/>' % (kind, name, bx, by, bw, bh))
+    for name, px, py, angle in points:
+        out.append(' <point name="%s" x="%d" y="%d" angle="%d"/>' % (name, px, py, angle))
     for i in range(frames):
         out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>'
                    % ((i % columns) * w, (i // columns) * h, w, h, anchor[0], anchor[1]))
@@ -541,13 +553,20 @@ def main():
         ("thrust", False, [(17, 4), (27, 10)]),
         ("push", True, [(28, 10), (29, 10), (30, 10), (31, 10)]),
         ("aim", False, [(32 + i, 1) for i in range(9)], (9, 192, 64)),
-    ], extra=extra)
+    ], extra=extra, palettes=[
+        # Wearing the chain mail (layered-sprites.md §5): the coat in steel.
+        ("steel", [("#b51021", "#8c94a5"), ("#820a18", "#5a6270")]),
+    ])
     sheet(BAT_FRAMES, 2, 16, 16).save(os.path.join(out, "bat.png"))
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [
         ("idle", True, [(0, 8), (1, 8)]),
     ], boxes=[("hit", "bite", -3, -4, 6, 4)], palettes=[
         # The red bat (the Fast Bat's): the same drawing, its colours swapped.
         ("red", [("#6b428c", "#b02838"), ("#422963", "#64141e"), ("#ffe763", "#fff8c8")]),
+    ], points=[("body", 0, -5, 0)])
+    sheet([BAT_ARMOUR, BAT_ARMOUR], 2, 16, 16).save(os.path.join(out, "bat_armour.png"))
+    sprite_file(os.path.join(out, "bat_armour.bmsprite"), "bat_armour.png", 2, 2, 16, 16, (8, 8), (0, 0, 0, 0), [
+        ("idle", True, [(0, 8), (1, 8)]),
     ])
     for f in MOON_FRAMES:
         assert len(f) == 32 and all(len(r) == 32 for r in f), f

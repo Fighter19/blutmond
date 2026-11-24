@@ -389,6 +389,18 @@ Objects live in the `objects` layer.
 
 Game classes (enemies, NPCs, lanterns) are written in Mondskript and used the same way.
 
+**Kinds** ([../plans/layered-sprites.md](../plans/layered-sprites.md) §5): an object without a
+class but with the property `kind` (a record's name, any table) is an object of the class the
+record's first `attach` field names. Its record's fields, by name, say how it looks: `look`
+(sprite; none: the class's), `palette` (name; the object's own property `palette` comes
+first), `extra` (sprite: a layer drawn over it in step, the animation of the same name at the
+same step, in front of it) at `extra_at` (name: a point of its frame; without it, its anchor).
+The class's first `record<S>` variable starts as that record (a property of the variable's
+name still wins). The cooker keeps such an object (one with neither class nor kind is
+dropped with a warning). In a script, `layer_hide(#extra)` and `layer_show(#extra, ...)` hide
+and show its extra layer (snapshot state); the rest of the kind is worked out from the room
+object whenever the room is entered.
+
 ## 6. Validation
 
 The cooker MUST report as errors: layers without role, unknown object classes or properties,

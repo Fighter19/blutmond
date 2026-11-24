@@ -162,6 +162,10 @@ struct Consumable is Item : item, usable { ... }
   its number (ignoring case and `_`: `max_health` and `MaxHealth` are alike) is a warning.
 - **Equipping**: a record of a structure with roles goes only into the slot its role says; a
   structure without roles (a game that declares none) may go anywhere, as before.
+- **Equipment that shows** ([../plans/layered-sprites.md](../plans/layered-sprites.md) §5): an
+  equipped record with a field `look_palette` (type `name`, not `#default`) has the player's
+  layers drawn in that palette of their sprites where a sprite has it (the last slot that names
+  one); a palette a script set with `layer_palette` comes first. Derived like the stat totals.
 - **Stat totals**: `stat(i)` is the player's own value plus what attachments add plus what
   equipment and abilities add. The equipment's part is derived (not saved, not in snapshots): worked out
   again whenever something is equipped or taken off, a state or save game is loaded, and a

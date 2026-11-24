@@ -83,6 +83,7 @@ struct Armour is Item : item, equip(slot), stat_source(stats) {
   StatBlock stats;
   Element   resists;
   attach    behaviour = ArmourStats;   // its stats while worn
+  name      look_palette = #default;   // a palette of the player's sprites while worn (layered-sprites.md §5)
 }
 
 struct KeyItem is Item : item {

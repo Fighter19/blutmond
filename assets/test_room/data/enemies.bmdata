@@ -2,6 +2,7 @@
 table Enemy
 
 record Bat {
+  behaviour = Bat
   damage = 1
   speed = 0.75
   wake_distance = 64
@@ -16,6 +17,16 @@ record FastBat : Bat {
   damage = 2
   speed = 1.25
   give_up_distance = 160
+}
+
+# The Fast Bat in armour (layered-sprites.md §5): a room object with kind = IronBat is a Bat
+# drawn red, with the armour on, and takes three times the strikes. No class, no sprite of its
+# own: the armour is one more sheet drawn over the bat's frames.
+record IronBat : FastBat {
+  palette = #red
+  extra = "bat_armour"
+  health = 12
+  speed = 1.0
 }
 
 # A knight with a shield (scripts/knight.ms): it blocks from the front and turns after

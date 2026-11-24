@@ -60,6 +60,9 @@
  <frame x="192" y="160" w="24" h="32" ax="8" ay="17">
   <point name="hand" x="3" y="-2" angle="64" />
  </frame>
+ <palette name="steel">
+  <swap from="#b51021" to="#8c94a5" />
+ </palette>
  <animation name="idle" loop="1">
   <step frame="0" duration="40" />
   <step frame="1" duration="40" />

@@ -458,6 +458,21 @@ static void animateLayers(BmGame *g)
   }
 }
 
+// The palette the player's layer `i` is drawn in: one a script chose (layer_palette), else the
+// one the equipment names (look_palette) if its sprite has it, else the figure's.
+static uint8_t playerLayerPaletteNow(const BmGame *g, uint8_t i)
+{
+  const BmFigureLayerState *l = &g->playerLayers[i];
+  if (l->palette != 0xFF) return l->palette;
+  int8_t s = layerSheet(g, i);
+  if (g->equipPalette != 0xFFFF && s >= 0)
+  {
+    int32_t p = bmSpriteSheetPalette(&g->sheets[s], g->pPack, bmPackString(g->pPack, g->equipPalette));
+    if (p >= 0) return (uint8_t)p;
+  }
+  return g->playerLayerPalette[i];
+}
+
 // The player's figure as it stands now: its layers' sheets and pose (figure.h).
 static void playerPose(const BmGame *g, const BmSpriteSheet *sheets[BM_FIGURE_MAX_LAYERS], BmFigurePose *pose)
 {
@@ -650,7 +665,7 @@ static void updateSprites(BmGame *g)
       {
         uint8_t i = pose.order[k];
         const BmFigureLayerState *l = &g->playerLayers[i];
-        int8_t bank = bmGameSheetBank(g, layerSheet(g, i), l->palette != 0xFF ? l->palette : g->playerLayerPalette[i]);
+        int8_t bank = bmGameSheetBank(g, layerSheet(g, i), playerLayerPaletteNow(g, i));
         if ((l->flags & BM_LAYER_HIDDEN) || bank < 0) continue;
         used = (uint8_t)(used + bmSpriteSheetDrawFlipped(sheets[i], pose.frame[i], x + pose.x[i], y + pose.y[i], left, up, 1, (uint8_t)bank,
                                                          (uint8_t)(next + used), (uint8_t)(12 - used)));
@@ -911,6 +926,7 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
 {
   memset(g, 0, sizeof(*g));
   g->pPack = pPack;
+  g->equipPalette = 0xFFFF;
   bmBodyDefaultParams(&g->playerParams);
   int32_t index = roomId ? bmGameFindRoom(pPack, roomId) : 0;
   if (index < 0) return BM_ERROR_INVALID_ARGUMENT;
@@ -1132,6 +1148,7 @@ void bmGameEquipmentChanged(BmGame *g)
 {
   BmInventory *inv = &g->inventory;
   memset(inv->statEquip, 0, sizeof(inv->statEquip));
+  g->equipPalette = 0xFFFF;
   // What is equipped, then the abilities owned.
   for (uint8_t s = 0; s < BM_INVENTORY_EQUIP + BM_INVENTORY_SLOTS; s++)
   {
@@ -1141,6 +1158,17 @@ void bmGameEquipmentChanged(BmGame *g)
     uint32_t key = owned ? (s - BM_INVENTORY_EQUIP < inv->count ? inv->key[s - BM_INVENTORY_EQUIP] : 0) : inv->equipped[s];
     if (key == 0 || !bmDataFindRecord(g->pPack, key, &table, &record)) continue;
     if (owned != ((bmDataTableRoles(&table) & BM_DATA_ROLE_ABILITY) != 0)) continue;
+    // Equipment that shows (layered-sprites.md §5): a field `look_palette` names a palette the
+    // player's layers take while it is worn (the last slot that has one).
+    for (uint16_t f = 0; !owned && f < table.fieldCount; f++)
+    {
+      BmDataField field = bmDataTableField(&table, f);
+      const char *n = bmPackString(g->pPack, field.name);
+      if (field.type != BM_DATA_NAME || n == NULL || strcmp(n, "look_palette") != 0) continue;
+      uint16_t palette = (uint16_t)bmDataRead(&table, record, field.offset, BM_DATA_NAME);
+      const char *pn = bmPackString(g->pPack, palette);
+      if (pn != NULL && strcmp(pn, "default") != 0) g->equipPalette = palette;
+    }
     int32_t stats[BM_DATA_MAX_STATS];
     uint32_t n = bmDataRecordStats(&table, record, stats);
     for (uint32_t i = 0; i < n && i < BM_INVENTORY_STATS; i++)
@@ -1892,6 +1920,7 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.flash, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.weight, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.angle, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.extraHidden, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animFinished, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animStep, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),

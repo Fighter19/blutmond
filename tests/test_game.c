@@ -2452,7 +2452,8 @@ static void testSheetsAndPalettesPerRoom(void)
   for (int f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_LEFT);
   frames(5, 0);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
-  TEST_ASSERT(s_game.sheetTile[knight] != BM_GAME_NO_TILES && banksOf(bat, -1) == 0 && s_game.tileNext < BM_GAME_OBJ_TILES - 200);
+  // The bat sheet is back for the Iron Bat (red, with its armour), the plain one not.
+  TEST_ASSERT(s_game.sheetTile[knight] != BM_GAME_NO_TILES && banksOf(bat, 0) == 0 && banksOf(bat, 1) == 1 && s_game.tileNext < BM_GAME_OBJ_TILES - 200);
   // The player is the figure "player" (legs and torso): both sheets stay through all this, in
   // banks 0 and 1, and both are drawn, the torso in front.
   int legs = sheetOf("player_legs"), torso = sheetOf("player_torso");
@@ -2471,6 +2472,82 @@ static void testSheetsAndPalettesPerRoom(void)
     frames(3, 0);
     TEST_ASSERT(s_game.actors.flash[p] == 0);
   }
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+// A kind as a record (layered-sprites.md §5): the Guard Room's iron_bat has no class, only
+// kind = IronBat; the record names the class (Bat), its palette (red) and an extra layer (the
+// armour, drawn in step with the body at its point `body`), and the bat reads its numbers from
+// it.
+static void testIronBat(void)
+{
+  startWith(s_data, s_size, "guard_room");
+  frames(3, 0);
+  const BmActors *a = &s_game.actors;
+  int iron = -1;
+  for (int i = 0; i < a->count; i++)
+    if (a->kind[i] != 0) iron = i;
+  TEST_ASSERT(iron >= 0 && (int32_t)a->classIndex[iron] == bmActorsClassNamed(&s_game, "Bat"));
+  int bat = sheetOf("bat"), armour = sheetOf("bat_armour");
+  TEST_ASSERT(a->sheet[iron] == bat && a->palette[iron] == 1 && a->extraSheet[iron] == armour && armour >= 0);
+  TEST_ASSERT(a->health[iron] == 12);   // IronBat's health, not the Bat's 4
+  // Drawn: the armour first (in front), at the body point: (0, -5) from the bat's anchor, the
+  // armour's anchor at its own (8, 8) of 16 x 16.
+  frames(1, 0);
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  int armourOam = -1, batOam = -1;
+  for (int k = 0; k < 48; k++)
+  {
+    uint16_t attr2 = ppu->oam[k * 4 + 2];
+    uint16_t tile = attr2 & 0x3FF;
+    if (s_game.sheetTile[armour] != BM_GAME_NO_TILES && tile >= s_game.sheetTile[armour] && tile < s_game.sheetTile[armour] + s_game.sheets[armour].tileCount && armourOam < 0) armourOam = k;
+    if (tile >= s_game.sheetTile[bat] && tile < s_game.sheetTile[bat] + s_game.sheets[bat].tileCount && s_game.bankSheet[attr2 >> 12] == bat && s_game.bankPalette[attr2 >> 12] == 1 && batOam < 0) batOam = k;
+  }
+  TEST_ASSERT(armourOam >= 0 && batOam > armourOam);
+  int ax = ppu->oam[armourOam * 4 + 1] & 0x1FF, ay = ppu->oam[armourOam * 4] & 0xFF;
+  int bx = ppu->oam[batOam * 4 + 1] & 0x1FF, by = ppu->oam[batOam * 4] & 0xFF;
+  // The armour's top: its anchor (the bat's anchor + (0, -5)) - 8; the bat's: its anchor - 12.
+  TEST_ASSERT(ax == bx && ay - by == -1);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
+// Equipment that shows (layered-sprites.md §5): the chain mail names the palette `steel`; while
+// it is worn the torso (which has the coat) is drawn in it, the legs (no coat: no such palette)
+// in their own; taken off, back to the default.
+static void testEquipmentShows(void)
+{
+  startWith(s_data, s_size, NULL);
+  frames(3, 0);
+  int torso = sheetOf("player_torso"), legs = sheetOf("player_legs");
+  int32_t steel = bmSpriteSheetPalette(&s_game.sheets[torso], s_game.pPack, "steel");
+  TEST_ASSERT(steel > 0 && bmSpriteSheetPalette(&s_game.sheets[legs], s_game.pPack, "steel") < 0);
+  uint32_t mail = keyOf("ChainMail");
+  TEST_ASSERT(bmInventoryGive(&s_game.inventory, mail, 1) == 1);
+  uint8_t slot = 0;
+  BmDataTable table;
+  const uint8_t *record;
+  TEST_ASSERT(bmDataFindRecord(s_game.pPack, mail, &table, &record));
+  slot = bmDataRecordSlot(&table, record);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, slot, mail));
+  frames(2, 0);   // the sprites of a frame reach the screen with the next
+  TEST_ASSERT(banksOf(torso, steel) == 1 && banksOf(legs, -1) == 1);
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  bool torsoSteel = false;
+  for (int k = 0; k < 12; k++)
+  {
+    uint16_t attr2 = ppu->oam[k * 4 + 2], b = attr2 >> 12;
+    torsoSteel |= s_game.bankSheet[b] == torso && s_game.bankPalette[b] == steel;
+  }
+  TEST_ASSERT(torsoSteel);
+  bmAttachmentsEquip(&s_game, slot, 0);
+  frames(2, 0);
+  torsoSteel = false;
+  for (int k = 0; k < 12; k++)
+  {
+    uint16_t b = ppu->oam[k * 4 + 2] >> 12;
+    torsoSteel |= s_game.bankSheet[b] == torso && s_game.bankPalette[b] == steel;
+  }
+  TEST_ASSERT(!torsoSteel && s_game.equipPalette == 0xFFFF);
   TEST_ASSERT(bm_script_errors == 0);
 }
 
@@ -2693,6 +2770,8 @@ int main(int argc, char **argv)
   RUN_TEST(testThePushBlockPuzzle);
   RUN_TEST(testSheetsAndPalettesPerRoom);
   RUN_TEST(testAimingTheTorso);
+  RUN_TEST(testIronBat);
+  RUN_TEST(testEquipmentShows);
   RUN_TEST(testTheGrapple);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);

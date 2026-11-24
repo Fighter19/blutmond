@@ -810,8 +810,9 @@ Bytes objectsChunk(const tmx::Map &map, StringTable &strings, Report &report, ui
   uint32_t propsBase = 4 + 20 * uint32_t(objects.size());
   for (const tmx::Object *o : objects)
   {
-    if (o->type.empty())
-      report.warning("does-not-fit", map.path + " object " + std::to_string(o->id), "object without class (type) is ignored by the runtime");
+    // Without a class it needs a kind (layered-sprites.md §5: the record names the class).
+    if (o->type.empty() && !o->properties.count("kind"))
+      report.warning("does-not-fit", map.path + " object " + std::to_string(o->id), "object without class (type) or kind is ignored by the runtime");
     if (o->type == "PlayerStart") starts++;
     entries.u16(strings.id(o->type));
     entries.u16(uint32_t(o->id));

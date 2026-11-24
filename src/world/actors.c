@@ -741,8 +741,13 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_layer_point_x:
   case BM_SCRIPT_API_layer_point_y:
   case BM_SCRIPT_API_layer_point_angle:
-    // The player's figure, from its attachments (objects show one sprite yet).
+    // The player's figure, from its attachments; an object's extra layer (#extra) from it.
     if (i == BM_ACTORS_OWNER) *result = bmGameLayerCall(g, api, args);
+    else if (i < BM_ACTORS_MAX && (api == BM_SCRIPT_API_layer_hide || api == BM_SCRIPT_API_layer_show))
+    {
+      const char *layer = bmPackString(g->pPack, (uint16_t)args[0]);
+      if (layer != NULL && strcmp(layer, "extra") == 0) a->extraHidden[i] = api == BM_SCRIPT_API_layer_hide;
+    }
     break;
   case BM_SCRIPT_API_spawn_at_point:
   {
@@ -1193,6 +1198,65 @@ void bmActorsVerifyInUse(BmGame *g)
   }
 }
 
+// A field of a record by its name (any table), or `none` if the record has no such field.
+static int32_t kindField(const BmGame *g, uint32_t kind, const char *name, int32_t none)
+{
+  BmDataTable table;
+  const uint8_t *record;
+  if (kind == 0 || !bmDataFindRecord(g->pPack, kind, &table, &record)) return none;
+  for (uint16_t f = 0; f < table.fieldCount; f++)
+  {
+    BmDataField field = bmDataTableField(&table, f);
+    const char *n = bmPackString(g->pPack, field.name);
+    if (n != NULL && strcmp(n, name) == 0) return bmDataRead(&table, record, field.offset, (BmDataType)field.type);
+  }
+  return none;
+}
+
+// The class of a room object: its own, else the one its kind's record names (its first
+// `attach` field, layered-sprites.md §5). `pKind`: the kind's record key (0: none).
+static int32_t objectClass(const BmGame *g, const BmObjectView *v, uint32_t *pKind)
+{
+  const char *kindName = bmGameObjectProperty(g, v, "kind");
+  *pKind = kindName != NULL ? hashName(kindName) : 0;
+  int32_t cls = classNamed(g, v->className);
+  BmDataTable table;
+  const uint8_t *record;
+  if (cls < 0 && *pKind != 0 && bmDataFindRecord(g->pPack, *pKind, &table, &record))
+    cls = classNamed(g, bmPackString(g->pPack, bmDataRecordBehaviour(&table, record)));
+  return cls;
+}
+
+// What an object's kind gives it to look like: its sprite (`look`), palette (`palette`) and
+// extra layer (`extra` at the body's point `extra_at`).
+static void applyKindLook(BmGame *g, uint8_t i)
+{
+  BmActors *a = &g->actors;
+  a->extraSheet[i] = -1;
+  a->extraPoint[i] = 0xFFFF;
+  if (a->kind[i] == 0) return;
+  int32_t look = kindField(g, a->kind[i], "look", 0xFFFF);
+  if (look != 0xFFFF && sheetNamed(g, bmPackString(g->pPack, (uint16_t)look)) >= 0) a->sheet[i] = sheetNamed(g, bmPackString(g->pPack, (uint16_t)look));
+  int32_t extra = kindField(g, a->kind[i], "extra", 0xFFFF);
+  if (extra != 0xFFFF) a->extraSheet[i] = sheetNamed(g, bmPackString(g->pPack, (uint16_t)extra));
+  a->extraPoint[i] = (uint16_t)kindField(g, a->kind[i], "extra_at", 0xFFFF);
+}
+
+// Its palette when it starts: the room object's property `palette`, else its kind's, else 0.
+static uint8_t startPalette(BmGame *g, uint8_t i)
+{
+  BmActors *a = &g->actors;
+  if (a->sheet[i] < 0) return 0;
+  const BmSpriteSheet *s = &g->sheets[a->sheet[i]];
+  int32_t p = bmSpriteSheetPalette(s, g->pPack, bmGameObjectProperty(g, objectOf(g, i), "palette"));
+  if (p < 0)
+  {
+    int32_t named = kindField(g, a->kind[i], "palette", 0xFFFF);
+    if (named != 0xFFFF) p = bmSpriteSheetPalette(s, g->pPack, bmPackString(g->pPack, (uint16_t)named));
+  }
+  return (uint8_t)(p < 0 ? 0 : p);
+}
+
 void bmActorsEnterRoom(BmGame *g, bool fresh)
 {
   BmActors *a = &g->actors;
@@ -1214,7 +1278,8 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
   uint8_t n = 0;
   for (uint16_t o = 0; o < g->objectCount && n < BM_ACTORS_MAX; o++)
   {
-    int32_t cls = classNamed(g, g->objects[o].className);
+    uint32_t kind;
+    int32_t cls = objectClass(g, &g->objects[o], &kind);
     if (cls < 0) continue;
     const BmObjectView *v = &g->objects[o];
     a->object[n] = (uint8_t)o;
@@ -1222,7 +1287,10 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->homeX[n] = BM_FIX(v->x + v->w / 2);
     a->homeY[n] = BM_FIX(v->y + v->h);
     uint16_t spriteId = bmVmClassSprite(&a->modules[a->classModule[cls]], a->classInModule[cls]);
-    a->sheet[n] = sheetNamed(g, spriteId != BM_VM_NONE ? bmPackString(g->pPack, spriteId) : v->className);
+    const char *clsName = bmPackString(g->pPack, bmVmClassName(&a->modules[a->classModule[cls]], a->classInModule[cls]));
+    a->sheet[n] = sheetNamed(g, spriteId != BM_VM_NONE ? bmPackString(g->pPack, spriteId) : clsName);
+    a->kind[n] = kind;
+    applyKindLook(g, n);
     if (perObject) a->classIndex[n] = (uint16_t)cls;   // the class table was made anew
     if (!fresh && !perObject && (n >= a->count || a->classIndex[n] != (uint16_t)cls)) fresh = true;  // not the room the state was made in
     if (fresh) a->classIndex[n] = (uint16_t)cls;
@@ -1235,6 +1303,8 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
   while (!fresh && !perObject && total < a->count && a->spawned[total] && a->classIndex[total] < a->classCount)
   {
     a->object[total] = 0xFF;
+    a->kind[total] = 0;
+    a->extraSheet[total] = -1;
     a->homeX[total] = a->x[total];
     a->homeY[total] = a->y[total];
     uint16_t cls = a->classIndex[total];
@@ -1274,12 +1344,22 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->steady[i] = 0;
     a->team[i] = 0;
     a->invulnerable[i] = 0;
-    // Its palette: the room object's property `palette` (a palette of its sprite), else its own.
-    int32_t palette = a->sheet[i] >= 0 ? bmSpriteSheetPalette(&g->sheets[a->sheet[i]], g->pPack, bmGameObjectProperty(g, objectOf(g, i), "palette")) : -1;
-    a->palette[i] = (uint8_t)(palette < 0 ? 0 : palette);
+    // Its palette: the room object's property `palette` (a palette of its sprite), else its
+    // kind's, else its own.
+    a->palette[i] = startPalette(g, i);
     a->flash[i] = 0;
     a->weight[i] = 1;
     a->angle[i] = 0;
+    a->extraHidden[i] = 0;
+    // Its kind: the class's first record<S> variable is that record (a property may say otherwise).
+    for (uint8_t f = 0; a->kind[i] != 0 && f < bmVmClassFieldCount(moduleOf(a, i), inst.classIndex); f++)
+    {
+      uint8_t type;
+      bmVmClassField(moduleOf(a, i), inst.classIndex, f, NULL, &type, NULL, NULL);
+      if (type != BM_SCRIPT_RECORD) continue;
+      inst.fields[f] = (int32_t)a->kind[i];
+      break;
+    }
     resetMotion(a, i);
     BmAnimState none = { 0, 0, 0, 0 };
     setAnim(a, i, &none);
@@ -1353,7 +1433,27 @@ uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
     BmAnimState st = animOf(a, i);
     // Just struck, or flash(frames): drawn in the flash bank (hits.h).
     bool flash = a->invulnerable[i] > BM_HITS_INVULNERABLE - BM_HITS_FLASH_FRAMES || a->flash[i] != 0;
-    used = (uint8_t)(used + bmSpriteSheetDrawBank(s, bmAnimFrame(s, &st), BM_FIX_INT(a->x[i]) - g->room.cameraX, BM_FIX_INT(a->y[i]) - g->room.cameraY,
+    uint16_t frame = bmAnimFrame(s, &st);
+    // Its kind's extra layer first (in front): the animation named like the body's, at its
+    // step, at the body's point (figure.h's sync mode).
+    if (a->extraSheet[i] >= 0 && !a->extraHidden[i])
+    {
+      const BmSpriteSheet *xs = &g->sheets[a->extraSheet[i]];
+      int32_t anim = bmFigureLayerAnim(s, st.anim, xs);
+      int8_t xbank = bmGameSheetBank(g, a->extraSheet[i], 0);
+      BmSpritePoint pt = { 0, 0, 0, false };
+      if (anim >= 0 && xbank >= 0)
+      {
+        BmAnimState xst = st;
+        xst.anim = (uint8_t)anim;
+        if (a->extraPoint[i] != 0xFFFF) bmSpriteSheetPoint(s, frame, a->extraPoint[i], a->facing[i] < 0, false, &pt);
+        used = (uint8_t)(used + bmSpriteSheetDrawBank(xs, bmAnimFrame(xs, &xst), BM_FIX_INT(a->x[i]) + pt.x - g->room.cameraX,
+                                                      BM_FIX_INT(a->y[i]) + pt.y - g->room.cameraY, a->facing[i] < 0, 1,
+                                                      flash ? BM_HITS_FLASH_BANK : (uint8_t)xbank, (uint8_t)(firstOam + used),
+                                                      (uint8_t)(maxOam - used)));
+      }
+    }
+    used = (uint8_t)(used + bmSpriteSheetDrawBank(s, frame, BM_FIX_INT(a->x[i]) - g->room.cameraX, BM_FIX_INT(a->y[i]) - g->room.cameraY,
                                                   a->facing[i] < 0, 1, flash ? BM_HITS_FLASH_BANK : (uint8_t)bank, (uint8_t)(firstOam + used),
                                                   (uint8_t)(maxOam - used)));
   }
@@ -1449,6 +1549,9 @@ static bool spawnNamed(BmGame *g, const char *name, int32_t x, int32_t y, uint32
   a->palette[i] = 0;
   a->flash[i] = 0;
   a->weight[i] = 1;
+  a->kind[i] = 0;
+  a->extraSheet[i] = -1;
+  a->extraHidden[i] = 0;
   // spawn_at_point: the point's direction; else the maker's facing.
   a->angle[i] = s_spawnAngle;
   a->facing[i] = (int8_t)(s_spawnAngle > 64 && s_spawnAngle < 192 ? -1 : 1);

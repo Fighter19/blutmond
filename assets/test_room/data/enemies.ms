@@ -13,4 +13,12 @@ struct Enemy {
   Element weak;                     // takes x 1.5 from this element (first-items.md §1)
   Element resists;                  // takes x 0.5 from this one
   sound  hit_sound;                 // played when the player strikes it
+  // How a room object of this kind looks (layered-sprites.md §5): a room object with the
+  // property `kind` and no class gets the class `behaviour`, the sprite `look` (none: the
+  // class's) in its palette `palette`, and `extra` drawn over it at its point `extra_at`.
+  attach behaviour;
+  sprite look;
+  name   palette          = #default;
+  sprite extra;
+  name   extra_at         = #body;
 }

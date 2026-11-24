@@ -63,8 +63,12 @@ def main(argv):
     low.save(os.path.join(out, lower + ".png"))
     high.save(os.path.join(out, upper + ".png"))
 
+    def colours(img):
+        return {"#%02x%02x%02x" % c[:3] for _, c in img.getcolors(1 << 16) if c[3] >= 128}
+
     def write(name, upper_layer):
         r = ET.Element("sprite", {"version": "1", "image": name + ".png"})
+        present = colours(high if upper_layer else low)
         for child in root:
             if child.tag == "frame":
                 f = ET.SubElement(r, "frame", dict(child.attrib))
@@ -82,6 +86,15 @@ def main(argv):
                         f.append(c)
                 if not upper_layer:
                     ET.SubElement(f, "point", {"name": point, "x": "0", "y": str(-waist)})
+            elif child.tag == "palette" and child.get("image") is None:
+                # Colour swaps: only those of colours this layer has (a palette left with none
+                # is left out: the layer keeps its own colours in it).
+                p = ET.Element("palette", {"name": child.get("name")})
+                for sw in child:
+                    if sw.get("from", "").lower() in present:
+                        p.append(sw)
+                if len(p):
+                    r.append(p)
             elif child.tag in ("hitbox", "box"):
                 if upper_layer:
                     if child.tag == "hitbox":

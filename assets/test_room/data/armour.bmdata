@@ -24,6 +24,7 @@ record TravellersCoat {
 }
 
 record ChainMail {
+  look_palette = #steel
   title = "Chain Mail"
   description = "Strong, and a little slow."
   price = 250

@@ -72,6 +72,14 @@ typedef struct BmActors
   uint8_t palette[BM_ACTORS_MAX];      // which palette of its sprite (0: its own; set_palette)
   uint8_t weight[BM_ACTORS_MAX];       // the grapple pulls light ones (grapple.h); 1 unless set
   uint8_t angle[BM_ACTORS_MAX];        // a direction (script_api.h): spawn_at_point's point's
+  // Its kind (layered-sprites.md §5): the record its room object's property `kind` names (0:
+  // none), and the extra layer the record gives it: a sprite drawn in step with the body at a
+  // point of the body's frame (-1: none). Derived from the room object, not state; whether the
+  // extra layer is hidden (layer_hide(#extra)) is.
+  uint32_t kind[BM_ACTORS_MAX];
+  int8_t extraSheet[BM_ACTORS_MAX];
+  uint16_t extraPoint[BM_ACTORS_MAX];
+  uint8_t extraHidden[BM_ACTORS_MAX];
   uint8_t flash[BM_ACTORS_MAX];        // frames it is drawn all white (flash)
   uint8_t affinity[BM_ACTORS_MAX];     // elements it is weak to (bits 0-3) and resists (4-7)
   int32_t knock[BM_ACTORS_MAX];        // fix: pixels per frame it is pushed by the last hit
