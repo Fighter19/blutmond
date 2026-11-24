@@ -872,8 +872,9 @@ if the last room was lit). Every frame after the effects:
 - `palette`: every background bank with lit entries (all of them on entering) gets
   `colour × min(1, ambient + intensity × light colour × level / (levels - 1))`, per channel in
   sixteenths of 256, rounded.
-- `layer`: on entering the room's banks are darkened to the ambient; every frame each region's
-  bank gets `intensity × gain × light colour × max(0, N·F)` per normal. The light layer is
+- `layer`: on entering the room's banks are darkened to the ambient; every frame each bank of
+  the light layer gets `intensity × gain × light colour × v` per value, v its fitted level or,
+  with normals, `max(0, N·F)` (worked out once on entering). The light layer is
   shown and blended (first targets the UI layer and the light layer, second the rest, EVA 16,
   EVB 16: the UI's boxes are then added at full weight too) while no screen is open, no room
   effect and no teleport; else it is hidden.

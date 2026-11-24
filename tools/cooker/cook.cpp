@@ -998,6 +998,142 @@ Bytes paletteLightChunk(const RoomWork &room, const AreaWork &area, Report &repo
 }
 
 // Mode `layer`: normal tiles over the room, a bank per region of the light, and its LITE.
+std::pair<Bytes, Bytes> buildFittedLayer(const RoomWork &room, AreaWork &area, Report &report, const GraphicsLayer *main, const GraphicsLayer *back,
+                                         int w8, int h8);
+
+// Mode `layer`, values fitted (light_index = fitted): a pixel's value stands for its whole light
+// at full intensity, `max(0, N·L) × falloff`, 0 in shadow; its direction, distance and shadow
+// are worked out here, per pixel. The light only scales at run time, so a bank is 15 levels of
+// light: the lit cells are grouped by how lit they are (one bank each group), each group's
+// levels fitted to its pixels (1D k-means), and every pixel takes its bank's nearest level.
+std::pair<Bytes, Bytes> buildFittedLayer(const RoomWork &room, AreaWork &area, Report &report, const GraphicsLayer *main, const GraphicsLayer *back,
+                                         int w8, int h8)
+{
+  const light::Light &l = room.light;
+  int wpx = w8 * 8;
+  auto state = [&](int x, int y, light::Vec3 *pN) -> int {
+    for (const GraphicsLayer *gl : {main, back})
+    {
+      if (gl == nullptr || gl->pixelState.empty()) continue;
+      size_t at = size_t(y) * size_t(wpx) + size_t(x);
+      if (gl->pixelState[at] == 0) continue;
+      if (pN) *pN = gl->normals[at];
+      return gl->pixelState[at];
+    }
+    return 0;
+  };
+  // The light of every pixel of every cell that has some.
+  std::vector<int> litCells;
+  std::vector<std::array<float, 64>> cellLight;
+  std::vector<light::Vec3> cellKey;
+  for (int cy = 0; cy < h8; cy++)
+    for (int cx = 0; cx < w8; cx++)
+    {
+      std::array<float, 64> t;
+      float sum = 0, most = 0;
+      int count = 0;
+      for (int y = 0; y < 8; y++)
+        for (int x = 0; x < 8; x++)
+        {
+          light::Vec3 n;
+          float v = 0;
+          int px = cx * 8 + x, py = cy * 8 + y;
+          if (state(px, py, &n) == 2)
+          {
+            float fx = float(px) + 0.5f, fy = float(py) + 0.5f;
+            v = light::term(l, fx, fy, n);
+            if (v > 0 && room.solid.shadowed(fx, fy, l)) v = 0;
+          }
+          t[size_t(y * 8 + x)] = v;
+          if (v > 0) sum += v, count++, most = std::max(most, v);
+        }
+      if (count == 0 || most < 0.004f) continue;
+      litCells.push_back(cy * w8 + cx);
+      cellLight.push_back(t);
+      cellKey.push_back(light::Vec3{sum / float(count), most * 0.5f, 0});
+    }
+  int firstBank = int(area.banks.size());
+  int regions = std::min(light::MAX_REGIONS, 15 - firstBank);
+  if (regions < 1)
+  {
+    report.error("lighting", room.map->path, "no palette bank is left for the light layer");
+    regions = 1;
+  }
+  // Groups of cells by how lit they are (their mean and brightest pixel).
+  std::vector<light::Vec3> groups = light::cluster(cellKey, std::vector<float>(cellKey.size(), 1.0f), regions);
+  std::vector<int> groupOf(litCells.size());
+  for (size_t i = 0; i < litCells.size(); i++) groupOf[i] = light::nearest(groups, cellKey[i]);
+  // Each group's 15 levels, fitted to its pixels' light.
+  std::vector<std::vector<float>> levels(groups.size());
+  for (size_t gi = 0; gi < groups.size(); gi++)
+  {
+    std::map<int, float> counts;   // light in 1/1024 steps: how many pixels
+    for (size_t i = 0; i < litCells.size(); i++)
+      if (groupOf[i] == int(gi))
+        for (float v : cellLight[i])
+          if (v > 0) counts[int(std::lround(v * 1024))] += 1;
+    std::vector<light::Vec3> pts;
+    std::vector<float> wts;
+    for (const auto &[k, c] : counts) pts.push_back(light::Vec3{float(k) / 1024.0f, 0, 0}), wts.push_back(c);
+    for (const light::Vec3 &c : light::cluster(pts, wts, 15)) levels[gi].push_back(c.x);
+    std::sort(levels[gi].begin(), levels[gi].end());
+  }
+
+  Bytes m;
+  m.u16(uint32_t(w8));
+  m.u16(uint32_t(h8));
+  m.u8(0);
+  m.u8(0);
+  m.u16(0);
+  std::vector<uint16_t> entries(size_t(w8) * h8, 0);
+  std::map<std::array<uint8_t, 64>, uint32_t> tileOf;
+  float error = 0;
+  size_t measured = 0;
+  for (size_t i = 0; i < litCells.size(); i++)
+  {
+    const std::vector<float> &lv = levels[size_t(groupOf[i])];
+    std::array<uint8_t, 64> t{};
+    bool any = false;
+    for (int p = 0; p < 64; p++)
+    {
+      float v = cellLight[i][size_t(p)];
+      if (v <= 0) continue;
+      // The nearest level; nearer to none at all: nothing.
+      int best = -1;
+      float bestD = v;
+      for (size_t k = 0; k < lv.size(); k++)
+        if (std::abs(lv[k] - v) < bestD) bestD = std::abs(lv[k] - v), best = int(k);
+      error += bestD;
+      measured++;
+      if (best < 0) continue;
+      t[size_t(p)] = uint8_t(best + 1);
+      any = true;
+    }
+    if (!any) continue;
+    auto it = tileOf.find(t);
+    uint32_t tile;
+    if (it != tileOf.end()) tile = it->second;
+    else
+    {
+      tile = uint32_t(area.uniqueTiles.size() + area.rawTiles.size());
+      area.rawTiles.push_back(t);
+      tileOf[t] = tile;
+    }
+    entries[size_t(litCells[i])] = uint16_t(tile | uint32_t(firstBank + groupOf[i]) << 12);
+  }
+  for (uint16_t e : entries) m.u16(e);
+
+  Bytes lite;
+  lightHead(lite, l, 0x80 | 15, uint32_t(firstBank), uint32_t(groups.size()));
+  for (const std::vector<float> &lv : levels)
+    for (size_t k = 0; k < 15; k++) lite.u16(uint32_t(k < lv.size() ? std::clamp(int(std::lround(lv[k] * 4096)), 0, 32767) : 0));
+  report.info("lighting", room.map->path, "light layer (fitted): " + std::to_string(tileOf.size()) + " light tiles, " +
+              std::to_string(groups.size()) + " banks of 15 levels from bank " + std::to_string(firstBank) + ", " +
+              std::to_string(litCells.size()) + " lit cells, mean error " +
+              std::to_string(measured ? error / float(measured) : 0.0f));
+  return {m, lite};
+}
+
 std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Report &report)
 {
   const light::Light &l = room.light;
@@ -1010,6 +1146,7 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
       report.error("lighting", room.map->path, "a room lit with the light layer has no foreground layer (the light layer takes its place)");
   }
   int w8 = main ? main->width8 : back ? back->width8 : 0, h8 = main ? main->height8 : back ? back->height8 : 0;
+  if (l.fitted) return buildFittedLayer(room, area, report, main, back, w8, h8);
   int wpx = w8 * 8;
   // What shows at a pixel: the main layer's, else the background's.
   auto state = [&](int x, int y, light::Vec3 *pN) -> int {

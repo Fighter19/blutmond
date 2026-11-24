@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BSD-2-Clause OR MIT
 """Draws the torch halls of the test level (docs/plans/lighting.md §7) and writes their rooms:
-two rooms alike but for how they are lit, side by side behind a door of the debug lobby.
+three rooms alike but for how they are lit, side by side behind a door of the debug lobby.
 
   torch_hall        lighting = palette: the light baked into the room's colours
-  torch_hall_layer  lighting = layer: a light layer of normal tiles added over the room
+  torch_hall_layer  lighting = layer: a light layer added over the room, its values each
+                    pixel's light (light_index = fitted)
+  torch_hall_normals  the same with the light layer's values normals (light_index = normals)
 
 usage: make_torch_hall.py <assets/test_room>
 
 Writes torch_tiles.png (bricks, flagstones, a pillar) and torch_tiles_n.png (their normal map:
 x right, y down, z toward the viewer), torch.png and torch.bmsprite (a bracket and a flame of
-four frames, emissive), torch_hall.tmx and torch_hall_layer.tmx. Everything is drawn here.
+four frames, emissive), torch_hall.tmx, torch_hall_layer.tmx and torch_hall_normals.tmx. Everything is drawn here.
 """
 import math
 import os
@@ -198,7 +200,7 @@ def collision(main, first):
     return [[first + 1 if main[y][x] else 0 for x in range(W)] for y in range(H)]
 
 
-def write_room(path, room_id, title, lighting, doors, rows):
+def write_room(path, room_id, title, lighting, doors, rows, extra=()):
     bg, main = layers()
     first_col = 1 + len(NAMES)
     first_mat = first_col + 30
@@ -209,7 +211,7 @@ def write_room(path, room_id, title, lighting, doors, rows):
     })
     mp = ET.SubElement(m, "properties")
     for k, v in (("music", "castle"), ("room_id", room_id), ("title", title), ("lighting", lighting),
-                 ("ambient", "0.3"), ("acoustics", "hall")):
+                 ("ambient", "0.3"), ("acoustics", "hall")) + tuple(extra):
         rooms.prop(mp, k, v)
     ts = ET.SubElement(m, "tileset", {"firstgid": "1", "name": "torch_tiles", "tilewidth": str(T),
                                       "tileheight": str(T), "tilecount": str(len(NAMES)), "columns": str(COLS)})
@@ -270,8 +272,10 @@ def main():
                [door("exit_west", 0, "debug_lobby", "to_torch_hall", "west"),
                 door("exit_east", W * T - 16, "torch_hall_layer", "exit_west", "east")], rows)
     write_room(os.path.join(out, "torch_hall_layer.tmx"), "torch_hall_layer", "Torch hall: light layer", "layer",
-               [door("exit_west", 0, "torch_hall", "exit_east", "west")], rows)
-
+               [door("exit_west", 0, "torch_hall", "exit_east", "west"),
+                door("exit_east", W * T - 16, "torch_hall_normals", "exit_west", "east")], rows)
+    write_room(os.path.join(out, "torch_hall_normals.tmx"), "torch_hall_normals", "Torch hall: normals", "layer",
+               [door("exit_west", 0, "torch_hall_layer", "exit_east", "west")], rows, extra=[("light_index", "normals")])
 
 if __name__ == "__main__":
     main()

@@ -58,6 +58,7 @@ Map-level custom properties:
 | `muffle` | int | preset's | a low pass over everything heard: 0 none - 255 most |
 | `lighting` | string | `palette` | how the room's `Light` object lights its tiles: `palette` (baked into the room's colours) or `layer` (a light layer added over the room) (below) |
 | `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
+| `light_index` | string | `fitted` | with `lighting = layer`, what the light layer's values stand for: `fitted` (levels of light) or `normals` (directions) (below) |
 
 **Acoustics.** While the player is in a room with any of the last five properties, the
 room's echo is heard instead of the one the playing song brings (sound-format.md), over the
@@ -84,13 +85,22 @@ only layers without parallax are lit. The two modes:
   with more than 15 pairs gives its rarest ones the nearest level of their colour.
 - `layer`: the room's colours stay as drawn and are darkened to the ambient; a **light
   layer** (a fourth layer, role 3 in `ROOM`, so the room may have at most 2 graphics layers of
-  its own) holds per pixel one of 15 normals (the cooker's clusters of the room's normals) and
-  is added over the room by alpha blending (EVA 16, EVB 16). Its cells inside the light's
-  radius are grouped into regions (at most 12, by the light's strength there first and its
-  direction second); a region's cells use one palette bank, whose 15 colours are, each frame,
-  `intensity × gain × light colour × max(0, N·F)` with F the region's direction scaled by its
-  falloff. Normal tiles are merged as usual; cells on a shadow's edge have their shadowed
-  pixels empty.
+  its own) is added over the room by alpha blending (EVA 16, EVB 16). Its lit cells use at
+  most 12 palette banks, and a pixel's value (1 to 15, 0 none) one of its bank's colours.
+  What a value stands for (`light_index`):
+  - `fitted`: a level of light. The cooker works out each pixel's light as for `palette` (its
+    normal, distance and shadow), groups the cells by how lit they are (mean and brightest
+    pixel) into the banks, and fits each bank's 15 levels to its pixels (1D k-means); a pixel
+    takes the nearest level. Each frame a bank's colours are
+    `intensity × gain × light colour × level`. Smooth to the pixel, but most lit cells need a
+    tile of their own.
+  - `normals`: one of 15 normals (the cooker's clusters of the room's normals). The cells
+    inside the light's radius are grouped into regions (by the light's strength there first
+    and its direction second), a region per bank, whose colours are, each frame,
+    `intensity × gain × light colour × max(0, N·F)` with F the region's direction scaled by
+    its falloff. Normal tiles are merged as usual (a repeated brick is one tile), but the
+    light steps from region to region; cells on a shadow's edge have their shadowed pixels
+    empty.
 
 The map's tile size MUST be a multiple of 8. Map width and height MUST be at least one screen
 of the profile (240×160 px on GBA).
@@ -475,7 +485,7 @@ little endian; offsets are from the start of the chunk.
         u16 entries[width * height];       // row major. GBA: tile number in bits 0-9, 0x400 mirrored
                                            // left-right, 0x800 mirrored top-bottom, palette bank << 12
 'LITE'  u8  mode;                         // 1 palette, 2 layer
-        u8  count;                        // palette: levels (8); layer: normals (15)
+        u8  count;                        // palette: levels (8); layer: normals (15), bit 7 fitted
         u8  first_bank, bank_count;       // palette: 0 and the area's banks; layer: the regions' banks
         s16 x, y;                         // the light, room pixels
         u8  radius, height;               // px
@@ -487,6 +497,7 @@ little endian; offsets are from the start of the chunk.
         palette: u8 level[bank_count * 16]           // per palette entry, 0 = ambient only
         layer:   { s8 x, y, z; u8 0; } normal[15]    // 127 = 1.0
                  { s16 x, y, z; u16 0; } region[bank_count]   // falloff × direction, 4096 = 1.0
+        fitted:  u16 level[bank_count][15]           // 4096 = 1.0
 'COLL'  u16 width, height;                 // in cells
         u8  cell_size; u8 pad[3];
         u8  cells[width * height][2];      // row major, §3.2
@@ -536,4 +547,5 @@ room IDs and song names.
 - 0.2.2: room properties `effect`, `effect_a`, `effect_b`, `title`.
 - 0.2.3: room acoustics: `acoustics`, `echo`, `echo_feedback`, `echo_damping`, `muffle`.
 - 0.2.4: light: the `Light` object, room properties `lighting` and `ambient`, tileset property
-  `normal`, `LITE` (in the place of `ROOM`'s reserved field), the light layer (role 3).
+  `normal`, `LITE` (in the place of `ROOM`'s reserved field), the light layer (role 3);
+  `light_index` (fitted levels of light, bit 7 of `LITE`'s count).

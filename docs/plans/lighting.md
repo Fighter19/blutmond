@@ -1,20 +1,39 @@
 # Plan: a light layer and lit palettes (normal-mapped light on the GBA)
 
-Status: both techniques for tiles built side by side, and lit sprites
+Status: three ways of lighting the tiles built side by side, and lit sprites
 ([../spec/room-format.md](../spec/room-format.md) §1 "Light", §7 `LITE`;
 [../spec/sprite-format.md](../spec/sprite-format.md) version 5;
 [../spec/runtime-core.md](../spec/runtime-core.md) §12 "The light"). A room chooses with its
 property `lighting`: `palette` (the light baked into the room's palettes, the first version of
-this plan) or `layer` (the light layer of section 3). Only rooms with a `Light` object are lit;
-every other room is as before. The test level's debug lobby has a fifth door into the torch
-halls: "Torch hall: palettes" and, through its east door, "Torch hall: light layer", alike but
-for the mode (`tools/make_torch_hall.py`; `test_game` writes both side by side into
-`test-output/torch_halls.ppm`). Where it differs:
+this plan) or `layer` (the light layer of section 3), whose values are, by `light_index`,
+`fitted` levels of light (the default) or `normals` (section 3 as planned). Only rooms with a
+`Light` object are lit; every other room is as before. The test level's debug lobby has a
+fifth door into the torch halls, one behind the other: "palettes", "light layer" (fitted),
+"normals" (`tools/make_torch_hall.py`; `test_game` writes all three side by side into
+`test-output/torch_halls.ppm`).
 
-- **Regions** of the light layer: at most 12 (not 8), clustered by the light's strength first
-  and its direction second, so they lie in rings. A 2x2 dither between neighbouring regions
-  was tried and looked worse (a checkerboard of 8 px cells); without it the rings step.
-- **The UI** over a lit room in mode `layer` is blended at EVB 16 instead of 8 (one pair of
+**Fitted values** (instead of normals): the flicker only scales the light, so a pixel needs one
+number, its light at full intensity, `max(0, N·L) × falloff` with its shadow. The cooker works
+that out per pixel (direction, distance and shadow merged into it), groups the lit cells by
+how lit they are into the banks, and fits each bank's 15 levels to its pixels; a pixel takes
+its bank's nearest level (mean error in the hall: 0.0075 of full light). The light layer then
+keeps the gradients and the bevels; the cost is that a light tile is almost never repeated.
+
+Compared in the test level (radius 160):
+
+| | palettes | light layer, fitted | light layer, normals |
+|---|---|---|---|
+| look | the light multiplies each colour; smooth | the light is added (bricks wash toward the torch's colour); smooth | added; steps from region to region |
+| tiles | 573 (the room's own, lit) | 19 room tiles + 556 light tiles | 19 + 95 |
+| banks | 9 | 1 + 12 | 1 + 12 |
+| layers | the room's 3 | 2 + the light layer | 2 + the light layer |
+
+Where it differs from the plan below:
+
+- **Regions** of the normals' light layer: at most 12 (not 8), clustered by the light's
+  strength first and its direction second, so they lie in rings. A 2x2 dither between
+  neighbouring regions was tried and looked worse (a checkerboard of 8 px cells).
+- **The UI** over a room with a light layer is blended at EVB 16 instead of 8 (one pair of
   weights for both), not through the line table: its boxes are lighter there.
 - **Figure palettes and a bank per piece** (section 4) are not built: a sprite's normals split
   its own 15 slots (each colour into a few directions while slots are left), the player's legs
@@ -24,34 +43,12 @@ for the mode (`tools/make_torch_hall.py`; `test_game` writes both side by side i
   views of section 8 are not built. **Scripts** (section 9, step 5) are not built.
 - **Multiboot** images leave the light out (`src/hal/gba/light_off.c`): their packs have no lit
   room.
-- **Cost** on the GBA, measured in mGBA: about 26,000 cycles a frame for the room's banks and
-  11,000 for the sprites' (13 % of a frame), from ROM; IWRAM has no room for the kernels in
-  every image. Both halls run at 60 frames a second (`light_mgba_*` tests keep the budget).
+- **Cost** on the GBA, measured in mGBA: about 26,000 to 28,000 cycles a frame for the room's
+  banks and 11,000 for the sprites' (13 % of a frame), from ROM; IWRAM has no room for the
+  kernels in every image. All halls run at 60 frames a second (`light_mgba_*` tests keep the
+  budget).
 - A new `Light` property `gain` (the light layer's strength: it adds the light, while the baked
   mode multiplies it).
-
-Compared in the test level: the baked mode looks better (the light multiplies each colour, the
-falloff is smooth to the pixel) and costs tiles (498 for the hall, against 19 room tiles and 69
-normal tiles with the light layer) and 6 banks; the light layer keeps the room's tiles and
-palette as drawn, but its light is added (the bricks wash toward the torch's colour), its
-falloff steps by region, it takes a background layer and up to 12 banks.
-
-The light of a room shades the room's tiles and the player by the direction their surfaces
-face, the way a normal map does in a 3D engine. The bricks of the wall show their edges, the
-side of the knight's helmet that faces the torch catches it, and the far side stays dark. A
-room has **one light**. Its direction is one vector, which is also lit from two sides at
-once: light from the top right lights what faces up and what faces right, and most of all
-what faces up and to the right. The showcase is a **torch on a wall**: it does not move, and
-its light flickers.
-
-Two techniques do it, because the hardware treats backgrounds and sprites differently:
-
-| | Tiles | Sprites |
-|---|---|---|
-| Technique | a **light layer**: one more BG whose tiles hold normal indices, blended additively over the room | **lit palettes**: the sprite's own colour slots carry normals |
-| Why | the GBA can blend a BG over the BGs below it, pixel by pixel | the GBA never blends a sprite with another sprite, so a light sprite over the knight would add to the wall behind him |
-| Per frame | the light layer's palettes (a few banks of 15 colours) | the figure's banks |
-| Memory | normal tiles, merged like any tiles | 4 bytes per slot |
 
 ## Dependencies
 

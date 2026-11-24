@@ -56,13 +56,14 @@ for each screen effect, the torch halls, and a teleporter back to the first room
 starts in that room (`--room debug_lobby`, `--room torch_hall`), `--debug-item` puts the mirror
 in the bag at the start.
 
-**The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): two rooms alike but
-for how their flickering torch lights the walls, side by side for comparing. The first,
-"Torch hall: palettes", has the light baked into its colours; its east door leads to "Torch
-hall: light layer", where a layer of normal tiles is added over the room. The player and the
+**The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): three rooms alike
+but for how their flickering torch lights the walls, side by side for comparing, each behind
+the east door of the one before. "Torch hall: palettes" has the light baked into its colours;
+"Torch hall: light layer" adds a light layer over the room whose values are levels of light
+fitted per pixel; "Torch hall: normals" adds one whose values are normals. The player and the
 bat are lit the same way in both; behind the pillar they are in its shadow.
 `tools/make_torch_hall.py` draws them. `test_game` writes the six pictures it compares into
-`build/test-output/torch_halls.ppm` (palettes left, light layer right).
+`build/test-output/torch_halls.ppm` (the halls left to right).
 
 Sounds: each enemy struck sounds its own (an `Enemy` record's `hit_sound`: the bats squeak; the
 moon bat and the training dummy name theirs in their scripts), an item picked up chimes (the

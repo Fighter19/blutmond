@@ -85,6 +85,9 @@ Light find(const tmx::Map &map, Report &report)
   auto s = p.find("shadows");
   l.shadows = s == p.end() || s->second != "false";
   l.ambient = std::clamp(float(std::atof(map.property("ambient", "1").c_str())), 0.0f, 1.0f);
+  std::string index = map.property("light_index", "fitted");
+  if (index != "fitted" && index != "normals") report.error("lighting", map.path, "unknown light_index '" + index + "' (fitted, normals)");
+  l.fitted = index != "normals";
   return l;
 }
 

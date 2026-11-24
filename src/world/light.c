@@ -130,9 +130,11 @@ void bmLightEnterRoom(BmGame *g)
   }
   else
   {
-    l->normalCount = l->levels;
-    if (l->normalCount > 15 || l->bankCount == 0 || l->firstBank + l->bankCount > 15 || size < LITE_HEAD + 60 + (uint32_t)l->bankCount * 8)
-      l->mode = BM_LIGHT_NONE;
+    // Bit 7 of the count: the values are fitted levels of light (15 per bank) instead of normals.
+    l->fitted = (l->levels & 0x80) != 0;
+    l->normalCount = l->levels & 0x7F;
+    uint32_t need = l->fitted ? LITE_HEAD + (uint32_t)l->bankCount * 30 : LITE_HEAD + 60 + (uint32_t)l->bankCount * 8;
+    if (l->normalCount > 15 || l->bankCount == 0 || l->firstBank + l->bankCount > 15 || size < need) l->mode = BM_LIGHT_NONE;
     for (uint8_t i = 0; i < g->room.layerCount; i++)
       if (g->room.layers[i].role == BM_ROOM_ROLE_LIGHT) l->layerBg = g->room.layers[i].bg;
     if (l->layerBg == 0xFF) l->mode = BM_LIGHT_NONE;
@@ -154,7 +156,13 @@ void bmLightEnterRoom(BmGame *g)
       l->paletteBanks = pal[2];
     }
   }
-  if (l->mode == BM_LIGHT_LAYER)
+  if (l->mode == BM_LIGHT_LAYER && l->fitted)
+  {
+    // The levels as they are (4096 = 1.0).
+    for (uint8_t r = 0; r < l->bankCount; r++)
+      for (uint8_t n = 0; n < 15; n++) s_faces[r][n] = (int16_t)bmRead16(p + LITE_HEAD + (r * 15 + n) * 2);
+  }
+  else if (l->mode == BM_LIGHT_LAYER)
   {
     // Per region and normal how much it faces the light (constant: only the strength changes).
     const int8_t *normals = (const int8_t *)(p + LITE_HEAD);

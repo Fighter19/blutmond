@@ -40,6 +40,7 @@ typedef struct BmLight
   uint8_t layerBg;           // the light layer's background, 0xFF: none
   bool wasLit;               // the sprites' banks hold lit colours (reloaded when that ends)
   bool fresh;                // the room was just entered: every bank is set
+  bool fitted;               // layer mode: the values are levels of light, not normals
   const uint8_t *pPalette;   // the room's palette (PALE) as drawn ...
   uint8_t paletteFirst, paletteBanks;   // ... from bank `paletteFirst` on
   uint16_t litBanks;         // palette mode: the room's banks with lit colours

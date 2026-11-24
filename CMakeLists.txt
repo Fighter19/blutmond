@@ -73,7 +73,8 @@ set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_lobby.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_wave.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_spotlight.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_pulse.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx
-  ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_layer.tmx)
+  ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_layer.tmx
+  ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/torch.ms
@@ -269,11 +270,16 @@ if(BM_PLATFORM STREQUAL "gba")
     --absent-room debug_pulse --absent-room debug_gradient --absent-room boss_hall --absent-room ability_hall
     --absent-asset vesper --absent-asset moon_bat --absent-asset vesper_face --absent-asset voice_vesper
     --absent-asset fireball --absent-room guard_room --absent-asset knight --absent-asset bat_armour --absent-asset clang
-    --absent-room torch_hall --absent-room torch_hall_layer --absent-asset torch
+    --absent-asset torch
     --absent-kind LANG)
+  # The torch halls (docs/plans/lighting.md) are not in it at all, not even as absent entries:
+  # the multiboot images have no light, and the halls come last, so the other rooms keep their
+  # numbers.
+  set(BM_TEST_LEVEL_MB_ROOMS ${BM_TEST_LEVEL_ROOMS})
+  list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall")
   set(BM_TEST_LEVEL_MB_PACK ${CMAKE_BINARY_DIR}/test_level_mb_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_MB_PACK}
-    COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
+    COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_MB_ROOMS} ${BM_TEST_LEVEL_ASSETS}
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png
     COMMENT "Cooking the test level for multiboot")
   # The same level with the scripts also compiled to native code (mondskript.md section 12).
@@ -1049,7 +1055,7 @@ if(BM_PLATFORM STREQUAL "host")
       set_tests_properties(live_mgba_hot PROPERTIES FIXTURES_REQUIRED test_level_variant FIXTURES_SETUP live_mgba_hot)
       # The light (docs/plans/lighting.md) on the GBA: in both torch halls a frame's light stays
       # within its budget in processor cycles (the room's banks, the sprites' banks), from ROM.
-      foreach(hall torch_hall torch_hall_layer)
+      foreach(hall torch_hall torch_hall_layer torch_hall_normals)
         add_test(NAME light_mgba_${hall}
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${cooked}/test_level_gba.bmpk restart:${hall} run 120
             check "${elf}:bm_light_cycles+0<=40000" check "${elf}:bm_light_cycles+4<=20000" screenshot ${out}/light_${hall}.ppm)

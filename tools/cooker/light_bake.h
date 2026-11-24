@@ -44,6 +44,9 @@ struct Light
   float ambient = 1;
   float gain = 0.5f;          // the light layer's strength (it adds, the baked mode multiplies)
   bool shadows = true;
+  // Mode `layer`: what the light layer's 15 values stand for (room property `light_index`):
+  // fitted (default) a pixel's whole light, normals one of 15 directions.
+  bool fitted = true;
 };
 
 /// The room's light: its one `Light` object and the map's `lighting` and `ambient`. Mode None
