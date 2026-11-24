@@ -132,7 +132,22 @@ typedef enum BmScriptType {
   X(alive,             INT,  1, NAME,  VOID,  VOID,  VOID, 0) \
   X(effect,            VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
   X(set_palette,       VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
-  X(flash,             VOID, 1, INT,   VOID,  VOID,  VOID, 0)
+  X(flash,             VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(sin,               FIX,  1, INT,   VOID,  VOID,  VOID, 0) \
+  X(cos,               FIX,  1, INT,   VOID,  VOID,  VOID, 0) \
+  X(angle_to_point,    INT,  2, FIX,   FIX,   VOID,  VOID, 0) \
+  X(layer_aim,         VOID, 2, NAME,  INT,   VOID,  VOID, 0) \
+  X(layer_turn,        VOID, 3, NAME,  INT,   INT,   VOID, 0) \
+  X(layer_angle,       INT,  1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(layer_play,        VOID, 2, NAME,  NAME,  VOID,  VOID, 0) \
+  X(layer_show,        VOID, 2, NAME,  NAME,  VOID,  VOID, 0) \
+  X(layer_hide,        VOID, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(layer_palette,     VOID, 2, NAME,  NAME,  VOID,  VOID, 0) \
+  X(layer_point_x,     FIX,  2, NAME,  NAME,  VOID,  VOID, 0) \
+  X(layer_point_y,     FIX,  2, NAME,  NAME,  VOID,  VOID, 0) \
+  X(layer_point_angle, INT,  2, NAME,  NAME,  VOID,  VOID, 0) \
+  X(spawn_at_point,    BOOL, 3, NAME,  NAME,  NAME,  VOID, 0) \
+  X(fly_angle,         VOID, 2, INT,   FIX,   VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -193,6 +208,24 @@ typedef enum BmScriptType {
 // set_palette(#name): the object is drawn with that palette of its sprite (layered-sprites.md
 // §2; one it does not have: its own), as the room object's property `palette` does.
 // flash(frames): it is drawn all white for that many frames.
+//
+// Angles and the player's figure (layered-sprites.md §6; src/world/figure.h): angles are whole
+// numbers, 256 a turn, 0 to the right, clockwise on screen (64 down, 192 up); sin(a), cos(a) are
+// fix from tables, the same on every machine. angle_to_point(x, y): from the figure's anchor (an
+// attachment: the player's) to a place in the room. layer_aim(#layer, angle) sets the angle of a
+// layer of the player's figure (a layer whose animation is a direction set shows the step
+// nearest to it), layer_turn(#layer, angle, speed) turns it there by at most `speed` a frame,
+// layer_angle(#layer) reads it. layer_play(#layer, #anim): the layer plays that animation of its
+// sprite on its own (a name its sprite does not have: back to what the figure says);
+// layer_show(#layer, #sprite) shows another sprite there (#default: the figure's again) and
+// shows a hidden layer, layer_hide(#layer) hides it (what hangs on it stays in place),
+// layer_palette(#layer, #palette) a palette of its sprite (#default). layer_point_x/y(#layer,
+// #point): where that point of the layer's current frame is (room pixels, fix; without it: the
+// layer's anchor), layer_point_angle its world angle. spawn_at_point(#Class, #layer, #point):
+// spawn at the point, the new object's `angle` the point's angle (facing that way).
+// fly_angle(angle, speed): fly at `speed` (fix, a frame) in that direction. The layer functions
+// work from the player's attachments; from an object they do nothing yet (objects show one
+// sprite) and read 0.
 //
 // Filters (attachable-scripts.md §3): the player's attachments get damage_in(amount) in slot
 // order before the player is struck (after defence and resistance), damage_out(amount) before
@@ -264,7 +297,8 @@ typedef enum BmScriptApi {
 // Variables every actor has, read and written like fields. health: struck only while above
 // 0; team: hits strike only figures of another team (0, the default: enemies; the player is
 // 1); weight: 1 by default; the grapple pulls one of 2 or less to the player and pulls the
-// player to a heavier one (grapple.h). An attachment reads its owner's (the player's) and may write `health`.
+// player to a heavier one (grapple.h); angle: a direction (0 to 255, see the angles above),
+// that of the point spawn_at_point made it at (it faces left if that points left), else 0. An attachment reads its owner's (the player's) and may write `health`.
 // X(name, type, writable)
 #define BM_SCRIPT_ACTOR_VARS(X) \
   X(x,      FIX, 1) \
@@ -274,7 +308,8 @@ typedef enum BmScriptApi {
   X(facing, INT, 1) \
   X(health, INT, 1) \
   X(team,   INT, 1) \
-  X(weight, INT, 1)
+  X(weight, INT, 1) \
+  X(angle,  INT, 1)
 
 typedef enum BmScriptActorVar {
 #define X(name, type, writable) BM_SCRIPT_VAR_##name,
@@ -330,7 +365,7 @@ typedef enum BmScriptEvent {
 #define BM_SCRIPT_ACTOR_ONLY(X) \
   X(finish_anim) X(play_anim) X(anim_done) X(player_distance) X(move_toward_player) X(move_toward) \
   X(enter_door) X(hide) X(show) X(face_player) X(touching_player) X(destroy) X(spawn_with) X(floor_y) \
-  X(set_affinity) X(set_knockback) X(fly) X(fall) X(lifetime) X(effect) X(set_palette) X(flash)
+  X(set_affinity) X(set_knockback) X(fly) X(fall) X(lifetime) X(effect) X(set_palette) X(flash) X(fly_angle)
 
 // Field flags in the class table: the storage flags of docs/spec/state.md.
 #define BM_SCRIPT_FIELD_SAVE 1

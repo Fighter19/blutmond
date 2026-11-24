@@ -201,7 +201,8 @@ typedef struct BmGame
   int16_t objectDoorGround[BM_GAME_MAX_OBJECTS]; // and the ground it stands on (y)
   uint16_t builtinTile;                        // where the built-in graphics start
   BmAnimState playerAnim;
-  BmAnimState playerLayerAnim[BM_FIGURE_MAX_LAYERS];   // the player's `own` layers ([0] unused: playerAnim)
+  BmFigureLayerState playerLayers[BM_FIGURE_MAX_LAYERS];   // the player's layers ([0].anim unused: playerAnim)
+  uint8_t playerLayerPalette[BM_FIGURE_MAX_LAYERS];      // the palette each layer's figure line names
   // Scripted objects of the room (docs/spec/mondskript.md).
   BmActors actors;
   // What the player carries and wears (docs/plans/structures.md §7).
@@ -237,6 +238,16 @@ typedef struct BmGame
 /// not have: its own), loading its tiles into sprite memory and the palette into a free bank
 /// the first time in a room. -1 if the sheet does not fit (counted in spriteMisses); with
 /// no bank free, a bank with another palette of the sheet.
+/// The player's layer named by string id `name` (figure.h), or -1.
+int8_t bmGamePlayerLayer(const BmGame *pGame, uint16_t name);
+/// Where point `point` (string id) of the player's layer `layer` is now: room pixels as fix and
+/// its world angle. False if the layer's frame has no such point (then the layer's anchor and
+/// the way the player faces).
+bool bmGamePlayerPoint(BmGame *pGame, int8_t layer, uint16_t point, int32_t *pX, int32_t *pY, uint8_t *pAngle);
+
+/// layer_aim ... layer_point_angle (script_api.h) on the player's figure; the result.
+int32_t bmGameLayerCall(BmGame *pGame, uint16_t api, const int32_t *pArgs);
+
 int8_t bmGameSheetBank(BmGame *pGame, int8_t sheet, uint8_t palette);
 
 /// A spark at room pixel (x, y): the first frames of the sprite "spark" (if the pack has one),

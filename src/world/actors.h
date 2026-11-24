@@ -71,6 +71,7 @@ typedef struct BmActors
   uint8_t invulnerable[BM_ACTORS_MAX]; // frames until it can be struck again
   uint8_t palette[BM_ACTORS_MAX];      // which palette of its sprite (0: its own; set_palette)
   uint8_t weight[BM_ACTORS_MAX];       // the grapple pulls light ones (grapple.h); 1 unless set
+  uint8_t angle[BM_ACTORS_MAX];        // a direction (script_api.h): spawn_at_point's point's
   uint8_t flash[BM_ACTORS_MAX];        // frames it is drawn all white (flash)
   uint8_t affinity[BM_ACTORS_MAX];     // elements it is weak to (bits 0-3) and resists (4-7)
   int32_t knock[BM_ACTORS_MAX];        // fix: pixels per frame it is pushed by the last hit

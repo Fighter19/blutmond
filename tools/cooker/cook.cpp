@@ -1490,7 +1490,7 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
   // what only they use (their maps, collision, objects; an area's graphics no kept room
   // shows), and every chunk of the kinds asked for. The entries stay: chunk numbers and string
   // ids are the same as in the full pack, so an update made from it fits this one.
-  if (!options.absentRooms.empty() || !options.absentKinds.empty())
+  if (!options.absentRooms.empty() || !options.absentKinds.empty() || !options.absentAssets.empty())
   {
     std::set<uint16_t> absentIds;
     for (const std::string &id : options.absentRooms)
@@ -1525,11 +1525,20 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       if (kind.size() != 4) report.warning("absent", kind, "a kind of chunk is four characters (LANG, MODB, ...)");
       else kinds.insert(BM_FOURCC(kind[0], kind[1], kind[2], kind[3]));
     }
+    // Sprites and songs by name: both start with the string id of their name.
+    std::set<uint16_t> assetIds;
+    for (const std::string &name : options.absentAssets)
+    {
+      if (!spriteNames.count(name) && !songNames.count(name)) report.warning("absent", "asset '" + name + "'", "no sprite or song has this name");
+      assetIds.insert(strings.id(name));
+    }
     uint32_t chunks = 0, bytes = 0;
     for (uint32_t k = 0; k < writer.chunkCount; k++)
     {
       BmPackWriterChunk &c = writer.pChunks[k];
-      bool gone = absent[k] || (users[k] != 0 && users[k] == absentUsers[k]) || kinds.count(c.entry.id) != 0;
+      bool named = (c.entry.id == BM_CHUNK_SPRT || c.entry.id == BM_CHUNK_SONG) && c.entry.size >= 2 &&
+                   assetIds.count(uint16_t(c.pData[0] | c.pData[1] << 8)) != 0;
+      bool gone = absent[k] || (users[k] != 0 && users[k] == absentUsers[k]) || kinds.count(c.entry.id) != 0 || named;
       if (!gone || c.entry.id == BM_CHUNK_STRS) continue;
       c.entry.flags = BM_PACK_ENTRY_ABSENT;
       chunks++;

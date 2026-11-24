@@ -29,6 +29,7 @@ The file name without its extension is the sprite's **name**; the game finds spr
 | `hitbox` (in `frame`) | `x`, `y`, `w`, `h` | this frame's own hitbox |
 | `box` (in `sprite` or `frame`) | `kind` (`hurt`, `hit`, `guard`), `name`, `x`, `y`, `w`, `h` | a box for fighting ([../plans/hitboxes.md](../plans/hitboxes.md) §2): `hurt` where the figure can be hit, `hit` where it hits while a script arms it, `guard` where a hit is blocked. Relative to the anchor, x and y from -128 to 127, w and h up to 255. `hit` and `guard` boxes have a name; boxes of one name belong together. In `sprite`: the boxes of every frame that has none of that kind of its own. At most 4 of a kind per frame and 8 names per sprite |
 | `animation` | `name`, `loop` (1 or 0) | a named sequence. An animation that does not loop stays on its last step and reports that it has finished |
+| `animation` | `directions`, `from`, `to` | a **direction set** ([../plans/layered-sprites.md](../plans/layered-sprites.md) §6): its steps (as many as `directions`, 1 to 32) are not played in time; step `i` stands for the angle `from + ((to - from) & 255) * i / (directions - 1)` (256 a turn, 0 forward, clockwise on screen: 192 up, 64 down; one step: `from`). A figure's layer showing it picks the step nearest to its angle. Their `duration` is not used |
 | `step` | `frame`, `duration` | show a frame for `duration` game frames (60 per second on the GBA), at least 1 |
 | `point` (in `sprite` or `frame`) | `name`, `x`, `y`, `angle` (0), `order` (`front`, `behind`) | where a layer of a figure is placed (below, "Figures"), relative to the anchor, -128 to 127. `angle`: 0 to 255, a whole turn, 0 forward, clockwise on screen; handed to what hangs there. `order behind`: what hangs there is drawn behind this layer on this frame. In `sprite`: the points of every frame that has none of that name. At most 4 per frame and 8 names per sprite |
 | `palette` | `name`, `image` (optional) | another palette of the same pixels ([../plans/layered-sprites.md](../plans/layered-sprites.md) §2): the sheet's colours (slots) take the colours their pixels have in `image` (a sheet of the same size), or those its `swap` children give. Not `default`, which is the sheet's own |
@@ -62,8 +63,9 @@ frame (12 bytes):     u16 first piece, u8 piece count, u8 box count,
                       s8 bounds x, y, u8 bounds w, h        (of the drawn pixels)
 piece (6 bytes):      s8 dx, dy (top left, relative to the anchor),
                       u8 shape (bits 0-1: square, wide, tall) | size << 2, u8 0, u16 first tile
-animation (8 bytes):  u16 name (string id), u16 first step, u16 step count, u8 loop, u8 0
-step (4 bytes):       u16 frame, u16 duration
+animation (8 bytes):  u16 name (string id), u16 first step, u16 step count,
+                      u8 flags (bit 0 loops, bit 1 a direction set), u8 0
+step (4 bytes):       u16 frame, u16 duration (a direction set: the step's angle)
 palette:              palettes × 16 × u16 BGR555 (entry 0 is transparent and written as 0), the
                       default first; then palettes × u16 string id of their names ("default"
                       first)
@@ -126,6 +128,8 @@ using the chunk.
 - 2.1: packed tiles (the flags byte, which was 0).
 - 3: palettes: `palette` and `swap` in the file, a palette table with names in `SPRT`.
 - 4: points (`point` in the file, the point tables in `SPRT`); figures (`.bmfigure`, `FIGR`).
+- 4.1: direction sets (`directions`, `from`, `to`; bit 1 of an animation's flags); figure
+  layers in `aim` mode.
 
 ## Figures
 
@@ -145,7 +149,7 @@ layer cape   sprite=cape          at=legs.waist  behind
 | `layer NAME` | a layer; the first is the **root**, placed at the object |
 | `sprite=` | its sprite, or `none` (nothing drawn; for what the game puts there later) |
 | `at=LAYER.POINT` | every layer but the root: the layer above it it hangs on, and the point of that layer's current frame it is placed at (without `.POINT`: the layer's anchor). A point the sprite does not have is a warning; the layer is then at the anchor |
-| `mode=` | `own` (the default): its own animation state, playing the animation named like the root's; `sync`: the animation named like its parent's, at the parent's step (for a layer drawn frame for frame with its parent). `aim` (section 6 of the plan) is not built |
+| `mode=` | `own` (the default): its own animation state, playing the animation named like the root's; `sync`: the animation named like its parent's, at the parent's step (for a layer drawn frame for frame with its parent); `aim`: its own animation, from the start its sprite's first direction set, shown at the layer's angle (any layer whose animation is a direction set is aimed so: a script can make an `own` or `sync` layer aim with `layer_play`) |
 | `behind` | drawn right behind its parent instead of in front of the layers before it |
 | `palette=` | a palette of its sprite by name (default: `default`) |
 

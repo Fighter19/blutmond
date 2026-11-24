@@ -30,8 +30,8 @@ static void testLoadSaveRoundTrip()
 {
   sprite::Sprite s = sprite::load(s_assets + "/sources/player.bmsprite");
   TEST_ASSERT(s.name == "player");
-  TEST_ASSERT(s.frames.size() == 32);   // 10 of 16x32, 3 of 32x32 (slash), 4 of 16x48 (lance up, down), 2 of 32x32 (low), 8 of 32x48 (arcs), 1 of 32x32 (lance), 4 of 16x32 (push)
-  TEST_ASSERT(s.animations.size() == 13);
+  TEST_ASSERT(s.frames.size() == 41);   // 10 of 16x32, 3 of 32x32 (slash), 4 of 16x48 (lance up, down), 2 of 32x32 (low), 8 of 32x48 (arcs), 1 of 32x32 (lance), 4 of 16x32 (push), 9 of 24x32 (aim)
+  TEST_ASSERT(s.animations.size() == 14);
   TEST_ASSERT(s.animations[1].name == "run" && s.animations[1].steps.size() == 4);
   TEST_ASSERT(s.frames[0].ax == 8 && s.frames[0].ay == 32);
 
@@ -56,7 +56,7 @@ static void testCook()
   Report report;
   sprite::Cooked c = sprite::cook(s, *profileByName("gba"), report);
   TEST_ASSERT(!report.hasErrors());
-  TEST_ASSERT(c.frames.size() == 32);
+  TEST_ASSERT(c.frames.size() == 41);
   // A 16x32 frame is one tall hardware sprite of 8 tiles.
   TEST_ASSERT(c.frames[0].pieces.size() == 1);
   TEST_ASSERT(c.frames[0].pieces[0].w == 16 && c.frames[0].pieces[0].h == 32);
@@ -100,7 +100,7 @@ static void testRuntime()
   TEST_ASSERT(bmPackOpen(&pack, data.data(), uint32_t(data.size()), true) == BM_PACK_OK);
   BmSpriteSheet sheet;
   TEST_ASSERT(bmSpriteSheetFind(&sheet, &pack, "Player") == BM_SUCCESS);  // case does not matter
-  TEST_ASSERT(sheet.frameCount == 32 && sheet.animCount == 13);
+  TEST_ASSERT(sheet.frameCount == 41 && sheet.animCount == 14);
   BmSpriteSheet bat;
   TEST_ASSERT(bmSpriteSheetFind(&bat, &pack, "bat") == BM_SUCCESS);
   TEST_ASSERT(bmSpriteSheetFind(&bat, &pack, "ghost") == BM_ERROR_NOT_FOUND);
@@ -220,8 +220,10 @@ static void testFigureDrawsTheWholePlayer()
         bmPpuRender(bmHalHostGetPpu(), a);
         const BmSpriteSheet *sheets[BM_FIGURE_MAX_LAYERS] = {&legs, &torso};
         BmAnimState states[BM_FIGURE_MAX_LAYERS] = {st, {}};
+        // A direction set (aim) shows the step nearest to the angle: the step's own.
+        uint8_t angle = uint8_t(192 + 16 * step), angles[BM_FIGURE_MAX_LAYERS] = {angle, angle};
         BmFigurePose pose;
-        bmFigurePose(&fig, sheets, states, h, v, &pose);
+        bmFigurePose(&fig, sheets, states, angles, h, v, &pose);
         TEST_ASSERT(pose.count == 2 && pose.order[0] == 1);   // the torso in front
         clear();
         uint8_t used = 0;
@@ -240,6 +242,41 @@ static void testFigureDrawsTheWholePlayer()
         compared++;
       }
   printf("    %d poses the same\n", compared);
+
+  // The direction set: nine steps from straight up (192) to straight down (64), not played in
+  // time; the step nearest to an angle; the hand point on each with the step's angle.
+  int32_t aim = bmSpriteSheetAnim(&torso, &pack, "aim");
+  TEST_ASSERT(aim >= 0 && bmSpriteSheetAnimIsDirections(&torso, uint8_t(aim)) && bmSpriteSheetAnimSteps(&torso, uint8_t(aim)) == 9);
+  TEST_ASSERT(bmSpriteSheetFirstDirections(&torso) == aim && bmSpriteSheetFirstDirections(&whole) == aim);
+  TEST_ASSERT(bmSpriteSheetDirectionStep(&torso, uint8_t(aim), 192) == 0 && bmSpriteSheetDirectionStep(&torso, uint8_t(aim), 0) == 4 &&
+              bmSpriteSheetDirectionStep(&torso, uint8_t(aim), 64) == 8 && bmSpriteSheetDirectionStep(&torso, uint8_t(aim), 7) == 4 &&
+              bmSpriteSheetDirectionStep(&torso, uint8_t(aim), 9) == 5);
+  // Behind the figure: the nearest end.
+  TEST_ASSERT(bmSpriteSheetDirectionStep(&torso, uint8_t(aim), 120) == 8 && bmSpriteSheetDirectionStep(&torso, uint8_t(aim), 140) == 0);
+  BmAnimState held = {uint8_t(aim), 0, 3, 0};
+  for (int i = 0; i < 10; i++) bmAnimTick(&torso, &held);
+  TEST_ASSERT(held.step == 3 && held.timer == 0 && !held.finished);
+  uint16_t handId = 0xFFFF;
+  for (uint16_t k = 0; k < 2000 && handId == 0xFFFF; k++)
+    if (const char *t = bmPackString(&pack, k); t != nullptr && std::strcmp(t, "hand") == 0) handId = k;
+  for (uint16_t k = 0; k < 9; k++)
+  {
+    BmAnimState at = {uint8_t(aim), 0, k, 0};
+    TEST_ASSERT(bmSpriteSheetPoint(&torso, bmAnimFrame(&torso, &at), handId, false, false, &pt) && pt.angle == uint8_t(192 + 16 * k));
+  }
+
+  // Angles: sin and cos from the table, the direction of a vector, turning, mirroring.
+  TEST_ASSERT(bmAngleSin(0) == 0 && bmAngleSin(64) == 256 && bmAngleSin(128) == 0 && bmAngleSin(192) == -256 && bmAngleCos(0) == 256);
+  TEST_ASSERT(bmAngleSin(32) == 181 && bmAngleCos(96) == -181);
+  TEST_ASSERT(bmAngleOf(10, 0) == 0 && bmAngleOf(0, 10) == 64 && bmAngleOf(-10, 0) == 128 && bmAngleOf(0, -10) == 192);
+  TEST_ASSERT(bmAngleOf(10, 10) == 32 && bmAngleOf(-10, -10) == 160 && bmAngleOf(0, 0) == 0);
+  for (int a = 0; a < 256; a += 5)
+  {
+    int got = bmAngleOf(bmAngleCos(uint8_t(a)) * 4, bmAngleSin(uint8_t(a)) * 4), d = (got - a) & 255;
+    TEST_ASSERT(d <= 1 || d >= 255);
+  }
+  TEST_ASSERT(bmAngleToward(250, 10, 4) == 254 && bmAngleToward(10, 250, 4) == 6 && bmAngleToward(10, 12, 4) == 12);
+  TEST_ASSERT(bmAngleOfDrawing(16, true, false) == 112 && bmAngleOfDrawing(16, false, true) == 240 && bmAngleOfDrawing(112, true, false) == 16);
   TEST_ASSERT(compared >= 4 * 30);
 
   // Own mode and order: a torso at its own pace, and a cape behind the legs at the same point.
@@ -253,13 +290,13 @@ static void testFigureDrawsTheWholePlayer()
   const BmSpriteSheet *sheets3[BM_FIGURE_MAX_LAYERS] = {&legs, &torso, &torso};
   BmAnimState states3[BM_FIGURE_MAX_LAYERS] = {{uint8_t(run), 0, 2, 0}, {uint8_t(idle), 0, 1, 0}, {}};
   BmFigurePose pose;
-  bmFigurePose(&three, sheets3, states3, true, false, &pose);
+  bmFigurePose(&three, sheets3, states3, nullptr, true, false, &pose);
   TEST_ASSERT(pose.count == 3 && pose.order[0] == 1 && pose.order[1] == 0 && pose.order[2] == 2);   // torso, legs, cape
   TEST_ASSERT(pose.frame[1] == bmAnimFrame(&torso, &states3[1]) && pose.frame[2] == bmAnimFrame(&legs, &states3[0]));
   TEST_ASSERT(pose.y[1] == -15 && pose.y[2] == -15 && pose.x[1] == 0);
   // A layer without a sheet is not drawn; what hangs on it is placed at its place.
   sheets3[1] = nullptr;
-  bmFigurePose(&three, sheets3, states3, false, false, &pose);
+  bmFigurePose(&three, sheets3, states3, nullptr, false, false, &pose);
   TEST_ASSERT(pose.count == 2 && pose.order[0] == 0 && pose.order[1] == 2);
 }
 
@@ -296,7 +333,7 @@ static void testBoxes()
   TEST_ASSERT(bmPackOpen(&pack, data.data(), uint32_t(data.size()), true) == BM_PACK_OK);
   BmSpriteSheet sheet;
   TEST_ASSERT(bmSpriteSheetFind(&sheet, &pack, "boxed") == BM_SUCCESS);
-  TEST_ASSERT(sheet.boxCount == 24 + 4 + 2 + 6 * 2 && sheet.boxNameCount == 2);   // 24 frames with the sprite's box, 4 own, 1 own + the sprite's, 6 arc frames: their blade + the sprite's
+  TEST_ASSERT(sheet.boxCount == 33 + 4 + 2 + 6 * 2 && sheet.boxNameCount == 2);   // 33 frames with the sprite's box, 4 own, 1 own + the sprite's, 6 arc frames: their blade + the sprite's
   BmSpriteNamedBox b[8];
   TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 0, false, b, 8) == 1 && b[0].kind == BM_BOX_HURT && b[0].box.x == -5 && b[0].box.h == 28 && b[0].name == 0xFFFF);
   TEST_ASSERT(bmSpriteSheetBoxes(&sheet, 3, false, b, 8) == 4);

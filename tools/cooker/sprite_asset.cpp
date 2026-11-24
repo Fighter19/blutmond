@@ -183,6 +183,9 @@ Sprite load(const std::string &path)
     an.name = a->attr("name");
     an.loop = a->attr("loop", "1") != "0";
     for (const xml::Element *st : a->childrenNamed("step")) an.steps.push_back({toInt(st, "frame", 0), toInt(st, "duration", 6)});
+    an.directions = toInt(a, "directions", 0);
+    an.from = toInt(a, "from", 192);
+    an.to = toInt(a, "to", 64);
     s.animations.push_back(an);
   }
   return s;
@@ -252,7 +255,9 @@ bool save(const Sprite &s, std::string *pError)
   }
   for (const Animation &a : s.animations)
   {
-    out << " <animation name=\"" << a.name << "\" loop=\"" << (a.loop ? 1 : 0) << "\">\n";
+    out << " <animation name=\"" << a.name << "\" loop=\"" << (a.loop ? 1 : 0) << "\"";
+    if (a.directions > 0) out << " directions=\"" << a.directions << "\" from=\"" << a.from << "\" to=\"" << a.to << "\"";
+    out << ">\n";
     for (const Step &st : a.steps) out << "  <step frame=\"" << st.frame << "\" duration=\"" << st.duration << "\"/>\n";
     out << " </animation>\n";
   }
@@ -260,8 +265,24 @@ bool save(const Sprite &s, std::string *pError)
   return bool(out);
 }
 
+int directionAngle(const Animation &a, size_t i)
+{
+  int span = (a.to - a.from) & 255;
+  if (a.directions <= 1) return a.from & 255;
+  return (a.from + span * int(i) / (a.directions - 1)) & 255;
+}
+
 Cooked cook(const Sprite &s, const Profile &profile, Report &report)
 {
+  for (const Animation &a : s.animations)
+  {
+    if (a.directions == 0) continue;
+    std::string where = s.path + " animation '" + a.name + "'";
+    if (a.directions < 0 || a.directions > 32) report.error("does-not-fit", where, "a direction set has 1 to 32 directions");
+    else if (int(a.steps.size()) != a.directions)
+      report.error("directions", where, std::to_string(a.directions) + " directions need as many steps, not " + std::to_string(a.steps.size()));
+    if (a.from < 0 || a.from > 255 || a.to < 0 || a.to > 255) report.error("does-not-fit", where, "an angle is 0 to 255");
+  }
   Cooked out;
   out.palette.assign(16, 0);
   if (!s.image) return out;
@@ -597,15 +618,16 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
     u16(i < animationNames.size() ? animationNames[i] : 0);
     u16(stepStart);
     u16(uint32_t(a.steps.size()));
-    u8(a.loop ? 1 : 0);
+    u8((a.loop ? 1 : 0) | (a.directions > 0 ? 2 : 0));
     u8(0);
     stepStart += uint32_t(a.steps.size());
   }
   for (const Animation &a : s.animations)
-    for (const Step &st : a.steps)
+    for (size_t k = 0; k < a.steps.size(); k++)
     {
-      u16(uint32_t(st.frame));
-      u16(uint32_t(std::max(1, st.duration)));
+      // A direction set's steps hold their angle where others hold their duration.
+      u16(uint32_t(a.steps[k].frame));
+      u16(a.directions > 0 ? uint32_t(directionAngle(a, k)) : uint32_t(std::max(1, a.steps[k].duration)));
     }
   for (int i = 0; i < 16; i++) u16(c.palette[size_t(i)]);
   for (const auto &v : c.variants)

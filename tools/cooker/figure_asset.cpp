@@ -58,8 +58,8 @@ Figure load(const std::string &path)
       {
         if (value == "own") l.mode = Mode::Own;
         else if (value == "sync") l.mode = Mode::Sync;
-        else if (value == "aim") throw std::runtime_error(where + ": mode aim is not built yet (layered-sprites.md §6)");
-        else throw std::runtime_error(where + ": a mode is own or sync, not '" + value + "'");
+        else if (value == "aim") l.mode = Mode::Aim;
+        else throw std::runtime_error(where + ": a mode is own, sync or aim, not '" + value + "'");
       }
       else if (key == "palette") l.palette = value == "default" ? std::string() : value;
       else throw std::runtime_error(where + ": unknown '" + word + "' (sprite=, at=, mode=, palette=, behind)");

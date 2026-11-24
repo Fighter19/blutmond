@@ -516,6 +516,25 @@ value is dropped and counts as a script error.
 | 103 | `fall(g)` | its gravity |
 | 104 | `lifetime(frames)` | destroyed (or hidden) after that many frames; 0 for ever |
 | 105 | `alive(#Class)` | how many objects of the class are there |
+| 106 | `effect(#sprite)` | that sprite's first animation once at the object's anchor (section 12) |
+| 107 | `set_palette(#name)` | the object's palette: one of its sprite by name; none of that name: 0 |
+| 108 | `flash(frames)` | drawn with bank 13 for that many frames |
+| 109, 110 | `sin(a)`, `cos(a)` | fix from a table: `round(256 sin(2 pi a / 256))` for `a & 63` in the first quarter, the rest by symmetry |
+| 111 | `angle_to_point(x, y)` | `bmAngleOf(INT(x - fx), INT(y - fy))` from the figure's anchor (an attachment: the player's): 0 for no distance; else within each eighth of a turn from the nearer axis `round(atan(t / 32) / 2 pi * 256)` for `t = (min * 32 + max / 2) / max`, mirrored into place |
+| 112 | `layer_aim(#layer, a)` | the layer's `angle = a`, `speed = 0` |
+| 113 | `layer_turn(#layer, a, speed)` | `goal = a`, `speed` (0 to 255; 0: `angle = a` now); every frame `angle` turns toward `goal` by at most `speed` the shorter way (half a turn: the positive way) |
+| 114 | `layer_angle(#layer)` | its `angle` |
+| 115 | `layer_play(#layer, #anim)` | an animation of the layer's sprite by name: played from its start, the layer `played` (its own state, whatever its mode); another name: no longer played (an `aim` layer back on its first direction set). On the root: as `owner_play_anim` |
+| 116 | `layer_show(#layer, #sprite)` | the layer shows that sprite (`#default`: the figure's) and is no longer hidden |
+| 117 | `layer_hide(#layer)` | not drawn; its pose (and what hangs on it) as before |
+| 118 | `layer_palette(#layer, #palette)` | a palette of its sprite by name (`#default` or none of that name: the figure's) |
+| 119-121 | `layer_point_x/y/angle(#layer, #point)` | where the point of the layer's current frame is (fix, room pixels) and its world angle; without it: the layer's anchor and 0 (128 facing left) |
+| 122 | `spawn_at_point(#Class, #layer, #point)` | `spawn` at that place, the new object's `angle` the point's; it faces left if `64 < angle < 192` |
+| 123 | `fly_angle(a, speed)` | `fly(speed * cos(a) >> 8, speed * sin(a) >> 8)` |
+
+Layer functions (112-122) work only from the player's attachments, on the player's figure (a
+layer named by the figure file); from an object, or for a layer the figure does not have,
+they do nothing and read 0.
 | 88 | `flip_gravity()` | the player's gravity turns over or back (section 5, "Gravity flipped"): `flipped` toggled, `vy = 0`, not on the ground, no coyote time; true if it now pulls up |
 
 `add_stat` (29) from one of the player's attachments changes `statBonus`, not `statBase`
@@ -532,7 +551,7 @@ remember the slot; from a room's attachment they do nothing.
 `dist(a, b) = max(|a|, |b|) + min(|a|, |b|) / 2`.
 
 Actor variables by index: 0 `x`, 1 `y`, 2 `home_x`, 3 `home_y`, 4 `facing`, 5 `health`, 6
-`team`. Writing `facing` stores -1 for a negative value, else 1. `home_x` and `home_y` cannot
+`team`, 7 `weight` (1 when it starts), 8 `angle` (0 when it starts; `spawn_at_point` sets it). Writing `facing` stores -1 for a negative value, else 1. `home_x` and `home_y` cannot
 be written. `health` and `team` start at 0 when an object starts anew; `team` keeps the low 8
 bits. An attachment of the player reads the player's `x`, `y`, `facing`, `health` and `team`
 (1) and can write only `health`, clamped to 1..30; one of the room reads the camera's `x`,
@@ -572,16 +591,23 @@ is the root layer's: animations `idle`, `run`, `jump`, `fall`,
 `climb`, `push` (a missing one is animation 0; `push`: `run`). Climbing: `climb`, ticking only
 while `vx` or `vy` is not 0. Else in the air: `jump` if `vy < 0`, else `fall`. Else `push` while
 pushing a push block (room-format.md §3.9). Else `run` if `|vx| > 32/256`. Else `idle`. Play,
-then tick. Then each `own` layer of the figure plays the animation of its sprite named like the
-root's current one (nothing if it has none) and ticks; a `sync` layer has no state of its own.
-The `own` layers' states are snapshot state (`playerLayerAnim`).
+then tick. Then each layer of the figure, in order: its `angle` turns toward `goal` by `speed`
+(if not 0); then, but for the root: an `own` layer that no script plays plays the animation of
+its sprite named like the root's current one (nothing if it has none); an `own` or `aim` layer
+or one a script plays (`layer_play`) ticks its own state (a direction set does not change); a
+`sync` layer has no state of its own. Each layer's state (`playerLayers`: animation state,
+sprite shown instead, palette, angle, goal, speed, hidden and played) is snapshot state; an
+`aim` layer starts on its sprite's first direction set.
 
 **A figure's pose** (`bmFigurePose`), layer by layer in order. The root is at the figure's
 position with its animation state. Another layer starts at its parent's place; a `sync` layer
 shows the animation of its sprite named like the parent's current one at the parent's step
 (no such animation: the layer is not drawn), an `own` layer its own state; if the layer names a
 point and the parent's current frame has it, the layer is moved by the point (mirrored with the
-figure: `x` negated facing left, `y` negated upside down) and takes its angle. A layer without
+figure: `x` negated facing left, `y` negated upside down) and takes its angle. A layer whose
+animation is a **direction set** shows the step whose angle is nearest to its own angle as
+drawn: the world angle `a` turned into the drawing's, `128 - a` facing left, then `256 - a`
+upside down (a tie: the earlier step). A layer without
 a sprite is not drawn; what hangs on it is placed at its place. **Order**, back to front: each
 layer in front of all before it, or, if it is `behind` or its point says `behind` on this
 frame, right behind its parent.
@@ -597,8 +623,9 @@ sprite by name, or `set_palette`; else 0, the sheet's own); priority 1.
 **Order of the 48 hardware sprites used:**
 
 1. The player: its frame, mirrored when `facing < 0`, at most 8 pieces; a figure: its layers
-   front to back, each at the figure's position plus its offset, 12 pieces in all; not drawn
-   while `hurtTimer & 4` is not 0. Without a `player` sheet: the built-in 16 x 32 figure at
+   front to back, each at the figure's position plus its offset, in the bank of its sheet and
+   palette (bmGameSheetBank), but hidden ones, 12 pieces in all; not drawn while
+   `hurtTimer & 4` is not 0. Without a `player` sheet: the built-in 16 x 32 figure at
    `(px - 8, py - 32)`.
 2. Scripted objects in order, unless hidden: their frame at `(INT(x), INT(y))`, mirrored when
    `facing < 0`. Without a sheet, and only for objects without width and height: the

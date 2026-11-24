@@ -129,6 +129,14 @@ int32_t bmSpriteSheetAnimById(const BmSpriteSheet *pSheet, uint16_t name);
 uint16_t bmSpriteSheetAnimName(const BmSpriteSheet *pSheet, uint8_t anim);
 /// Steps of animation `anim`.
 uint16_t bmSpriteSheetAnimSteps(const BmSpriteSheet *pSheet, uint8_t anim);
+/// Whether animation `anim` is a direction set (layered-sprites.md §6): each step stands for a
+/// direction, nothing plays in time (bmAnimTick leaves it alone).
+bool bmSpriteSheetAnimIsDirections(const BmSpriteSheet *pSheet, uint8_t anim);
+/// The step of direction set `anim` nearest to `angle` (256 a turn, 0 forward, clockwise on
+/// screen as drawn, facing right).
+uint16_t bmSpriteSheetDirectionStep(const BmSpriteSheet *pSheet, uint8_t anim, uint8_t angle);
+/// The first direction set of the sheet, or -1.
+int32_t bmSpriteSheetFirstDirections(const BmSpriteSheet *pSheet);
 
 /// Kinds of boxes (docs/plans/hitboxes.md §2).
 typedef enum BmBoxKind { BM_BOX_HURT = 0, BM_BOX_HIT = 1, BM_BOX_GUARD = 2 } BmBoxKind;

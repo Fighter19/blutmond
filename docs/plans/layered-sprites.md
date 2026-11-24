@@ -1,6 +1,6 @@
 # Plan: layered sprites and variants
 
-Status: steps 1 to 3 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
+Status: steps 1 to 4 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
 a palette table in `SPRT` version 3 ([../spec/sprite-format.md](../spec/sprite-format.md)), the
 room object's property `palette`, `set_palette` and `flash` in scripts. Sheets: every sheet's
 data opened once per pack, sprite memory and banks given out room by room per (sheet, palette)
@@ -22,8 +22,20 @@ missing point falls back to the sprite's (the cooker fills it in), not to an ani
 of the player's sheets takes a bank of its own (the legs and torso of the test level: banks 0
 and 1), so 11 are left for rooms; boxes come from the root layer only; the angle of a point is
 read but nothing uses it yet; the figure's state is the `own` layers' animation states (6
-bytes each), sheets and palettes are fixed by the figure file. Steps 4 to 7 are open. Milestone
-M18 in [../PLAN.md](../PLAN.md).
+bytes each), sheets and palettes are fixed by the figure file.
+
+Step 4 built: direction sets (`directions`, `from`, `to` on an animation; nine aiming frames of
+the test level's player with a `hand` point each), `aim` layers, and for the player's
+attachments `sin`, `cos`, `angle_to_point`, `layer_aim`, `layer_turn` (the engine turns a
+layer toward an angle: `layer_track` toward a target waits for handles, step 6),
+`layer_angle`, `layer_play`, `layer_show`, `layer_hide`, `layer_palette`,
+`layer_point_x/y/angle`, `spawn_at_point` (the new object's `angle`, an actor variable) and
+`fly_angle` (runtime-core.md §7, §9). Where it differs: angles in scripts are world angles (0
+to the right), not angles from forward; any layer whose animation is a direction set is
+aimed, so `layer_play(#torso, #aim)` makes the torso aim without an `aim` mode; phases
+(`aim_cast`) are a second direction set the script plays; `angle_to(target)` waits for
+handles. A layer's state is 13 bytes of snapshot. Steps 5 to 7 are open. Milestone M18 in
+[../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

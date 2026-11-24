@@ -102,9 +102,11 @@ struct CookOptions
   std::string nativeElf;
   /// Left out of the pack, their entries kept (flagged absent, pack-format.md §0), so that an
   /// update brings them later (pack sets): the rooms with these IDs, with every chunk only they
-  /// use, and every chunk of these kinds (four-character codes, e.g. "LANG").
+  /// use, every chunk of these kinds (four-character codes, e.g. "LANG"), and the sprites and
+  /// songs of these names.
   std::vector<std::string> absentRooms;
   std::vector<std::string> absentKinds;
+  std::vector<std::string> absentAssets;
   /// If set: the C made from the scripts is written here.
   std::string scriptC;
 };

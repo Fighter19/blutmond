@@ -142,8 +142,63 @@ static void sentEntry(const BmPack *pPack, const FitPlan *f, uint32_t i, uint32_
   }
 }
 
+#define FIT_MAX_ROOMS 64
+
+// The chunk of room number `room`, or -1.
+static int32_t roomChunk(const BmPack *pPack, int32_t room)
+{
+  for (uint32_t i = 0; i < bmPackChunkCount(pPack); i++)
+  {
+    BmChunkEntry e;
+    bmPackGetChunk(pPack, i, &e);
+    if (e.id == BM_CHUNK_ROOM && room-- == 0) return (int32_t)i;
+  }
+  return -1;
+}
+
+// The rooms a room's objects lead to (their property `target_room`: doors, teleporters), by
+// number, at most `max`.
+static uint32_t roomExits(const BmPack *pPack, int32_t room, int32_t *pOut, uint32_t max)
+{
+  int32_t chunk = roomChunk(pPack, room);
+  uint16_t refs[13];
+  uint32_t n = chunk < 0 ? 0 : roomRefs(pPack, (uint32_t)chunk, refs), out = 0;
+  for (uint32_t k = 0; k < n; k++)
+  {
+    BmChunkEntry e;
+    uint32_t size = 0;
+    const uint8_t *o = bmPackChunkData(pPack, refs[k], &size);
+    if (o == NULL || !bmPackGetChunk(pPack, refs[k], &e) || e.id != BM_CHUNK_OBJS || size < 4) continue;
+    uint32_t count = bmRead16(o);
+    for (uint32_t j = 0; j < count && 4 + j * 20 + 20 <= size; j++)
+    {
+      const uint8_t *ob = o + 4 + j * 20;
+      uint32_t props = bmRead16(ob + 14), at = bmRead32(ob + 16);
+      for (uint32_t p = 0; p < props && at + p * 4 + 4 <= size; p++)
+      {
+        const char *key = bmPackString(pPack, bmRead16(o + at + p * 4));
+        if (key == NULL || strcmp(key, "target_room") != 0) continue;
+        uint16_t target = bmRead16(o + at + p * 4 + 2);
+        // The room whose id (ROOM + 40) is that string.
+        int32_t r = 0;
+        for (uint32_t c = 0; c < bmPackChunkCount(pPack); c++)
+        {
+          BmChunkEntry re;
+          bmPackGetChunk(pPack, c, &re);
+          if (re.id != BM_CHUNK_ROOM) continue;
+          const uint8_t *rd = bmPackChunkData(pPack, c, NULL);
+          if (rd != NULL && re.size >= 44 && bmRead16(rd + 40) == target && out < max) pOut[out++] = r;
+          r++;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // Picks what goes into `budget` bytes: every chunk no room names (but the languages), the room
-// `room`, room 0, the other rooms in order (each whole, if it fits), then the languages.
+// `room`, room 0, then the other rooms nearest to them through doors first (then the ones no
+// door leads to, in order; each whole, if it fits), then the languages.
 static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan *f)
 {
   uint32_t count = bmPackChunkCount(pPack);
@@ -168,7 +223,22 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
     if (e.id != BM_CHUNK_ROOM && e.id != BM_CHUNK_LANG && !(named[i / 8] & (1u << (i % 8)))) fitKeep(pPack, f, i);
   }
   if (f->size > budget) return false;
-  fitRoom(pPack, f, room, budget);
+  // Breadth first from the room asked for and room 0.
+  int32_t queue[FIT_MAX_ROOMS];
+  uint8_t seen[FIT_MAX_ROOMS] = { 0 };
+  uint32_t head = 0, tail = 0;
+  if (rooms > FIT_MAX_ROOMS) rooms = FIT_MAX_ROOMS;
+  if (room >= 0 && room < rooms) seen[room] = 1, queue[tail++] = room;
+  if (!seen[0] && rooms > 0) seen[0] = 1, queue[tail++] = 0;
+  while (head < tail)
+  {
+    int32_t r = queue[head++];
+    fitRoom(pPack, f, r, budget);
+    int32_t exits[16];
+    uint32_t n = roomExits(pPack, r, exits, 16);
+    for (uint32_t k = 0; k < n; k++)
+      if (exits[k] < rooms && !seen[exits[k]]) seen[exits[k]] = 1, queue[tail++] = exits[k];
+  }
   for (int32_t k = 0; k < rooms; k++) fitRoom(pPack, f, k, budget);
   for (uint32_t i = 0; i < count; i++)
   {

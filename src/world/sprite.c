@@ -250,7 +250,7 @@ void bmAnimTick(const BmSpriteSheet *s, BmAnimState *st)
   if (st->anim >= s->animCount) return;
   const uint8_t *an = s->pAnims + st->anim * ANIM_SIZE;
   uint16_t first = bmRead16(an + 2), count = bmRead16(an + 4);
-  if (count == 0) return;
+  if (count == 0 || (an[6] & 2) != 0) return;   // a direction set is not played in time
   if (st->step >= count) st->step = 0;
   uint16_t duration = bmRead16(s->pSteps + (first + st->step) * STEP_SIZE + 2);
   if (++st->timer < duration) return;
@@ -452,4 +452,36 @@ uint16_t bmSpriteSheetAnimName(const BmSpriteSheet *s, uint8_t anim)
 uint16_t bmSpriteSheetAnimSteps(const BmSpriteSheet *s, uint8_t anim)
 {
   return anim < s->animCount ? bmRead16(s->pAnims + anim * ANIM_SIZE + 4) : 0;
+}
+
+bool bmSpriteSheetAnimIsDirections(const BmSpriteSheet *s, uint8_t anim)
+{
+  return anim < s->animCount && (s->pAnims[anim * ANIM_SIZE + 6] & 2) != 0;
+}
+
+uint16_t bmSpriteSheetDirectionStep(const BmSpriteSheet *s, uint8_t anim, uint8_t angle)
+{
+  if (!bmSpriteSheetAnimIsDirections(s, anim)) return 0;
+  const uint8_t *an = s->pAnims + anim * ANIM_SIZE;
+  uint16_t first = bmRead16(an + 2), count = bmRead16(an + 4), best = 0;
+  int32_t bestDistance = 256;
+  for (uint16_t i = 0; i < count; i++)
+  {
+    // The step's angle is where another animation has its duration.
+    int32_t d = (int32_t)((bmRead16(s->pSteps + (first + i) * STEP_SIZE + 2) - angle) & 255);
+    if (d > 128) d = 256 - d;
+    if (d < bestDistance)
+    {
+      bestDistance = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+int32_t bmSpriteSheetFirstDirections(const BmSpriteSheet *s)
+{
+  for (uint16_t a = 0; a < s->animCount; a++)
+    if (s->pAnims[a * ANIM_SIZE + 6] & 2) return a;
+  return -1;
 }

@@ -64,7 +64,15 @@ struct Animation
   std::string name;
   bool loop = true;
   std::vector<Step> steps;
+  // A direction set (layered-sprites.md §6): 0, or as many steps as directions, which are not
+  // played in time; each stands for a direction, evenly from `from` to `to` (256 a turn, 0
+  // forward, clockwise on screen: 192 up, 64 down).
+  int directions = 0;
+  int from = 192, to = 64;
 };
+
+/// The angle step `i` of a direction set stands for.
+int directionAngle(const Animation &animation, size_t i);
 
 /// Another palette of the same pixels (docs/plans/layered-sprites.md §2): a second image of the
 /// sheet with other colours (paired with the default ones by position), or single colours

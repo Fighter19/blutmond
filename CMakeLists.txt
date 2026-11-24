@@ -255,10 +255,12 @@ if(BM_PLATFORM STREQUAL "gba")
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level")
   # For the multiboot images, which share 256 KB with the engine: the same level with the debug
-  # rooms, the Hall of Abilities and the translations left out (pack-format.md §0: their
-  # entries stay, flagged absent); a fitted push brings them later (runtime-abi.md §0).
+  # rooms, the boss hall (with the boss's sprite and music) and the Hall of Abilities behind it
+  # and the translations left out (pack-format.md §0: their entries stay, flagged absent); a
+  # fitted push brings them later (runtime-abi.md §0).
   set(BM_TEST_LEVEL_ABSENT --absent-room debug_lobby --absent-room debug_wave --absent-room debug_spotlight
-    --absent-room debug_pulse --absent-room debug_gradient --absent-room ability_hall --absent-kind LANG)
+    --absent-room debug_pulse --absent-room debug_gradient --absent-room boss_hall --absent-room ability_hall
+    --absent-asset vesper --absent-asset moon_bat --absent-kind LANG)
   set(BM_TEST_LEVEL_MB_PACK ${CMAKE_BINARY_DIR}/test_level_mb_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_MB_PACK}
     COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
@@ -680,7 +682,8 @@ if(BM_PLATFORM STREQUAL "host")
     COMMAND bmcook --profile gba -o ${cooked}/test_level_wind_gba.bmpk
       ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${cooked}/room2_wind.tmx ${BM_TEST_LEVEL_BASE_ASSETS} ${PROJECT_SOURCE_DIR}/tests/scripts/wind.ms ${PROJECT_SOURCE_DIR}/tests/scripts/capable.ms ${PROJECT_SOURCE_DIR}/tests/scripts/shield.ms
       ${PROJECT_SOURCE_DIR}/tests/scripts/knight.ms ${PROJECT_SOURCE_DIR}/tests/scripts/knight.bmsprite ${PROJECT_SOURCE_DIR}/tests/scripts/heavy.ms ${PROJECT_SOURCE_DIR}/tests/scripts/drill.ms ${PROJECT_SOURCE_DIR}/tests/scripts/knife.ms ${PROJECT_SOURCE_DIR}/tests/scripts/thrower.ms ${PROJECT_SOURCE_DIR}/tests/scripts/bolt.ms ${PROJECT_SOURCE_DIR}/tests/scripts/turret.ms ${PROJECT_SOURCE_DIR}/tests/scripts/parry.ms
-      ${PROJECT_SOURCE_DIR}/tests/scripts/jab.ms ${PROJECT_SOURCE_DIR}/tests/scripts/painter.ms)
+      ${PROJECT_SOURCE_DIR}/tests/scripts/jab.ms ${PROJECT_SOURCE_DIR}/tests/scripts/painter.ms
+      ${PROJECT_SOURCE_DIR}/tests/scripts/aimer.ms ${PROJECT_SOURCE_DIR}/tests/scripts/spark_shot.ms)
   set_tests_properties(cook_test_level_wind PROPERTIES FIXTURES_REQUIRED wind_room FIXTURES_SETUP test_level_wind)
   add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk ${cooked}/test_level_wind_gba.bmpk)
   set_tests_properties(test_game PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_wind")
@@ -1049,9 +1052,14 @@ if(BM_PLATFORM STREQUAL "host")
       foreach(image game_autoplay game_autoplay_mb)
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         # The full level, also on a multiboot GBA: the variant does not fit beside the embedded
-        # pack there and replaces it (src/link/live.h). Into the boss hall within the run.
+        # pack there and replaces it (src/link/live.h). Into the boss hall within the run; on a
+        # multiboot GBA the pack is fitted around the first room (runtime-abi.md §0), and the
+        # boss hall is not among the rooms that fit: the run stays in the second room.
         set(level test_level)
         set(rooms 2)
+        if(image MATCHES "_mb$")
+          set(rooms 1)
+        endif()
         add_test(NAME live_mgba_bit_errors_${image}
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/${image}.gba --errors 2000 2000 run 30 hello
             push ${cooked}/${level}_variant_gba.bmpk hot

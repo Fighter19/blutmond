@@ -310,6 +310,30 @@ def sheet(frames, columns, w, h):
     return img
 
 
+# Aiming (layered-sprites.md §6): the torso with its right arm pointing from straight up to
+# straight down in nine steps (0 forward, 64 down, 192 up), the hand at the arm's end; drawn
+# 24 wide so the arm has room ahead. The legs stand.
+AIM_ANGLES = [192, 208, 224, 240, 0, 16, 32, 48, 64]
+AIM_SHOULDER = (11, 9)
+AIM_REACH = 6
+
+
+def aim_frame(angle):
+    import math
+    torso = [r[:12] + "." * 4 if 13 <= 8 + i <= 15 else r for i, r in enumerate(TORSO)]   # the right arm lifted off
+    rows = [list(r + "." * 8) for r in player_frame(torso, legs(0, 0))]
+    a = angle * 2 * math.pi / 256
+    sx, sy = AIM_SHOULDER
+    hx, hy = sx, sy
+    for k in range(1, AIM_REACH + 1):
+        hx, hy = sx + round(k * math.cos(a)), sy + round(k * math.sin(a))
+        rows[hy][hx] = '3' if k == AIM_REACH else '4'
+    return ["".join(r) for r in rows], (hx, hy)
+
+
+AIM_FRAMES = [aim_frame(a) for a in AIM_ANGLES]
+
+
 def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=(), palettes=()):
     """`boxes`: sprite-wide boxes (kind, name, x, y, w, h); `extra`: frames of other sizes
     after the regular ones, as (x, y, w, h, ax, ay); `palettes`: other palettes of the same
@@ -322,11 +346,14 @@ def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, 
         out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>'
                    % ((i % columns) * w, (i // columns) * h, w, h, anchor[0], anchor[1]))
     for f in extra:
-        # (x, y, w, h, ax, ay) or with its own boxes: (..., [(kind, name, x, y, w, h), ...])
-        if len(f) > 6 and f[6]:
+        # (x, y, w, h, ax, ay) or with its own boxes: (..., [(kind, name, x, y, w, h), ...]) and
+        # points (..., boxes, [(name, x, y, angle), ...])
+        if (len(f) > 6 and f[6]) or (len(f) > 7 and f[7]):
             out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d">' % f[:6])
             for kind, name, bx, by, bw, bh in f[6]:
                 out.append('  <box kind="%s" name="%s" x="%d" y="%d" w="%d" h="%d"/>' % (kind, name, bx, by, bw, bh))
+            for name, px, py, angle in (f[7] if len(f) > 7 else []):
+                out.append('  <point name="%s" x="%d" y="%d" angle="%d"/>' % (name, px, py, angle))
             out.append(' </frame>')
         else:
             out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>' % f[:6])
@@ -335,8 +362,13 @@ def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, 
         for a, b in swaps:
             out.append('  <swap from="%s" to="%s"/>' % (a, b))
         out.append(' </palette>')
-    for name, loop, steps in animations:
-        out.append(' <animation name="%s" loop="%d">' % (name, 1 if loop else 0))
+    for anim in animations:
+        name, loop, steps = anim[:3]
+        directions = anim[3] if len(anim) > 3 else None   # (count, from, to): a direction set
+        if directions:
+            out.append(' <animation name="%s" loop="0" directions="%d" from="%d" to="%d">' % ((name,) + directions))
+        else:
+            out.append(' <animation name="%s" loop="%d">' % (name, 1 if loop else 0))
         for frame, duration in steps:
             out.append('  <step frame="%d" duration="%d"/>' % (frame, duration))
         out.append(' </animation>')
@@ -473,6 +505,14 @@ def main():
         for y in range(32):
             for x in range(16):
                 img.putpixel((160 + i * 16 + x, 64 + y), PALETTE[frame[y][x]])
+    # A fifth row: aiming (24 x 32 each).
+    tallest = Image.new("RGBA", (256, 192), (0, 0, 0, 0))
+    tallest.paste(img, (0, 0))
+    img = tallest
+    for i, (frame, _) in enumerate(AIM_FRAMES):
+        for y in range(32):
+            for x in range(24):
+                img.putpixel((i * 24 + x, 160 + y), PALETTE[frame[y][x]])
     sources = os.path.join(out, "..", "sources")
     os.makedirs(sources, exist_ok=True)
     img.save(os.path.join(sources, "player.png"))
@@ -484,6 +524,8 @@ def main():
     extra += [(128 + i * 32, 112, 32, 48, 16, 32, [] if i == 0 else [("hit", "blade") + SLASH_DOWN_ARC[i][1]]) for i in range(4)]   # 23-26: arc down
     extra += [(128, 64, 32, 32, 8, 32)]                               # 27: the lance ahead
     extra += [(160 + i * 16, 64, 16, 32, 8, 32) for i in range(4)]    # 28-31: pushing
+    extra += [(i * 24, 160, 24, 32, 8, 32, [], [("hand", hx - 8, hy - 32, AIM_ANGLES[i])])
+              for i, (_, (hx, hy)) in enumerate(AIM_FRAMES)]                # 32-40: aiming
     sprite_file(os.path.join(sources, "player.bmsprite"), "player.png", len(PLAYER_FRAMES), 8, 16, 32, (8, 32), (-5, -30, 10, 30), [
         ("idle", True, [(0, 40), (1, 40)]),
         ("run", True, [(2, 6), (3, 6), (4, 6), (5, 6)]),
@@ -498,6 +540,7 @@ def main():
         ("slash_down", False, [(23, 4), (24, 3), (25, 3), (26, 8)]),
         ("thrust", False, [(17, 4), (27, 10)]),
         ("push", True, [(28, 10), (29, 10), (30, 10), (31, 10)]),
+        ("aim", False, [(32 + i, 1) for i in range(9)], (9, 192, 64)),
     ], extra=extra)
     sheet(BAT_FRAMES, 2, 16, 16).save(os.path.join(out, "bat.png"))
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [

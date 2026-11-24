@@ -16,7 +16,7 @@
 int main(int argc, char **argv)
 {
   std::string profileName = "gba", out, reportPath, nativeCompiler, nativeInclude, nativeElf, scriptC;
-  std::vector<std::string> inputs, absentRooms, absentKinds;
+  std::vector<std::string> inputs, absentRooms, absentKinds, absentAssets;
   std::optional<std::array<float, 9>> matrix;
 
   for (int i = 1; i < argc; i++)
@@ -31,6 +31,7 @@ int main(int argc, char **argv)
     else if (a == "--script-c" && i + 1 < argc) scriptC = argv[++i];
     else if (a == "--absent-room" && i + 1 < argc) absentRooms.push_back(argv[++i]);
     else if (a == "--absent-kind" && i + 1 < argc) absentKinds.push_back(argv[++i]);
+    else if (a == "--absent-asset" && i + 1 < argc) absentAssets.push_back(argv[++i]);
     else if (a == "--color-matrix" && i + 1 < argc)
     {
       std::array<float, 9> m{};
@@ -50,7 +51,7 @@ int main(int argc, char **argv)
   {
     std::cerr << "usage: bmcook [--profile gba|snes|host] [--report report.txt] [--color-matrix m0,...,m8]\n"
                  "              [--native arm-none-eabi-gcc] [--native-elf out.elf] [--native-include dir] [--script-c out.c]\n"
-                 "              [--absent-room id]... [--absent-kind LANG]... -o out.bmpk room.tmx...\n";
+                 "              [--absent-room id]... [--absent-kind LANG]... [--absent-asset name]... -o out.bmpk room.tmx...\n";
     return 2;
   }
 
@@ -88,6 +89,7 @@ int main(int argc, char **argv)
     options.scriptC = scriptC;
     options.absentRooms = absentRooms;
     options.absentKinds = absentKinds;
+    options.absentAssets = absentAssets;
     pack = bm::cook(maps, options, report);
   }
   catch (const std::exception &e)

@@ -71,9 +71,16 @@ def main(argv):
                 if upper_layer:
                     ay = int(child.get("ay", child.get("h")))
                     f.set("ay", str(ay - waist))
-                else:
-                    for c in child:
+                for c in child:
+                    # Points above the cut go up with the torso (from its anchor, at the cut);
+                    # boxes and the rest stay below.
+                    above = c.tag == "point" and int(c.get("y", "0")) < -waist
+                    if above and upper_layer:
+                        p = ET.SubElement(f, "point", dict(c.attrib))
+                        p.set("y", str(int(c.get("y", "0")) + waist))
+                    elif not above and not upper_layer:
                         f.append(c)
+                if not upper_layer:
                     ET.SubElement(f, "point", {"name": point, "x": "0", "y": str(-waist)})
             elif child.tag in ("hitbox", "box"):
                 if upper_layer:

@@ -103,6 +103,33 @@
  <frame x="208" y="64" w="16" h="32" ax="8" ay="32">
   <point name="waist" x="0" y="-15" />
  </frame>
+ <frame x="0" y="160" w="24" h="32" ax="8" ay="32">
+  <point name="waist" x="0" y="-15" />
+ </frame>
+ <frame x="24" y="160" w="24" h="32" ax="8" ay="32">
+  <point name="waist" x="0" y="-15" />
+ </frame>
+ <frame x="48" y="160" w="24" h="32" ax="8" ay="32">
+  <point name="waist" x="0" y="-15" />
+ </frame>
+ <frame x="72" y="160" w="24" h="32" ax="8" ay="32">
+  <point name="waist" x="0" y="-15" />
+ </frame>
+ <frame x="96" y="160" w="24" h="32" ax="8" ay="32">
+  <point name="waist" x="0" y="-15" />
+ </frame>
+ <frame x="120" y="160" w="24" h="32" ax="8" ay="32">
+  <point name="waist" x="0" y="-15" />
+ </frame>
+ <frame x="144" y="160" w="24" h="32" ax="8" ay="32">
+  <point name="waist" x="0" y="-15" />
+ </frame>
+ <frame x="168" y="160" w="24" h="32" ax="8" ay="32">
+  <point name="waist" x="0" y="-15" />
+ </frame>
+ <frame x="192" y="160" w="24" h="32" ax="8" ay="32">
+  <point name="waist" x="0" y="-15" />
+ </frame>
  <animation name="idle" loop="1">
   <step frame="0" duration="40" />
   <step frame="1" duration="40" />
@@ -161,5 +188,16 @@
   <step frame="29" duration="10" />
   <step frame="30" duration="10" />
   <step frame="31" duration="10" />
+ </animation>
+ <animation name="aim" loop="0" directions="9" from="192" to="64">
+  <step frame="32" duration="1" />
+  <step frame="33" duration="1" />
+  <step frame="34" duration="1" />
+  <step frame="35" duration="1" />
+  <step frame="36" duration="1" />
+  <step frame="37" duration="1" />
+  <step frame="38" duration="1" />
+  <step frame="39" duration="1" />
+  <step frame="40" duration="1" />
  </animation>
 </sprite>

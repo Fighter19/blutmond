@@ -222,7 +222,13 @@ static void findPlayer(BmGame *g)
 {
   memset(&g->playerFigure, 0, sizeof(g->playerFigure));
   memset(g->playerLayerSheet, 0xFF, sizeof(g->playerLayerSheet));
-  memset(g->playerLayerAnim, 0, sizeof(g->playerLayerAnim));
+  memset(g->playerLayers, 0, sizeof(g->playerLayers));
+  memset(g->playerLayerPalette, 0, sizeof(g->playerLayerPalette));
+  for (uint8_t i = 0; i < BM_FIGURE_MAX_LAYERS; i++)
+  {
+    g->playerLayers[i].sprite = 0xFFFF;
+    g->playerLayers[i].palette = 0xFF;
+  }
   g->playerSheetCount = 0;
   g->playerSheet = -1;
   if (bmFigureFind(&g->playerFigure, g->pPack, "player") == BM_SUCCESS)
@@ -232,10 +238,19 @@ static void findPlayer(BmGame *g)
       const BmFigureLayer *l = &g->playerFigure.layers[i];
       int8_t s = l->sprite == 0xFFFF ? -1 : sheetNamed(g, l->sprite);
       g->playerLayerSheet[i] = s;
+      if (s >= 0 && l->palette != 0xFFFF)
+      {
+        int32_t named = bmSpriteSheetPalette(&g->sheets[s], g->pPack, bmPackString(g->pPack, l->palette));
+        g->playerLayerPalette[i] = (uint8_t)(named < 0 ? 0 : named);
+      }
       bool have = s < 0;
       for (uint8_t k = 0; k < g->playerSheetCount; k++) have |= g->playerSheets[k] == s;
       if (have) continue;
       int32_t pal = l->palette == 0xFFFF ? 0 : bmSpriteSheetPalette(&g->sheets[s], g->pPack, bmPackString(g->pPack, l->palette));
+      g->playerLayerPalette[i] = (uint8_t)(pal < 0 ? 0 : pal);
+      // An `aim` layer starts on its first direction set.
+      int32_t set = bmSpriteSheetFirstDirections(&g->sheets[s]);
+      if (l->mode == BM_FIGURE_AIM && set >= 0) g->playerLayers[i].anim.anim = (uint8_t)set;
       g->playerSheets[g->playerSheetCount] = s;
       g->playerPalettes[g->playerSheetCount++] = (uint8_t)(pal < 0 ? 0 : pal);
     }
@@ -415,18 +430,148 @@ void bmGamePlayPlayerAnim(BmGame *g, uint16_t name)
   g->animHeld = g->lockTimer != 0 ? 2 : 1;
 }
 
-// The player's `own` layers play the animation named like the root's, each at its own pace.
+// The sheet the player's layer `i` shows now (-1: none).
+static int8_t layerSheet(const BmGame *g, uint8_t i)
+{
+  uint16_t shown = g->playerLayers[i].sprite;
+  return shown != 0xFFFF ? sheetNamed(g, shown) : g->playerLayerSheet[i];
+}
+
+// The player's layers (figure.h): turning toward their goal; an `own` layer plays the animation
+// named like the root's, an `aim` layer or one a script plays its own; each at its own pace.
 static void animateLayers(BmGame *g)
 {
-  for (uint8_t i = 1; i < g->playerFigure.layerCount; i++)
+  for (uint8_t i = 0; i < g->playerFigure.layerCount; i++)
   {
-    int8_t s = g->playerLayerSheet[i];
-    if (s < 0 || g->playerFigure.layers[i].mode != BM_FIGURE_OWN) continue;
-    int32_t a = bmFigureLayerAnim(&g->sheets[g->playerSheet], g->playerAnim.anim, &g->sheets[s]);
-    if (a < 0) continue;
-    bmAnimPlay(&g->playerLayerAnim[i], (uint8_t)a, false);
-    bmAnimTick(&g->sheets[s], &g->playerLayerAnim[i]);
+    BmFigureLayerState *l = &g->playerLayers[i];
+    if (l->speed != 0) l->angle = bmAngleToward(l->angle, l->goal, l->speed);
+    int8_t s = layerSheet(g, i);
+    if (i == 0 || s < 0) continue;
+    uint8_t mode = g->playerFigure.layers[i].mode;
+    if (!(l->flags & BM_LAYER_PLAYED) && mode == BM_FIGURE_OWN)
+    {
+      int32_t a = bmFigureLayerAnim(&g->sheets[g->playerSheet], g->playerAnim.anim, &g->sheets[s]);
+      if (a < 0) continue;
+      bmAnimPlay(&l->anim, (uint8_t)a, false);
+    }
+    if ((l->flags & BM_LAYER_PLAYED) || mode != BM_FIGURE_SYNC) bmAnimTick(&g->sheets[s], &l->anim);
   }
+}
+
+// The player's figure as it stands now: its layers' sheets and pose (figure.h).
+static void playerPose(const BmGame *g, const BmSpriteSheet *sheets[BM_FIGURE_MAX_LAYERS], BmFigurePose *pose)
+{
+  BmFigure f = g->playerFigure;
+  BmAnimState states[BM_FIGURE_MAX_LAYERS];
+  uint8_t angles[BM_FIGURE_MAX_LAYERS];
+  bool left = g->player.facing < 0, up = g->player.flipped;
+  for (uint8_t i = 0; i < BM_FIGURE_MAX_LAYERS; i++)
+  {
+    int8_t s = i < f.layerCount ? layerSheet(g, i) : -1;
+    sheets[i] = s >= 0 ? &g->sheets[s] : NULL;
+    const BmFigureLayerState *l = &g->playerLayers[i];
+    states[i] = i == 0 ? g->playerAnim : l->anim;
+    angles[i] = bmAngleOfDrawing(l->angle, left, up);
+    // A layer a script plays goes its own way.
+    if (i != 0 && (l->flags & BM_LAYER_PLAYED)) f.layers[i].mode = BM_FIGURE_OWN;
+  }
+  bmFigurePose(&f, sheets, states, angles, left, up, pose);
+}
+
+int32_t bmGameLayerCall(BmGame *g, uint16_t api, const int32_t *args)
+{
+  int8_t layer = bmGamePlayerLayer(g, (uint16_t)args[0]);
+  if (layer < 0) return 0;
+  BmFigureLayerState *l = &g->playerLayers[layer];
+  int8_t sheet = layerSheet(g, (uint8_t)layer);
+  const char *name = api == BM_SCRIPT_API_layer_play || api == BM_SCRIPT_API_layer_show || api == BM_SCRIPT_API_layer_palette
+                         ? bmPackString(g->pPack, (uint16_t)args[1])
+                         : NULL;
+  bool byDefault = name != NULL && strcmp(name, "default") == 0;
+  switch (api)
+  {
+  case BM_SCRIPT_API_layer_aim:
+    l->angle = (uint8_t)args[1];
+    l->speed = 0;
+    return 0;
+  case BM_SCRIPT_API_layer_turn:
+    l->goal = (uint8_t)args[1];
+    l->speed = (uint8_t)(args[2] < 0 ? 0 : args[2] > 255 ? 255 : args[2]);
+    if (l->speed == 0) l->angle = l->goal;
+    return 0;
+  case BM_SCRIPT_API_layer_angle:
+    return l->angle;
+  case BM_SCRIPT_API_layer_play:
+  {
+    int32_t anim = sheet >= 0 ? bmSpriteSheetAnimById(&g->sheets[sheet], (uint16_t)args[1]) : -1;
+    if (anim >= 0 && layer != 0)
+    {
+      l->flags |= BM_LAYER_PLAYED;
+      bmAnimPlay(&l->anim, (uint8_t)anim, true);
+    }
+    else if (layer == 0) bmGamePlayPlayerAnim(g, (uint16_t)args[1]);   // the root: as owner_play_anim
+    else
+    {
+      // Back to what the figure says: an `aim` layer to its first direction set.
+      l->flags &= (uint8_t)~BM_LAYER_PLAYED;
+      int32_t set = sheet >= 0 ? bmSpriteSheetFirstDirections(&g->sheets[sheet]) : -1;
+      if (g->playerFigure.layers[layer].mode == BM_FIGURE_AIM && set >= 0) bmAnimPlay(&l->anim, (uint8_t)set, true);
+    }
+    return 0;
+  }
+  case BM_SCRIPT_API_layer_show:
+    l->sprite = byDefault ? 0xFFFF : (uint16_t)args[1];
+    l->flags &= (uint8_t)~BM_LAYER_HIDDEN;
+    return 0;
+  case BM_SCRIPT_API_layer_hide:
+    l->flags |= BM_LAYER_HIDDEN;
+    return 0;
+  case BM_SCRIPT_API_layer_palette:
+  {
+    int32_t p = !byDefault && sheet >= 0 ? bmSpriteSheetPalette(&g->sheets[sheet], g->pPack, name) : -1;
+    l->palette = (uint8_t)(p < 0 ? 0xFF : p);
+    return 0;
+  }
+  case BM_SCRIPT_API_layer_point_x:
+  case BM_SCRIPT_API_layer_point_y:
+  case BM_SCRIPT_API_layer_point_angle:
+  {
+    int32_t x, y;
+    uint8_t angle;
+    bmGamePlayerPoint(g, layer, (uint16_t)args[1], &x, &y, &angle);
+    return api == BM_SCRIPT_API_layer_point_x ? x : api == BM_SCRIPT_API_layer_point_y ? y : angle;
+  }
+  default:
+    return 0;
+  }
+}
+
+int8_t bmGamePlayerLayer(const BmGame *g, uint16_t name)
+{
+  for (uint8_t i = 0; i < g->playerFigure.layerCount; i++)
+    if (g->playerFigure.layers[i].name == name) return (int8_t)i;
+  return -1;
+}
+
+bool bmGamePlayerPoint(BmGame *g, int8_t layer, uint16_t point, int32_t *pX, int32_t *pY, uint8_t *pAngle)
+{
+  bool left = g->player.facing < 0, up = g->player.flipped;
+  int32_t x = g->player.x, y = up ? g->player.y - BM_FIX(g->playerParams.height) : g->player.y;
+  *pAngle = left ? 128 : 0;
+  *pX = x;
+  *pY = y;
+  if (layer < 0 || layer >= g->playerFigure.layerCount) return false;
+  const BmSpriteSheet *sheets[BM_FIGURE_MAX_LAYERS];
+  BmFigurePose pose;
+  playerPose(g, sheets, &pose);
+  *pX = x + BM_FIX(pose.x[layer]);
+  *pY = y + BM_FIX(pose.y[layer]);
+  BmSpritePoint pt;
+  if (sheets[layer] == NULL || !bmSpriteSheetPoint(sheets[layer], pose.frame[layer], point, left, up, &pt)) return false;
+  *pX += BM_FIX(pt.x);
+  *pY += BM_FIX(pt.y);
+  *pAngle = bmAngleOfDrawing(pt.angle, left, false);   // bmSpriteSheetPoint turned it upside down already
+  return true;
 }
 
 static void animateBody(BmGame *g);
@@ -497,20 +642,17 @@ static void updateSprites(BmGame *g)
     else if (!blink)
     {
       // A figure: its layers front to back (figure.h), 12 hardware sprites in all.
-      const BmSpriteSheet *sheets[BM_FIGURE_MAX_LAYERS] = { NULL };
-      BmAnimState states[BM_FIGURE_MAX_LAYERS];
-      for (uint8_t i = 0; i < g->playerFigure.layerCount; i++)
-      {
-        if (g->playerLayerSheet[i] >= 0) sheets[i] = &g->sheets[g->playerLayerSheet[i]];
-        states[i] = i == 0 ? g->playerAnim : g->playerLayerAnim[i];
-      }
+      const BmSpriteSheet *sheets[BM_FIGURE_MAX_LAYERS];
       BmFigurePose pose;
-      bmFigurePose(&g->playerFigure, sheets, states, left, up, &pose);
+      playerPose(g, sheets, &pose);
       uint8_t used = 0;
       for (uint8_t k = 0; k < pose.count && used < 12; k++)
       {
         uint8_t i = pose.order[k];
-        used = (uint8_t)(used + bmSpriteSheetDrawFlipped(sheets[i], pose.frame[i], x + pose.x[i], y + pose.y[i], left, up, 1, sheets[i]->bank,
+        const BmFigureLayerState *l = &g->playerLayers[i];
+        int8_t bank = bmGameSheetBank(g, layerSheet(g, i), l->palette != 0xFF ? l->palette : g->playerLayerPalette[i]);
+        if ((l->flags & BM_LAYER_HIDDEN) || bank < 0) continue;
+        used = (uint8_t)(used + bmSpriteSheetDrawFlipped(sheets[i], pose.frame[i], x + pose.x[i], y + pose.y[i], left, up, 1, (uint8_t)bank,
                                                          (uint8_t)(next + used), (uint8_t)(12 - used)));
       }
       next = (uint8_t)(next + used);
@@ -1694,19 +1836,43 @@ static const BmStateField s_gameFields[] = {
   F(playerAnim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerAnim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerAnim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
-  // The player's `own` layers (figure.h); the root's is playerAnim.
-  F(playerLayerAnim[1].anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[1].finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[1].step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[1].timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[2].anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[2].finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[2].step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[2].timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[3].anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[3].finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[3].step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
-  F(playerLayerAnim[3].timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  // The player's layers (figure.h); the root's animation is playerAnim.
+  F(playerLayers[0].sprite, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[0].palette, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[0].angle, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[0].goal, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[0].speed, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[0].flags, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].anim.anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].anim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].anim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].anim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].sprite, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].palette, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].angle, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].goal, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].speed, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].flags, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].anim.anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].anim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].anim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].anim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].sprite, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].palette, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].angle, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].goal, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].speed, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].flags, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].anim.anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].anim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].anim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].anim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].sprite, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].palette, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].angle, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].goal, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].speed, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].flags, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   // Scripted objects: where each script is and what its variables hold.
   F(actors.moduleHash, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   F(actors.count, BM_TYPE_U8, BM_STATE_SNAPSHOT),
@@ -1725,6 +1891,7 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.palette, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.flash, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.weight, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.angle, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animFinished, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animStep, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),

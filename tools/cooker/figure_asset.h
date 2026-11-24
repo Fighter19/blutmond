@@ -18,7 +18,7 @@
 
 namespace bm::figure {
 
-enum class Mode { Own = 0, Sync = 1 };
+enum class Mode { Own = 0, Sync = 1, Aim = 2 };
 
 struct Layer
 {

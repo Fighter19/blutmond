@@ -2474,6 +2474,77 @@ static void testSheetsAndPalettesPerRoom(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// Aiming (layered-sprites.md step 4; the wind pack's Aimer and Spark): an attachment plays the
+// torso's direction set and turns it toward a point by 8 a frame; the torso shows the step
+// nearest to its angle while the legs go on with their own animation; the hand point moves
+// with it; a shot from the hand flies along the hand's angle; a snapshot taken mid-turn goes
+// on the same; layer_hide, layer_show and layer_palette.
+static void testAimingTheTorso(void)
+{
+  if (s_windData == NULL) return;
+  startWith(s_windData, s_windSize, "test_room_2");
+  frames(3, 0);
+  BmGame *g = &s_game;
+  int8_t torso = bmGamePlayerLayer(g, stringId("torso"));
+  TEST_ASSERT(torso == 1 && g->playerFigure.layerCount == 2);
+  TEST_ASSERT(bmAttachmentsAttach(g, 3, stringId("Aimer"), 0));
+  const BmFigureLayerState *l = &g->playerLayers[1];
+  uint8_t goal = bmAngleOf(64, -80);
+  TEST_ASSERT((l->flags & BM_LAYER_PLAYED) && l->angle == 0 && l->goal == goal && l->speed == 8);
+  frames(2, 0);
+  TEST_ASSERT(l->angle == 256 - 16);   // two frames, 8 each, the shorter way (up)
+  // A snapshot mid-turn goes on the same.
+  static uint8_t snap[BM_LIVE_STATE_CAPACITY];
+  BmStateBlock block = bmGameStateBlock(g);
+  uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
+  TEST_ASSERT(size > 0);
+  frames(20, 0);
+  uint8_t after = l->angle;
+  TEST_ASSERT(after == goal);
+  TEST_ASSERT(bmStateRead(&block, 1, snap, size) == BM_STATE_OK && bmGameAfterLoad(g) == BM_SUCCESS);
+  TEST_ASSERT(l->angle == 256 - 16 && (l->flags & BM_LAYER_PLAYED));
+  frames(20, 0);
+  TEST_ASSERT(l->angle == after);
+
+  // The torso shows the aim step nearest to its angle, the legs their own (idle).
+  const BmSpriteSheet *ts = &g->sheets[g->playerLayerSheet[1]];
+  int32_t aim = bmSpriteSheetAnim(ts, g->pPack, "aim");
+  TEST_ASSERT(l->anim.anim == aim);
+  uint16_t step = bmSpriteSheetDirectionStep(ts, (uint8_t)aim, bmAngleOfDrawing(goal, g->player.facing < 0, false));
+  int32_t hx = bmGameLayerCall(g, BM_SCRIPT_API_layer_point_x, (int32_t[]){ stringId("torso"), stringId("hand") });
+  int32_t hy = bmGameLayerCall(g, BM_SCRIPT_API_layer_point_y, (int32_t[]){ stringId("torso"), stringId("hand") });
+  int32_t ha = bmGameLayerCall(g, BM_SCRIPT_API_layer_point_angle, (int32_t[]){ stringId("torso"), stringId("hand") });
+  TEST_ASSERT(ha == (uint8_t)(192 + 16 * step));
+  TEST_ASSERT(hy < g->player.y - BM_FIX(15) && (g->player.facing > 0 ? hx > g->player.x : hx < g->player.x));
+  // Running: the legs run, the torso keeps aiming.
+  frames(10, BM_KEY_RIGHT);
+  TEST_ASSERT(g->playerAnim.anim == g->playerAnims[BM_PLAYER_ANIM_RUN] && l->anim.anim == aim);
+  frames(10, 0);
+
+  // A shot from the hand along its angle.
+  int before = s_game.actors.count;
+  frames(1, BM_KEY_B);
+  frames(1, 0);
+  TEST_ASSERT(s_game.actors.count == before + 1);
+  int shot = s_game.actors.count - 1;
+  ha = bmGameLayerCall(g, BM_SCRIPT_API_layer_point_angle, (int32_t[]){ stringId("torso"), stringId("hand") });
+  TEST_ASSERT(s_game.actors.angle[shot] == (uint8_t)ha);
+  TEST_ASSERT(s_game.actors.vx[shot] == ((2 * 256 * bmAngleCos((uint8_t)ha)) >> 8) && s_game.actors.vy[shot] == ((2 * 256 * bmAngleSin((uint8_t)ha)) >> 8));
+  TEST_ASSERT(s_game.actors.vy[shot] < 0);   // up and ahead
+
+  // Hidden: the torso takes no hardware sprite; shown again with another palette (none: its own).
+  bmGameLayerCall(g, BM_SCRIPT_API_layer_hide, (int32_t[]){ stringId("torso") });
+  TEST_ASSERT(l->flags & BM_LAYER_HIDDEN);
+  bmGameLayerCall(g, BM_SCRIPT_API_layer_show, (int32_t[]){ stringId("torso"), stringId("default") });
+  TEST_ASSERT(!(l->flags & BM_LAYER_HIDDEN) && l->sprite == 0xFFFF);
+  bmGameLayerCall(g, BM_SCRIPT_API_layer_palette, (int32_t[]){ stringId("torso"), stringId("nothing_like_this") });
+  TEST_ASSERT(l->palette == 0xFF);
+  // Back to following the legs.
+  bmGameLayerCall(g, BM_SCRIPT_API_layer_play, (int32_t[]){ stringId("torso"), stringId("no_such_animation") });
+  TEST_ASSERT(!(l->flags & BM_LAYER_PLAYED));
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // The grapple (grapple.h) in the chasm (assets/test_room/chasm_room.tmx): nothing without the
 // ability, which the pedestal gives; R to the anchor over the chasm and from it to the next,
 // held level, and down onto the west floor; up the tower's ledge; the bat (light) pulled to
@@ -2621,6 +2692,7 @@ int main(int argc, char **argv)
   RUN_TEST(testBreakableWallsAndCrates);
   RUN_TEST(testThePushBlockPuzzle);
   RUN_TEST(testSheetsAndPalettesPerRoom);
+  RUN_TEST(testAimingTheTorso);
   RUN_TEST(testTheGrapple);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);

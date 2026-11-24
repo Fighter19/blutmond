@@ -19,7 +19,23 @@
 
 #define BM_FIGURE_MAX_LAYERS 4
 
-enum { BM_FIGURE_OWN = 0, BM_FIGURE_SYNC = 1 };
+enum { BM_FIGURE_OWN = 0, BM_FIGURE_SYNC = 1, BM_FIGURE_AIM = 2 };
+
+// Angles (layered-sprites.md §6): 256 a turn. A world angle has 0 to the right and turns
+// clockwise on screen (64 down, 128 left, 192 up); an angle of a figure's drawing has 0 forward
+// (the way the drawing faces) and turns clockwise as drawn. Table based: the same on every
+// machine.
+
+/// sin and cos of an angle as fix (24.8: -256 to 256).
+int32_t bmAngleSin(uint8_t angle);
+int32_t bmAngleCos(uint8_t angle);
+/// The world angle of the direction (dx, dy) (y down); 0 for (0, 0).
+uint8_t bmAngleOf(int32_t dx, int32_t dy);
+/// `from` turned toward `to` by at most `speed` the shorter way.
+uint8_t bmAngleToward(uint8_t from, uint8_t to, uint8_t speed);
+/// A world angle as an angle of a drawing mirrored left to right (`hflip`) and upside down
+/// (`vflip`), and back (the same formula both ways).
+uint8_t bmAngleOfDrawing(uint8_t angle, bool hflip, bool vflip);
 
 typedef struct BmFigureLayer
 {
@@ -38,6 +54,22 @@ typedef struct BmFigure
   BmFigureLayer layers[BM_FIGURE_MAX_LAYERS];
 } BmFigure;
 
+/// What can change in a layer while the game runs (layer_* in scripts): snapshot state.
+typedef struct BmFigureLayerState
+{
+  BmAnimState anim;   // an `own` or `aim` layer's, or one a script plays (BM_LAYER_PLAYED)
+  uint16_t sprite;    // string id of a sprite shown instead of the figure's (0xFFFF: the figure's)
+  uint8_t palette;    // a palette of its sprite (0xFF: the figure's)
+  uint8_t angle;      // world angle (an `aim` layer or a direction set shows it)
+  uint8_t goal;       // turning toward this world angle by `speed` a frame (0: not turning)
+  uint8_t speed;
+  uint8_t flags;      // BM_LAYER_HIDDEN, BM_LAYER_PLAYED
+  uint8_t reserved;
+} BmFigureLayerState;
+
+#define BM_LAYER_HIDDEN 1   // not drawn (what hangs on it still is)
+#define BM_LAYER_PLAYED 2   // plays `anim` (from a script) instead of following the root
+
 /// Opens the figure called `pName` (compared without regard to case). BM_ERROR_NOT_FOUND if the
 /// pack has none.
 BmResult bmFigureFind(BmFigure *pFigure, const BmPack *pPack, const char *pName);
@@ -49,14 +81,17 @@ typedef struct BmFigurePose
   uint8_t order[BM_FIGURE_MAX_LAYERS];        // front to back (the order to give out OAM)
   uint16_t frame[BM_FIGURE_MAX_LAYERS];
   int16_t x[BM_FIGURE_MAX_LAYERS], y[BM_FIGURE_MAX_LAYERS];   // from the figure's position
-  uint8_t angle[BM_FIGURE_MAX_LAYERS];        // of the point it hangs on (0 for the root)
+  uint8_t angle[BM_FIGURE_MAX_LAYERS];        // of the point it hangs on (0 for the root), of the drawing
 } BmFigurePose;
 
 /// `pSheets[i]` is layer i's sheet (NULL: none; it is not drawn and what hangs on it is placed
-/// at its place), `pStates[i]` its animation state (the root's and every `own` layer's; a
-/// `sync` layer's is worked out). Mirrored with `hflip` and `vflip` as a sprite is.
+/// at its place), `pStates[i]` its animation state (the root's and every `own` or `aim` layer's;
+/// a `sync` layer's is worked out). A layer whose animation is a direction set shows the step
+/// nearest to `pAngles[i]` (angles of the drawing; NULL: 0). Mirrored with `hflip` and `vflip`
+/// as a sprite is.
 void bmFigurePose(const BmFigure *pFigure, const BmSpriteSheet *const pSheets[BM_FIGURE_MAX_LAYERS],
-                  const BmAnimState pStates[BM_FIGURE_MAX_LAYERS], bool hflip, bool vflip, BmFigurePose *pPose);
+                  const BmAnimState pStates[BM_FIGURE_MAX_LAYERS], const uint8_t *pAngles, bool hflip, bool vflip,
+                  BmFigurePose *pPose);
 
 /// The animation layer `layer` of a figure plays when its parent plays `parentAnim` of
 /// `pParent`: the one of the same name in `pSheet`, or -1.

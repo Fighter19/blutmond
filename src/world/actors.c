@@ -164,6 +164,8 @@ static uint32_t storeKey(const BmGame *g, uint8_t i, uint16_t field)
 
 static int32_t classNamed(const BmGame *g, const char *name);
 static void resetMotion(BmActors *a, uint8_t i);
+// The angle the next object made starts with (spawn_at_point); 0: as its maker faces.
+static uint8_t s_spawnAngle;
 
 static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int32_t *args, int32_t *result)
 {
@@ -713,6 +715,49 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_abs:
     *result = absolute(args[0]);
     break;
+  case BM_SCRIPT_API_sin:
+    *result = bmAngleSin((uint8_t)args[0]);
+    break;
+  case BM_SCRIPT_API_cos:
+    *result = bmAngleCos((uint8_t)args[0]);
+    break;
+  case BM_SCRIPT_API_angle_to_point:
+  {
+    int32_t fx = i < BM_ACTORS_MAX ? a->x[i] : g->player.x, fy = i < BM_ACTORS_MAX ? a->y[i] : g->player.y;
+    *result = bmAngleOf(BM_FIX_INT(args[0] - fx), BM_FIX_INT(args[1] - fy));
+    break;
+  }
+  case BM_SCRIPT_API_fly_angle:
+    a->vx[i] = (int32_t)(((int64_t)args[1] * bmAngleCos((uint8_t)args[0])) >> 8);
+    a->vy[i] = (int32_t)(((int64_t)args[1] * bmAngleSin((uint8_t)args[0])) >> 8);
+    break;
+  case BM_SCRIPT_API_layer_aim:
+  case BM_SCRIPT_API_layer_turn:
+  case BM_SCRIPT_API_layer_angle:
+  case BM_SCRIPT_API_layer_play:
+  case BM_SCRIPT_API_layer_show:
+  case BM_SCRIPT_API_layer_hide:
+  case BM_SCRIPT_API_layer_palette:
+  case BM_SCRIPT_API_layer_point_x:
+  case BM_SCRIPT_API_layer_point_y:
+  case BM_SCRIPT_API_layer_point_angle:
+    // The player's figure, from its attachments (objects show one sprite yet).
+    if (i == BM_ACTORS_OWNER) *result = bmGameLayerCall(g, api, args);
+    break;
+  case BM_SCRIPT_API_spawn_at_point:
+  {
+    if (i != BM_ACTORS_OWNER) break;
+    int32_t x, y;
+    uint8_t angle;
+    bmGamePlayerPoint(g, bmGamePlayerLayer(g, (uint16_t)args[1]), (uint16_t)args[2], &x, &y, &angle);
+    uint8_t current = a->current, slot = a->currentSlot;
+    s_spawnAngle = angle;
+    *result = bmActorsSpawn(g, (uint16_t)args[0], x, y, 0);
+    s_spawnAngle = 0;
+    a->current = current;
+    a->currentSlot = slot;
+    break;
+  }
   case BM_SCRIPT_API_set_palette:
   {
     // A palette of its sprite by name; one it does not have: its own.
@@ -774,6 +819,7 @@ static int32_t hostGetVar(void *pContext, BmVmInstance *inst, uint16_t var)
   case BM_SCRIPT_VAR_health: return a->health[i];
   case BM_SCRIPT_VAR_team: return a->team[i];
   case BM_SCRIPT_VAR_weight: return a->weight[i];
+  case BM_SCRIPT_VAR_angle: return a->angle[i];
   default: return 0;
   }
 }
@@ -800,6 +846,7 @@ static void hostSetVar(void *pContext, BmVmInstance *inst, uint16_t var, int32_t
   case BM_SCRIPT_VAR_health: a->health[i] = value; break;
   case BM_SCRIPT_VAR_team: a->team[i] = (uint8_t)value; break;
   case BM_SCRIPT_VAR_weight: a->weight[i] = (uint8_t)(value < 0 ? 0 : value > 255 ? 255 : value); break;
+  case BM_SCRIPT_VAR_angle: a->angle[i] = (uint8_t)value; break;
   default: break;
   }
 }
@@ -1232,6 +1279,7 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->palette[i] = (uint8_t)(palette < 0 ? 0 : palette);
     a->flash[i] = 0;
     a->weight[i] = 1;
+    a->angle[i] = 0;
     resetMotion(a, i);
     BmAnimState none = { 0, 0, 0, 0 };
     setAnim(a, i, &none);
@@ -1401,6 +1449,10 @@ static bool spawnNamed(BmGame *g, const char *name, int32_t x, int32_t y, uint32
   a->palette[i] = 0;
   a->flash[i] = 0;
   a->weight[i] = 1;
+  // spawn_at_point: the point's direction; else the maker's facing.
+  a->angle[i] = s_spawnAngle;
+  a->facing[i] = (int8_t)(s_spawnAngle > 64 && s_spawnAngle < 192 ? -1 : 1);
+  s_spawnAngle = 0;
   resetMotion(a, i);
   a->madeBy[i] = maker;
   a->madeBySlot[i] = makerSlot;
