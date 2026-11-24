@@ -70,6 +70,7 @@ typedef struct FitPlan
   uint8_t named[BM_LIVE_MAX_CHUNKS / 8];
   int32_t queue[FIT_MAX_ROOMS];
   uint8_t seen[FIT_MAX_ROOMS];
+  uint32_t near;   // queue[0 .. near): the rooms asked for and those one door from them
 } FitPlan;
 
 static bool kept(const FitPlan *f, uint32_t i) { return f == NULL || (f->keep[i / 8] & (1u << (i % 8))) != 0; }
@@ -201,9 +202,9 @@ static uint32_t roomExits(const BmPack *pPack, int32_t room, int32_t *pOut, uint
 }
 
 // Picks what goes into `budget` bytes: every chunk no room names (but the songs and the
-// languages), the room `room`, room 0, the songs, then the other rooms nearest to them through
-// doors first (then the ones no door leads to, in order; each whole, if it fits), then the
-// languages.
+// languages), the room `room`, room 0 and the rooms one door from them, the songs, then the
+// other rooms nearest to them through doors first (then the ones no door leads to, in order;
+// each whole, if it fits), then the languages.
 static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan *f)
 {
   uint32_t count = bmPackChunkCount(pPack);
@@ -235,24 +236,28 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
   if (rooms > FIT_MAX_ROOMS) rooms = FIT_MAX_ROOMS;
   if (room >= 0 && room < rooms) seen[room] = 1, queue[tail++] = room;
   if (!seen[0] && rooms > 0) seen[0] = 1, queue[tail++] = 0;
-  // The room asked for and room 0, then the songs (a song left out is silence, a room left
-  // out cannot be entered), then the rest nearest first.
-  for (uint32_t k = 0; k < tail; k++) fitRoom(pPack, f, queue[k], budget);
+  // Every room reachable through doors, nearest first (the order to fit them in).
+  uint32_t initial = tail;
+  while (head < tail)
+  {
+    int32_t exits[16];
+    uint32_t n = roomExits(pPack, queue[head++], exits, 16);
+    for (uint32_t k = 0; k < n; k++)
+      if (exits[k] < rooms && !seen[exits[k]]) seen[exits[k]] = 1, queue[tail++] = exits[k];
+    // Where the rooms one door away end.
+    if (head == initial) f->near = tail;
+  }
+  if (initial == 0) f->near = 0;
+  // The room asked for and room 0 and the rooms one door from them, then the songs (a song
+  // left out is silence, a room left out cannot be entered), then the rest nearest first.
+  for (uint32_t k = 0; k < f->near; k++) fitRoom(pPack, f, queue[k], budget);
   for (uint32_t i = 0; i < count; i++)
   {
     BmChunkEntry e;
     bmPackGetChunk(pPack, i, &e);
     if (e.id == BM_CHUNK_SONG && f->size + fitCost(pPack, f, i) <= budget) fitKeep(pPack, f, i);
   }
-  while (head < tail)
-  {
-    int32_t r = queue[head++];
-    fitRoom(pPack, f, r, budget);
-    int32_t exits[16];
-    uint32_t n = roomExits(pPack, r, exits, 16);
-    for (uint32_t k = 0; k < n; k++)
-      if (exits[k] < rooms && !seen[exits[k]]) seen[exits[k]] = 1, queue[tail++] = exits[k];
-  }
+  for (uint32_t k = f->near; k < tail; k++) fitRoom(pPack, f, queue[k], budget);
   for (int32_t k = 0; k < rooms; k++) fitRoom(pPack, f, k, budget);
   for (uint32_t i = 0; i < count; i++)
   {
