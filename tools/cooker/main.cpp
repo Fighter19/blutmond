@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 // bmcook: cooks Tiled rooms into a pack for one platform profile.
 //
-//   bmcook [--profile gba|snes|host] [--report report.txt] [--color-matrix m0,...,m8] -o out.bmpk
+//   bmcook [--profile gba|snes|host] [--report report.txt] [--color-matrix m0,...,m8] [--color-correction agb-001|none] -o out.bmpk
 //          room.tmx... [sprite.bmsprite...] [script.ms...] [song.bmsong...] [records.bmdata...] [font.bmfont...] [language.bmlang...] [world.bmworld]
 //
 // Exit status 1 when the report contains errors (the pack is then not written).
@@ -18,6 +18,7 @@ int main(int argc, char **argv)
   std::string profileName = "gba", out, reportPath, nativeCompiler, nativeInclude, nativeElf, scriptC;
   std::vector<std::string> inputs, absentRooms, absentKinds, absentAssets;
   std::optional<std::array<float, 9>> matrix;
+  auto correction = bm::CookOptions::ColorCorrection::Agb001;
 
   for (int i = 1; i < argc; i++)
   {
@@ -32,6 +33,17 @@ int main(int argc, char **argv)
     else if (a == "--absent-room" && i + 1 < argc) absentRooms.push_back(argv[++i]);
     else if (a == "--absent-kind" && i + 1 < argc) absentKinds.push_back(argv[++i]);
     else if (a == "--absent-asset" && i + 1 < argc) absentAssets.push_back(argv[++i]);
+    else if (a == "--color-correction" && i + 1 < argc)
+    {
+      std::string c = argv[++i];
+      if (c == "agb-001" || c == "gba") correction = bm::CookOptions::ColorCorrection::Agb001;
+      else if (c == "none") correction = bm::CookOptions::ColorCorrection::None;
+      else
+      {
+        std::cerr << "unknown colour correction " << c << " (agb-001 or none)\n";
+        return 2;
+      }
+    }
     else if (a == "--color-matrix" && i + 1 < argc)
     {
       std::array<float, 9> m{};
@@ -50,6 +62,7 @@ int main(int argc, char **argv)
   if (out.empty() || inputs.empty())
   {
     std::cerr << "usage: bmcook [--profile gba|snes|host] [--report report.txt] [--color-matrix m0,...,m8]\n"
+                 "              [--color-correction agb-001|none]\n"
                  "              [--native arm-none-eabi-gcc] [--native-elf out.elf] [--native-include dir] [--script-c out.c]\n"
                  "              [--absent-room id]... [--absent-kind LANG]... [--absent-asset name]... -o out.bmpk room.tmx...\n";
     return 2;
@@ -83,6 +96,7 @@ int main(int argc, char **argv)
     }
     options.profile = *profile;
     options.colorMatrix = matrix;
+    options.colorCorrection = correction;
     options.nativeCompiler = nativeCompiler;
     options.nativeIncludeDir = nativeInclude;
     options.nativeElf = nativeElf;

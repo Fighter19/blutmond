@@ -72,6 +72,9 @@ BmResult bmRoomOpen(BmRoom *pRoom, const BmPack *pPack, uint32_t index);
 /// the room is used: for a room opened beside the game's (the editor's preview).
 BmResult bmRoomOpenWith(BmRoom *pRoom, const BmPack *pPack, uint32_t index, uint8_t *pBuffer, uint32_t size);
 
+/// Uploads the room's palettes only (again: the colour correction changed).
+BmResult bmRoomLoadPalette(const BmRoom *pRoom);
+
 /// Uploads the room's palettes and tiles, sets up its backgrounds and shows it with the camera
 /// at (x, y) (top-left corner of the screen, clamped to the room).
 BmResult bmRoomShow(BmRoom *pRoom, int32_t cameraX, int32_t cameraY);

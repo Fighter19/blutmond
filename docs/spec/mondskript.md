@@ -364,7 +364,9 @@ with the game frame (a map screen calls it again every few frames); `map_percent
 of it is explored; `map_reveal(#room_id)` shows a room's cells without exploring them (false if
 the room is not on the map). Texts are shown in the language chosen
 (`language()`, `set_language(i)`, `language_count()`, `language_name(i)`;
-[pack-format.md](pack-format.md) §3.2). For equipment and items: `equipped(slot)`,
+[pack-format.md](pack-format.md) §3.2). The colours corrected for the GBA's own screen are
+an option as well: `color_correction()`, `set_color_correction(on)`, `has_color_correction()`
+(the pack holds a correction, CCOR). For equipment and items: `equipped(slot)`,
 `record_text(record, #field)` and `record_int(record, #field)` (a field of a record of any
 structure), `heal(n)`, `max_health()`, `player_health()`; `equip(slot, record)` puts on what the
 player owns.

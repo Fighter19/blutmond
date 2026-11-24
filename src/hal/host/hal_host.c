@@ -37,6 +37,11 @@ const char *bmHalPlatformName(void)
   return "host";
 }
 
+BmHalScreen bmHalScreen(void)
+{
+  return BM_HAL_SCREEN_PC;
+}
+
 void bmHalGetMemoryRanges(BmHalMemoryRange *pRanges, uint32_t count)
 {
   ensureInit();

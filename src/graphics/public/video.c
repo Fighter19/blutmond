@@ -127,14 +127,70 @@ void bmPaletteLoadBg(uint16_t first, const BmColor *pColors, uint16_t count)
 {
   if (first >= 256) return;
   if (first + count > 256) count = (uint16_t)(256 - first);
-  bmHalPaletteWriteBlock(first, &pColors[0].color, count);
+  bmPaletteWrite(first, &pColors[0].color, count);
 }
 
 void bmPaletteLoadObj(uint16_t first, const BmColor *pColors, uint16_t count)
 {
   if (first >= 256) return;
   if (first + count > 256) count = (uint16_t)(256 - first);
-  bmHalPaletteWriteBlock((uint16_t)(BM_HAL_PALETTE_OBJ_OFFSET + first), &pColors[0].color, count);
+  bmPaletteWrite((uint16_t)(BM_HAL_PALETTE_OBJ_OFFSET + first), &pColors[0].color, count);
+}
+
+uint16_t bmColorCorrectMix(const BmColorCorrection *c, uint16_t bgr555)
+{
+  int32_t r = bgr555 & 31, g = (bgr555 >> 5) & 31, b = (bgr555 >> 10) & 31;
+  uint32_t out = 0;
+  const int16_t *m = c->matrix;
+  for (int shift = 0; shift < 15; shift += 5, m += 3)
+  {
+    int32_t v = (m[0] * r + m[1] * g + m[2] * b) >> 12;
+    out |= (uint32_t)(v < 0 ? 0 : v > 31 ? 31 : v) << shift;
+  }
+  return (uint16_t)out;
+}
+
+uint16_t bmColorCorrectCurve(const BmColorCorrection *c, uint16_t bgr555)
+{
+  const uint8_t *k = c->curve;
+  return (uint16_t)((k[bgr555 & 31] & 31) | (k[(bgr555 >> 5) & 31] & 31) << 5 | (k[(bgr555 >> 10) & 31] & 31) << 10);
+}
+
+uint16_t bmColorCorrect(const BmColorCorrection *c, uint16_t bgr555)
+{
+  return bmColorCorrectCurve(c, bmColorCorrectMix(c, bgr555));
+}
+
+// The colour correction (color.h): with it on, colours go to palette memory corrected.
+static BmColorCorrection s_correction BM_EWRAM_BSS;
+static bool s_corrected;
+
+void bmPaletteWrite(uint16_t index, const uint16_t *pColours, uint16_t count)
+{
+  if (!s_corrected)
+  {
+    bmHalPaletteWriteBlock(index, pColours, count);
+    return;
+  }
+  // Not every frame (colours that change every frame, the light's, are corrected by the light
+  // itself, cheaply: light.c): a call a colour will do.
+  for (uint16_t i = 0; i < count; i++) bmHalPaletteWrite((uint16_t)(index + i), bmColorCorrect(&s_correction, pColours[i]));
+}
+
+void bmPaletteWriteRaw(uint16_t index, const uint16_t *pColours, uint16_t count)
+{
+  bmHalPaletteWriteBlock(index, pColours, count);
+}
+
+void bmPaletteSetCorrection(const BmColorCorrection *pCorrection)
+{
+  s_corrected = pCorrection != NULL;
+  if (pCorrection != NULL) s_correction = *pCorrection;
+}
+
+const BmColorCorrection *bmPaletteCorrection(void)
+{
+  return s_corrected ? &s_correction : NULL;
 }
 
 BmResult bmTilesLoadBg(uint8_t charBlock, uint16_t tileIndex, const void *pData, uint32_t size)

@@ -120,7 +120,8 @@ Where it differs from the plan below:
 - **Cost** on the GBA, measured in mGBA: about 26,000 to 32,000 cycles a frame for the room's
   banks and 11,000 for the sprites' (13 % of a frame), from ROM; IWRAM has no room for the
   kernels in every image. All halls run at 60 frames a second (`light_mgba_*` tests keep the
-  budget).
+  budget), with the colour correction (pack-format.md §3.3) too: its mix is taken once per
+  source colour, only its curve every frame (about 3,000 cycles more in the baked hall).
 - A new `Light` property `gain` (the light layer's strength: it adds the light, while the baked
   mode multiplies it).
 

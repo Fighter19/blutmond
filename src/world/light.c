@@ -78,6 +78,22 @@ static uint8_t s_rayNext BM_EWRAM_BSS;
 static bool s_weightTable BM_EWRAM_BSS;   // line table slot 0 holds a hybrid light's weights
 static uint16_t s_weights[BM_HAL_SCREEN_HEIGHT] BM_EWRAM_BSS;   // that table
 static int32_t s_builtRow BM_EWRAM_BSS, s_builtScale BM_EWRAM_BSS;   // what it was built for (-1: nothing)
+// With the colour correction on (video.h): the room's colours and the sprite banks' mixed once
+// (bmColorCorrectMix), so that every frame only the curve goes over what was lit.
+static uint8_t s_roomMixed[16 * 32] BM_EWRAM_BSS;
+static uint8_t s_objMixed[BM_GAME_BANKS][32] BM_EWRAM_BSS;
+static uint8_t s_objMixedSheet[BM_GAME_BANKS] BM_EWRAM_BSS, s_objMixedPalette[BM_GAME_BANKS] BM_EWRAM_BSS;   // for (0xFF: none)
+
+static void mixColours(uint8_t *out, const uint8_t *src, uint32_t count, const BmColorCorrection *c)
+{
+  for (uint32_t i = 0; i < count; i++)
+  {
+    uint16_t m = bmColorCorrectMix(c, (uint16_t)(src[i * 2] | src[i * 2 + 1] << 8));
+    out[i * 2] = (uint8_t)m;
+    out[i * 2 + 1] = (uint8_t)(m >> 8);
+  }
+}
+
 
 uint32_t bm_light_banks BM_EWRAM_BSS;   // sprite banks lit in the last frame (tests read it)
 
@@ -247,7 +263,10 @@ static int32_t clamp256(int32_t v)
 
 // Palette mode: each colour (little endian in `src`) × the factors of its level (256 = 1.0, at
 // most 256, so no channel passes 31).
-static void LIGHT_KERNEL shadeLevels(uint16_t *out, const uint8_t *src, const uint8_t *levels, const int16_t *fac)
+// `k`: the colour correction's curve over each channel (NULL: none); always inlined, so the
+// kernels without it are what they were.
+static inline __attribute__((always_inline)) void shadeLevelsWith(uint16_t *out, const uint8_t *src, const uint8_t *levels, const int16_t *fac,
+                                                                  const uint8_t *k)
 {
   for (int32_t i = 0; i < 16; i++)
   {
@@ -256,8 +275,19 @@ static void LIGHT_KERNEL shadeLevels(uint16_t *out, const uint8_t *src, const ui
     uint32_t r = ((c & 31) * (uint32_t)f[0] + 128) >> 8;
     uint32_t gr = (((c >> 5) & 31) * (uint32_t)f[1] + 128) >> 8;
     uint32_t b = (((c >> 10) & 31) * (uint32_t)f[2] + 128) >> 8;
+    if (k != NULL) r = k[r], gr = k[gr], b = k[b];
     out[i] = (uint16_t)(r | gr << 5 | b << 10);
   }
+}
+
+static void LIGHT_KERNEL shadeLevels(uint16_t *out, const uint8_t *src, const uint8_t *levels, const int16_t *fac)
+{
+  shadeLevelsWith(out, src, levels, fac, NULL);
+}
+
+static void LIGHT_KERNEL shadeLevelsCurved(uint16_t *out, const uint8_t *src, const uint8_t *levels, const int16_t *fac, const uint8_t *k)
+{
+  shadeLevelsWith(out, src, levels, fac, k);
 }
 
 // Layer mode: per normal the light added in a region, `faces` how much each normal faces it
@@ -291,7 +321,8 @@ typedef struct LitArgs
 
 // A sprite bank: per slot albedo × (ambient + light × max(0, N·L)), shiny slots a highlight,
 // emissive ones as drawn. `normals` NULL: every slot faces the viewer.
-static void LIGHT_KERNEL litSlots(uint16_t *out, const uint8_t *pal, const uint8_t *normals, const LitArgs *a)
+static inline __attribute__((always_inline)) void litSlotsWith(uint16_t *out, const uint8_t *pal, const uint8_t *normals, const LitArgs *a,
+                                                               const uint8_t *k)
 {
   out[0] = 0;
   for (int32_t i = 1; i < 16; i++)
@@ -307,7 +338,7 @@ static void LIGHT_KERNEL litSlots(uint16_t *out, const uint8_t *pal, const uint8
     }
     if (flags & BM_SPRITE_SLOT_EMISSIVE)
     {
-      out[i] = (uint16_t)c;
+      out[i] = (uint16_t)(k != NULL ? (uint32_t)(k[c & 31] | k[(c >> 5) & 31] << 5 | k[(c >> 10) & 31] << 10) : c);
       continue;
     }
     int32_t t = 0;
@@ -335,8 +366,22 @@ static void LIGHT_KERNEL litSlots(uint16_t *out, const uint8_t *pal, const uint8
       gr += a->green * sp >> 8;
       b += a->blue * sp >> 8;
     }
-    out[i] = (uint16_t)((r > 31 ? 31 : r) | (gr > 31 ? 31 : gr) << 5 | (b > 31 ? 31 : b) << 10);
+    r = r > 31 ? 31 : r;
+    gr = gr > 31 ? 31 : gr;
+    b = b > 31 ? 31 : b;
+    if (k != NULL) r = k[r], gr = k[gr], b = k[b];
+    out[i] = (uint16_t)(r | gr << 5 | b << 10);
   }
+}
+
+static void LIGHT_KERNEL litSlots(uint16_t *out, const uint8_t *pal, const uint8_t *normals, const LitArgs *a)
+{
+  litSlotsWith(out, pal, normals, a, NULL);
+}
+
+static void LIGHT_KERNEL litSlotsCurved(uint16_t *out, const uint8_t *pal, const uint8_t *normals, const LitArgs *a, const uint8_t *k)
+{
+  litSlotsWith(out, pal, normals, a, k);
 }
 
 // --- The room ----------------------------------------------------------------------------------
@@ -347,7 +392,8 @@ static void presentPalette(BmGame *g, bool all)
 {
   const BmLight *l = &g->light;
   uint32_t first = l->paletteFirst, banks = l->paletteBanks;
-  const uint8_t *src = l->pPalette;
+  const BmColorCorrection *cc = bmPaletteCorrection();
+  const uint8_t *src = cc != NULL ? s_roomMixed : l->pPalette;
   // Per level the factor of each channel: ambient + light × level (two divisions in all).
   int16_t fac[16 * 3];
   int32_t step = (l->now << 8) / (l->levels - 1);   // a level's light, 65536 = 1.0
@@ -364,8 +410,9 @@ static void presentPalette(BmGame *g, bool all)
   for (uint32_t b = 0; b < banks && b < l->bankCount; b++)
   {
     if (!all && !(l->litBanks & (1u << b))) continue;
-    shadeLevels(out, src + b * 32, levelOf + b * 16, fac);
-    bmHalPaletteWriteBlock((uint16_t)((first + b) * 16), out, 16);
+    if (cc != NULL) shadeLevelsCurved(out, src + b * 32, levelOf + b * 16, fac, cc->curve);
+    else shadeLevels(out, src + b * 32, levelOf + b * 16, fac);
+    bmPaletteWriteRaw((uint16_t)((first + b) * 16), out, 16);
   }
 }
 
@@ -383,7 +430,7 @@ static void presentLayer(BmGame *g, bool all)
     for (uint32_t b = 0; b < banks; b++)
     {
       shadeLevels(out, src + b * 32, level0, fac);
-      bmHalPaletteWriteBlock((uint16_t)((first + b) * 16), out, 16);
+      bmPaletteWrite((uint16_t)((first + b) * 16), out, 16);
     }
   }
   if (l->stream)
@@ -393,7 +440,7 @@ static void presentLayer(BmGame *g, bool all)
       for (uint8_t b = 0; b < l->fixedBanks; b++)
       {
         for (uint32_t i = 0; i < 16; i++) out[i] = bmRead16(l->pFixed + (b * 16 + i) * 2);
-        bmHalPaletteWriteBlock((uint16_t)((l->firstBank + l->streamStride / 16 + b) * 16), out, 16);
+        bmPaletteWriteRaw((uint16_t)((l->firstBank + l->streamStride / 16 + b) * 16), out, 16);
       }
     return;
   }
@@ -402,7 +449,7 @@ static void presentLayer(BmGame *g, bool all)
   for (uint8_t r = 0; r < l->bankCount; r++)
   {
     regionBank(out, s_faces[r], cr, cg, cb);
-    bmHalPaletteWriteBlock((uint16_t)((l->firstBank + r) * 16), out, 16);
+    bmPaletteWriteRaw((uint16_t)((l->firstBank + r) * 16), out, 16);
   }
 }
 
@@ -494,8 +541,21 @@ static void litBank(BmGame *g, uint8_t bank, int32_t x, int32_t y, const int32_t
   a.green = l->green;
   a.blue = l->blue;
   uint16_t out[16];
-  litSlots(out, s->pPalette + palette * 32, s->pNormals, &a);
-  bmHalPaletteWriteBlock((uint16_t)(BM_HAL_PALETTE_OBJ_OFFSET + bank * 16), out, 16);
+  const BmColorCorrection *cc = bmPaletteCorrection();
+  const uint8_t *pal = s->pPalette + palette * 32;
+  if (cc != NULL)
+  {
+    if (s_objMixedSheet[bank] != g->bankSheet[bank] || s_objMixedPalette[bank] != palette)
+    {
+      mixColours(s_objMixed[bank], pal, 16, cc);
+      s_objMixedSheet[bank] = g->bankSheet[bank];
+      s_objMixedPalette[bank] = palette;
+    }
+    pal = s_objMixed[bank];
+  }
+  if (cc != NULL) litSlotsCurved(out, pal, s->pNormals, &a, cc->curve);
+  else litSlots(out, pal, s->pNormals, &a);
+  bmPaletteWriteRaw((uint16_t)(BM_HAL_PALETTE_OBJ_OFFSET + bank * 16), out, 16);
 }
 
 static void presentSprites(BmGame *g)
@@ -565,6 +625,14 @@ void bmLightPresent(BmGame *g)
   if (l->mode == BM_LIGHT_NONE) return;
   uint32_t t0 = bmHalCycles();
   l->now = bmLightIntensity(l, g->frame);
+  if (l->fresh)
+  {
+    // A room entered or the correction changed: the mixed sources again.
+    const BmColorCorrection *cc = bmPaletteCorrection();
+    if (cc != NULL && l->mode == BM_LIGHT_PALETTE)
+      mixColours(s_roomMixed, l->pPalette, (uint32_t)(l->paletteBanks < 16 ? l->paletteBanks : 16) * 16, cc);
+    memset(s_objMixedSheet, 0xFF, sizeof(s_objMixedSheet));
+  }
   if (l->mode == BM_LIGHT_PALETTE) presentPalette(g, l->fresh);
   else presentLayer(g, l->fresh);
   l->fresh = false;

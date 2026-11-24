@@ -57,6 +57,19 @@ BmResult bmBgSetLineScrollX(uint8_t bg, const int16_t *pOffsets);
 void bmPaletteLoadBg(uint16_t first, const BmColor *pColors, uint16_t count);
 void bmPaletteLoadObj(uint16_t first, const BmColor *pColors, uint16_t count);
 
+/// Palette entries (0-511: BG, then OBJ) as drawn: with a colour correction set they are
+/// corrected on the way to palette memory (which then holds other colours than were written).
+void bmPaletteWrite(uint16_t index, const uint16_t *pColours, uint16_t count);
+/// The same, never corrected: colours that are added to others by the colour effect (the light
+/// layer), whose sum the correction could not follow.
+void bmPaletteWriteRaw(uint16_t index, const uint16_t *pColours, uint16_t count);
+
+/// The colour correction for the colours written from now on (NULL: none; the table is
+/// copied). What palette memory holds stays: the caller writes its colours again.
+void bmPaletteSetCorrection(const BmColorCorrection *pCorrection);
+/// The colour correction in use, NULL if none.
+const BmColorCorrection *bmPaletteCorrection(void);
+
 /// Tile data for backgrounds: `tileIndex` counts tiles of the given depth from the start of
 /// the char block. 4 bpp tiles are 32 bytes, 8 bpp tiles 64 bytes.
 BmResult bmTilesLoadBg(uint8_t charBlock, uint16_t tileIndex, const void *pData, uint32_t size);

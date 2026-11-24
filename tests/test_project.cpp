@@ -172,6 +172,20 @@ static void testColourOverride()
   TEST_ASSERT(cookedPalette("gba", nullptr) == before);
 }
 
+// The colour correction the cooker bakes (pack-format.md §3.3): by default the AGB-001's,
+// none when asked.
+static void testColourCorrectionChunk()
+{
+  std::vector<uint8_t> c = colorCorrectionChunk(CookOptions::ColorCorrection::Agb001);
+  TEST_ASSERT(c.size() == 54 && c[0] == 1 && c[1] == 1);
+  auto at = [&](int i) { return int16_t(c[4 + i * 2] | c[5 + i * 2] << 8); };
+  TEST_ASSERT(at(0) > 4096 && at(4) > 4096 && at(8) > 4096 && at(1) < 0);   // the inverse of the screen's mixing
+  TEST_ASSERT(c[22] == 0 && c[23] == 7 && c[53] == 31);                     // the curve
+  TEST_ASSERT(colorCorrectionChunk(CookOptions::ColorCorrection::None).empty());
+  CookOptions options;
+  TEST_ASSERT(options.colorCorrection == CookOptions::ColorCorrection::Agb001);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 3)
@@ -186,6 +200,7 @@ int main(int argc, char **argv)
   RUN_TEST(testNewRoomCooks);
   RUN_TEST(testImportAndDelete);
   RUN_TEST(testColourOverride);
+  RUN_TEST(testColourCorrectionChunk);
   fs::remove_all(s_work);
   return TEST_RESULT();
 }

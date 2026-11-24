@@ -54,7 +54,7 @@ static void gaugeTile(uint8_t out[TILE_BYTES], int eighths, uint8_t fill)
     }
 }
 
-static void loadFixedTiles(void)
+void bmUiLoadPalette(void)
 {
   static const BmColor palette[14] = {
     { 0 }, { 0x7FFF }, { (uint16_t)(5 | 5 << 5 | 6 << 10) }, { (uint16_t)(3 | 4 << 5 | 10 << 10) },
@@ -67,6 +67,11 @@ static void loadFixedTiles(void)
     { (uint16_t)(31 | 28 << 5 | 6 << 10) },
   };
   bmPaletteLoadBg(BM_UI_PALETTE_BANK * 16, palette, 14);
+}
+
+static void loadFixedTiles(void)
+{
+  bmUiLoadPalette();
   uint8_t tile[TILE_BYTES];
   memset(tile, 0, sizeof(tile));
   bmTilesLoadBg(BM_UI_CHAR_BLOCK, 0, tile, TILE_BYTES);

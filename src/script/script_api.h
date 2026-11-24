@@ -158,7 +158,10 @@ typedef enum BmScriptType {
   X(layer_track,       VOID, 3, NAME,  HANDLE, INT,  VOID, 0) \
   X(marker_show,       VOID, 2, HANDLE, NAME, VOID,  VOID, 0) \
   X(marker_hide,       VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
-  X(self,              HANDLE, 0, VOID, VOID, VOID,  VOID, 0)
+  X(self,              HANDLE, 0, VOID, VOID, VOID,  VOID, 0) \
+  X(color_correction,  BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(set_color_correction, VOID, 1, BOOL, VOID, VOID,  VOID, 0) \
+  X(has_color_correction, BOOL, 0, VOID, VOID, VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -256,7 +259,9 @@ typedef enum BmScriptType {
 // row), ui_gauge(x, y, w, percent), ui_clear(x, y, w, h), ui_show(on); open_screen(#Class)
 // puts a Screen class on the stack (false if there is none of that name or the stack is full),
 // close_screen() closes the top one. language(), set_language(i), language_count(),
-// language_name(i): the texts' language (an option, text.h). equipped(slot): the record in an
+// language_name(i): the texts' language (an option, text.h). color_correction(),
+// set_color_correction(on), has_color_correction(): the colours corrected for the GBA's screen
+// (an option too; has_: the pack holds a correction, game.h). equipped(slot): the record in an
 // equipment slot (0: none); record_text(record, #field), record_int(record, #field): a field of
 // a record of any structure, by name (a text's string id; 0 if there is no such field). heal(n),
 // max_health(), player_health(): the player's health.

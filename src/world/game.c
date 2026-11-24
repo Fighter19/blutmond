@@ -376,6 +376,27 @@ static int8_t sheetBank(BmGame *g, int8_t sheet, uint8_t palette)
   return bank;
 }
 
+// The built-in sprites' banks.
+static void loadBuiltinPalettes(void)
+{
+  // Bank 13: a struck object's flash, every colour white (hits.h).
+  BmColor flash[16];
+  for (int c = 0; c < 16; c++) flash[c] = bmColorRGB(31, 31, 31);
+  bmPaletteLoadObj(BM_HITS_FLASH_BANK * 16, flash, 16);
+
+  // Banks 14 and 15: the built-in figure and the placeholder frame.
+  BmColor pal[32];
+  memset(pal, 0, sizeof(pal));
+  pal[1] = bmColorRGB(6, 4, 4);     // boots
+  pal[2] = bmColorRGB(20, 4, 6);    // hair
+  pal[3] = bmColorRGB(31, 24, 18);  // skin
+  pal[4] = bmColorRGB(22, 2, 4);    // coat
+  pal[5] = bmColorRGB(28, 26, 22);  // shirt
+  pal[6] = bmColorRGB(6, 6, 12);    // trousers
+  pal[16 + 1] = bmColorRGB(4, 31, 31);
+  bmPaletteLoadObj(14 * 16, pal, 32);
+}
+
 static void loadSprites(BmGame *g)
 {
   // Once per pack: every sheet's data (what logic reads: frames, boxes, animations). What is
@@ -452,22 +473,7 @@ static void loadSprites(BmGame *g)
   }
   bmTilesLoadObj((uint16_t)(g->builtinTile + 8), box, sizeof(box));
 
-  // Bank 13: a struck object's flash, every colour white (hits.h).
-  BmColor flash[16];
-  for (int c = 0; c < 16; c++) flash[c] = bmColorRGB(31, 31, 31);
-  bmPaletteLoadObj(BM_HITS_FLASH_BANK * 16, flash, 16);
-
-  // Banks 14 and 15: the built-in figure and the placeholder frame.
-  BmColor pal[32];
-  memset(pal, 0, sizeof(pal));
-  pal[1] = bmColorRGB(6, 4, 4);     // boots
-  pal[2] = bmColorRGB(20, 4, 6);    // hair
-  pal[3] = bmColorRGB(31, 24, 18);  // skin
-  pal[4] = bmColorRGB(22, 2, 4);    // coat
-  pal[5] = bmColorRGB(28, 26, 22);  // shirt
-  pal[6] = bmColorRGB(6, 6, 12);    // trousers
-  pal[16 + 1] = bmColorRGB(4, 31, 31);
-  bmPaletteLoadObj(14 * 16, pal, 32);
+  loadBuiltinPalettes();
   bmVideoSetSpriteMapping1D(true);
 }
 
@@ -2278,14 +2284,43 @@ BmResult bmGameAfterLoad(BmGame *g)
 #define OPTIONS_OFFSET 1024
 #define OPTIONS_MAGIC 0x504F4D42u   // "BMOP"
 
-// Options: u32 magic, u8 language, u8 0, u16 0.
+// Options: u32 magic, u8 language, u8 colour choice (BmGame::colorChoice; 0 in older ones), u16 0.
+static void writeOptions(const BmGame *g)
+{
+  uint8_t o[8] = { (uint8_t)OPTIONS_MAGIC, (uint8_t)(OPTIONS_MAGIC >> 8), (uint8_t)(OPTIONS_MAGIC >> 16), (uint8_t)(OPTIONS_MAGIC >> 24),
+                   g->language, g->colorChoice, 0, 0 };
+  bmHalSaveWrite(OPTIONS_OFFSET, o, sizeof(o));
+}
+
+bool bmGameColorCorrection(const BmGame *g)
+{
+  // Not chosen: corrected on a GBA's own screen only (an SP's looks like it to the game).
+  return g->colorCorrectable && (g->colorChoice == 0 ? bmHalScreen() == BM_HAL_SCREEN_GBA : g->colorChoice == 1);
+}
+
+// The pack's colour correction (CCOR, pack-format.md: after 4 bytes the matrix and the curve,
+// laid out as BmColorCorrection) for the colours written from now on, if it has one and it is on.
+static void applyColorCorrection(BmGame *g)
+{
+  int32_t c = bmPackFindChunk(g->pPack, BM_CHUNK_CCOR, 0);
+  uint32_t size = 0;
+  const uint8_t *p = c >= 0 ? bmPackChunkData(g->pPack, (uint32_t)c, &size) : NULL;
+  g->colorCorrectable = p != NULL && size >= 4 + sizeof(BmColorCorrection) && p[0] == 1;
+  BmColorCorrection cc;
+  if (g->colorCorrectable) memcpy(&cc, p + 4, sizeof(cc));
+  for (int i = 0; i < 32; i++) cc.curve[i] = cc.curve[i] > 31 ? 31 : cc.curve[i];   // the light looks it up as it is
+  bmPaletteSetCorrection(bmGameColorCorrection(g) ? &cc : NULL);
+}
+
 static void readOptions(BmGame *g)
 {
   uint8_t o[8];
   bmHalSaveRead(OPTIONS_OFFSET, o, sizeof(o));
   uint32_t magic = (uint32_t)o[0] | ((uint32_t)o[1] << 8) | ((uint32_t)o[2] << 16) | ((uint32_t)o[3] << 24);
   g->language = magic == OPTIONS_MAGIC && o[4] < bmTextLanguageCount(g->pPack) ? o[4] : 0;
+  g->colorChoice = magic == OPTIONS_MAGIC && o[5] <= 2 ? o[5] : 0;
   bmUiSetLanguage(&g->ui, g->language);
+  applyColorCorrection(g);
 }
 
 void bmGameSetLanguage(BmGame *g, uint8_t language)
@@ -2294,8 +2329,30 @@ void bmGameSetLanguage(BmGame *g, uint8_t language)
   g->language = language;
   bmUiSetLanguage(&g->ui, language);
   g->noticeDrawn = false;   // its text in the new language
-  uint8_t o[8] = { (uint8_t)OPTIONS_MAGIC, (uint8_t)(OPTIONS_MAGIC >> 8), (uint8_t)(OPTIONS_MAGIC >> 16), (uint8_t)(OPTIONS_MAGIC >> 24), language, 0, 0, 0 };
-  bmHalSaveWrite(OPTIONS_OFFSET, o, sizeof(o));
+  writeOptions(g);
+}
+
+// Every colour in palette memory written again (the correction changed): the room's, the UI's,
+// the sprites' banks, the built-in ones, and the light's on top.
+static void reloadPalettes(BmGame *g)
+{
+  bmRoomLoadPalette(&g->room);
+  bmUiLoadPalette();
+  for (uint8_t b = 0; b < BM_GAME_BANKS; b++)
+    if (g->bankSheet[b] != 0xFF) bmSpriteSheetLoadPalette(&g->sheets[g->bankSheet[b]], g->bankPalette[b], b);
+  loadBuiltinPalettes();
+  g->light.fresh = true;
+  g->light.objDark = 0;   // the banks out of the light were written once: again
+  bmLightPresent(g);
+}
+
+void bmGameSetColorCorrection(BmGame *g, bool on)
+{
+  if (!g->colorCorrectable) return;
+  g->colorChoice = on ? 1 : 2;
+  writeOptions(g);
+  applyColorCorrection(g);
+  reloadPalettes(g);
 }
 
 bool bmGameWriteSaveGame(BmGame *g)

@@ -27,6 +27,11 @@
 #define GBA_REG_IE        GBA_REG16(0x200)
 #define GBA_REG_IME       GBA_REG16(0x208)
 
+// Emulators' own registers (bmHalScreen): mGBA answers 0x1DEA once 0xC0DE is written to its
+// debug register; no$gba shows its name at 0x04FFFA00. On a GBA both are open bus.
+#define GBA_REG_MGBA_DEBUG GBA_REG16(0xFFF780)
+#define GBA_NOCASH_NAME   (*(volatile uint32_t *)(GBA_IO + 0xFFFA00))
+
 // The BIOS jumps to the address stored here on interrupts.
 #define GBA_BIOS_IRQ_VECTOR (*(void (*volatile *)(void))0x03007FFCu)
 

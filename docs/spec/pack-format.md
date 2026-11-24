@@ -65,9 +65,9 @@ chunk formats named in section 3.
   where a new game starts.
 - **What the cooker writes**, in this order: per area `VLAY`, `PALE`, `TILE`, then per room of
   the area (if lit: its light layer's `TMAP` and its `LITE`) its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `FIGR`, every `SONG`, every `FONT`,
-  every `MODB`, optionally `MODN`, every `DTAB`, the `LANG`s, and `STRS`.
+  every `MODB`, optionally `MODN`, every `DTAB`, the `LANG`s, `CCOR` (unless left out), and `STRS`.
 - **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `LITE`, `PALE`, `TILE`, `SPRT`, `FIGR`, `SONG`,
-  `FONT`, `MODB`, `MODN`, `DTAB`, `LANG`, `WRLD`, `MIGR`, `STRS`. `VLAY` is written but not read; where things go in video memory is
+  `FONT`, `MODB`, `MODN`, `DTAB`, `LANG`, `WRLD`, `MIGR`, `CCOR`, `STRS`. `VLAY` is written but not read; where things go in video memory is
   fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
 - **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the
   profile (GBA: 1024); 15 background palette banks (the 16th is the UI's); a pack pushed over the link has at most 512 chunks
@@ -266,6 +266,7 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `FONT` | one font, or a part of one, section 3.1 |
 | `LANG` | one language: translations of the pack's texts, section 3.2 |
 | `MIGR` | the save layouts of earlier versions ([state.md](state.md) §7) |
+| `CCOR` | a colour correction for a screen, section 3.3 |
 | `WRLD` | world map: where the rooms lie, their cells' walls and doors ([world-format.md](world-format.md) §3) |
 
 Readers MUST skip chunk types they do not know.
@@ -346,6 +347,41 @@ font, ranges U+3040-U+30FF and the kanji), glyphs larger than 8 x 8 for kanji to
 file takes 8 x 16 cells; the runtime draws 8 x 8 only so far, a 16 x 16 glyph would be four
 cache tiles), at most 224 different characters on one screen (the glyph cache), and line
 breaks between any two characters rather than at spaces.
+
+### 3.3 Colour correction
+
+The colours of a game are drawn on a PC screen; the AGB-001's screen (no light of its own)
+shows them darker and with the channels mixed. `CCOR` holds a correction the runtime applies
+to every colour on its way to palette memory (`src/graphics/public/color.h`), after lighting:
+
+```
+u8  version          1
+u8  screen           1: AGB-001
+u16 0
+s16 matrix[9]        row major (red, green, blue out), 4096 = 1.0
+u8  curve[32]
+```
+
+A channel is `curve[clamp((m0 * r + m1 * g + m2 * b) >> 12, 0, 31)]`. The cooker bakes the
+AGB-001's correction by default (the inverse of the mixing of the gba-colors shader by
+Pokefan531, each row adding up to 1.0, and its brightening curve); `bmcook --color-correction
+none` leaves the chunk out, and the snes profile never has one. Colours that the colour effect
+adds to others (the light layer) are not corrected: the sum of two corrected colours is not
+the corrected sum.
+
+The light costs (almost) nothing more with the correction on, which matters more than
+exactness on the GBA: the room's colours (palette mode) and the lit sprite banks' are mixed once
+(a room entered, the correction switched, a bank given another sheet), and every frame the
+light's kernels only look up the curve for each channel they lit (`src/world/light.c`). The mix
+is so taken before the light's colour instead of after: the same for white light, a little off
+in hue for a coloured one. The `light_mgba_*_corrected` tests hold the halls to the same cycle
+budget as without the correction.
+
+The player chooses in the system menu between the corrected and the original colours; the
+choice is kept with the options in the save memory (byte 5 of the options: 0 not chosen, 1
+corrected, 2 original). Not chosen, a GBA's own screen gets the corrected colours and
+everything else the original ones: a DS (its BIOS checksum), mGBA and no$gba (their debug
+registers) and the PC. A GBA SP cannot be told from an AGB-001 and counts as one.
 
 ## 4. Compression
 
