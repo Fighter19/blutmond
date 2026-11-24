@@ -439,7 +439,7 @@ function (12 bytes): u32 first code word, u16 code words, u8 registers, u8 param
                      u8 flags (1: state code), u8 0, u16 class
 constants:           s32 each
 code:                u16 words, followed by one spare word
-line table:          per function a u32 offset to: u16 file (string id), u16 n, n × (u16 word, u16 line)
+line table:          per function a u32 offset to: u16 file (string id of its name, without the folders), u16 n, n × (u16 word, u16 line)
 ```
 
 Everything is little endian. Variable types: 0 void, 1 bool, 2 int, 3 fix, 4 name, 5 text
