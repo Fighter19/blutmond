@@ -2222,7 +2222,7 @@ static void screenRun(BmGame *g, uint8_t s, BmScriptEvent event, int32_t arg, bo
 static void darkenRoom(bool on)
 {
   if (on) bmBlendSet(BM_BLEND_DARKEN, BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2) | BM_LAYER_OBJ | BM_LAYER_BACKDROP, 0, 0, 0, 9);
-  else bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
+  else bmUiBlend();
 }
 
 bool bmScreensOpen(BmGame *g, uint16_t className)

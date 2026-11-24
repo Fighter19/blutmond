@@ -2225,7 +2225,7 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   // game has no attachments).
   bmGameEquipmentChanged(g);
   bmAttachmentsAbilities(g);
-  bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
+  bmUiBlend();
   bmGameDrawDialogue(g);
   bmScreensRedraw(g);
   updateCamera(g);

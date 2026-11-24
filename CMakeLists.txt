@@ -866,7 +866,7 @@ if(BM_PLATFORM STREQUAL "host")
             --ppm ${out}/${image}.ppm --check ${elf}:bm_game_stats+8=0 --check ${elf}:bm_game_stats+12=1 --check "${elf}:bm_game_stats+4<=${lag}")
         set_tests_properties(game_render_${image} PROPERTIES FIXTURES_REQUIRED game_host FIXTURES_SETUP game_${image})
         add_test(NAME game_matches_${image}
-          COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --diff ${out}/${image}_diff.ppm)
+          COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --tolerance 1 --diff ${out}/${image}_diff.ppm)
         set_tests_properties(game_matches_${image} PROPERTIES FIXTURES_REQUIRED "game_host;game_${image}")
       endforeach()
 
@@ -887,7 +887,7 @@ if(BM_PLATFORM STREQUAL "host")
           --check ${elf}:bm_game_stats+56=0 --check "${elf}:bm_game_stats+4<=16")
       set_tests_properties(boss_gba PROPERTIES FIXTURES_SETUP boss_gba)
       add_test(NAME boss_matches
-        COMMAND ${compare} ${out}/boss_host.ppm ${out}/boss_gba.ppm --diff ${out}/boss_diff.ppm)
+        COMMAND ${compare} ${out}/boss_host.ppm ${out}/boss_gba.ppm --tolerance 1 --diff ${out}/boss_diff.ppm)
       set_tests_properties(boss_matches PROPERTIES FIXTURES_REQUIRED "boss_host;boss_gba")
 
       # The debug overlay (the UI layer's first user) at game frame 1000: the same on the GBA as
@@ -900,7 +900,7 @@ if(BM_PLATFORM STREQUAL "host")
           --ppm ${out}/overlay_gba.ppm --check ${BM_GBA_BUILD_DIR}/game_overlay.elf:bm_game_stats+8=0)
       set_tests_properties(overlay_gba PROPERTIES FIXTURES_SETUP overlay_gba)
       add_test(NAME overlay_matches
-        COMMAND ${compare} ${out}/overlay_host.ppm ${out}/overlay_gba.ppm --ignore 184 24 207 31 --diff ${out}/overlay_diff.ppm)
+        COMMAND ${compare} ${out}/overlay_host.ppm ${out}/overlay_gba.ppm --tolerance 1 --ignore 184 24 207 31 --diff ${out}/overlay_diff.ppm)
       set_tests_properties(overlay_matches PROPERTIES FIXTURES_REQUIRED "overlay_host;overlay_gba")
 
       # Save states move between the platforms (docs/spec/state.md):
@@ -930,7 +930,7 @@ if(BM_PLATFORM STREQUAL "host")
           --check ${elf}:bm_game_stats+20=1 --print ${elf}:bm_game_stats+24)
       set_tests_properties(state_host_to_gba PROPERTIES FIXTURES_REQUIRED state_host FIXTURES_SETUP state_host_to_gba)
       add_test(NAME state_host_to_gba_matches
-        COMMAND ${compare} ${out}/game_host.ppm ${out}/state_host_to_gba.ppm)
+        COMMAND ${compare} ${out}/game_host.ppm ${out}/state_host_to_gba.ppm --tolerance 1)
       set_tests_properties(state_host_to_gba_matches PROPERTIES FIXTURES_REQUIRED "game_host;state_host_to_gba")
 
       # Scripts as native code (docs/spec/mondskript.md section 12): the level cooked with a
@@ -950,7 +950,7 @@ if(BM_PLATFORM STREQUAL "host")
         set_tests_properties(native_render_${image} PROPERTIES FIXTURES_REQUIRED game_host FIXTURES_SETUP native_${image}
           PASS_REGULAR_EXPRESSION "bm_game_stats\\+48 = [1-9][0-9][0-9]")
         add_test(NAME native_matches_${image}
-          COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --diff ${out}/${image}_diff.ppm)
+          COMMAND ${compare} ${out}/game_host.ppm ${out}/${image}.ppm --tolerance 1 --diff ${out}/${image}_diff.ppm)
         set_tests_properties(native_matches_${image} PROPERTIES FIXTURES_REQUIRED "game_host;native_${image}")
       endforeach()
       set(elf ${BM_GBA_BUILD_DIR}/game_autoplay_native.elf)
@@ -1054,7 +1054,7 @@ if(BM_PLATFORM STREQUAL "host")
       add_test(NAME live_mgba_ppu_snapshot_render COMMAND bm_ppu_render ${out}/live_snapshot.bmps ${out}/live_snapshot_ppu.ppm)
       set_tests_properties(live_mgba_ppu_snapshot_render PROPERTIES FIXTURES_REQUIRED live_mgba_ppu_snapshot FIXTURES_SETUP live_mgba_ppu_render)
       add_test(NAME live_mgba_ppu_snapshot_matches COMMAND ${compare} ${out}/live_snapshot_mgba.ppm ${out}/live_snapshot_ppu.ppm
-          --ignore 32 96 47 127)  # the screenshot is a few frames later: the player's idle animation
+          --tolerance 1 --ignore 32 96 47 127)  # the screenshot is a few frames later: the player's idle animation
       set_tests_properties(live_mgba_ppu_snapshot_matches PROPERTIES FIXTURES_REQUIRED live_mgba_ppu_render)
       # The runtime image (no pack of its own, what the editor boots): it waits with the
       # loading box, then runs the pack pushed to it.

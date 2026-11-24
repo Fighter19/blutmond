@@ -25,6 +25,8 @@
 #include "shared.h"
 
 #define BM_UI_BG 3
+#define BM_UI_BLEND_UI 16      // the UI layer's weight in the blend (bmUiBlend), of 16
+#define BM_UI_BLEND_BEHIND 8   // what is behind it
 #define BM_UI_CHAR_BLOCK 2
 #define BM_UI_SCREEN_BLOCK 25
 #define BM_UI_PALETTE_BANK 15
@@ -140,6 +142,11 @@ int bmUiTextRange(BmUi *pUi, int col, int row, int w, int h, uint16_t textId, co
 
 /// Shows or hides the layer (from the next present).
 void bmUiShow(BmUi *pUi, bool shown);
+
+/// The colour effect when nothing else needs it: the UI layer blended over the room (alpha
+/// blending, the UI at full strength plus half of what is behind it): boxes and backgrounds
+/// show the room through them, dimmed; white text and frames stay bright.
+void bmUiBlend(void);
 
 /// Once a frame, in the vertical blank: background 3 on or off, the rows of the map that
 /// changed.

@@ -773,7 +773,15 @@ first one darkens the room (BLDCNT: darken BG0-2, sprites and the backdrop, BLDY
 layer; the new one gets `opened()`. `close_screen()`: the top one gets `closed()`, then is
 removed; if one is left, every open screen redraws (`opened()` from the bottom, the layer
 cleared first); if none, the layer is cleared, hidden unless a dialogue is shown, and the blend
-switched off.
+back to the UI's (below).
+
+**The UI see-through** (`bmUiBlend`): whenever nothing else uses the colour effect (no screen
+open, the room's effect none of spotlight, pulse, gradient or a teleport), BLDCNT is alpha
+blending with BG3 (the UI layer) as first target and BG0-2, sprites and the backdrop as
+second, EVA 16, EVB 8: every box and background of the UI shows what is behind it at half
+strength added to its own colours, so the room shows through, dimmed, and white text and
+frames stay white. A room effect that blends takes the effect over while it lasts (the UI is
+opaque then), and an open screen darkens the room instead.
 
 **The HUD and notices** (in a game frame without a screen, after the sprites, before the
 layer is presented): unless the debug overlay is shown (it takes the place), a frame of 13 x 4
@@ -817,7 +825,7 @@ frame the effect is presented; the UI layer (BG3) never takes part.
 | `gradient` | darkness at the top 0..16 (10) | – | dusk: BLDY per line (slot 2) from `a` at the top to 0 at line 96, with a slight shimmer |
 
 Line-table slots no longer used are switched off; the windows and blend are set each frame
-while a screen is not open.
+while a screen is not open (with no effect of the room's: the UI see-through, section above).
 
 **Teleport** (`bmEffectsTeleport`, `teleport`, the Return Feather): `teleTimer = 64`, the target
 in `teleRoom`, `teleX`, `teleY`, the sound `teleport`. At the start of each frame, while it

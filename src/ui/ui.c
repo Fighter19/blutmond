@@ -584,3 +584,9 @@ void bmUiRebind(BmUi *ui, const BmPack *pPack)
   }
   bmUiRestore(ui);
 }
+
+void bmUiBlend(void)
+{
+  bmBlendSet(BM_BLEND_ALPHA, BM_LAYER_BG(BM_UI_BG), BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2) | BM_LAYER_OBJ | BM_LAYER_BACKDROP,
+             BM_UI_BLEND_UI, BM_UI_BLEND_BEHIND, 0);
+}

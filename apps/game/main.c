@@ -284,7 +284,7 @@ static void loadingBox(uint32_t frame)
   }
   BmLiveProgress p;
   bmLiveGetProgress(&s_live, &p);
-  bmUiClearRect(ui, 3, 8, 24, 5);
+  bmUiFillRect(ui, 3, 8, 24, 5);   // the box's inside again (cleared cells would show the room undimmed)
   if (!p.receiving)
   {
     bmUiLabel(ui, 4, 9, "Waiting for the PC");
@@ -341,7 +341,7 @@ static void roomBox(uint32_t frame)
   {
     return;
   }
-  bmUiClearRect(ui, 3, 8, 24, 5);
+  bmUiFillRect(ui, 3, 8, 24, 5);   // the box's inside again (cleared cells would show the room undimmed)
   bmUiLabel(ui, 4, 8, "The next room comes");
   bmUiLabel(ui, 4, 9, "over the cable.");
   if (!menu)

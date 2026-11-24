@@ -276,7 +276,7 @@ void bmEffectsPresent(BmGame *g)
   }
   else if (kind != BM_EFFECT_SPOTLIGHT)
   {
-    bmBlendSet(BM_BLEND_NONE, 0, 0, 0, 0, 0);
+    bmUiBlend();   // nothing of the room's: the UI see-through
   }
   // Slots not used now are switched off (the room's backgrounds keep their plain scroll).
   for (uint8_t i = 0; i < 3; i++)
