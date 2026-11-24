@@ -105,7 +105,13 @@ static void status(void *pContext, uint32_t *pFrame, uint32_t *pRoom, int16_t *p
   *pY = (int16_t)BM_FIX_INT(gl->pGame->player.y);
 }
 
+static uint16_t wantedRoom(void *pContext)
+{
+  const BmGameLive *gl = pContext;
+  return gl->pGame->wantRoom;
+}
+
 BmLiveHooks bmGameLiveHooks(BmGameLive *gl)
 {
-  return (BmLiveHooks){ gl, stateBlocks, usePack, releasePack, afterStateLoad, status };
+  return (BmLiveHooks){ gl, stateBlocks, usePack, releasePack, afterStateLoad, status, wantedRoom };
 }

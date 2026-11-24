@@ -1093,11 +1093,45 @@ static void useDoor(BmGame *g, uint16_t index)
   goThroughDoor(g, &door);
 }
 
+// Whether the pack leaves out chunks (a trimmed one: rooms can come later over the link).
+static bool packHasAbsent(const BmPack *pPack)
+{
+  for (uint32_t i = 0; i < bmPackChunkCount(pPack); i++)
+  {
+    BmChunkEntry e;
+    if (bmPackGetChunk(pPack, i, &e) && (e.flags & BM_PACK_ENTRY_ABSENT)) return true;
+  }
+  return false;
+}
+
+bool bmGameWaitingForRoom(const BmGame *g, bool *pMenu, uint8_t *pChoice)
+{
+  if (pMenu) *pMenu = g->wantTimer >= BM_GAME_ROOM_WAIT_FRAMES;
+  if (pChoice) *pChoice = g->wantChoice;
+  return g->wantRoom != 0;
+}
+
 static void goThroughDoor(BmGame *g, const BmObjectView *door)
 {
   const char *target = bmGameObjectProperty(g, door, "target_room");
   const char *targetDoor = bmGameObjectProperty(g, door, "target_door");
   int32_t index = target ? bmGameFindRoom(g->pPack, target) : -1;
+  if (index < 0 && target != NULL && packHasAbsent(g->pPack))
+  {
+    // A room the pack left out: ask for it over the link and hold still meanwhile.
+    for (uint16_t i = 0; i < door->propertyCount; i++)
+    {
+      const char *k = bmPackString(g->pPack, bmRead16(door->pProperties + i * 4));
+      if (k != NULL && strcmp(k, "target_room") == 0) g->wantRoom = (uint16_t)(bmRead16(door->pProperties + i * 4 + 2) + 1);
+    }
+    g->wantDoor = 0;
+    for (uint16_t i = 0; i < g->objectCount; i++)
+      if (g->objects[i].persistentId == door->persistentId && g->objects[i].kind == BM_OBJECT_DOOR) g->wantDoor = (uint8_t)(i + 1);
+    g->wantTimer = 0;
+    g->wantChoice = 0;
+    g->player.vx = 0;
+    return;
+  }
   if (index < 0) return;
   bm_fix vx = g->player.vx;
   if (enterRoom(g, (uint32_t)index, true) != BM_SUCCESS) return;
@@ -1601,6 +1635,58 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     bmHalAudioBuffers(&l, &r);
     bmSoundFrame(&g->sound, l, r, BM_HAL_AUDIO_FRAME_SAMPLES);
     return;
+  }
+  // Waiting for a room over the link (a door into one the pack left out): the game holds still.
+  if (g->wantRoom != 0)
+  {
+    const char *target = bmPackString(g->pPack, (uint16_t)(g->wantRoom - 1));
+    if (target != NULL && bmGameFindRoom(g->pPack, target) >= 0 && g->wantDoor != 0 && g->wantDoor <= g->objectCount)
+    {
+      // It came (a pack pushed hot): through the door.
+      BmObjectView door = g->objects[g->wantDoor - 1];
+      g->wantRoom = 0;
+      g->hudDirty = true;
+      goThroughDoor(g, &door);
+    }
+    else
+    {
+      if (g->wantTimer < 0xFFFF) g->wantTimer++;
+      if (g->wantTimer >= BM_GAME_ROOM_WAIT_FRAMES)
+      {
+        // No answer: try again, or cancel (back into the room, away from the door).
+        if (pressed & (BM_KEY_UP | BM_KEY_DOWN)) g->wantChoice ^= 1;
+        if (pressed & BM_KEY_B) g->wantChoice = 1;
+        if (pressed & (BM_KEY_A | BM_KEY_START | BM_KEY_B))
+        {
+          if (g->wantChoice == 0) g->wantTimer = 0;
+          else
+          {
+            const BmObjectView *d = g->wantDoor != 0 && g->wantDoor <= g->objectCount ? &g->objects[g->wantDoor - 1] : NULL;
+            g->wantRoom = 0;
+            g->hudDirty = true;
+            g->doorCooldown = 60;
+            if (d != NULL)
+            {
+              // Back into the room, away from the door (an east door: to its left; a west one:
+              // to its right; one in the back wall: where they stand).
+              uint8_t side = g->objectDoorSide[g->wantDoor - 1];
+              int32_t x = side == 1 ? d->x - 20 : side == 2 ? d->x + d->w + 20 : BM_FIX_INT(g->player.x);
+              int8_t facing = side == 1 ? -1 : side == 2 ? 1 : g->player.facing;
+              int32_t sx = g->player.safeX, sy = g->player.safeY;
+              bmBodyPlace(&g->player, x, d->y + d->h);
+              g->player.safeX = sx;
+              g->player.safeY = sy;
+              g->player.facing = facing;
+            }
+          }
+        }
+      }
+      updateSprites(g);
+      int8_t *l, *r;
+      bmHalAudioBuffers(&l, &r);
+      bmSoundFrame(&g->sound, l, r, BM_HAL_AUDIO_FRAME_SAMPLES);
+      return;
+    }
   }
   // An item obtained last frame: its sound now (the frame it came had the item's work already).
   if (g->pickupSound)

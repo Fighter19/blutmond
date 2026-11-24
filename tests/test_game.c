@@ -4,6 +4,7 @@
 #include "device.h"
 #include "effects.h"
 #include "game.h"
+#include "game_live.h"
 #include "hal_host.h"
 #include "hits.h"
 #include "live.h"
@@ -2778,6 +2779,73 @@ static void testSpritesAcrossRooms(void)
   TEST_ASSERT(s_game.spriteMisses == 0);
 }
 
+// A door into a room the pack left out (a multiboot GBA's): the game holds still and asks for
+// it (bmLiveHooks.wantedRoom); no answer for 3 seconds: the menu, try again or cancel (back
+// into the room); when a pack with the room comes, through the door by itself. The pack here
+// is the level with the boss hall's ROOM left out.
+static void testWaitingForARoom(void)
+{
+  static uint8_t *trimmed;
+  trimmed = malloc(s_size);
+  memcpy(trimmed, s_data, s_size);
+  BmPack full;
+  TEST_ASSERT(bmPackOpen(&full, s_data, s_size, true) == BM_PACK_OK);
+  int32_t boss = bmGameFindRoom(&full, "boss_hall");
+  uint32_t tocOffset = bmRead32(trimmed + 24), room = 0;
+  for (uint32_t i = 0; i < bmPackChunkCount(&full); i++)
+  {
+    uint8_t *e = trimmed + tocOffset + i * 24;
+    if (bmRead32(e) != BM_CHUNK_ROOM || room++ != (uint32_t)boss) continue;
+    memset(e + 4, 0, 8);   // offset, size
+    e[16] |= BM_PACK_ENTRY_ABSENT;
+  }
+  uint32_t crc = bmCrc32(0, trimmed + BM_PACK_HEADER_SIZE, s_size - BM_PACK_HEADER_SIZE);
+  for (int k = 0; k < 4; k++) trimmed[32 + k] = (uint8_t)(crc >> (8 * k));
+  startWith(trimmed, s_size, "test_room_2");
+  frames(3, 0);
+  TEST_ASSERT(bmGameFindRoom(&s_pack, "boss_hall") < 0);
+  // Into the east door.
+  bmBodyPlace(&s_game.player, 470, 128);
+  int f = 0;
+  for (; f < 200 && !bmGameWaitingForRoom(&s_game, NULL, NULL); f++) frames(1, BM_KEY_RIGHT);
+  TEST_ASSERT(bmGameWaitingForRoom(&s_game, NULL, NULL) && strcmp(bmPackString(&s_pack, (uint16_t)(s_game.wantRoom - 1)), "boss_hall") == 0);
+  BmLiveHooks hooks = bmGameLiveHooks(&(BmGameLive){ &s_game, &s_pack, NULL, false, { 0 } });
+  TEST_ASSERT(hooks.wantedRoom(hooks.pContext) == s_game.wantRoom);
+  // It holds still: the player does not move, the room stays.
+  int32_t x = s_game.player.x;
+  bool menu = true;
+  frames(BM_GAME_ROOM_WAIT_FRAMES - 10, BM_KEY_LEFT);
+  TEST_ASSERT(s_game.player.x == x && strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
+  TEST_ASSERT(bmGameWaitingForRoom(&s_game, &menu, NULL) && !menu);
+  // No answer: the menu. Try again: waiting again; then cancel: back into the room.
+  frames(20, 0);
+  uint8_t choice = 9;
+  TEST_ASSERT(bmGameWaitingForRoom(&s_game, &menu, &choice) && menu && choice == 0);
+  frames(1, BM_KEY_A);
+  frames(1, 0);
+  TEST_ASSERT(bmGameWaitingForRoom(&s_game, &menu, NULL) && !menu);
+  frames(BM_GAME_ROOM_WAIT_FRAMES, 0);
+  frames(1, BM_KEY_DOWN);
+  frames(1, 0);
+  TEST_ASSERT(bmGameWaitingForRoom(&s_game, &menu, &choice) && menu && choice == 1);
+  frames(1, BM_KEY_A);
+  frames(1, 0);
+  TEST_ASSERT(!bmGameWaitingForRoom(&s_game, NULL, NULL) && BM_FIX_INT(s_game.player.x) < 480);
+  frames(30, BM_KEY_LEFT);
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) < BM_FIX_INT(x) - 20 && strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
+  // Into it again; this time the whole level comes (as a hot push): through the door.
+  frames(70, 0);   // the door rests after a cancel
+  bmBodyPlace(&s_game.player, 470, 128);   // back on the ledge before it
+  for (f = 0; f < 200 && !bmGameWaitingForRoom(&s_game, NULL, NULL); f++) frames(1, BM_KEY_RIGHT);
+  TEST_ASSERT(bmGameWaitingForRoom(&s_game, NULL, NULL));
+  frames(10, 0);
+  TEST_ASSERT(bmPackOpen(&s_pack, s_data, s_size, true) == BM_PACK_OK && bmGameAfterLoad(&s_game) == BM_SUCCESS);
+  frames(3, 0);
+  TEST_ASSERT(!bmGameWaitingForRoom(&s_game, NULL, NULL) && strcmp(bmGameRoomId(&s_game), "boss_hall") == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+  free(trimmed);
+}
+
 // The grapple (grapple.h) in the chasm (assets/test_room/chasm_room.tmx): nothing without the
 // ability, which the pedestal gives; R to the anchor over the chasm and from it to the next,
 // held level, and down onto the west floor; up the tower's ledge; the bat (light) pulled to
@@ -2928,6 +2996,7 @@ int main(int argc, char **argv)
   RUN_TEST(testThePushBlockPuzzle);
   RUN_TEST(testSheetsAndPalettesPerRoom);
   RUN_TEST(testSpritesAcrossRooms);
+  RUN_TEST(testWaitingForARoom);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

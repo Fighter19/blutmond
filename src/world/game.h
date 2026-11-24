@@ -209,6 +209,14 @@ typedef struct BmGame
   BmFigureLayerState playerLayers[BM_FIGURE_MAX_LAYERS];   // the player's layers ([0].anim unused: playerAnim)
   uint8_t playerLayerPalette[BM_FIGURE_MAX_LAYERS];      // the palette each layer's figure line names
   uint16_t equipPalette;   // string id of the palette the equipment names (look_palette), 0xFFFF none; derived
+  // A door into a room the pack left out (a multiboot GBA, pack-format.md §0): the game holds
+  // still and asks for the room over the link (bmLiveHooks.wantedRoom) until a pack that has it
+  // arrives, then goes through the door; after BM_GAME_ROOM_WAIT_FRAMES without one, a menu
+  // (try again, cancel). Not state: a loaded state or a restart ends it.
+  uint16_t wantRoom;       // the string id + 1 of the room's id, 0: none
+  uint8_t wantDoor;        // the door (object index + 1)
+  uint8_t wantChoice;      // in the menu: 0 try again, 1 cancel
+  uint16_t wantTimer;      // frames waited since asked (again)
   // The marker (marker_show): a sprite's first animation drawn at an object's middle.
   uint32_t markerTarget;   // a handle, 0: none
   uint16_t markerSprite;   // string id of the sprite
@@ -247,6 +255,12 @@ typedef struct BmGame
 /// not have: its own), loading its tiles into sprite memory and the palette into a free bank
 /// the first time in a room. -1 if the sheet does not fit (counted in spriteMisses); with
 /// no bank free, a bank with another palette of the sheet.
+#define BM_GAME_ROOM_WAIT_FRAMES 180   // waiting for a left-out room before the menu (3 s)
+
+/// Whether the game waits for a room over the link (a door into a room the pack left out);
+/// *pMenu: the menu is up (no answer), with *pChoice selected (0 try again, 1 cancel).
+bool bmGameWaitingForRoom(const BmGame *pGame, bool *pMenu, uint8_t *pChoice);
+
 /// The player's layer named by string id `name` (figure.h), or -1.
 int8_t bmGamePlayerLayer(const BmGame *pGame, uint16_t name);
 /// Where point `point` (string id) of the player's layer `layer` is now: room pixels as fix and

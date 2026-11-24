@@ -18,7 +18,7 @@
 #include "pack.h"
 #include "state.h"
 
-#define BM_LIVE_RUNTIME_VERSION 5   // 5: takes packs that leave chunks out (fitted push)
+#define BM_LIVE_RUNTIME_VERSION 6   // 5: takes packs that leave chunks out (fitted push); 6: asks for rooms (HELLO's wanted room)
 #define BM_LIVE_MAX_CHUNKS 512
 #define BM_LIVE_STATE_CAPACITY 3328
 
@@ -65,6 +65,10 @@ typedef struct BmLiveHooks
   bool (*afterStateLoad)(void *pContext);
   /// Current frame, room and coarse player position for STATUS.
   void (*status)(void *pContext, uint32_t *pFrame, uint32_t *pRoomIndex, int16_t *pX, int16_t *pY);
+  /// A room the game waits for (a door into one its pack left out): the string id of its id + 1,
+  /// 0 none. Told in HELLO (runtime version 6); the master answers with a pack that has it. NULL:
+  /// never.
+  uint16_t (*wantedRoom)(void *pContext);
 } BmLiveHooks;
 
 /// Region table (runtime-abi.md §3): what the runtime keeps and what content owns.
@@ -305,10 +309,11 @@ typedef struct BmLiveHello
   uint32_t hashCount;         // pairs that follow (may be fewer than chunkCount)
   uint32_t poolCapacity;      // the largest pack it takes at all, overwriting the running one
   uint32_t inPlaceCapacity;   // the largest that goes over it keeping chunks in place (0: none)
+  uint32_t wantedRoom;        // runtime version 6: the room the game waits for (string id + 1, 0 none)
 } BmLiveHello;
 #define BM_LIVE_HELLO_SIZE 40
 #define BM_LIVE_HELLO_ENTRY 12   // per chunk listed: hash, size, offset
-#define BM_LIVE_HELLO_MAX_HASHES ((BM_LINK_MAX_PAYLOAD - BM_LIVE_HELLO_SIZE) / BM_LIVE_HELLO_ENTRY)
+#define BM_LIVE_HELLO_MAX_HASHES ((BM_LINK_MAX_PAYLOAD - BM_LIVE_HELLO_SIZE - 4) / BM_LIVE_HELLO_ENTRY)   // room for the wanted room after them
 
 /// STATUS: kind (0 report, 1 answer to APPLY), result, mode, then transfer id, frame, room,
 /// x, y, applied count.

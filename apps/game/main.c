@@ -315,6 +315,50 @@ static void loadingBox(uint32_t frame)
   bmUiPresent(ui);
 }
 
+// The same box while the game waits for a room over the link (a door into one the pack left
+// out, bmGameWaitingForRoom): asking the PC; when the pack comes, loadingBox shows it arriving;
+// with no answer, the choice to try again or cancel. Drawn with the game's own font.
+static bool s_roomBoxShown;
+static uint8_t s_roomBoxState;
+
+static void roomBox(uint32_t frame)
+{
+  BmUi *ui = &s_game.ui;
+  bool menu = false;
+  uint8_t choice = 0;
+  bmGameWaitingForRoom(&s_game, &menu, &choice);
+  uint8_t state = (uint8_t)(menu ? 2 + choice : 1);
+  if (!s_roomBoxShown || state != s_roomBoxState)
+  {
+    bmUiClear(ui);
+    bmUiFrame(ui, 2, 6, 26, 8);
+    bmUiLabel(ui, 4, 7, "Loading");
+    s_roomBoxShown = true;
+    s_roomBoxState = state;
+    frame = 0;
+  }
+  else if (frame % 8 != 0)
+  {
+    return;
+  }
+  bmUiClearRect(ui, 3, 8, 24, 5);
+  bmUiLabel(ui, 4, 8, "The next room comes");
+  bmUiLabel(ui, 4, 9, "over the cable.");
+  if (!menu)
+  {
+    bmUiLabel(ui, 4, 11, "Waiting for the PC");
+    bmUiLabel(ui, 4 + (int)((s_game.frame / 16) % 18), 12, ".");
+  }
+  else
+  {
+    bmUiLabel(ui, 4, 10, "No answer from the PC.");
+    bmUiLabel(ui, 4, 11, choice == 0 ? "> Try again" : "  Try again");
+    bmUiLabel(ui, 4, 12, choice == 1 ? "> Cancel" : "  Cancel");
+  }
+  bmUiShow(ui, true);
+  bmUiPresent(ui);
+}
+
 static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autoplay)
 {
   // Without a pack (a runtime image, game_runtime_mb.gba): it waits for one over the link,
@@ -485,6 +529,14 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
     }
 #endif
     bmGameFrame(&s_game, keys);
+    if (bmGameWaitingForRoom(&s_game, NULL, NULL)) roomBox(s_game.frame);
+    else if (s_roomBoxShown)
+    {
+      // The room came (or the wait was cancelled): the game's own UI again.
+      s_roomBoxShown = false;
+      bmUiClear(&s_game.ui);
+      s_game.hudDirty = true;
+    }
     if (s_snapshotFrame != 0 && s_game.frame == s_snapshotFrame)
     {
       takeSnapshot(&bm_state_outbox);

@@ -33,6 +33,11 @@
 //                                     scripted objects whose class did not change keep running)
 //   state-get <file> [save|link|snapshot]
 //   state-put <file>      load a state (reload mode "state")
+//   serve <pack> [count [polls]]   answer the game when it asks for a room its pack left out (a
+//                         door into it on a multiboot GBA): the pack fitted around that room,
+//                         pushed hot (the game goes on through the door). Until Ctrl-C, or
+//                         `count` answers, or `polls` questions (a question every 100 ms; mGBA:
+//                         every 6 frames)
 //   run <frames>          mGBA: let the game run
 //   check <elf>:<sym>[+off][=|<=]<value>   mGBA: read the program's memory
 //   screenshot <file.ppm> mGBA
@@ -676,6 +681,57 @@ int main(int argc, char **argv)
 #endif
     }
 #ifdef BM_HAVE_MGBA
+    else if (strcmp(cmd, "serve") == 0 && a1 != NULL)
+    {
+      i++;
+      int count = i + 1 < argc && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9' ? atoi(argv[++i]) : 0;
+      int polls = i + 1 < argc && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9' ? atoi(argv[++i]) : 0;
+      uint32_t size;
+      uint8_t *pack = readFile(a1, &size);
+      BmPack opened;
+      if (pack == NULL || bmPackOpen(&opened, pack, size, true) != BM_PACK_OK) { free(pack); failed = 1; break; }
+      printf("serve %s: answering requests for rooms%s\n", a1, count ? "" : " until Ctrl-C");
+      int served = 0;
+      for (int poll = 0; !s_cancel && (count == 0 || served < count) && (polls == 0 || poll < polls); poll++)
+      {
+        if (!bmLiveMasterHello(&m, &remote)) { failed = 1; break; }
+        haveRemote = true;
+        uint32_t want = remote.hello.wantedRoom;
+        if (want != 0)
+        {
+          // The room by its id in our pack (the same strings as the game's), and the pack
+          // fitted around it, pushed hot: the game keeps its state and goes through the door.
+          const char *id = bmPackString(&opened, (uint16_t)(want - 1));
+          int32_t room = id != NULL ? bmLiveMasterFindRoom(pack, size, id) : -1;
+          if (room < 0)
+          {
+            fprintf(stderr, "serve: the game wants a room this pack does not have (%s)\n", id != NULL ? id : "?");
+            failed = 1;
+            break;
+          }
+          BmLivePushStats st;
+          BmLiveStatus status;
+          double t0 = now();
+          bool ok = bmLiveMasterPushPackFor(&m, pack, size, ++transferId, &remote, room, &st) &&
+                    bmLiveMasterApply(&m, transferId, BM_LIVE_HOT, NULL, &status);
+          if (!ok) { failed = 1; break; }
+          printf("serve: room %s: %u chunks sent (%u bytes), %u left out, %.2f s; %s, room %u\n", id, (unsigned)st.chunksSent,
+                 (unsigned)st.bytesSent, (unsigned)st.chunksLeftOut, now() - t0, resultName(status.result), (unsigned)status.roomIndex);
+          if (status.result != BM_LIVE_OK) { failed = 1; break; }
+          served++;
+          continue;
+        }
+        if (mgba != NULL) bmMgbaLinkRunFrames(mgba, 6);
+        else
+        {
+          struct timespec nap = { 0, 100000000 };
+          nanosleep(&nap, NULL);
+        }
+      }
+      free(pack);
+      if (count != 0 && served < count) { fprintf(stderr, "serve: %d of %d requests answered\n", served, count); failed = 1; }
+      if (failed) break;
+    }
     else if (strcmp(cmd, "run") == 0 && a1 != NULL && mgba != NULL)
     {
       bmMgbaLinkRunFrames(mgba, (uint32_t)atoi(argv[++i]));

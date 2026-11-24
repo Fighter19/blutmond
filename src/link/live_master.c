@@ -23,7 +23,12 @@ bool bmLiveMasterHello(BmLinkMaster *m, BmLiveRemote *r)
     if (h.hashCount > BM_LIVE_HELLO_MAX_HASHES || p.length < BM_LIVE_HELLO_SIZE + h.hashCount * BM_LIVE_HELLO_ENTRY ||
         listed + h.hashCount > BM_LIVE_MAX_CHUNKS)
       return false;
-    if (part == 0) r->hello = h;
+    if (part == 0)
+    {
+      r->hello = h;
+      uint32_t tail = BM_LIVE_HELLO_SIZE + h.hashCount * BM_LIVE_HELLO_ENTRY;
+      if (h.runtimeVersion >= 6 && p.length >= tail + 4) r->hello.wantedRoom = bmLinkGet32(p.payload + tail);
+    }
     for (uint32_t i = 0; i < 3 * h.hashCount; i++) r->pairs[3 * listed + i] = bmLinkGet32(p.payload + BM_LIVE_HELLO_SIZE + i * 4);
     listed += h.hashCount;
     r->hello.hashCount = listed;

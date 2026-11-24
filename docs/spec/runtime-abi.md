@@ -40,6 +40,18 @@ Most of this document is the design. Built so far (`src/link/live.h`,
   game does not go to a left-out room; a later push fitted around that room brings it (and
   leaves out others). On the test level and a pool 12 KB smaller than it, 21 of 142 chunks
   are left out.
+- **Rooms on demand** (runtime version 6). A door into a room the pack left out (a trimmed
+  pack: a multiboot image's) does not just stay shut: the game holds still (the picture stays,
+  the sound goes on), shows the loading box ("The next room comes over the cable. Waiting for
+  the PC") and tells the room in every `HELLO` answer (the string id of the door's
+  `target_room` + 1; the string table is never left out, so the PC finds the room by that id
+  in its own pack). `bmlink serve <pack>` asks every 100 ms and answers with the pack fitted
+  around that room, pushed hot: the game keeps its state; while the pack arrives over the
+  running one the box shows it coming (gauge, KB, chunks), and then the player goes through
+  the door. After 3 seconds (`BM_GAME_ROOM_WAIT_FRAMES`) without a pack the box offers "Try
+  again" (waits 3 seconds more) and "Cancel" (B as well): the player is put back into the room
+  beside the door (60 frames before the door works again), and the game goes on. The wait is
+  not state. The editor does not answer yet (it uses the cable only while it pushes).
 - **No pack at all.** The runtime image (`game_runtime_mb.gba`) carries no pack: it starts
   with the pack let go of and waits for the first. A restart or hot push then starts the
   game.

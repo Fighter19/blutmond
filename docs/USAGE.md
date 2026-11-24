@@ -250,6 +250,17 @@ bmlink --xboo /dev/parport0 push build/test-output/test_level_gba.bmpk restart:d
 `push` reports how many chunks were left out. A cartridge GBA sending its game to a
 multiboot one (section 8) fits the pack around the room it is in.
 
+Or let the game ask: walking into a door to a room its pack does not have, the multiboot game
+stops with a box ("The next room comes over the cable"). With
+
+```
+bmlink --xboo /dev/parport0 serve build/test-output/test_level_gba.bmpk
+```
+
+running (until Ctrl-C), the room comes by itself, a second or two later, and the game goes
+on through the door with everything the player had. Without it, after 3 seconds the box
+offers to try again or to cancel (back into the room).
+
 ## 5. Changing things while the game runs
 
 With the game running (PC or GBA) and **Live** on in the editor, save a room in Tiled, a

@@ -351,7 +351,10 @@ static bool sendHello(BmLive *l, uint32_t first)
     bmLinkPut32(o + 4, e.size);
     bmLinkPut32(o + 8, e.offset);
   }
-  return send(l, BM_LINK_HELLO, out, (uint16_t)(BM_LIVE_HELLO_SIZE + hashes * BM_LIVE_HELLO_ENTRY));
+  // After the chunks: the room the game waits for (runtime version 6).
+  uint8_t *tail = out + BM_LIVE_HELLO_SIZE + hashes * BM_LIVE_HELLO_ENTRY;
+  bmLinkPut32(tail, l->hooks.wantedRoom != NULL && !l->packReleased ? l->hooks.wantedRoom(l->hooks.pContext) : 0);
+  return send(l, BM_LINK_HELLO, out, (uint16_t)(BM_LIVE_HELLO_SIZE + hashes * BM_LIVE_HELLO_ENTRY + 4));
 }
 
 // The state as it is now, sent in parts by pumpState (STATE_DATA: offset, total, data). In
@@ -932,4 +935,5 @@ void bmLiveDecodeHello(const uint8_t *i, BmLiveHello *h)
   h->hashCount = bmLinkGet32(i + 28);
   h->poolCapacity = bmLinkGet32(i + 32);
   h->inPlaceCapacity = bmLinkGet32(i + 36);
+  h->wantedRoom = 0;
 }
