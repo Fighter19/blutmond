@@ -43,6 +43,7 @@ enum {
   BM_CHUNK_LANG = BM_FOURCC('L', 'A', 'N', 'G'),   // translations into one language (src/ui/text.h)
   BM_CHUNK_WRLD = BM_FOURCC('W', 'R', 'L', 'D'),   // the world map (src/world/map.h)
   BM_CHUNK_MIGR = BM_FOURCC('M', 'I', 'G', 'R'),   // save layouts of earlier versions (src/world/state.h)
+  BM_CHUNK_FIGR = BM_FOURCC('F', 'I', 'G', 'R'),   // a figure: sprites in layers (src/world/figure.h)
 };
 
 /// Storage layout (header flags bits 0-3), docs/spec/pack-format.md §2.6.

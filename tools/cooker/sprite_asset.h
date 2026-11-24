@@ -32,6 +32,17 @@ struct NamedBox
   bool operator==(const NamedBox &o) const { return kind == o.kind && name == o.name && box == o.box; }
 };
 
+/// A point of a frame (docs/plans/layered-sprites.md §4): where another layer of a figure is
+/// placed, with a direction for what hangs there and whether that is drawn behind.
+struct Point
+{
+  std::string name;
+  int x = 0, y = 0;                   // relative to the anchor
+  int angle = 0;                      // 256 steps a turn, 0 forward, clockwise on screen
+  bool behind = false;                // what hangs there is drawn behind this layer
+  bool operator==(const Point &o) const { return name == o.name && x == o.x && y == o.y && angle == o.angle && behind == o.behind; }
+};
+
 struct Frame
 {
   int x = 0, y = 0, w = 16, h = 16;   // rectangle in the sheet
@@ -39,6 +50,7 @@ struct Frame
   bool ownHitbox = false;             // otherwise the sprite's hitbox
   Box hitbox;
   std::vector<NamedBox> boxes;        // replace the sprite's boxes of the same kinds
+  std::vector<Point> points;          // and the sprite's points of the same names
 };
 
 struct Step
@@ -75,6 +87,7 @@ struct Sprite
   std::shared_ptr<Image> image;
   Box hitbox;
   std::vector<NamedBox> boxes;        // of every frame that has none of that kind
+  std::vector<Point> points;          // of every frame that has none of that name
   std::vector<Frame> frames;
   std::vector<Animation> animations;
   std::vector<PaletteVariant> palettes;   // besides the sheet's own ("default")
@@ -99,6 +112,7 @@ struct CookedFrame
   Box hitbox;
   std::vector<NamedBox> boxes;        // the frame's own, else the sprite's, per kind
   Box bounds;                         // of the opaque pixels, relative to the anchor
+  std::vector<Point> points;          // the frame's own, then the sprite's of other names
 };
 
 /// The boxes a frame has: its own of a kind, else the sprite's of that kind.
@@ -107,6 +121,7 @@ std::vector<NamedBox> frameBoxes(const Sprite &sprite, const Frame &frame);
 struct Cooked
 {
   std::vector<std::string> boxNames;  // every name of a hit or guard box, in order of use
+  std::vector<std::string> pointNames;   // every point name, in order of use
   std::vector<uint16_t> palette;      // 16 entries, 0 transparent
   std::vector<std::string> paletteNames;           // of the variants, in file order
   std::vector<std::vector<uint16_t>> variants;     // 16 entries each, the same slots
@@ -121,8 +136,10 @@ Cooked cook(const Sprite &sprite, const Profile &profile, Report &report);
 
 /// The SPRT chunk (pack-format.md): `nameId` is the sprite's name in the string table,
 /// `animationNames` the string ids of its animations, `boxNameIds` those of cooked.boxNames.
-/// `paletteNameIds` those of "default" and then cooked.paletteNames.
+/// `paletteNameIds` those of "default" and then cooked.paletteNames, `pointNameIds` those of
+/// cooked.pointNames (a sprite with points is written as version 4).
 std::vector<uint8_t> chunk(const Sprite &sprite, const Cooked &cooked, uint16_t nameId, const std::vector<uint16_t> &animationNames,
-                           const std::vector<uint16_t> &boxNameIds = {}, const std::vector<uint16_t> &paletteNameIds = {});
+                           const std::vector<uint16_t> &boxNameIds = {}, const std::vector<uint16_t> &paletteNameIds = {},
+                           const std::vector<uint16_t> &pointNameIds = {});
 
 }  // namespace bm::sprite

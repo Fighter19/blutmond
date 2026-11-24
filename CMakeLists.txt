@@ -42,7 +42,9 @@ set(BM_WARNINGS -Wall -Wextra -Werror -pedantic)
 # play it. The full level adds languages, menus and the boss; every other image plays that.
 set(BM_TEST_LEVEL_BASE_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
 set(BM_TEST_LEVEL_BASE_ASSETS
-  ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/player_legs.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/player_torso.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmfigure
   ${PROJECT_SOURCE_DIR}/assets/test_room/bat.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bat.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/door.ms
@@ -398,7 +400,7 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_script PRIVATE ${BM_WARNINGS})
 
   add_library(bm_cooker STATIC
-    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp tools/cooker/font_asset.cpp tools/cooker/lang_asset.cpp tools/cooker/world_asset.cpp src/sound/sound.c src/pack/pack.c src/data/data.c)
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp tools/cooker/font_asset.cpp tools/cooker/lang_asset.cpp tools/cooker/world_asset.cpp tools/cooker/figure_asset.cpp src/sound/sound.c src/pack/pack.c src/data/data.c)
   target_include_directories(bm_cooker PUBLIC tools/cooker src/pack src/sound src/data src/core/public PRIVATE third_party/stb)
   target_link_libraries(bm_cooker PUBLIC bm_script)
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST PRIVATE "BM_NATIVE_INCLUDE_DIR=\"${PROJECT_SOURCE_DIR}/src/script\"")
@@ -982,7 +984,7 @@ if(BM_PLATFORM STREQUAL "host")
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+92=2
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+96=2982369528)
       add_test(NAME gba_to_gba_boot
-        COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/bootstrap_mb.gba --frames 1500 --until a ${send}+24=1000
+        COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/bootstrap_mb.gba --frames 1800 --until a ${send}+24=1000
           --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=6 --check a ${send}+8=0 --check a ${send}+12=1
           --check a ${send}+64 --check a ${send}+80 --check a ${send}+68
           --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+28=2

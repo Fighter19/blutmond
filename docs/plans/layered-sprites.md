@@ -1,6 +1,6 @@
 # Plan: layered sprites and variants
 
-Status: steps 1 and 2 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
+Status: steps 1 to 3 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
 a palette table in `SPRT` version 3 ([../spec/sprite-format.md](../spec/sprite-format.md)), the
 room object's property `palette`, `set_palette` and `flash` in scripts. Sheets: every sheet's
 data opened once per pack, sprite memory and banks given out room by room per (sheet, palette)
@@ -10,7 +10,19 @@ bat and a red Fast Bat, one sheet in two banks. Where it differs from sections 2
 to 12 are given out (13 is the flash, as before; the UI uses a background bank), bank 0 is the
 player's; nothing is freed inside a room, only when a room is entered; colour rules (`ramp`,
 `tint`), `tint` and `fade` and streamed animations are not built; a sheet that does not fit is
-not drawn (and counted) rather than drawn as the placeholder. Steps 3 to 7 are open. Milestone
+not drawn (and counted) rather than drawn as the placeholder.
+
+Step 3 built: points in frames (`SPRT` version 4), figures (`.bmfigure`, `FIGR`) with layers in
+`own` and `sync` mode, `behind` and a point's order, the pose and drawing order
+([../spec/sprite-format.md](../spec/sprite-format.md) "Figures", runtime-core.md §9). The
+player is the figure `player`: legs and torso split from the whole drawing by
+`tools/split_sprite.py`, pixel for pixel the old sprite in every pose. Where it differs: only
+the player is a figure yet (objects keep one sprite; 2 layers for them come with step 5); a
+missing point falls back to the sprite's (the cooker fills it in), not to an animation's; each
+of the player's sheets takes a bank of its own (the legs and torso of the test level: banks 0
+and 1), so 11 are left for rooms; boxes come from the root layer only; the angle of a point is
+read but nothing uses it yet; the figure's state is the `own` layers' animation states (6
+bytes each), sheets and palettes are fixed by the figure file. Steps 4 to 7 are open. Milestone
 M18 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies

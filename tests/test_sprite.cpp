@@ -9,6 +9,8 @@ extern "C" {
 #include "device.h"
 #include "hal_host.h"
 #include "physical_device.h"
+#include "figure.h"
+#include "ppu.h"
 #include "sprite.h"
 #include "video.h"
 }
@@ -16,6 +18,7 @@ extern "C" {
 #include "test.h"
 
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -25,7 +28,7 @@ static std::string s_assets, s_work;
 
 static void testLoadSaveRoundTrip()
 {
-  sprite::Sprite s = sprite::load(s_assets + "/test_room/player.bmsprite");
+  sprite::Sprite s = sprite::load(s_assets + "/sources/player.bmsprite");
   TEST_ASSERT(s.name == "player");
   TEST_ASSERT(s.frames.size() == 32);   // 10 of 16x32, 3 of 32x32 (slash), 4 of 16x48 (lance up, down), 2 of 32x32 (low), 8 of 32x48 (arcs), 1 of 32x32 (lance), 4 of 16x32 (push)
   TEST_ASSERT(s.animations.size() == 13);
@@ -33,7 +36,7 @@ static void testLoadSaveRoundTrip()
   TEST_ASSERT(s.frames[0].ax == 8 && s.frames[0].ay == 32);
 
   fs::create_directories(s_work);
-  fs::copy_file(s_assets + "/test_room/player.png", s_work + "/player.png", fs::copy_options::overwrite_existing);
+  fs::copy_file(s_assets + "/sources/player.png", s_work + "/player.png", fs::copy_options::overwrite_existing);
   s.path = s_work + "/copy.bmsprite";
   s.frames[3].ownHitbox = true;
   s.frames[3].hitbox = {-4, -20, 8, 20};
@@ -49,7 +52,7 @@ static void testLoadSaveRoundTrip()
 
 static void testCook()
 {
-  sprite::Sprite s = sprite::load(s_assets + "/test_room/player.bmsprite");
+  sprite::Sprite s = sprite::load(s_assets + "/sources/player.bmsprite");
   Report report;
   sprite::Cooked c = sprite::cook(s, *profileByName("gba"), report);
   TEST_ASSERT(!report.hasErrors());
@@ -82,7 +85,7 @@ static std::vector<uint8_t> cookPack()
 {
   CookOptions options;
   options.profile = *profileByName("gba");
-  options.sprites = {s_assets + "/test_room/player.bmsprite", s_assets + "/test_room/bat.bmsprite"};
+  options.sprites = {s_assets + "/sources/player.bmsprite", s_assets + "/test_room/bat.bmsprite"};
   std::vector<tmx::Map> maps{tmx::load(s_assets + "/test_room/room.tmx")};
   Report report;
   return cook(maps, options, report);
@@ -158,14 +161,116 @@ static void testRuntime()
   TEST_ASSERT(chunk != nullptr && size > 36);
 }
 
+// The player as a figure (layered-sprites.md step 3): legs and torso split from the whole
+// drawing at the waist, the torso placed at the legs' point and playing in step with them. Every
+// step of every animation, facing either way and upside down, draws pixel for pixel what the
+// whole sprite draws.
+static void testFigureDrawsTheWholePlayer()
+{
+  static std::vector<uint8_t> data;
+  CookOptions options;
+  options.profile = *profileByName("gba");
+  options.sprites = {s_assets + "/sources/player.bmsprite", s_assets + "/test_room/player_legs.bmsprite",
+                     s_assets + "/test_room/player_torso.bmsprite"};
+  options.figures = {s_assets + "/test_room/player.bmfigure"};
+  std::vector<tmx::Map> maps{tmx::load(s_assets + "/test_room/room.tmx")};
+  Report report;
+  data = cook(maps, options, report);
+  TEST_ASSERT(!report.hasErrors());
+  BmPack pack;
+  TEST_ASSERT(bmPackOpen(&pack, data.data(), uint32_t(data.size()), true) == BM_PACK_OK);
+  BmSpriteSheet whole, legs, torso;
+  TEST_ASSERT(bmSpriteSheetFind(&whole, &pack, "player") == BM_SUCCESS);
+  TEST_ASSERT(bmSpriteSheetFind(&legs, &pack, "player_legs") == BM_SUCCESS);
+  TEST_ASSERT(bmSpriteSheetFind(&torso, &pack, "player_torso") == BM_SUCCESS);
+  BmFigure fig;
+  TEST_ASSERT(bmFigureFind(&fig, &pack, "Player") == BM_SUCCESS);
+  TEST_ASSERT(fig.layerCount == 2 && fig.layers[1].parent == 0 && fig.layers[1].mode == BM_FIGURE_SYNC);
+  TEST_ASSERT(bmFigureFind(&fig, &pack, "nobody") == BM_ERROR_NOT_FOUND);
+  BmSpritePoint pt;
+  TEST_ASSERT(bmSpriteSheetPoint(&legs, 0, fig.layers[1].point, false, false, &pt) && pt.x == 0 && pt.y == -15);
+  TEST_ASSERT(bmSpriteSheetPoint(&legs, 0, fig.layers[1].point, true, true, &pt) && pt.y == 15);
+  TEST_ASSERT(!bmSpriteSheetPoint(&torso, 0, fig.layers[1].point, false, false, &pt));
+  TEST_ASSERT(legs.animCount == whole.animCount && torso.animCount == whole.animCount);
+
+  bmHalHostReset();
+  BmDeviceHandle device = nullptr;
+  bmCreateDevice(bmGetPhysicalDevice(), &device);
+  g_defaultDevice = device;
+  bmVideoInit();
+  bmVideoSetSpriteMapping1D(true);
+  bmVideoSetLayers(0, true);
+  TEST_ASSERT(bmSpriteSheetLoad(&whole, 0, 0) == BM_SUCCESS);
+  TEST_ASSERT(bmSpriteSheetLoad(&legs, whole.tileCount, 1) == BM_SUCCESS);
+  TEST_ASSERT(bmSpriteSheetLoad(&torso, uint16_t(whole.tileCount + legs.tileCount), 2) == BM_SUCCESS);
+  static uint16_t a[BM_PPU_WIDTH * BM_PPU_HEIGHT], b[BM_PPU_WIDTH * BM_PPU_HEIGHT];
+  auto clear = [] {
+    for (uint8_t i = 0; i < 128; i++) bmSpriteHide(i);
+  };
+  int compared = 0;
+  for (uint8_t anim = 0; anim < whole.animCount; anim++)
+    for (uint16_t step = 0; step < bmSpriteSheetAnimSteps(&whole, anim); step++)
+      for (int flips = 0; flips < 4; flips++)
+      {
+        bool h = flips & 1, v = flips & 2;
+        BmAnimState st = {anim, 0, step, 0};
+        clear();
+        bmSpriteSheetDrawFlipped(&whole, bmAnimFrame(&whole, &st), 120, 80, h, v, 1, whole.bank, 0, 16);
+        bmVideoWaitFrame();
+        bmPpuRender(bmHalHostGetPpu(), a);
+        const BmSpriteSheet *sheets[BM_FIGURE_MAX_LAYERS] = {&legs, &torso};
+        BmAnimState states[BM_FIGURE_MAX_LAYERS] = {st, {}};
+        BmFigurePose pose;
+        bmFigurePose(&fig, sheets, states, h, v, &pose);
+        TEST_ASSERT(pose.count == 2 && pose.order[0] == 1);   // the torso in front
+        clear();
+        uint8_t used = 0;
+        for (uint8_t k = 0; k < pose.count; k++)
+        {
+          uint8_t i = pose.order[k];
+          used = uint8_t(used + bmSpriteSheetDrawFlipped(sheets[i], pose.frame[i], 120 + pose.x[i], 80 + pose.y[i], h, v, 1, sheets[i]->bank,
+                                                         used, uint8_t(16 - used)));
+        }
+        bmVideoWaitFrame();
+        bmPpuRender(bmHalHostGetPpu(), b);
+        int drawn = 0;
+        for (int i = 0; i < BM_PPU_WIDTH * BM_PPU_HEIGHT; i++) drawn += a[i] != a[0];
+        TEST_ASSERT(drawn > 100);
+        TEST_ASSERT(std::memcmp(a, b, sizeof(a)) == 0);
+        compared++;
+      }
+  printf("    %d poses the same\n", compared);
+  TEST_ASSERT(compared >= 4 * 30);
+
+  // Own mode and order: a torso at its own pace, and a cape behind the legs at the same point.
+  BmFigure three = fig;
+  three.layerCount = 3;
+  three.layers[1].mode = BM_FIGURE_OWN;
+  three.layers[2] = fig.layers[1];
+  three.layers[2].behind = true;
+  int32_t run = bmSpriteSheetAnim(&legs, &pack, "run"), idle = bmSpriteSheetAnim(&torso, &pack, "idle");
+  TEST_ASSERT(run >= 0 && idle >= 0 && bmFigureLayerAnim(&legs, uint8_t(run), &torso) == run);
+  const BmSpriteSheet *sheets3[BM_FIGURE_MAX_LAYERS] = {&legs, &torso, &torso};
+  BmAnimState states3[BM_FIGURE_MAX_LAYERS] = {{uint8_t(run), 0, 2, 0}, {uint8_t(idle), 0, 1, 0}, {}};
+  BmFigurePose pose;
+  bmFigurePose(&three, sheets3, states3, true, false, &pose);
+  TEST_ASSERT(pose.count == 3 && pose.order[0] == 1 && pose.order[1] == 0 && pose.order[2] == 2);   // torso, legs, cape
+  TEST_ASSERT(pose.frame[1] == bmAnimFrame(&torso, &states3[1]) && pose.frame[2] == bmAnimFrame(&legs, &states3[0]));
+  TEST_ASSERT(pose.y[1] == -15 && pose.y[2] == -15 && pose.x[1] == 0);
+  // A layer without a sheet is not drawn; what hangs on it is placed at its place.
+  sheets3[1] = nullptr;
+  bmFigurePose(&three, sheets3, states3, false, false, &pose);
+  TEST_ASSERT(pose.count == 2 && pose.order[0] == 0 && pose.order[1] == 2);
+}
+
 // Hurt, hit and guard boxes (hitboxes.md step 1): in the file (on the sprite for every frame,
 // on a frame replacing those of a kind), saved and loaded again, cooked into SPRT version 2,
 // read by the runtime, mirrored with the facing; and the cooker's limits.
 static void testBoxes()
 {
   fs::create_directories(s_work);
-  fs::copy_file(s_assets + "/test_room/player.png", s_work + "/player.png", fs::copy_options::overwrite_existing);
-  sprite::Sprite s = sprite::load(s_assets + "/test_room/player.bmsprite");
+  fs::copy_file(s_assets + "/sources/player.png", s_work + "/player.png", fs::copy_options::overwrite_existing);
+  sprite::Sprite s = sprite::load(s_assets + "/sources/player.bmsprite");
   s.path = s_work + "/boxed.bmsprite";
   s.boxes = {{sprite::BoxKind::Hurt, "", {-5, -28, 10, 28}}};                       // every frame
   s.frames[3].boxes = {{sprite::BoxKind::Hurt, "", {-6, -20, 12, 20}},              // ducked
@@ -273,6 +378,7 @@ int main(int argc, char **argv)
   RUN_TEST(testRuntime);
   RUN_TEST(testBoxes);
   RUN_TEST(testPalettes);
+  RUN_TEST(testFigureDrawsTheWholePlayer);
   fs::remove_all(s_work);
   return TEST_RESULT();
 }

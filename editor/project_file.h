@@ -30,7 +30,7 @@ struct ProjectFile
   bool removeRoom(const std::string &path);    // the file stays
 };
 
-enum class AssetKind { Room, Sprite, Script, Song, Data, Tileset, Image, Other, Font, Language, World, Schema };
+enum class AssetKind { Room, Sprite, Script, Song, Data, Tileset, Image, Other, Font, Language, World, Schema, Figure };
 
 struct AssetInfo
 {
@@ -84,6 +84,7 @@ std::vector<std::string> songPaths(const AssetCatalog &catalog);
 /// The record files (.bmdata) of a catalogue.
 std::vector<std::string> dataPaths(const AssetCatalog &catalog);
 std::vector<std::string> fontPaths(const AssetCatalog &catalog);
+std::vector<std::string> figurePaths(const AssetCatalog &catalog);
 std::vector<std::string> languagePaths(const AssetCatalog &catalog);
 /// The world map (.bmworld) of the project: the first one in its asset folders, or empty.
 std::string worldPath(const AssetCatalog &catalog);

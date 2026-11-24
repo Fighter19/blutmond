@@ -121,8 +121,26 @@ Sprite load(const std::string &path)
     }
     return out;
   };
+  auto points = [&](const xml::Element *parent) {
+    std::vector<Point> out;
+    for (const xml::Element *e : parent->childrenNamed("point"))
+    {
+      Point pt;
+      pt.name = e->attr("name");
+      if (pt.name.empty()) throw std::runtime_error(path + ": a point needs a name");
+      pt.x = toInt(e, "x", 0);
+      pt.y = toInt(e, "y", 0);
+      pt.angle = toInt(e, "angle", 0);
+      std::string order = e->attr("order", "front");
+      if (order != "front" && order != "behind") throw std::runtime_error(path + ": a point's order is front or behind, not '" + order + "'");
+      pt.behind = order == "behind";
+      out.push_back(pt);
+    }
+    return out;
+  };
   if (const xml::Element *h = root->child("hitbox")) s.hitbox = box(h);
   s.boxes = boxes(root.get());
+  s.points = points(root.get());
   for (const xml::Element *f : root->childrenNamed("frame"))
   {
     Frame fr;
@@ -138,6 +156,7 @@ Sprite load(const std::string &path)
       fr.hitbox = box(h);
     }
     fr.boxes = boxes(f);
+    fr.points = points(f);
     s.frames.push_back(fr);
   }
   for (const xml::Element *pe : root->childrenNamed("palette"))
@@ -187,11 +206,21 @@ bool save(const Sprite &s, std::string *pError)
       out << " x=\"" << b.box.x << "\" y=\"" << b.box.y << "\" w=\"" << b.box.w << "\" h=\"" << b.box.h << "\"/>\n";
     }
   };
+  auto writePoints = [&](const std::vector<Point> &points, const char *indent) {
+    for (const Point &p : points)
+    {
+      out << indent << "<point name=\"" << p.name << "\" x=\"" << p.x << "\" y=\"" << p.y << "\"";
+      if (p.angle != 0) out << " angle=\"" << p.angle << "\"";
+      if (p.behind) out << " order=\"behind\"";
+      out << "/>\n";
+    }
+  };
   writeBoxes(s.boxes, " ");
+  writePoints(s.points, " ");
   for (const Frame &f : s.frames)
   {
     out << " <frame x=\"" << f.x << "\" y=\"" << f.y << "\" w=\"" << f.w << "\" h=\"" << f.h << "\" ax=\"" << f.ax << "\" ay=\"" << f.ay << "\"";
-    if (!f.ownHitbox && f.boxes.empty())
+    if (!f.ownHitbox && f.boxes.empty() && f.points.empty())
     {
       out << "/>\n";
       continue;
@@ -199,6 +228,7 @@ bool save(const Sprite &s, std::string *pError)
     out << ">\n";
     if (f.ownHitbox) out << "  <hitbox x=\"" << f.hitbox.x << "\" y=\"" << f.hitbox.y << "\" w=\"" << f.hitbox.w << "\" h=\"" << f.hitbox.h << "\"/>\n";
     writeBoxes(f.boxes, "  ");
+    writePoints(f.points, "  ");
     out << " </frame>\n";
   }
   for (const PaletteVariant &v : s.palettes)
@@ -357,6 +387,19 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
       if (!b.name.empty() && std::find(out.boxNames.begin(), out.boxNames.end(), b.name) == out.boxNames.end()) out.boxNames.push_back(b.name);
     }
     if (out.boxNames.size() > 8) report.error("does-not-fit", s.path, "a sprite has at most 8 box names");
+    // Points: the frame's own, then the sprite's of names the frame does not have.
+    cf.points = f.points;
+    for (const Point &p : s.points)
+      if (std::none_of(cf.points.begin(), cf.points.end(), [&](const Point &q) { return q.name == p.name; })) cf.points.push_back(p);
+    for (const Point &p : cf.points)
+    {
+      std::string where = s.path + " frame " + std::to_string(fi);
+      if (p.x < -128 || p.x > 127 || p.y < -128 || p.y > 127) report.error("does-not-fit", where, "point '" + p.name + "' goes from -128 to 127");
+      if (p.angle < 0 || p.angle > 255) report.error("does-not-fit", where, "point '" + p.name + "': an angle is 0 to 255");
+      if (std::find(out.pointNames.begin(), out.pointNames.end(), p.name) == out.pointNames.end()) out.pointNames.push_back(p.name);
+    }
+    if (cf.points.size() > 4) report.error("does-not-fit", s.path + " frame " + std::to_string(fi), "more than 4 points");
+    if (out.pointNames.size() > 8) report.error("does-not-fit", s.path, "a sprite has at most 8 point names");
     if (f.w <= 0 || f.h <= 0 || f.w > 128 || f.h > 128)
     {
       report.error("does-not-fit", s.path, "frame " + std::to_string(fi) + " must be between 1 and 128 pixels wide and high");
@@ -452,7 +495,8 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
 }
 
 std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, const std::vector<uint16_t> &animationNames,
-                           const std::vector<uint16_t> &boxNameIds, const std::vector<uint16_t> &paletteNameIds)
+                           const std::vector<uint16_t> &boxNameIds, const std::vector<uint16_t> &paletteNameIds,
+                           const std::vector<uint16_t> &pointNameIds)
 {
   std::vector<uint8_t> b;
   auto u8 = [&](int v) { b.push_back(uint8_t(v)); };
@@ -475,13 +519,19 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   // Version 3: the header goes on with the boxes' tables (version 2: 52 bytes; a version 1
   // chunk has a 36-byte header, so its frames start at 36) and the number of palettes; the
   // palettes (the default first) are followed by their names.
-  const uint32_t header = 56;
+  // Version 4 (only a sprite with points): the header goes on with the points' tables.
+  size_t points = 0;
+  for (const CookedFrame &f : c.frames) points += f.points.size();
+  const bool withPoints = points != 0;
+  const uint32_t header = withPoints ? 68 : 56;
   const uint32_t palettes = 1 + uint32_t(c.variants.size());
   uint32_t framesAt = header, piecesAt = framesAt + uint32_t(c.frames.size()) * 12, animsAt = piecesAt + uint32_t(pieces) * 6;
   uint32_t stepsAt = animsAt + uint32_t(s.animations.size()) * 8, paletteAt = stepsAt + uint32_t(steps) * 4;
   uint32_t tilesAt = paletteAt + palettes * 32 + palettes * 2;
   uint32_t boxIndexAt = tilesAt + uint32_t((tileData.size() + 1) & ~size_t(1)), boxesAt = boxIndexAt + uint32_t(c.frames.size()) * 2;
   uint32_t namesAt = boxesAt + uint32_t(boxes) * 6;
+  uint32_t pointIndexAt = namesAt + uint32_t(c.boxNames.size()) * 2;
+  uint32_t pointsAt = pointIndexAt + uint32_t(c.frames.size() + 1) * 2, pointNamesAt = pointsAt + uint32_t(points) * 4;
 
   u16(nameId);
   u16(uint32_t(c.frames.size()));
@@ -503,6 +553,14 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   u8(isPacked ? 1 : 0);   // flags: bit 0 the tiles are packed
   u16(palettes);
   u16(0);
+  if (withPoints)
+  {
+    u32(pointIndexAt);
+    u32(pointNamesAt);
+    u16(uint32_t(points));
+    u8(int(c.pointNames.size()));
+    u8(0);
+  }
 
   uint32_t pieceStart = 0;
   for (const CookedFrame &f : c.frames)
@@ -573,6 +631,27 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
       u8(nb.name.empty() || it == c.boxNames.end() ? 0xFF : int(it - c.boxNames.begin()));
     }
   for (size_t i = 0; i < c.boxNames.size(); i++) u16(i < boxNameIds.size() ? boxNameIds[i] : 0xFFFF);
+  if (withPoints)
+  {
+    // Point index: the first point of each frame and one past the last.
+    uint32_t pointStart = 0;
+    for (const CookedFrame &f : c.frames)
+    {
+      u16(pointStart);
+      pointStart += uint32_t(f.points.size());
+    }
+    u16(pointStart);
+    for (const CookedFrame &f : c.frames)
+      for (const Point &p : f.points)
+      {
+        u8(p.x);
+        u8(p.y);
+        u8(p.angle);
+        auto it = std::find(c.pointNames.begin(), c.pointNames.end(), p.name);
+        u8(int(it - c.pointNames.begin()) | (p.behind ? 0x80 : 0));
+      }
+    for (size_t i = 0; i < c.pointNames.size(); i++) u16(i < pointNameIds.size() ? pointNameIds[i] : 0xFFFF);
+  }
   while (b.size() % 4) u8(0);
   return b;
 }

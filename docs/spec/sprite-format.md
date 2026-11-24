@@ -1,6 +1,6 @@
 # Sprite format
 
-Version 3, draft.
+Version 4, draft.
 
 A sprite is a source asset ([asset-model.md](asset-model.md)): a **sheet image** plus a
 **sprite file** (`.bmsprite`, XML) that says where the frames are and how they are played.
@@ -30,6 +30,7 @@ The file name without its extension is the sprite's **name**; the game finds spr
 | `box` (in `sprite` or `frame`) | `kind` (`hurt`, `hit`, `guard`), `name`, `x`, `y`, `w`, `h` | a box for fighting ([../plans/hitboxes.md](../plans/hitboxes.md) §2): `hurt` where the figure can be hit, `hit` where it hits while a script arms it, `guard` where a hit is blocked. Relative to the anchor, x and y from -128 to 127, w and h up to 255. `hit` and `guard` boxes have a name; boxes of one name belong together. In `sprite`: the boxes of every frame that has none of that kind of its own. At most 4 of a kind per frame and 8 names per sprite |
 | `animation` | `name`, `loop` (1 or 0) | a named sequence. An animation that does not loop stays on its last step and reports that it has finished |
 | `step` | `frame`, `duration` | show a frame for `duration` game frames (60 per second on the GBA), at least 1 |
+| `point` (in `sprite` or `frame`) | `name`, `x`, `y`, `angle` (0), `order` (`front`, `behind`) | where a layer of a figure is placed (below, "Figures"), relative to the anchor, -128 to 127. `angle`: 0 to 255, a whole turn, 0 forward, clockwise on screen; handed to what hangs there. `order behind`: what hangs there is drawn behind this layer on this frame. In `sprite`: the points of every frame that has none of that name. At most 4 per frame and 8 names per sprite |
 | `palette` | `name`, `image` (optional) | another palette of the same pixels ([../plans/layered-sprites.md](../plans/layered-sprites.md) §2): the sheet's colours (slots) take the colours their pixels have in `image` (a sheet of the same size), or those its `swap` children give. Not `default`, which is the sheet's own |
 | `swap` (in `palette`) | `from`, `to` (`#rrggbb`) | the slot of colour `from` takes colour `to` |
 
@@ -54,6 +55,7 @@ u16 name (string id)   u16 frames   u16 animations   u16 tiles   u16 pieces   u1
 u32 offset of: frames, pieces, animations, steps, palette, tiles      (from the chunk start)
 u32 offset of: box index, boxes, box names   u16 boxes   u8 box names   u8 flags (bit 0: the tiles are packed)
 u16 palettes   u16 0
+u32 offset of: point index, point names   u16 points   u8 point names   u8 0    (version 4)
 
 frame (12 bytes):     u16 first piece, u8 piece count, u8 box count,
                       s8 hitbox x, y, u8 hitbox w, h,
@@ -73,6 +75,10 @@ box index:            u16 first box of each frame
 box (6 bytes):        s8 x, y, u8 w, h (relative to the anchor), u8 kind (0 hurt, 1 hit,
                       2 guard), u8 name (index into the box names, 0xFF none)
 box names:            u16 string id each
+point index:          u16 first point of each frame, then one past the last (frames + 1)
+point (4 bytes):      s8 x, y (relative to the anchor), u8 angle, u8 name (index into the
+                      point names, bits 0-6) | 0x80 for order behind
+point names:          u16 string id each
 ```
 
 Shape and size give the piece's pixels as on the hardware: square 8, 16, 32, 64; wide 16×8,
@@ -80,10 +86,11 @@ Shape and size give the piece's pixels as on the hardware: square 8, 16, 32, 64;
 not drawn. Everything is little endian and the chunk is padded to four bytes. The runtime
 does not use the bounds.
 
-The header is 56 bytes. A chunk of version 1 has the 36 bytes up to the tiles' offset only,
+The header is 56 bytes, 68 with points; the cooker writes version 4 only for a sprite with
+points (the points' tables follow the box names). A chunk of version 1 has the 36 bytes up to the tiles' offset only,
 with its frames at offset 36, and no boxes; one of version 2 the 52 bytes up to the flags, and
 one palette. The runtime tells them apart by where the frames start (at least 52: version 2,
-at least 56: version 3) and reads a version 1 chunk as one without boxes, a version 1 or 2
+at least 56: version 3, at least 68: version 4) and reads a version 1 chunk as one without boxes, a version 1 or 2
 chunk as one with the default palette alone. A
 frame's boxes are its own of a kind, else the sprite's of that kind, worked out by the cooker.
 
@@ -100,7 +107,8 @@ using the chunk.
 - The position in an animation (animation, step, frames shown) is plain data and part of the
   game state ([state.md](state.md)), so save states and link transfers continue animations
   where they were.
-- The engine's player uses the sprite named `player` with the animations `idle`, `run`,
+- The engine's player uses the figure named `player` (section Figures), or the sprite named
+  `player`, with the animations `idle`, `run`,
   `jump`, `fall`, `climb` and `push` (against a push block; missing ones fall back to the
   first, `push` to `run`). A scripted object uses
   the sprite its class names, or the one named like the class (ignoring case), and its script
@@ -117,6 +125,49 @@ using the chunk.
 - 2: hurt, hit and guard boxes in the file and in `SPRT` (box index, boxes, box names).
 - 2.1: packed tiles (the flags byte, which was 0).
 - 3: palettes: `palette` and `swap` in the file, a palette table with names in `SPRT`.
+- 4: points (`point` in the file, the point tables in `SPRT`); figures (`.bmfigure`, `FIGR`).
+
+## Figures
+
+A figure ([../plans/layered-sprites.md](../plans/layered-sprites.md) §4) is what an object
+shows when one sprite is not enough: up to 4 **layers**, each a sprite with its own frame,
+placed at a point of another layer's current frame. A `.bmfigure` file, one layer a line
+(`#` starts a comment); the file name without extension is the figure's name:
+
+```
+layer legs   sprite=player_legs                        # the first layer is the root
+layer torso  sprite=player_torso  at=legs.waist  mode=sync
+layer cape   sprite=cape          at=legs.waist  behind
+```
+
+| Word | Meaning |
+|---|---|
+| `layer NAME` | a layer; the first is the **root**, placed at the object |
+| `sprite=` | its sprite, or `none` (nothing drawn; for what the game puts there later) |
+| `at=LAYER.POINT` | every layer but the root: the layer above it it hangs on, and the point of that layer's current frame it is placed at (without `.POINT`: the layer's anchor). A point the sprite does not have is a warning; the layer is then at the anchor |
+| `mode=` | `own` (the default): its own animation state, playing the animation named like the root's; `sync`: the animation named like its parent's, at the parent's step (for a layer drawn frame for frame with its parent). `aim` (section 6 of the plan) is not built |
+| `behind` | drawn right behind its parent instead of in front of the layers before it |
+| `palette=` | a palette of its sprite by name (default: `default`) |
+
+The cooker writes a `FIGR` chunk per figure (its sprites must be in the cook):
+
+```
+u16 name (string id)   u8 layers (1 to 4)   u8 0
+layer (12 bytes):      u16 name, u16 sprite (string id, 0xFFFF none),
+                       u16 point (string id, 0xFFFF: the parent's anchor),
+                       u8 parent (0xFF for the root, else a layer before it),
+                       u8 mode (0 own, 1 sync), u8 flags (bit 0 behind), u8 0,
+                       u16 palette (string id, 0xFFFF the default)
+```
+
+How a pose is worked out and drawn is in [runtime-core.md](runtime-core.md) §9. The engine's
+player is the figure `player` if there is one (else the sprite `player`). In the test level it
+is legs and torso, made from the whole drawing (`assets/sources/player.png`) by
+`tools/split_sprite.py`: everything above a line 15 pixels over the feet goes to the torso,
+whose anchor moves to that line, and the legs get a `waist` point there on every frame, so the
+figure draws pixel for pixel what the whole sprite drew (`tests/test_sprite.cpp` checks every
+step of every animation, mirrored and upside down). Boxes stay on the legs: the player's boxes
+are its root layer's.
 
 ## Packed tiles
 

@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: BSD-2-Clause OR MIT
+"""Splits a sprite drawn whole into two layers of a figure (layered-sprites.md §8): legs below,
+torso above.
+
+usage: split_sprite.py <whole.bmsprite> <out dir> <lower name> <upper name>
+                       (--waist N | --mask mask.png) [--point waist]
+
+Each frame is cut at a line N pixels above its anchor (--waist), or by a mask image of the
+sheet's size (--mask: its opaque pixels go to the upper layer). The lower layer keeps the
+frames' rectangles, anchors, hitboxes and boxes, and gets a point (`waist` unless --point says
+otherwise) on every frame N pixels above the anchor; the upper layer has the same rectangles
+with the anchor moved to the cut, so drawn at that point it lands where it was. Both keep the
+animations. With --mask the point is at the anchor's height minus N as well (--waist is still
+needed for where the point goes). Writes <name>.png and <name>.bmsprite for both.
+"""
+import os
+import sys
+import xml.etree.ElementTree as ET
+
+from PIL import Image
+
+
+def main(argv):
+    args = argv[1:]
+    opts = {}
+    rest = []
+    i = 0
+    while i < len(args):
+        if args[i] in ("--waist", "--mask", "--point"):
+            opts[args[i]] = args[i + 1]
+            i += 2
+        else:
+            rest.append(args[i])
+            i += 1
+    if len(rest) != 4 or "--waist" not in opts:
+        print(__doc__, file=sys.stderr)
+        return 2
+    src, out, lower, upper = rest
+    waist = int(opts["--waist"])
+    point = opts.get("--point", "waist")
+    tree = ET.parse(src)
+    root = tree.getroot()
+    sheet = Image.open(os.path.join(os.path.dirname(src), root.get("image"))).convert("RGBA")
+    mask = Image.open(opts["--mask"]).convert("RGBA") if "--mask" in opts else None
+    low = Image.new("RGBA", sheet.size, (0, 0, 0, 0))
+    high = Image.new("RGBA", sheet.size, (0, 0, 0, 0))
+
+    frames = root.findall("frame")
+    for f in frames:
+        x, y, w, h = (int(f.get(k)) for k in ("x", "y", "w", "h"))
+        ay = int(f.get("ay", h))
+        cut = ay - waist   # rows above it (in the frame) go up
+        for py in range(h):
+            for px in range(w):
+                c = sheet.getpixel((x + px, y + py))
+                if c[3] < 128 or c[:3] == (255, 0, 255):
+                    continue
+                up = mask.getpixel((x + px, y + py))[3] >= 128 if mask else py < cut
+                (high if up else low).putpixel((x + px, y + py), c)
+
+    os.makedirs(out, exist_ok=True)
+    low.save(os.path.join(out, lower + ".png"))
+    high.save(os.path.join(out, upper + ".png"))
+
+    def write(name, upper_layer):
+        r = ET.Element("sprite", {"version": "1", "image": name + ".png"})
+        for child in root:
+            if child.tag == "frame":
+                f = ET.SubElement(r, "frame", dict(child.attrib))
+                if upper_layer:
+                    ay = int(child.get("ay", child.get("h")))
+                    f.set("ay", str(ay - waist))
+                else:
+                    for c in child:
+                        f.append(c)
+                    ET.SubElement(f, "point", {"name": point, "x": "0", "y": str(-waist)})
+            elif child.tag in ("hitbox", "box"):
+                if upper_layer:
+                    if child.tag == "hitbox":
+                        ET.SubElement(r, "hitbox", {"x": "0", "y": "0", "w": "0", "h": "0"})
+                else:
+                    r.append(child)
+            else:
+                r.append(child)
+        ET.indent(r, space=" ")
+        path = os.path.join(out, name + ".bmsprite")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+            fh.write(ET.tostring(r, encoding="unicode"))
+            fh.write("\n")
+
+    write(lower, False)
+    write(upper, True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

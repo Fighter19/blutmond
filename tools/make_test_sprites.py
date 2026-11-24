@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BSD-2-Clause OR MIT
-"""Draws the test sprites (assets/test_room/player.png, bat.png) and writes their sprite files.
+"""Draws the test sprites (assets/sources/player.png, assets/test_room/bat.png, ...) and writes
+their sprite files. The player is drawn whole; the game shows it as legs and torso, split from
+it by tools/split_sprite.py (assets/test_room/player.bmfigure says how).
 
 usage: make_test_sprites.py <assets/test_room>
 
@@ -471,7 +473,9 @@ def main():
         for y in range(32):
             for x in range(16):
                 img.putpixel((160 + i * 16 + x, 64 + y), PALETTE[frame[y][x]])
-    img.save(os.path.join(out, "player.png"))
+    sources = os.path.join(out, "..", "sources")
+    os.makedirs(sources, exist_ok=True)
+    img.save(os.path.join(sources, "player.png"))
     extra = [(32 + i * 32, 32, 32, 32, 8, 32) for i in range(len(SLASH_FRAMES))]
     extra += [(i * 16, 64, 16, 48, 8, 48) for i in range(2)]        # 13, 14: the lance up
     extra += [(32 + i * 16, 64, 16, 48, 8, 32) for i in range(2)]   # 15, 16: the lance down
@@ -480,7 +484,7 @@ def main():
     extra += [(128 + i * 32, 112, 32, 48, 16, 32, [] if i == 0 else [("hit", "blade") + SLASH_DOWN_ARC[i][1]]) for i in range(4)]   # 23-26: arc down
     extra += [(128, 64, 32, 32, 8, 32)]                               # 27: the lance ahead
     extra += [(160 + i * 16, 64, 16, 32, 8, 32) for i in range(4)]    # 28-31: pushing
-    sprite_file(os.path.join(out, "player.bmsprite"), "player.png", len(PLAYER_FRAMES), 8, 16, 32, (8, 32), (-5, -30, 10, 30), [
+    sprite_file(os.path.join(sources, "player.bmsprite"), "player.png", len(PLAYER_FRAMES), 8, 16, 32, (8, 32), (-5, -30, 10, 30), [
         ("idle", True, [(0, 40), (1, 40)]),
         ("run", True, [(2, 6), (3, 6), (4, 6), (5, 6)]),
         ("jump", False, [(6, 1)]),

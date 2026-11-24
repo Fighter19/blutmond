@@ -15,6 +15,7 @@ extern "C" {
 #include "lang_asset.h"
 #include "sprite_asset.h"
 #include "world_asset.h"
+#include "figure_asset.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1056,6 +1057,7 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
   std::set<std::string> spriteNames;
   std::map<std::string, std::pair<int, int>> spriteMemory;   // name: tiles, palettes (the room report)
   std::map<std::string, std::string> classSprites;           // a script class's sprite
+  std::map<std::string, std::vector<std::string>> spritePoints, spritePalettes;   // for checking figures
   for (const std::string &path : options.sprites)
   {
     try
@@ -1074,8 +1076,12 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       for (const std::string &n : cooked.boxNames) boxNames.push_back(strings.id(n));
       std::vector<uint16_t> paletteNames{strings.id("default")};
       for (const std::string &n : cooked.paletteNames) paletteNames.push_back(strings.id(n));
-      b.data = sprite::chunk(s, cooked, strings.id(s.name), names, boxNames, paletteNames);
+      std::vector<uint16_t> pointNames;
+      for (const std::string &n : cooked.pointNames) pointNames.push_back(strings.id(n));
+      b.data = sprite::chunk(s, cooked, strings.id(s.name), names, boxNames, paletteNames, pointNames);
       spriteMemory[s.name] = {int(cooked.tiles.size()), int(paletteNames.size())};
+      spritePoints[s.name] = cooked.pointNames;
+      spritePalettes[s.name] = cooked.paletteNames;
       add(writer, BM_CHUNK_SPRT, BM_CATEGORY_ACTORS, 0, b);
     }
     catch (const std::exception &e)
@@ -1083,6 +1089,51 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       report.error("does-not-fit", path, e.what());
     }
   }
+  // Figures (figure_asset.h): their sprites, points and palettes must be there.
+  std::set<std::string> figureNames;
+  std::map<std::string, std::vector<std::string>> figureSprites;   // a figure's sprites, each once
+  for (const std::string &path : options.figures)
+  {
+    try
+    {
+      figure::Figure f = figure::load(path);
+      if (!figureNames.insert(f.name).second)
+      {
+        report.error("does-not-fit", path, "figure name '" + f.name + "' is used twice");
+        continue;
+      }
+      bool ok = true;
+      for (const figure::Layer &l : f.layers)
+      {
+        std::string where = path + " layer '" + l.name + "'";
+        if (!l.sprite.empty() && !spriteNames.count(l.sprite))
+        {
+          report.error("figure", where, "no sprite '" + l.sprite + "'");
+          ok = false;
+          continue;
+        }
+        const figure::Layer &parent = f.layers[size_t(std::max(0, figure::layerIndex(f, l.parent)))];
+        const std::vector<std::string> &points = spritePoints[parent.sprite];
+        if (!l.point.empty() && !parent.sprite.empty() && std::find(points.begin(), points.end(), l.point) == points.end())
+          report.warning("figure", where, "sprite '" + parent.sprite + "' has no point '" + l.point + "': the layer is placed at its anchor");
+        const std::vector<std::string> &palettes = spritePalettes[l.sprite];
+        if (!l.palette.empty() && std::find(palettes.begin(), palettes.end(), l.palette) == palettes.end())
+          report.warning("figure", where, "sprite '" + l.sprite + "' has no palette '" + l.palette + "': the default is used");
+      }
+      if (!ok) continue;
+      for (const figure::Layer &l : f.layers)
+        if (!l.sprite.empty() && std::find(figureSprites[f.name].begin(), figureSprites[f.name].end(), l.sprite) == figureSprites[f.name].end())
+          figureSprites[f.name].push_back(l.sprite);
+      Bytes b;
+      b.data = figure::chunk(f, [&](const std::string &n) { return strings.id(n); });
+      add(writer, BM_CHUNK_FIGR, BM_CATEGORY_ACTORS, 0, b);
+    }
+    catch (const std::exception &e)
+    {
+      report.error("does-not-fit", path, e.what());
+    }
+  }
+
 
   // Songs and sound effects, one chunk each.
   std::set<std::string> songNames;
@@ -1337,8 +1388,12 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     };
     std::map<std::string, std::string> byLower;
     for (const auto &e : spriteMemory) byLower[lower(e.first)] = e.first;
-    const int playerTiles = spriteMemory.count("player") ? spriteMemory["player"].first : 0;
-    const int freeTiles = 1024 - 12 - playerTiles, banks = 12;   // bank 0: the player's
+    // The player's sprites stay in sprite memory, each in a bank of its own from bank 0: those
+    // of the figure "player", else the sprite "player".
+    std::vector<std::string> playerSprites = figureSprites.count("player") ? figureSprites["player"] : std::vector<std::string>{"player"};
+    int playerTiles = 0;
+    for (const std::string &n : playerSprites) playerTiles += spriteMemory.count(n) ? spriteMemory[n].first : 0;
+    const int freeTiles = 1024 - 12 - playerTiles, banks = 13 - int(playerSprites.size());
     for (const RoomWork &r : rooms)
     {
       std::map<std::string, std::set<std::string>> used;   // sprite: palettes
@@ -1352,7 +1407,9 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
           auto panel = o.properties.find("panel");
           if (panel != o.properties.end()) sprite = panel->second;
           if (o.type == "PushBlock" || o.type == "Gate" || o.type == "PressurePlate") sprite = "puzzle";
-          if (sprite.empty() || !spriteMemory.count(sprite) || sprite == "player") continue;
+          if (sprite.empty() || !spriteMemory.count(sprite) ||
+              std::find(playerSprites.begin(), playerSprites.end(), sprite) != playerSprites.end())
+            continue;
           auto pal = o.properties.find("palette");
           used[sprite].insert(pal != o.properties.end() ? pal->second : "default");
         }

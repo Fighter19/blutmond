@@ -30,6 +30,7 @@ const char *kindName(AssetKind k)
   {
   case AssetKind::Room: return "room";
   case AssetKind::Sprite: return "sprite";
+  case AssetKind::Figure: return "figure";
   case AssetKind::Script: return "script";
   case AssetKind::Song: return "song";
   case AssetKind::Data: return "records";
@@ -133,6 +134,7 @@ void ProjectPanel::rebuild()
   };
   Group groups[] = {{"Rooms not in the project", "file-o", AssetKind::Room},
                     {"Sprites", "film", AssetKind::Sprite},
+                    {"Figures", "users", AssetKind::Figure},
                     {"Scripts", "terminal", AssetKind::Script},
                     {"Songs and effects", "music", AssetKind::Song},
                     {"Records", "list", AssetKind::Data},

@@ -64,9 +64,9 @@ chunk formats named in section 3.
 - **Rooms** are numbered by the order of their `ROOM` chunks in the table, from 0. Room 0 is
   where a new game starts.
 - **What the cooker writes**, in this order: per area `VLAY`, `PALE`, `TILE`, then per room of
-  the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `SONG`, every `FONT`,
+  the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `FIGR`, every `SONG`, every `FONT`,
   every `MODB`, optionally `MODN`, every `DTAB`, the `LANG`s, and `STRS`.
-- **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `PALE`, `TILE`, `SPRT`, `SONG`,
+- **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `PALE`, `TILE`, `SPRT`, `FIGR`, `SONG`,
   `FONT`, `MODB`, `MODN`, `DTAB`, `LANG`, `WRLD`, `MIGR`, `STRS`. `VLAY` is written but not read; where things go in video memory is
   fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
 - **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the

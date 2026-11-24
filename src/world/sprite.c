@@ -12,6 +12,8 @@
 #define HEADER_SIZE 36
 #define HEADER_SIZE_V2 52   // version 2: the boxes' tables follow the version 1 header
 #define HEADER_SIZE_V3 56   // version 3: and the number of palettes
+#define HEADER_SIZE_V4 68   // version 4: and the points' tables
+#define POINT_SIZE 4
 #define BOX_SIZE 6
 #define FRAME_SIZE 12
 #define PIECE_SIZE 6
@@ -82,6 +84,24 @@ BmResult bmSpriteSheetOpen(BmSpriteSheet *s, const BmPack *pPack, uint32_t chunk
     if (n == 0 || n > BM_SPRITE_MAX_PALETTES || at[4] + (uint32_t)n * 34 > size) return BM_ERROR_INVALID_ARGUMENT;
     s->paletteCount = (uint8_t)n;
     s->pPaletteNames = s->pPalette + n * 32;
+  }
+  // Version 4: the points (sprite-format.md).
+  if (at[0] >= HEADER_SIZE_V4 && size >= HEADER_SIZE_V4)
+  {
+    uint32_t indexAt = bmRead32(p + 56), namesAt = bmRead32(p + 60), count = bmRead16(p + 64);
+    uint32_t pointsAt = indexAt + ((uint32_t)s->frameCount + 1) * 2;
+    s->pointNameCount = p[66];
+    if (pointsAt + count * POINT_SIZE > size || namesAt + (uint32_t)s->pointNameCount * 2 > size) return BM_ERROR_INVALID_ARGUMENT;
+    s->pPointIndex = p + indexAt;
+    s->pPoints = p + pointsAt;
+    s->pPointNames = p + namesAt;
+    for (uint16_t f = 0; f < s->frameCount; f++)
+    {
+      uint32_t from = bmRead16(s->pPointIndex + f * 2), to = bmRead16(s->pPointIndex + f * 2 + 2);
+      if (from > to || to > count) return BM_ERROR_INVALID_ARGUMENT;
+    }
+    for (uint32_t i = 0; i < count; i++)
+      if ((s->pPoints[i * POINT_SIZE + 3] & 0x7F) >= s->pointNameCount) return BM_ERROR_INVALID_ARGUMENT;
   }
   // Every reference must stay inside its table, so drawing never reads outside the chunk.
   for (uint16_t f = 0; f < s->frameCount; f++)
@@ -393,4 +413,43 @@ uint8_t bmSpriteSheetBoxes(const BmSpriteSheet *s, uint16_t frame, bool hflip, B
     o->name = b[5] < s->boxNameCount ? bmRead16(s->pBoxNames + b[5] * 2) : 0xFFFF;
   }
   return count;
+}
+
+bool bmSpriteSheetPoint(const BmSpriteSheet *s, uint16_t frame, uint16_t name, bool hflip, bool vflip, BmSpritePoint *pOut)
+{
+  if (s->pPointIndex == NULL || frame >= s->frameCount) return false;
+  uint32_t from = bmRead16(s->pPointIndex + frame * 2), to = bmRead16(s->pPointIndex + frame * 2 + 2);
+  for (uint32_t i = from; i < to; i++)
+  {
+    const uint8_t *pt = s->pPoints + i * POINT_SIZE;
+    if (bmRead16(s->pPointNames + (pt[3] & 0x7F) * 2) != name) continue;
+    int32_t x = (int8_t)pt[0], y = (int8_t)pt[1];
+    uint8_t angle = pt[2];
+    // The angle counts from forward, so facing the other way leaves it as it is; upside down
+    // it turns the other way round.
+    if (vflip) angle = (uint8_t)(256 - angle);
+    pOut->x = (int8_t)(hflip ? -x : x);
+    pOut->y = (int8_t)(vflip ? -y : y);
+    pOut->angle = angle;
+    pOut->behind = (pt[3] & 0x80) != 0;
+    return true;
+  }
+  return false;
+}
+
+int32_t bmSpriteSheetAnimById(const BmSpriteSheet *s, uint16_t name)
+{
+  for (uint16_t a = 0; a < s->animCount; a++)
+    if (bmRead16(s->pAnims + a * ANIM_SIZE) == name) return a;
+  return -1;
+}
+
+uint16_t bmSpriteSheetAnimName(const BmSpriteSheet *s, uint8_t anim)
+{
+  return anim < s->animCount ? bmRead16(s->pAnims + anim * ANIM_SIZE) : 0xFFFF;
+}
+
+uint16_t bmSpriteSheetAnimSteps(const BmSpriteSheet *s, uint8_t anim)
+{
+  return anim < s->animCount ? bmRead16(s->pAnims + anim * ANIM_SIZE + 4) : 0;
 }

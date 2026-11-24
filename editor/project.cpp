@@ -153,6 +153,7 @@ bool Project::cookLevel(const std::string &path, std::string *pError) const
     CookOptions options;
     options.profile = *profileByName("gba");
     options.sprites = sprites_;
+    options.figures = figures_;
     options.scripts = scripts_;
     options.songs = songs_;
     options.data = data_;

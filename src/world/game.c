@@ -185,6 +185,14 @@ static void bindObjectSprites(BmGame *g)
   }
 }
 
+// The sprite sheet named by string id `name`, or -1.
+static int8_t sheetNamed(const BmGame *g, uint16_t name)
+{
+  for (uint8_t s = 0; s < g->sheetCount; s++)
+    if (g->sheets[s].nameId == name) return (int8_t)s;
+  return -1;
+}
+
 // The tiles the built-in graphics take at the start of sprite memory: the figure (8), the
 // placeholder frame (4).
 #define BUILTIN_TILES 12
@@ -194,15 +202,71 @@ static void bindObjectSprites(BmGame *g)
 static void forgetSprites(BmGame *g)
 {
   for (uint8_t k = 0; k < g->sheetCount; k++)
-    if (k != g->playerSheet) g->sheetTile[k] = BM_GAME_NO_TILES;
+  {
+    bool player = false;
+    for (uint8_t i = 0; i < g->playerSheetCount; i++) player |= g->playerSheets[i] == (int8_t)k;
+    if (!player) g->sheetTile[k] = BM_GAME_NO_TILES;
+  }
   memset(g->bankSheet, 0xFF, sizeof(g->bankSheet));
   g->tileNext = g->tileFloor;
-  if (g->playerSheet >= 0)
+  for (uint8_t i = 0; i < g->playerSheetCount; i++)
   {
-    g->bankSheet[0] = (uint8_t)g->playerSheet;
-    g->bankPalette[0] = 0;
-    g->sheets[g->playerSheet].bank = 0;
+    g->bankSheet[i] = (uint8_t)g->playerSheets[i];
+    g->bankPalette[i] = g->playerPalettes[i];
+    g->sheets[g->playerSheets[i]].bank = i;
   }
+}
+
+// The player's sheets: the figure "player"'s, else the sprite "player" (layered-sprites.md §4).
+static void findPlayer(BmGame *g)
+{
+  memset(&g->playerFigure, 0, sizeof(g->playerFigure));
+  memset(g->playerLayerSheet, 0xFF, sizeof(g->playerLayerSheet));
+  memset(g->playerLayerAnim, 0, sizeof(g->playerLayerAnim));
+  g->playerSheetCount = 0;
+  g->playerSheet = -1;
+  if (bmFigureFind(&g->playerFigure, g->pPack, "player") == BM_SUCCESS)
+  {
+    for (uint8_t i = 0; i < g->playerFigure.layerCount; i++)
+    {
+      const BmFigureLayer *l = &g->playerFigure.layers[i];
+      int8_t s = l->sprite == 0xFFFF ? -1 : sheetNamed(g, l->sprite);
+      g->playerLayerSheet[i] = s;
+      bool have = s < 0;
+      for (uint8_t k = 0; k < g->playerSheetCount; k++) have |= g->playerSheets[k] == s;
+      if (have) continue;
+      int32_t pal = l->palette == 0xFFFF ? 0 : bmSpriteSheetPalette(&g->sheets[s], g->pPack, bmPackString(g->pPack, l->palette));
+      g->playerSheets[g->playerSheetCount] = s;
+      g->playerPalettes[g->playerSheetCount++] = (uint8_t)(pal < 0 ? 0 : pal);
+    }
+    g->playerSheet = g->playerLayerSheet[0];
+  }
+  if (g->playerSheet < 0)
+  {
+    g->playerFigure.layerCount = 0;
+    g->playerSheetCount = 0;
+    for (uint8_t k = 0; k < g->sheetCount && g->playerSheet < 0; k++)
+    {
+      const char *name = bmPackString(g->pPack, g->sheets[k].nameId);
+      if (name != NULL && strcmp(name, "player") == 0) g->playerSheet = (int8_t)k;
+    }
+    if (g->playerSheet >= 0)
+    {
+      g->playerSheets[0] = g->playerSheet;
+      g->playerPalettes[0] = 0;
+      g->playerSheetCount = 1;
+    }
+  }
+  if (g->playerSheet < 0) return;
+  static const char *const anims[BM_PLAYER_ANIM_COUNT] = { "idle", "run", "jump", "fall", "climb", "push" };
+  const BmSpriteSheet *s = &g->sheets[g->playerSheet];
+  for (int i = 0; i < BM_PLAYER_ANIM_COUNT; i++)
+  {
+    int32_t a = bmSpriteSheetAnim(s, g->pPack, anims[i]);
+    g->playerAnims[i] = (int8_t)(a < 0 ? 0 : a);
+  }
+  // Without a push animation, pushing looks like running.
+  if (bmSpriteSheetAnim(s, g->pPack, "push") < 0) g->playerAnims[BM_PLAYER_ANIM_PUSH] = g->playerAnims[BM_PLAYER_ANIM_RUN];
 }
 
 int8_t bmGameSheetBank(BmGame *g, int8_t sheet, uint8_t palette)
@@ -274,27 +338,18 @@ static void loadSprites(BmGame *g)
     const char *name = bmPackString(g->pPack, s->nameId);
     if (name != NULL && strcmp(name, "spark") == 0) g->sparkSheet = (int8_t)g->sheetCount;
     if (name != NULL && strcmp(name, "debris") == 0) g->debrisSheet = (int8_t)g->sheetCount;
-    if (name != NULL && strcmp(name, "player") == 0)
-    {
-      static const char *const anims[BM_PLAYER_ANIM_COUNT] = { "idle", "run", "jump", "fall", "climb", "push" };
-      g->playerSheet = (int8_t)g->sheetCount;
-      for (int i = 0; i < BM_PLAYER_ANIM_COUNT; i++)
-      {
-        int32_t a = bmSpriteSheetAnim(s, g->pPack, anims[i]);
-        g->playerAnims[i] = (int8_t)(a < 0 ? 0 : a);
-      }
-      // Without a push animation, pushing looks like running.
-      if (bmSpriteSheetAnim(s, g->pPack, "push") < 0) g->playerAnims[BM_PLAYER_ANIM_PUSH] = g->playerAnims[BM_PLAYER_ANIM_RUN];
-    }
     g->sheetCount++;
   }
+  findPlayer(g);
   g->builtinTile = 0;
   g->tileFloor = BUILTIN_TILES;
-  if (g->playerSheet >= 0 && bmSpriteSheetLoadTiles(&g->sheets[g->playerSheet], BUILTIN_TILES) == BM_SUCCESS)
+  for (uint8_t i = 0; i < g->playerSheetCount; i++)
   {
-    g->sheetTile[g->playerSheet] = BUILTIN_TILES;
-    g->tileFloor = (uint16_t)(BUILTIN_TILES + g->sheets[g->playerSheet].tileCount);
-    bmSpriteSheetLoadPalette(&g->sheets[g->playerSheet], 0, 0);
+    BmSpriteSheet *s = &g->sheets[g->playerSheets[i]];
+    if ((uint32_t)g->tileFloor + s->tileCount > BM_GAME_OBJ_TILES || bmSpriteSheetLoadTiles(s, g->tileFloor) != BM_SUCCESS) continue;
+    g->sheetTile[g->playerSheets[i]] = g->tileFloor;
+    g->tileFloor = (uint16_t)(g->tileFloor + s->tileCount);
+    bmSpriteSheetLoadPalette(s, g->playerPalettes[i], i);
   }
   forgetSprites(g);
   bindObjectSprites(g);
@@ -360,9 +415,31 @@ void bmGamePlayPlayerAnim(BmGame *g, uint16_t name)
   g->animHeld = g->lockTimer != 0 ? 2 : 1;
 }
 
+// The player's `own` layers play the animation named like the root's, each at its own pace.
+static void animateLayers(BmGame *g)
+{
+  for (uint8_t i = 1; i < g->playerFigure.layerCount; i++)
+  {
+    int8_t s = g->playerLayerSheet[i];
+    if (s < 0 || g->playerFigure.layers[i].mode != BM_FIGURE_OWN) continue;
+    int32_t a = bmFigureLayerAnim(&g->sheets[g->playerSheet], g->playerAnim.anim, &g->sheets[s]);
+    if (a < 0) continue;
+    bmAnimPlay(&g->playerLayerAnim[i], (uint8_t)a, false);
+    bmAnimTick(&g->sheets[s], &g->playerLayerAnim[i]);
+  }
+}
+
+static void animateBody(BmGame *g);
+
 static void animatePlayer(BmGame *g)
 {
   if (g->playerSheet < 0) return;
+  animateBody(g);
+  animateLayers(g);
+}
+
+static void animateBody(BmGame *g)
+{
   // A script's animation holds until its lock is over, or until it has finished.
   if (g->animHeld != 0 && (g->animHeld == 2 ? g->lockTimer == 0 : g->playerAnim.finished != 0)) g->animHeld = 0;
   if (g->animHeld != 0)
@@ -383,14 +460,6 @@ static void animatePlayer(BmGame *g)
   else if (p->vx > BM_FIX(1) / 8 || p->vx < -(BM_FIX(1) / 8)) which = BM_PLAYER_ANIM_RUN;
   bmAnimPlay(&g->playerAnim, (uint8_t)g->playerAnims[which], false);
   if (advance) bmAnimTick(&g->sheets[g->playerSheet], &g->playerAnim);
-}
-
-// The sprite sheet named by string id `name`, or -1.
-static int8_t sheetNamed(const BmGame *g, uint16_t name)
-{
-  for (uint8_t s = 0; s < g->sheetCount; s++)
-    if (g->sheets[s].nameId == name) return (int8_t)s;
-  return -1;
 }
 
 static void updateSprites(BmGame *g)
@@ -421,10 +490,31 @@ static void updateSprites(BmGame *g)
   {
     const BmSpriteSheet *s = &g->sheets[g->playerSheet];
     // Upside down with gravity flipped: the feet at the top of the body's box.
-    bool up = g->player.flipped;
-    if (!blink)
-      next = (uint8_t)(next + bmSpriteSheetDrawFlipped(s, bmAnimFrame(s, &g->playerAnim), px - camX, (up ? py - g->playerParams.height : py) - camY,
-                                                       g->player.facing < 0, up, 1, s->bank, next, 8));
+    bool up = g->player.flipped, left = g->player.facing < 0;
+    int32_t x = px - camX, y = (up ? py - g->playerParams.height : py) - camY;
+    if (!blink && g->playerFigure.layerCount == 0)
+      next = (uint8_t)(next + bmSpriteSheetDrawFlipped(s, bmAnimFrame(s, &g->playerAnim), x, y, left, up, 1, s->bank, next, 8));
+    else if (!blink)
+    {
+      // A figure: its layers front to back (figure.h), 12 hardware sprites in all.
+      const BmSpriteSheet *sheets[BM_FIGURE_MAX_LAYERS] = { NULL };
+      BmAnimState states[BM_FIGURE_MAX_LAYERS];
+      for (uint8_t i = 0; i < g->playerFigure.layerCount; i++)
+      {
+        if (g->playerLayerSheet[i] >= 0) sheets[i] = &g->sheets[g->playerLayerSheet[i]];
+        states[i] = i == 0 ? g->playerAnim : g->playerLayerAnim[i];
+      }
+      BmFigurePose pose;
+      bmFigurePose(&g->playerFigure, sheets, states, left, up, &pose);
+      uint8_t used = 0;
+      for (uint8_t k = 0; k < pose.count && used < 12; k++)
+      {
+        uint8_t i = pose.order[k];
+        used = (uint8_t)(used + bmSpriteSheetDrawFlipped(sheets[i], pose.frame[i], x + pose.x[i], y + pose.y[i], left, up, 1, sheets[i]->bank,
+                                                         (uint8_t)(next + used), (uint8_t)(12 - used)));
+      }
+      next = (uint8_t)(next + used);
+    }
   }
   else
   {
@@ -1604,6 +1694,19 @@ static const BmStateField s_gameFields[] = {
   F(playerAnim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerAnim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerAnim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  // The player's `own` layers (figure.h); the root's is playerAnim.
+  F(playerLayerAnim[1].anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[1].finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[1].step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[1].timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[2].anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[2].finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[2].step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[2].timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[3].anim, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[3].finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[3].step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayerAnim[3].timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   // Scripted objects: where each script is and what its variables hold.
   F(actors.moduleHash, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   F(actors.count, BM_TYPE_U8, BM_STATE_SNAPSHOT),

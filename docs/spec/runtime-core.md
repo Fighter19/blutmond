@@ -544,9 +544,11 @@ bits. An attachment of the player reads the player's `x`, `y`, `facing`, `health
 **Loading** ([../plans/layered-sprites.md](../plans/layered-sprites.md) §2, §3). Once per pack
 every `SPRT` chunk is opened in pack order, at most 24 (an invalid one is skipped): what logic
 reads (frames, boxes, animations) is there from then on. Sprite memory holds the built-in figure
-(tiles 0-7, bank 14) and the placeholder frame (tiles 8-11, bank 15), then the player's sheet
-(bank 0), which stays; the rest is given out room by room. When a room is entered, every other
-sheet is forgotten and banks 1 to 12 are free; then the room's objects' sheets (in the palettes
+(tiles 0-7, bank 14) and the placeholder frame (tiles 8-11, bank 15), then the player's sheets
+(the sheets of its figure's layers in layer order, each once, in banks 0, 1, ... with the
+palette its layer names; or the sheet `player` in bank 0), which stay; the rest is given out
+room by room. When a room is entered, every other sheet is forgotten and the other banks up to
+12 are free; then the room's objects' sheets (in the palettes
 their objects have), door panels and the puzzle's are loaded. A sheet not loaded yet is loaded
 the first time it is drawn (an effect, an object made at run time): its tiles after the last
 loaded ones (a sheet that would pass tile 1024 is not drawn), and each (sheet, palette) pair
@@ -564,11 +566,25 @@ one-dimensionally.
   next step if there is one; else `step = 0` if the animation loops; else `finished = 1`.
 - The frame shown is the step's frame.
 
-**The player**, with a sheet named exactly `player`: animations `idle`, `run`, `jump`, `fall`,
+**The player** is the figure named `player` (FIGR, sprite-format.md "Figures") if the pack has
+one whose root layer's sprite is there; else the sheet named exactly `player`. Its sheet below
+is the root layer's: animations `idle`, `run`, `jump`, `fall`,
 `climb`, `push` (a missing one is animation 0; `push`: `run`). Climbing: `climb`, ticking only
 while `vx` or `vy` is not 0. Else in the air: `jump` if `vy < 0`, else `fall`. Else `push` while
 pushing a push block (room-format.md §3.9). Else `run` if `|vx| > 32/256`. Else `idle`. Play,
-then tick.
+then tick. Then each `own` layer of the figure plays the animation of its sprite named like the
+root's current one (nothing if it has none) and ticks; a `sync` layer has no state of its own.
+The `own` layers' states are snapshot state (`playerLayerAnim`).
+
+**A figure's pose** (`bmFigurePose`), layer by layer in order. The root is at the figure's
+position with its animation state. Another layer starts at its parent's place; a `sync` layer
+shows the animation of its sprite named like the parent's current one at the parent's step
+(no such animation: the layer is not drawn), an `own` layer its own state; if the layer names a
+point and the parent's current frame has it, the layer is moved by the point (mirrored with the
+figure: `x` negated facing left, `y` negated upside down) and takes its angle. A layer without
+a sprite is not drawn; what hangs on it is placed at its place. **Order**, back to front: each
+layer in front of all before it, or, if it is `behind` or its point says `behind` on this
+frame, right behind its parent.
 
 **Drawing a frame** at screen position `(sx, sy)` = position minus camera: for each piece,
 `x = hflip ? sx - dx - w : sx + dx`, `y = sy + dy`, with the piece's size from the hardware
@@ -580,8 +596,9 @@ sprite by name, or `set_palette`; else 0, the sheet's own); priority 1.
 
 **Order of the 48 hardware sprites used:**
 
-1. The player: its frame, mirrored when `facing < 0`, at most 8 pieces; not drawn while
-   `hurtTimer & 4` is not 0. Without a `player` sheet: the built-in 16 x 32 figure at
+1. The player: its frame, mirrored when `facing < 0`, at most 8 pieces; a figure: its layers
+   front to back, each at the figure's position plus its offset, 12 pieces in all; not drawn
+   while `hurtTimer & 4` is not 0. Without a `player` sheet: the built-in 16 x 32 figure at
    `(px - 8, py - 32)`.
 2. Scripted objects in order, unless hidden: their frame at `(INT(x), INT(y))`, mirrored when
    `facing < 0`. Without a sheet, and only for objects without width and height: the

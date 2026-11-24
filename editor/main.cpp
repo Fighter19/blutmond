@@ -810,6 +810,7 @@ struct Editor
     project.setData(dataPaths(projectPanel.catalog()));
     dataPanel.setFiles(dataPaths(projectPanel.catalog()), scripts, sprites);
     project.setFonts(fontPaths(projectPanel.catalog()));
+    project.setFigures(figurePaths(projectPanel.catalog()));
     project.setLanguages(languagePaths(projectPanel.catalog()));
     project.setWorld(worldPath(projectPanel.catalog()));
     project.setSchemaHistory(schemaPath(projectPanel.catalog()));

@@ -28,6 +28,9 @@ typedef struct BmSpriteSheet
   // Version 3: palettes (the default first), 16 colours each, and their names (string ids).
   uint8_t paletteCount;
   const uint8_t *pPaletteNames;   // NULL: only the default
+  // Version 4: points (NULL: none): an index of frameCount + 1 entries, 4 bytes a point, names.
+  const uint8_t *pPointIndex, *pPoints, *pPointNames;
+  uint8_t pointNameCount;
   // Where it was loaded.
   uint16_t tileBase;
   uint8_t bank;
@@ -107,6 +110,25 @@ uint8_t bmSpriteSheetDrawSheared(const BmSpriteSheet *pSheet, uint16_t frame, in
 
 /// The frame's hitbox relative to the anchor (mirrored with `hflip`).
 BmSpriteBox bmSpriteSheetHitbox(const BmSpriteSheet *pSheet, uint16_t frame, bool hflip);
+
+/// A point of a frame (layered-sprites.md §4): where a figure's layer is placed.
+typedef struct BmSpritePoint
+{
+  int8_t x, y;        // relative to the anchor, mirrored with the flips
+  uint8_t angle;      // 256 a turn, 0 forward, clockwise on screen; mirrored with the flips
+  bool behind;        // what hangs there is drawn behind this layer
+} BmSpritePoint;
+
+/// The point named by string id `name` on frame `frame`, mirrored with `hflip` and `vflip`.
+/// False if the frame has none of that name.
+bool bmSpriteSheetPoint(const BmSpriteSheet *pSheet, uint16_t frame, uint16_t name, bool hflip, bool vflip, BmSpritePoint *pOut);
+
+/// Index of the animation whose name is string id `name`, or -1.
+int32_t bmSpriteSheetAnimById(const BmSpriteSheet *pSheet, uint16_t name);
+/// The string id of animation `anim`'s name (0xFFFF if there is none).
+uint16_t bmSpriteSheetAnimName(const BmSpriteSheet *pSheet, uint8_t anim);
+/// Steps of animation `anim`.
+uint16_t bmSpriteSheetAnimSteps(const BmSpriteSheet *pSheet, uint8_t anim);
 
 /// Kinds of boxes (docs/plans/hitboxes.md §2).
 typedef enum BmBoxKind { BM_BOX_HURT = 0, BM_BOX_HIT = 1, BM_BOX_GUARD = 2 } BmBoxKind;

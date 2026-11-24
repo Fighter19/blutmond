@@ -20,6 +20,7 @@
 #include "room.h"
 #include "puzzle.h"
 #include "grapple.h"
+#include "figure.h"
 #include "sound.h"
 #include "sprite.h"
 #include "state.h"
@@ -165,6 +166,14 @@ typedef struct BmGame
   uint8_t bankSheet[BM_GAME_BANKS], bankPalette[BM_GAME_BANKS];
   uint16_t spriteMisses;                       // sheets or banks that did not fit (counted)
   int8_t playerSheet;                          // -1: the built-in figure
+  // The player as a figure (figure.h): the figure "player" if the pack has one (playerSheet is
+  // its root layer's sheet), else the sprite "player" alone (layerCount 0). Its layers' sheets
+  // (-1: none), and the sheets that stay in sprite memory, each in a bank of its own from 0.
+  BmFigure playerFigure;
+  int8_t playerLayerSheet[BM_FIGURE_MAX_LAYERS];
+  uint8_t playerSheetCount;
+  int8_t playerSheets[BM_FIGURE_MAX_LAYERS];
+  uint8_t playerPalettes[BM_FIGURE_MAX_LAYERS];
   int8_t sparkSheet;                           // the sprite "spark" (a blocked hit), or -1
   int8_t debrisSheet;                          // the sprite "debris" (a broken wall), or -1
   // Effects being shown (bmGameSpark, bmGameBreak): their sheet, where, and their age in frames
@@ -192,6 +201,7 @@ typedef struct BmGame
   int16_t objectDoorGround[BM_GAME_MAX_OBJECTS]; // and the ground it stands on (y)
   uint16_t builtinTile;                        // where the built-in graphics start
   BmAnimState playerAnim;
+  BmAnimState playerLayerAnim[BM_FIGURE_MAX_LAYERS];   // the player's `own` layers ([0] unused: playerAnim)
   // Scripted objects of the room (docs/spec/mondskript.md).
   BmActors actors;
   // What the player carries and wears (docs/plans/structures.md §7).

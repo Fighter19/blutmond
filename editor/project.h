@@ -67,6 +67,7 @@ public:
   /// Record files (.bmdata) that go into the level pack.
   void setData(std::vector<std::string> paths) { data_ = std::move(paths); }
   void setFonts(std::vector<std::string> paths) { fonts_ = std::move(paths); }
+  void setFigures(std::vector<std::string> paths) { figures_ = std::move(paths); }
   void setLanguages(std::vector<std::string> paths) { languages_ = std::move(paths); }
   /// The world map (.bmworld; empty: none) that goes into the level pack.
   void setWorld(std::string path) { world_ = std::move(path); }
@@ -103,7 +104,7 @@ private:
   void analyse();
 
   std::vector<std::string> rooms_;
-  std::vector<std::string> sprites_, scripts_, songs_, data_, fonts_, languages_;
+  std::vector<std::string> sprites_, scripts_, songs_, data_, fonts_, languages_, figures_;
   std::string world_, schema_;
   std::map<std::string, std::filesystem::file_time_type> dataTimes_;
   int current_ = -1;

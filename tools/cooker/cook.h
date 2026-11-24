@@ -75,6 +75,8 @@ struct CookOptions
   CookInfo *pInfo = nullptr;
   /// Sprite files (.bmsprite, sprite-format.md) to cook into the pack.
   std::vector<std::string> sprites;
+  /// Figures (.bmfigure, figure_asset.h): sprites in layers.
+  std::vector<std::string> figures;
   /// Script files (.ms, mondskript.md), compiled into the pack's bytecode module.
   std::vector<std::string> scripts;
   /// Songs and sound effects (.bmsong, sound-format.md).

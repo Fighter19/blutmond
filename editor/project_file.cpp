@@ -8,6 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "figure_asset.h"
 #include "image.h"
 #include "overrides.h"
 #include "song_asset.h"
@@ -42,6 +43,7 @@ AssetKind kindOf(const std::string &path)
   if (ext == ".tmx") return AssetKind::Room;
   if (ext == ".tsx") return AssetKind::Tileset;
   if (ext == ".bmsprite") return AssetKind::Sprite;
+  if (ext == ".bmfigure") return AssetKind::Figure;
   if (ext == ".ms") return AssetKind::Script;
   if (ext == ".bmsong") return AssetKind::Song;
   if (ext == ".bmdata") return AssetKind::Data;
@@ -235,6 +237,29 @@ AssetCatalog AssetCatalog::scan(const ProjectFile &project)
     }
   }
 
+  // Figures use their layers' sprites; every room uses the player's figure.
+  std::vector<std::string> figures;
+  for (auto &[path, a] : found)
+    if (a.kind == AssetKind::Figure && a.problem.empty()) figures.push_back(path);
+  for (const std::string &path : figures)
+  {
+    try
+    {
+      figure::Figure f = figure::load(path);
+      for (const figure::Layer &l : f.layers)
+        for (auto &[spritePath, sa] : found)
+          if (sa.kind == AssetKind::Sprite && fs::path(spritePath).stem().string() == l.sprite &&
+              std::find(sa.usedBy.begin(), sa.usedBy.end(), path) == sa.usedBy.end())
+            sa.usedBy.push_back(path);
+      if (f.name == "player")
+        for (const std::string &room : project.rooms) found[path].usedBy.push_back(normalPath(room));
+    }
+    catch (const std::exception &e)
+    {
+      found[path].problem = e.what();
+    }
+  }
+
   // Songs use their samples; rooms use the song their `music` property names, and every room
   // uses the effects the engine plays itself.
   std::vector<std::string> songs;
@@ -410,6 +435,14 @@ std::vector<std::string> languagePaths(const AssetCatalog &catalog)
   std::vector<std::string> out;
   for (const AssetInfo &a : catalog.assets)
     if (a.kind == AssetKind::Language && a.problem.empty()) out.push_back(a.path);
+  return out;
+}
+
+std::vector<std::string> figurePaths(const AssetCatalog &catalog)
+{
+  std::vector<std::string> out;
+  for (const AssetInfo &a : catalog.assets)
+    if (a.kind == AssetKind::Figure && a.problem.empty()) out.push_back(a.path);
   return out;
 }
 

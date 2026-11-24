@@ -70,6 +70,7 @@ int main(int argc, char **argv)
     for (const std::string &path : inputs)
     {
       if (path.size() > 9 && path.substr(path.size() - 9) == ".bmsprite") options.sprites.push_back(path);
+      else if (path.size() > 9 && path.substr(path.size() - 9) == ".bmfigure") options.figures.push_back(path);
       else if (path.size() > 3 && path.substr(path.size() - 3) == ".ms") options.scripts.push_back(path);
       else if (path.size() > 7 && path.substr(path.size() - 7) == ".bmdata") options.data.push_back(path);
       else if (path.size() > 7 && path.substr(path.size() - 7) == ".bmsong") options.songs.push_back(path);

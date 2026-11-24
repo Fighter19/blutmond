@@ -2452,6 +2452,13 @@ static void testSheetsAndPalettesPerRoom(void)
   frames(5, 0);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
   TEST_ASSERT(s_game.sheetTile[knight] != BM_GAME_NO_TILES && banksOf(bat, -1) == 0 && s_game.tileNext < BM_GAME_OBJ_TILES - 200);
+  // The player is the figure "player" (legs and torso): both sheets stay through all this, in
+  // banks 0 and 1, and both are drawn, the torso in front.
+  int legs = sheetOf("player_legs"), torso = sheetOf("player_torso");
+  TEST_ASSERT(s_game.playerFigure.layerCount == 2 && s_game.playerSheet == legs && legs >= 0 && torso >= 0);
+  TEST_ASSERT(s_game.bankSheet[0] == legs && s_game.bankSheet[1] == torso);
+  TEST_ASSERT(s_game.sheetTile[legs] != BM_GAME_NO_TILES && s_game.sheetTile[torso] != BM_GAME_NO_TILES);
+  TEST_ASSERT((ppu->oam[2] >> 12) == 1 && (ppu->oam[4 * 1 + 2] >> 12) == 0);
   // set_palette and flash from a script (the wind pack's Painter).
   if (s_windData != NULL)
   {
