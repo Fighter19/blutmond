@@ -1,6 +1,6 @@
 # Plan: layered sprites and variants
 
-Status: steps 1 to 6 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
+Status: steps 1 to 7 built (the first version of each; what differs is said per step). Palettes: `palette` (a second image or `swap`s) in the sprite file,
 a palette table in `SPRT` version 3 ([../spec/sprite-format.md](../spec/sprite-format.md)), the
 room object's property `palette`, `set_palette` and `flash` in scripts. Sheets: every sheet's
 data opened once per pack, sprite memory and banks given out room by room per (sheet, palette)
@@ -60,8 +60,22 @@ the lock ends when the bat is gone. Where it differs: handles are of `Actor` onl
 class (`Bat?`); `t.alive()` is the check itself; the lock and the bolt are in the test pack,
 not in the test level's spells (whose casts stay at the player's anchor), and there is no lock
 button of its own (Select, the second quick slot's, here); the marker is a sprite named by the
-script, drawn at the target's middle, not at a point `centre`. Step 7 is open. Milestone M18
-in [../PLAN.md](../PLAN.md).
+script, drawn at the target's middle, not at a point `centre`.
+
+Step 7 built: in the Animation tab a sprite's **points** are listed per frame (name, place,
+angle, in front or behind), added, deleted, copied to every frame of the animation shown, and
+dragged in the preview, where every point is drawn as a crosshair with a line along its angle.
+An animation can be made a **direction set** (from, to); its steps list their angles, and the
+**dial** (a slider, 0 to 255) shows the step nearest to its angle, with a line along it to
+compare with the hand's. A `.bmfigure` opened in the tab (from the Project panel or the sprite
+chooser, which lists figures too) shows the **figure view**: its layers composed as the
+runtime poses them (sync by animation name and step, aiming layers at the dial, points,
+`behind`), playing the root's animations, the layer list, and the **budget** of the pose
+(hardware sprites, the worst line) and the figure (tiles, banks). Where it differs: the
+figure's layers are not edited in the tab (the `.bmfigure` is a text file; open its sprites to
+edit them); the palettes of a sprite are not shown side by side (the Graphics tab's palette
+view shows a sheet's); there is no "drag a target around" mode (the dial stands in for it);
+the State tab does not list a figure's layers. Milestone M18 in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

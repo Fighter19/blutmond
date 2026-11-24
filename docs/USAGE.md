@@ -128,6 +128,16 @@ commit they were built from.
   logo is still missing from the header (section 4): `tools/gbafix.py out.gba --logo FILE`.
 - The tabs (Room, Animation, Script, Sound, Graphics, Data, World, and Project and State on
   the left) are described in the [README](../README.md).
+- **Animation**, figures ([spec/sprite-format.md](spec/sprite-format.md) "Figures"): a sprite
+  frame's **points** (where the layers of a figure hang) are listed under the boxes: add one,
+  set its place, angle and whether what hangs there is in front or behind, drag it in the
+  preview, or copy it to every frame of the animation shown. An animation can be a
+  **direction set** (from, to): its steps are directions for aiming; move the **dial** to see
+  which step an angle picks. Choose a `.bmfigure` (in the sprite chooser or the Project panel)
+  to see the figure: its layers put together as the game does, playing the first layer's
+  animations, the aiming layers turned to the dial, and what the pose and the figure cost. The
+  player of the test level is `player.bmfigure`; `tools/split_sprite.py` makes legs and torso
+  from a sprite drawn whole.
 - **World**: the world map ([spec/world-format.md](spec/world-format.md)). The rooms lie on a
   grid of screens as the game's map shows them; rooms without a place of their own are put
   next to the room their door leads from (drawn lighter, "(doors)"). Drag a room to give it a

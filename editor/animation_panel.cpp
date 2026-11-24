@@ -2,6 +2,7 @@
 #include "animation_panel.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 
 #include "ui/canvas.h"
@@ -34,6 +35,18 @@ void checker(Canvas &c, const Rect &r, float cell)
   for (int y = 0; y * cell < r.h; y++)
     for (int x = (y & 1); x * cell < r.w; x += 2) c.rect({r.x + x * cell, r.y + y * cell, cell, cell}, parseColor("#64748a"));
   c.popClip();
+}
+
+// A point: a crosshair and a line along its angle (256 a turn, 0 forward: to the right).
+template <typename Font> void drawPoint(Canvas &c, Vec2 at, const sprite::Point &p, float zoom, bool selected, const Font &fnt, float size)
+{
+  Color col = p.behind ? Color{0.75f, 0.4f, 1, 1} : Color{1, 0.55f, 0.1f, 1};
+  float r = selected ? 6.0f : 4.0f;
+  c.line({at.x - r, at.y}, {at.x + r, at.y}, col, selected ? 2.5f : 1.5f);
+  c.line({at.x, at.y - r}, {at.x, at.y + r}, col, selected ? 2.5f : 1.5f);
+  float a = float(p.angle) * 6.2831853f / 256.0f, len = 6 * zoom;
+  c.line(at, {at.x + std::cos(a) * len, at.y + std::sin(a) * len}, col, 1.5f);
+  c.text({at.x + 4, at.y + 2}, p.name, fnt, size * 0.75f, col);
 }
 
 }  // namespace
@@ -97,6 +110,18 @@ ose::Vec2 AnimPreview::anchor() const
   return {rect_.x + rect_.w * 0.5f, rect_.y + rect_.h * 0.75f};
 }
 
+int AnimPreview::hitPoint(ose::Vec2 p) const
+{
+  if (!editable || !composite.empty()) return -1;
+  Vec2 a = anchor();
+  for (int i = int(points.size()) - 1; i >= 0; i--)
+  {
+    float x = a.x + points[size_t(i)].x * zoom, y = a.y + points[size_t(i)].y * zoom;
+    if (std::abs(p.x - x) <= 6 && std::abs(p.y - y) <= 6) return i;
+  }
+  return -1;
+}
+
 int AnimPreview::hit(ose::Vec2 p, int *pEdges) const
 {
   *pEdges = 0;
@@ -143,6 +168,16 @@ bool AnimPreview::event(const InputEvent &e)
   {
     if (e.button != MouseButton::Left) return false;
     if (pressed) pressed();   // stops playing: the boxes belong to the frame shown now
+    // A point first (they are small and sit on boxes).
+    dragPoint_ = hitPoint(e.pos);
+    if (dragPoint_ >= 0)
+    {
+      dragFrom_ = e.pos;
+      dragStart_ = {points[size_t(dragPoint_)].x, points[size_t(dragPoint_)].y, 0, 0};
+      dragged_ = false;
+      if (pointSelected) pointSelected(dragPoint_);
+      return true;
+    }
     if (!editable || !showBoxes) return true;
     int edges = 0;
     drag_ = hit(e.pos, &edges);
@@ -163,6 +198,17 @@ bool AnimPreview::event(const InputEvent &e)
   }
   case InputEvent::Type::MouseMove:
   {
+    if (dragPoint_ >= 0)
+    {
+      int x = std::clamp(dragStart_.x + int(std::lround((e.pos.x - dragFrom_.x) / zoom)), -128, 127);
+      int y = std::clamp(dragStart_.y + int(std::lround((e.pos.y - dragFrom_.y) / zoom)), -128, 127);
+      if (x == points[size_t(dragPoint_)].x && y == points[size_t(dragPoint_)].y) return true;
+      dragged_ = true;
+      points[size_t(dragPoint_)].x = x;
+      points[size_t(dragPoint_)].y = y;
+      if (pointMoved) pointMoved(dragPoint_, x, y, false);
+      return true;
+    }
     if (drag_ < 0 && dragMode_ != Draw) return false;
     int dx = int(std::lround((e.pos.x - dragFrom_.x) / zoom)), dy = int(std::lround((e.pos.y - dragFrom_.y) / zoom));
     if (dx == 0 && dy == 0 && !dragged_) return true;
@@ -205,6 +251,13 @@ bool AnimPreview::event(const InputEvent &e)
   }
   case InputEvent::Type::MouseUp:
   {
+    if (dragPoint_ >= 0)
+    {
+      int i = dragPoint_;
+      dragPoint_ = -1;
+      if (dragged_ && pointMoved) pointMoved(i, points[size_t(i)].x, points[size_t(i)].y, true);
+      return true;
+    }
     if (drag_ >= 0 && dragged_ && boxChanged) boxChanged(drag_, editBoxes[size_t(drag_)].box, true);
     if (dragMode_ == Draw && dragged_ && drawing_.w > 0 && boxDrawn) boxDrawn(drawing_);
     bool any = drag_ >= 0 || dragMode_ == Draw;
@@ -221,6 +274,30 @@ bool AnimPreview::event(const InputEvent &e)
 void AnimPreview::draw(Canvas &c)
 {
   checker(c, rect_, 16);
+  if (!composite.empty())
+  {
+    // A figure: its layers back to front, their pieces and points.
+    c.pushClip(rect_);
+    Vec2 a = anchor();
+    c.rect({rect_.x, a.y, rect_.w, 1}, {0, 0, 0, 0.35f});
+    for (const Layer &l : composite)
+      if (l.texture) c.image({a.x + l.x * zoom, a.y + l.y * zoom, l.w * zoom, l.h * zoom}, l.texture);
+    for (const Layer &l : composite)
+    {
+      if (showPieces)
+        for (const sprite::Piece &p : l.pieces) c.border({a.x + p.dx * zoom, a.y + p.dy * zoom, p.w * zoom, p.h * zoom}, {0.2f, 1, 1, 0.8f}, 1);
+      for (const sprite::Point &p : l.points) drawPoint(c, {a.x + p.x * zoom, a.y + p.y * zoom}, p, zoom, false, font(), fontSize());
+    }
+    if (dial >= 0)
+    {
+      float d = float(dial) * 6.2831853f / 256.0f;
+      c.line(a, {a.x + std::cos(d) * 40 * zoom, a.y + std::sin(d) * 40 * zoom}, {1, 1, 1, 0.6f}, 1);
+    }
+    c.line({a.x - 6, a.y}, {a.x + 6, a.y}, {1, 0.9f, 0.2f, 1}, 2);
+    c.line({a.x, a.y - 6}, {a.x, a.y + 6}, {1, 0.9f, 0.2f, 1}, 2);
+    c.popClip();
+    return;
+  }
   if (!cooked || frame < 0 || size_t(frame) >= cooked->frames.size() || size_t(frame) >= images.size()) return;
   c.pushClip(rect_);
   const sprite::CookedFrame &f = cooked->frames[size_t(frame)];
@@ -257,6 +334,15 @@ void AnimPreview::draw(Canvas &c)
     }
   if (drawing_.w > 0)
     c.border({ax + drawing_.x * zoom, ay + drawing_.y * zoom, drawing_.w * zoom, drawing_.h * zoom}, {1, 1, 1, 0.9f}, 1.5f);
+  // The points: the list's while editable, else the cooked frame's.
+  const std::vector<sprite::Point> &pts = editable ? points : f.points;
+  for (size_t i = 0; i < pts.size(); i++) drawPoint(c, {ax + pts[i].x * zoom, ay + pts[i].y * zoom}, pts[i], zoom, editable && int(i) == selectedPoint, font(), fontSize());
+  if (dial >= 0)
+  {
+    // The dial's direction, to compare with the hand's.
+    float d = float(dial) * 6.2831853f / 256.0f;
+    c.line({ax, ay}, {ax + std::cos(d) * 40 * zoom, ay + std::sin(d) * 40 * zoom}, {1, 1, 1, 0.6f}, 1);
+  }
   c.line({ax - 6, ay}, {ax + 6, ay}, {1, 0.9f, 0.2f, 1}, 2);
   c.line({ax, ay - 6}, {ax, ay + 6}, {1, 0.9f, 0.2f, 1}, 2);
   c.popClip();
@@ -545,6 +631,275 @@ void AnimationPanel::bind(Control &root, Renderer &renderer)
   };
   root.findAs<Button>("anim_step_up")->clicked.connect([move] { move(-1); });
   root.findAs<Button>("anim_step_down")->clicked.connect([move] { move(1); });
+
+  // Points (layered-sprites.md §4): the frame's own, edited with the numbers or dragged in
+  // the preview.
+  points_ = root.findAs<ItemList>("anim_points");
+  pointName_ = root.findAs<LineEdit>("anim_point_name");
+  pointOrder_ = root.findAs<OptionButton>("anim_point_order");
+  static const char *pointIds[3] = {"anim_px", "anim_py", "anim_pa"};
+  for (int i = 0; i < 3; i++)
+  {
+    point_[i] = root.findAs<SpinBox>(pointIds[i]);
+    point_[i]->minValue = i < 2 ? -128 : 0;
+    point_[i]->maxValue = i < 2 ? 127 : 255;
+    point_[i]->decimals = 0;
+    point_[i]->valueChanged.connect([this, i](double v) {
+      sprite::Point *p = selectedPoint();
+      if (updating_ || !p) return;
+      (i == 0 ? p->x : i == 1 ? p->y : p->angle) = int(v);
+      pointEdited();
+    });
+  }
+  points_->tileSize = 0;
+  points_->selectedChanged.connect([this](int) { fillPoints(); });
+  pointName_->submitted.connect([this](const std::string &name) {
+    sprite::Point *p = selectedPoint();
+    if (updating_ || !p || name.empty() || p->name == name) return;
+    p->name = name;
+    pointEdited();
+  });
+  pointOrder_->itemSelected.connect([this](int k) {
+    sprite::Point *p = selectedPoint();
+    if (updating_ || !p) return;
+    p->behind = k == 1;
+    pointEdited();
+  });
+  root.findAs<Button>("anim_point_add")->clicked.connect([this] {
+    sprite::Frame *f = currentFrame();
+    if (!f) return;
+    sprite::Point p;
+    p.name = "point" + std::to_string(f->points.size() + 1);
+    p.y = -f->h / 2;
+    f->points.push_back(p);
+    points_->selected = int(f->points.size()) - 1;
+    pointEdited();
+  });
+  root.findAs<Button>("anim_point_delete")->clicked.connect([this] {
+    sprite::Frame *f = currentFrame();
+    if (!f || !selectedPoint()) return;
+    f->points.erase(f->points.begin() + points_->selected);
+    points_->selected = std::min(points_->selected, int(f->points.size()) - 1);
+    pointEdited();
+  });
+  root.findAs<Button>("anim_point_copy")->clicked.connect([this] {
+    // To every frame of the animation shown (or every frame), replacing one of the same name.
+    const sprite::Point *p = selectedPoint();
+    if (!p) return;
+    sprite::Point copy = *p;
+    int a = currentAnim(), n = 0;
+    for (size_t k = 0; k < sprite_.frames.size(); k++)
+    {
+      if (int(k) == sheet_->selected) continue;
+      if (a >= 0 && std::none_of(sprite_.animations[size_t(a)].steps.begin(), sprite_.animations[size_t(a)].steps.end(),
+                                 [&](const sprite::Step &s) { return s.frame == int(k); }))
+        continue;
+      auto &pts = sprite_.frames[k].points;
+      pts.erase(std::remove_if(pts.begin(), pts.end(), [&](const sprite::Point &q) { return q.name == copy.name; }), pts.end());
+      pts.push_back(copy);
+      n++;
+    }
+    if (log) log("point " + copy.name + " copied to " + std::to_string(n) + " frames", false);
+    pointEdited();
+  });
+  preview_->pointSelected = [this](int i) {
+    points_->selected = i;
+    fillPoints();
+  };
+  preview_->pointMoved = [this](int i, int x, int y, bool done) {
+    sprite::Frame *f = currentFrame();
+    if (!f || i < 0 || size_t(i) >= f->points.size()) return;
+    f->points[size_t(i)].x = x;
+    f->points[size_t(i)].y = y;
+    if (done) pointEdited();
+    else
+    {
+      updating_ = true;
+      point_[0]->setValue(x, false);
+      point_[1]->setValue(y, false);
+      updating_ = false;
+    }
+  };
+
+  // Direction sets (layered-sprites.md §6) and the dial.
+  directions_ = root.findAs<CheckBox>("anim_directions");
+  dirFrom_ = root.findAs<SpinBox>("anim_dir_from");
+  dirTo_ = root.findAs<SpinBox>("anim_dir_to");
+  dial_ = root.findAs<Slider>("anim_dial");
+  dialLabel_ = root.findAs<Label>("anim_dial_label");
+  layers_ = root.findAs<ItemList>("anim_layers");
+  layers_->tileSize = 0;
+  for (SpinBox *s : {dirFrom_, dirTo_})
+  {
+    s->minValue = 0;
+    s->maxValue = 255;
+    s->decimals = 0;
+  }
+  dial_->minValue = 0;
+  dial_->maxValue = 255;
+  dial_->step = 1;
+  directions_->toggled.connect([this](bool on) {
+    int a = currentAnim();
+    if (updating_ || a < 0) return;
+    sprite::Animation &an = sprite_.animations[size_t(a)];
+    an.directions = on ? int(an.steps.size()) : 0;
+    rebuild();
+    edited();
+  });
+  dirFrom_->valueChanged.connect([this](double v) {
+    int a = currentAnim();
+    if (updating_ || a < 0) return;
+    sprite_.animations[size_t(a)].from = int(v);
+    rebuild();
+    edited();
+  });
+  dirTo_->valueChanged.connect([this](double v) {
+    int a = currentAnim();
+    if (updating_ || a < 0) return;
+    sprite_.animations[size_t(a)].to = int(v);
+    rebuild();
+    edited();
+  });
+  dial_->valueChanged.connect([this](float v) {
+    dialAngle_ = int(std::lround(v));
+    dialUsed_ = true;
+    fillDirections();
+    if (figureMode_) showFigure();
+  });
+}
+
+std::vector<AnimPreview::FrameImage> AnimationPanel::frameImages(const sprite::Cooked &cooked)
+{
+  // A picture per cooked frame: its pieces, decoded with the cooked palette.
+  std::vector<AnimPreview::FrameImage> out;
+  for (const sprite::CookedFrame &f : cooked.frames)
+  {
+    AnimPreview::FrameImage img;
+    if (!f.pieces.empty())
+    {
+      int x0 = 1000, y0 = 1000, x1 = -1000, y1 = -1000;
+      for (const sprite::Piece &p : f.pieces)
+      {
+        x0 = std::min(x0, p.dx);
+        y0 = std::min(y0, p.dy);
+        x1 = std::max(x1, p.dx + p.w);
+        y1 = std::max(y1, p.dy + p.h);
+      }
+      img.x = x0;
+      img.y = y0;
+      img.w = x1 - x0;
+      img.h = y1 - y0;
+      std::vector<uint8_t> rgba(size_t(img.w) * img.h * 4, 0);
+      for (const sprite::Piece &p : f.pieces)
+        for (int ty = 0; ty < p.h / 8; ty++)
+          for (int tx = 0; tx < p.w / 8; tx++)
+          {
+            size_t tile = size_t(p.tile + ty * (p.w / 8) + tx);
+            if (tile >= cooked.tiles.size()) continue;
+            for (int k = 0; k < 64; k++)
+            {
+              uint8_t idx = cooked.tiles[tile][size_t(k)];
+              if (!idx) continue;
+              uint16_t c = cooked.palette[idx];
+              int px = p.dx - x0 + tx * 8 + k % 8, py = p.dy - y0 + ty * 8 + k / 8;
+              uint8_t *o = &rgba[(size_t(py) * img.w + px) * 4];
+              auto x = [](unsigned v) { return uint8_t((v << 3) | (v >> 2)); };
+              o[0] = x(c & 31);
+              o[1] = x((c >> 5) & 31);
+              o[2] = x((c >> 10) & 31);
+              o[3] = 255;
+            }
+          }
+      img.texture = renderer_->createTexture(img.w, img.h, rgba.data(), true);
+    }
+    out.push_back(img);
+  }
+  return out;
+}
+
+void AnimationPanel::freeImages(std::vector<AnimPreview::FrameImage> &images)
+{
+  for (AnimPreview::FrameImage &img : images)
+    if (img.texture) renderer_->destroyTexture(img.texture);
+  images.clear();
+}
+
+sprite::Point *AnimationPanel::selectedPoint()
+{
+  sprite::Frame *f = currentFrame();
+  if (!f || points_ == nullptr || points_->selected < 0 || size_t(points_->selected) >= f->points.size()) return nullptr;
+  return &f->points[size_t(points_->selected)];
+}
+
+void AnimationPanel::fillPoints()
+{
+  if (!points_) return;
+  updating_ = true;
+  points_->items.clear();
+  sprite::Frame *f = loaded_ ? currentFrame() : nullptr;
+  if (f)
+    for (const sprite::Point &p : f->points)
+      points_->items.push_back({p.name + "  " + std::to_string(p.x) + "," + std::to_string(p.y) + "  angle " + std::to_string(p.angle) +
+                                    (p.behind ? "  behind" : ""),
+                                "dot-circle-o", {}, {}, {}, {}});
+  if (points_->selected >= int(points_->items.size())) points_->selected = int(points_->items.size()) - 1;
+  const sprite::Point *p = selectedPoint();
+  if (p)
+  {
+    point_[0]->setValue(p->x, false);
+    point_[1]->setValue(p->y, false);
+    point_[2]->setValue(p->angle, false);
+    pointName_->setText(p->name);
+    pointOrder_->select(p->behind ? 1 : 0, false);
+  }
+  preview_->points = f ? f->points : std::vector<sprite::Point>{};
+  preview_->selectedPoint = points_->selected;
+  updating_ = false;
+}
+
+void AnimationPanel::pointEdited()
+{
+  rebuild();
+  edited();
+  fillPoints();
+}
+
+// The direction set's fields, and with the dial: the step nearest to its angle, shown.
+void AnimationPanel::fillDirections()
+{
+  if (!directions_) return;
+  updating_ = true;
+  int a = currentAnim();
+  bool set = a >= 0 && sprite_.animations[size_t(a)].directions > 0;
+  directions_->disabled = a < 0;
+  dirFrom_->disabled = dirTo_->disabled = !set;
+  if (a >= 0)
+  {
+    directions_->setPressed(set);
+    dirFrom_->setValue(sprite_.animations[size_t(a)].from, false);
+    dirTo_->setValue(sprite_.animations[size_t(a)].to, false);
+  }
+  preview_->dial = dialUsed_ && (set || figureMode_) ? dialAngle_ : -1;
+  dialLabel_->text = "Dial: " + std::to_string(dialAngle_);
+  if (set && dialUsed_ && !figureMode_)
+  {
+    const sprite::Animation &an = sprite_.animations[size_t(a)];
+    size_t best = 0;
+    int bestD = 256;
+    for (size_t k = 0; k < an.steps.size(); k++)
+    {
+      int d = (sprite::directionAngle(an, k) - dialAngle_) & 255;
+      d = std::min(d, 256 - d);
+      if (d < bestD) bestD = d, best = k;
+    }
+    playing_ = false;
+    steps_->selected = int(best);
+    dialLabel_->text += " shows step " + std::to_string(best) + " (" + std::to_string(sprite::directionAngle(an, best)) + ")";
+    updating_ = false;
+    showStep();
+    return;
+  }
+  updating_ = false;
 }
 
 void AnimationPanel::setSprites(const std::vector<std::string> &paths)
@@ -565,6 +920,17 @@ void AnimationPanel::setSprites(const std::vector<std::string> &paths)
 void AnimationPanel::open(const std::string &path)
 {
   if (dirty_) save();
+  // Leaving the figure view, if it was on.
+  for (FigureLayer &l : figureLayers_) freeImages(l.images);
+  figureLayers_.clear();
+  preview_->composite.clear();
+  if (layers_) layers_->items.clear();
+  figureMode_ = false;
+  if (std::filesystem::path(path).extension() == ".bmfigure")
+  {
+    openFigure(path);
+    return;
+  }
   try
   {
     sprite_ = sprite::load(path);
@@ -606,9 +972,7 @@ sprite::Frame *AnimationPanel::currentFrame()
 
 void AnimationPanel::rebuild()
 {
-  for (AnimPreview::FrameImage &img : preview_->images)
-    if (img.texture) renderer_->destroyTexture(img.texture);
-  preview_->images.clear();
+  freeImages(preview_->images);
   if (sheet_->texture) renderer_->destroyTexture(sheet_->texture);
   sheet_->texture = {};
   sheet_->sprite = loaded_ ? &sprite_ : nullptr;
@@ -629,49 +993,7 @@ void AnimationPanel::rebuild()
   info_->text = problem.empty() ? sprite_.path : problem;
   info_->colorOverride = problem.empty() ? Color{0, 0, 0, 0} : errorColor(info_->theme());
 
-  // A picture per cooked frame: its pieces, decoded with the cooked palette.
-  for (const sprite::CookedFrame &f : cooked_.frames)
-  {
-    AnimPreview::FrameImage img;
-    if (!f.pieces.empty())
-    {
-      int x0 = 1000, y0 = 1000, x1 = -1000, y1 = -1000;
-      for (const sprite::Piece &p : f.pieces)
-      {
-        x0 = std::min(x0, p.dx);
-        y0 = std::min(y0, p.dy);
-        x1 = std::max(x1, p.dx + p.w);
-        y1 = std::max(y1, p.dy + p.h);
-      }
-      img.x = x0;
-      img.y = y0;
-      img.w = x1 - x0;
-      img.h = y1 - y0;
-      std::vector<uint8_t> rgba(size_t(img.w) * img.h * 4, 0);
-      for (const sprite::Piece &p : f.pieces)
-        for (int ty = 0; ty < p.h / 8; ty++)
-          for (int tx = 0; tx < p.w / 8; tx++)
-          {
-            size_t tile = size_t(p.tile + ty * (p.w / 8) + tx);
-            if (tile >= cooked_.tiles.size()) continue;
-            for (int k = 0; k < 64; k++)
-            {
-              uint8_t idx = cooked_.tiles[tile][size_t(k)];
-              if (!idx) continue;
-              uint16_t c = cooked_.palette[idx];
-              int px = p.dx - x0 + tx * 8 + k % 8, py = p.dy - y0 + ty * 8 + k / 8;
-              uint8_t *o = &rgba[(size_t(py) * img.w + px) * 4];
-              auto x = [](unsigned v) { return uint8_t((v << 3) | (v >> 2)); };
-              o[0] = x(c & 31);
-              o[1] = x((c >> 5) & 31);
-              o[2] = x((c >> 10) & 31);
-              o[3] = 255;
-            }
-          }
-      img.texture = renderer_->createTexture(img.w, img.h, rgba.data(), true);
-    }
-    preview_->images.push_back(img);
-  }
+  preview_->images = frameImages(cooked_);
   preview_->cooked = &cooked_;
 
   int colours = 0;
@@ -685,6 +1007,22 @@ void AnimationPanel::rebuild()
 
 void AnimationPanel::fillLists()
 {
+  if (figureMode_)
+  {
+    // The root's animations; the layers in the layers list.
+    updating_ = true;
+    int keep = anims_->selected;
+    anims_->items.clear();
+    steps_->items.clear();
+    if (!figureLayers_.empty() && figureLayers_[0].ok)
+      for (const sprite::Animation &a : figureLayers_[0].sprite.animations)
+        anims_->items.push_back({a.name + (a.directions ? "  (" + std::to_string(a.directions) + " directions)" : ""), "film", {}, {}, {}, {}});
+    anims_->selected = keep >= 0 && keep < int(anims_->items.size()) ? keep : (anims_->items.empty() ? -1 : 0);
+    updating_ = false;
+    fillDirections();
+    showFigure();
+    return;
+  }
   updating_ = true;
   int keepAnim = anims_->selected, keepStep = steps_->selected;
   anims_->items.clear();
@@ -702,7 +1040,10 @@ void AnimationPanel::fillLists()
   {
     const sprite::Animation &an = sprite_.animations[size_t(a)];
     for (size_t i = 0; i < an.steps.size(); i++)
-      steps_->items.push_back({"frame " + std::to_string(an.steps[i].frame) + " for " + std::to_string(an.steps[i].duration) + " frames", "image", {}, {}, {}, {}});
+      steps_->items.push_back({"frame " + std::to_string(an.steps[i].frame) +
+                                   (an.directions > 0 ? " at angle " + std::to_string(sprite::directionAngle(an, i))
+                                                      : " for " + std::to_string(an.steps[i].duration) + " frames"),
+                               "image", {}, {}, {}, {}});
     steps_->selected = keepStep < int(an.steps.size()) ? keepStep : -1;
     animName_->setText(an.name);
     loop_->setPressed(an.loop);
@@ -714,6 +1055,7 @@ void AnimationPanel::fillLists()
   }
   updating_ = false;
   showFrame();
+  fillDirections();
 }
 
 void AnimationPanel::showFrame()
@@ -739,6 +1081,7 @@ void AnimationPanel::showFrame()
     frameTitle_->text = "No frame selected";
   updating_ = false;
   fillBoxes();
+  fillPoints();
   updating_ = true;
   const sprite::Box &b = have && f->ownHitbox ? f->hitbox : sprite_.hitbox;
   hitbox_[0]->setValue(b.x, false);
@@ -816,6 +1159,30 @@ void AnimationPanel::update(float dt)
 {
   if (dirty_ && (saveTimer_ += dt) > 0.4f) save();
   play_->text = playing_ ? "Pause" : "Play";
+  if (figureMode_)
+  {
+    // The root's animation in time; the other layers follow it (showFigure).
+    int a = anims_->selected;
+    if (!playing_ || figureLayers_.empty() || !figureLayers_[0].ok || a < 0 || size_t(a) >= figureLayers_[0].sprite.animations.size()) return;
+    const sprite::Animation &an = figureLayers_[0].sprite.animations[size_t(a)];
+    if (an.steps.empty()) return;
+    playTime_ += dt;
+    bool changedStep = false;
+    while (playTime_ >= kFrameSeconds)
+    {
+      playTime_ -= kFrameSeconds;
+      if (an.directions > 0) break;
+      if (size_t(playStep_) >= an.steps.size()) playStep_ = 0;
+      if (++playTimer_ >= an.steps[size_t(playStep_)].duration)
+      {
+        playTimer_ = 0;
+        playStep_ = size_t(playStep_) + 1 < an.steps.size() ? playStep_ + 1 : 0;
+        changedStep = true;
+      }
+    }
+    if (changedStep || preview_->composite.empty()) showFigure();
+    return;
+  }
   // The boxes can be changed with the mouse while the frame they belong to is shown.
   preview_->editable = loaded_ && !playing_ && preview_->frame == sheet_->selected;
   int a = currentAnim();
@@ -953,6 +1320,182 @@ void AnimationPanel::boxEdited()
   rebuild();
   edited();
   fillBoxes();
+}
+
+}  // namespace bm::editor
+
+namespace bm::editor {
+
+void AnimationPanel::openFigure(const std::string &path)
+{
+  figureMode_ = true;
+  loaded_ = false;   // the sprite fields have nothing to edit
+  sprite_ = sprite::Sprite{};
+  sprite_.path = path;
+  for (size_t i = 0; i < paths_.size(); i++)
+    if (paths_[i] == path) chooser_->select(int(i), false);
+  try
+  {
+    figure_ = figure::load(path);
+  }
+  catch (const std::exception &e)
+  {
+    info_->text = e.what();
+    if (log) log(e.what(), true);
+    figure_ = figure::Figure{};
+  }
+  // Each layer's sprite: the project's sprite of that name, cooked.
+  for (const figure::Layer &l : figure_.layers)
+  {
+    FigureLayer fl;
+    for (const std::string &p : paths_)
+      if (!l.sprite.empty() && std::filesystem::path(p).extension() == ".bmsprite" && std::filesystem::path(p).stem().string() == l.sprite)
+      {
+        try
+        {
+          fl.sprite = sprite::load(p);
+          Report report;
+          fl.cooked = sprite::cook(fl.sprite, *profileByName("gba"), report);
+          fl.images = frameImages(fl.cooked);
+          fl.ok = true;
+        }
+        catch (const std::exception &e)
+        {
+          if (log) log(p + ": " + e.what(), true);
+        }
+      }
+    figureLayers_.push_back(std::move(fl));
+  }
+  layers_->items.clear();
+  for (size_t i = 0; i < figure_.layers.size(); i++)
+  {
+    const figure::Layer &l = figure_.layers[i];
+    std::string mode = l.mode == figure::Mode::Sync ? "sync" : l.mode == figure::Mode::Aim ? "aim" : "own";
+    layers_->items.push_back({l.name + ": " + (l.sprite.empty() ? "no sprite" : l.sprite) + (l.parent.empty() ? "  (root)" : "  at " + l.parent + "." + l.point) +
+                                  ", " + mode + (l.behind ? ", behind" : "") + (l.palette.empty() ? "" : ", palette " + l.palette) +
+                                  (figureLayers_[i].ok || l.sprite.empty() ? "" : "  (no such sprite)"),
+                              "clone", {}, {}, {}, {}});
+  }
+  info_->text = path + ": a figure of " + std::to_string(figure_.layers.size()) + " layers";
+  info_->colorOverride = Color{0, 0, 0, 0};
+  sheet_->sprite = nullptr;
+  sheet_->selected = -1;
+  if (sheet_->texture) renderer_->destroyTexture(sheet_->texture);
+  sheet_->texture = {};
+  preview_->cooked = nullptr;
+  freeImages(preview_->images);
+  showFrame();   // nothing: the fields are for a sprite
+  anims_->selected = 0;
+  playing_ = true;
+  playStep_ = playTimer_ = 0;
+  fillLists();
+  showFigure();
+}
+
+// The figure's pose for the root's animation at its step (as the runtime does, figure.h): a
+// layer plays the animation of its sprite named like its parent's at the same step; one whose
+// animation is a direction set (or an `aim` layer: its first) shows the step nearest to the dial.
+void AnimationPanel::showFigure()
+{
+  preview_->composite.clear();
+  size_t n = figure_.layers.size();
+  if (n == 0 || figureLayers_.empty() || !figureLayers_[0].ok) return;
+  int rootAnim = anims_->selected;
+  const auto &rootAnims = figureLayers_[0].sprite.animations;
+  if (rootAnim < 0 || size_t(rootAnim) >= rootAnims.size()) return;
+  std::vector<int> anim(n, -1), frame(n, -1), ox(n, 0), oy(n, 0);
+  std::vector<bool> behind(n, false);
+  int pieces = 0, tiles = 0, banks = 0, worst = 0;
+  for (size_t i = 0; i < n; i++)
+  {
+    const figure::Layer &l = figure_.layers[i];
+    const FigureLayer &fl = figureLayers_[i];
+    int parent = l.parent.empty() ? -1 : figure::layerIndex(figure_, l.parent);
+    if (parent >= 0)
+    {
+      ox[i] = ox[size_t(parent)];
+      oy[i] = oy[size_t(parent)];
+      int pf = frame[size_t(parent)];
+      if (pf >= 0 && figureLayers_[size_t(parent)].ok)
+        for (const sprite::Point &p : figureLayers_[size_t(parent)].cooked.frames[size_t(pf)].points)
+          if (p.name == l.point)
+          {
+            ox[i] += p.x;
+            oy[i] += p.y;
+            behind[i] = p.behind;
+          }
+    }
+    behind[i] = behind[i] || l.behind;
+    if (!fl.ok) continue;
+    tiles += int(fl.cooked.tiles.size());
+    banks++;
+    const std::string &want = rootAnims[size_t(rootAnim)].name;
+    for (size_t a = 0; a < fl.sprite.animations.size(); a++)
+      if (fl.sprite.animations[a].name == want) anim[i] = int(a);
+    if (l.mode == figure::Mode::Aim)
+      for (size_t a = 0; a < fl.sprite.animations.size() && anim[i] < 0; a++)
+        if (fl.sprite.animations[a].directions > 0) anim[i] = int(a);
+    if (anim[i] < 0) continue;
+    const sprite::Animation &an = fl.sprite.animations[size_t(anim[i])];
+    if (an.steps.empty()) continue;
+    size_t step = std::min(size_t(playStep_), an.steps.size() - 1);
+    if (an.directions > 0)
+    {
+      int bestD = 256;
+      for (size_t k = 0; k < an.steps.size(); k++)
+      {
+        int d = (sprite::directionAngle(an, k) - dialAngle_) & 255;
+        d = std::min(d, 256 - d);
+        if (d < bestD) bestD = d, step = k;
+      }
+    }
+    frame[i] = an.steps[step].frame;
+    if (frame[i] < 0 || size_t(frame[i]) >= fl.cooked.frames.size()) frame[i] = -1;
+  }
+  // Back to front: each layer in front of all before it, or right behind its parent.
+  std::vector<size_t> order;
+  for (size_t i = 0; i < n; i++)
+  {
+    size_t at = order.size();
+    int parent = figure_.layers[i].parent.empty() ? -1 : figure::layerIndex(figure_, figure_.layers[i].parent);
+    if (i != 0 && behind[i])
+      for (size_t k = 0; k < order.size(); k++)
+        if (int(order[k]) == parent) at = k;
+    order.insert(order.begin() + long(at), i);
+  }
+  std::vector<int> lineCost(256, 0);
+  for (size_t i : order)
+  {
+    if (frame[i] < 0) continue;
+    const FigureLayer &fl = figureLayers_[i];
+    const AnimPreview::FrameImage &img = fl.images[size_t(frame[i])];
+    AnimPreview::Layer layer;
+    layer.texture = img.texture;
+    layer.x = img.x + ox[i];
+    layer.y = img.y + oy[i];
+    layer.w = img.w;
+    layer.h = img.h;
+    for (sprite::Piece p : fl.cooked.frames[size_t(frame[i])].pieces)
+    {
+      p.dx += ox[i];
+      p.dy += oy[i];
+      layer.pieces.push_back(p);
+      pieces++;
+      for (int y = std::max(-128, p.dy); y < p.dy + p.h && y < 128; y++) lineCost[size_t(y + 128)] += p.w;
+    }
+    for (sprite::Point p : fl.cooked.frames[size_t(frame[i])].points)
+    {
+      p.x += ox[i];
+      p.y += oy[i];
+      layer.points.push_back(p);
+    }
+    preview_->composite.push_back(layer);
+  }
+  for (int c : lineCost) worst = std::max(worst, c);
+  preview_->dial = dialUsed_ ? dialAngle_ : -1;
+  cost_->text = "This pose: " + std::to_string(pieces) + " hardware sprites (12 for a figure), " + std::to_string(worst) +
+                " of 1210 sprite cycles on its worst line. The figure: " + std::to_string(tiles) + " tiles of sprite memory, " +
+                std::to_string(banks) + " palette banks";
 }
 
 }  // namespace bm::editor

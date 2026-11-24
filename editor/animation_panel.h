@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "figure_asset.h"
 #include "sprite_asset.h"
 #include "ui/control.h"
 #include "ui/core.h"
@@ -22,6 +23,7 @@ class Label;
 class LineEdit;
 class OptionButton;
 class Renderer;
+class Slider;
 class SpinBox;
 }  // namespace ose::ui
 
@@ -63,6 +65,24 @@ public:
     sprite::BoxKind kind = sprite::BoxKind::Hurt;
   };
   std::vector<EditBox> editBoxes;
+  /// The frame's points (layered-sprites.md §4): crosshairs with a line along their angle; while
+  /// `editable` a drag moves one.
+  std::vector<sprite::Point> points;
+  int selectedPoint = -1;
+  std::function<void(int)> pointSelected;
+  std::function<void(int, int x, int y, bool done)> pointMoved;
+  /// The dial (direction sets): a line from the anchor along this angle, -1 none.
+  int dial = -1;
+  /// A figure (several layers): drawn instead of the frame, back to front, each at its offset
+  /// from the anchor.
+  struct Layer
+  {
+    ose::ui::TextureHandle texture;
+    int x = 0, y = 0, w = 0, h = 0;   // the picture, relative to the anchor
+    std::vector<sprite::Piece> pieces;   // moved by the layer's offset already
+    std::vector<sprite::Point> points;   // the same
+  };
+  std::vector<Layer> composite;
   bool editable = false;
   /// The mouse went down on the preview: the panel stops playing and shows the frame edited.
   std::function<void()> pressed;
@@ -89,6 +109,8 @@ private:
   ose::Vec2 anchor() const;
   /// The box under a point (screen) and which of its edges, or -1.
   int hit(ose::Vec2 p, int *pEdges) const;
+  int hitPoint(ose::Vec2 p) const;
+  int dragPoint_ = -1;
   int drag_ = -1, dragMode_ = 0;
   ose::Vec2 dragFrom_;
   sprite::Box dragStart_, drawing_;
@@ -131,6 +153,16 @@ private:
   void warnOverride(sprite::BoxKind kind);
   void fillBoxes();
   void boxEdited();
+  void fillPoints();
+  void pointEdited();
+  sprite::Point *selectedPoint();
+  void fillDirections();
+  /// The pictures of a cooked sprite's frames.
+  std::vector<AnimPreview::FrameImage> frameImages(const sprite::Cooked &cooked);
+  void freeImages(std::vector<AnimPreview::FrameImage> &images);
+  // The figure view (a .bmfigure opened): its layers, composed in the preview.
+  void openFigure(const std::string &path);
+  void showFigure();
   int currentAnim() const;
   sprite::Frame *currentFrame();
 
@@ -164,6 +196,28 @@ private:
   ose::ui::OptionButton *boxScope_ = nullptr;
   ose::ui::SpinBox *box_[4] = {};
   ose::ui::LineEdit *boxName_ = nullptr;
+  ose::ui::ItemList *points_ = nullptr;
+  ose::ui::LineEdit *pointName_ = nullptr;
+  ose::ui::OptionButton *pointOrder_ = nullptr;
+  ose::ui::SpinBox *point_[3] = {};
+  ose::ui::CheckBox *directions_ = nullptr;
+  ose::ui::SpinBox *dirFrom_ = nullptr, *dirTo_ = nullptr;
+  ose::ui::Slider *dial_ = nullptr;
+  ose::ui::Label *dialLabel_ = nullptr;
+  ose::ui::ItemList *layers_ = nullptr;
+  int dialAngle_ = 0;
+  bool dialUsed_ = false;
+
+  bool figureMode_ = false;
+  figure::Figure figure_;
+  struct FigureLayer
+  {
+    bool ok = false;
+    sprite::Sprite sprite;
+    sprite::Cooked cooked;
+    std::vector<AnimPreview::FrameImage> images;
+  };
+  std::vector<FigureLayer> figureLayers_;
 };
 
 }  // namespace bm::editor

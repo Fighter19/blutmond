@@ -310,6 +310,19 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
                 <Label text="W"/><SpinBox id="anim_bw" expand="1"/><Label text="H"/><SpinBox id="anim_bh" expand="1"/>
               </HBox>
               <HBox><Label text="Name"/><LineEdit id="anim_box_name" expand="1"/></HBox>
+              <Label text="Points (for figures)" bold="1" tooltip="Where a figure's layers hang; drag them in the preview"/>
+              <Scroll min-size="0 60"><ItemList id="anim_points"/></Scroll>
+              <HBox>
+                <LineEdit id="anim_point_name" expand="1"/><OptionButton id="anim_point_order" items="In front;Behind" tooltip="What hangs there is drawn in front of this layer or behind it"/>
+              </HBox>
+              <HBox>
+                <Label text="X"/><SpinBox id="anim_px" expand="1"/><Label text="Y"/><SpinBox id="anim_py" expand="1"/>
+                <Label text="Angle"/><SpinBox id="anim_pa" expand="1" tooltip="256 a turn: 0 forward, 64 down, 192 up"/>
+              </HBox>
+              <Flow>
+                <Button id="anim_point_add" text="Add"/><Button id="anim_point_delete" text="Delete"/>
+                <Button id="anim_point_copy" text="Copy to all" tooltip="Every frame of the animation shown gets this point (replacing one of the same name)"/>
+              </Flow>
             </VBox></Scroll></PanelContainer>
             <HSplit fixed-end="300">
             <VBox expand="1">
@@ -330,6 +343,12 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
                 <CheckBox id="anim_loop" text="Loop"/>
               </HBox>
               <HBox><Button id="anim_add" text="New animation"/><Button id="anim_delete" text="Delete"/></HBox>
+              <HBox>
+                <CheckBox id="anim_directions" text="Direction set" tooltip="Each step stands for a direction instead of a time (aiming)"/>
+                <Label text="from"/><SpinBox id="anim_dir_from" expand="1"/><Label text="to"/><SpinBox id="anim_dir_to" expand="1"/>
+              </HBox>
+              <HBox><Label id="anim_dial_label" text="Dial"/></HBox>
+              <Slider id="anim_dial" tooltip="An angle: the direction set's step for it is shown, and a figure's aiming layers turn to it"/>
               <Label text="Steps" bold="1"/>
               <Scroll expand="1" min-size="0 120"><ItemList id="anim_steps"/></Scroll>
               <HBox><Label text="Shown for"/><SpinBox id="anim_duration" expand="1"/><Label text="frames"/></HBox>
@@ -339,6 +358,8 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
                 <Button id="anim_step_up" text="Up"/>
                 <Button id="anim_step_down" text="Down"/>
               </Flow>
+              <Label text="Figure layers" bold="1"/>
+              <Scroll min-size="0 60"><ItemList id="anim_layers"/></Scroll>
             </VBox></Scroll></PanelContainer>
             </HSplit>
           </HSplit>
@@ -801,7 +822,10 @@ struct Editor
   {
     std::vector<std::string> sprites = spritePaths(projectPanel.catalog());
     project.setSprites(sprites);
-    animationPanel.setSprites(sprites);
+    // The Animation tab lists the figures too (it composes them).
+    std::vector<std::string> withFigures = sprites, figures = figurePaths(projectPanel.catalog());
+    withFigures.insert(withFigures.end(), figures.begin(), figures.end());
+    animationPanel.setSprites(withFigures);
     std::vector<std::string> scripts = scriptPaths(projectPanel.catalog());
     project.setScripts(scripts);
     scriptPanel.setScripts(scripts);
@@ -1328,7 +1352,7 @@ int main(int argc, char **argv)
     // In the tab that edits it, as a pick in the Project panel does.
     std::string p = std::filesystem::absolute(openPath).lexically_normal().string(), ext = std::filesystem::path(p).extension().string();
     auto &pp = editor.projectPanel;
-    if (ext == ".bmsprite" && pp.spritePicked) pp.spritePicked(p);
+    if ((ext == ".bmsprite" || ext == ".bmfigure") && pp.spritePicked) pp.spritePicked(p);
     else if (ext == ".ms" && pp.scriptPicked) pp.scriptPicked(p);
     else if (ext == ".bmsong" && pp.songPicked) pp.songPicked(p);
     else if (ext == ".bmdata" && pp.dataPicked) pp.dataPicked(p);

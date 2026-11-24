@@ -755,6 +755,16 @@ if(BM_PLATFORM STREQUAL "host")
       COMMAND bmeditor --frames 3 --screenshot ${cooked}/editor_world.ppm --tab 6 ${PROJECT_SOURCE_DIR}/assets/test.bmproj)
     set_tests_properties(editor_world_tab PROPERTIES FAIL_REGULAR_EXPRESSION "layout:|not a world file|world version"
       ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;EGL_PLATFORM=surfaceless;GALLIUM_DRIVER=llvmpipe;ASAN_OPTIONS=detect_leaks=0")
+    # The figure view (layered-sprites.md §8): the player's figure composed in the Animation
+    # tab, legs and torso joined at the waist point; and the torso's sprite with its points.
+    add_test(NAME editor_figure_view
+      COMMAND bmeditor --frames 30 --screenshot ${cooked}/editor_figure.ppm --open ${PROJECT_SOURCE_DIR}/assets/test_room/player.bmfigure
+        ${PROJECT_SOURCE_DIR}/assets/test.bmproj)
+    add_test(NAME editor_sprite_points
+      COMMAND bmeditor --frames 30 --screenshot ${cooked}/editor_points.ppm --open ${PROJECT_SOURCE_DIR}/assets/test_room/player_legs.bmsprite
+        ${PROJECT_SOURCE_DIR}/assets/test.bmproj)
+    set_tests_properties(editor_figure_view editor_sprite_points PROPERTIES FAIL_REGULAR_EXPRESSION "layout:|cannot open|no such sprite"
+      ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;EGL_PLATFORM=surfaceless;GALLIUM_DRIVER=llvmpipe;ASAN_OPTIONS=detect_leaks=0")
   endif()
 
   add_test(NAME no_hardware_addresses

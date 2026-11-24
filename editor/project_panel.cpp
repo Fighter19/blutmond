@@ -63,7 +63,7 @@ void ProjectPanel::bind(Control &root, Context &ui)
   tree_->activated.connect([this](TreeItem *) { openSelected(); });
   tree_->selectionChanged.connect([this] {
     std::string path = selectedPath();
-    if (fs::path(path).extension() == ".bmsprite" && spritePicked) spritePicked(path);
+    if ((fs::path(path).extension() == ".bmsprite" || fs::path(path).extension() == ".bmfigure") && spritePicked) spritePicked(path);
     if (fs::path(path).extension() == ".ms" && scriptPicked) scriptPicked(path);
     if (fs::path(path).extension() == ".bmsong" && songPicked) songPicked(path);
     if (fs::path(path).extension() == ".bmdata" && dataPicked) dataPicked(path);
@@ -89,6 +89,7 @@ void ProjectPanel::contextMenu(const std::string &path, float x, float y)
   for (size_t i = 0; i < file_.rooms.size(); i++)
     if (file_.rooms[i] == path && roomShown) items.push_back(item("Show in the Room tab", "map", [this, i] { roomShown(int(i)); }));
   if (ext == ".bmsprite" && spritePicked) items.push_back(item("Edit in the Animation tab", "film", [this, path] { spritePicked(path); }));
+  if (ext == ".bmfigure" && spritePicked) items.push_back(item("Show in the Animation tab", "film", [this, path] { spritePicked(path); }));
   if (ext == ".ms" && scriptPicked) items.push_back(item("Edit in the Script tab", "terminal", [this, path] { scriptPicked(path); }));
   if (ext == ".bmsong" && songPicked) items.push_back(item("Edit in the Sound tab", "music", [this, path] { songPicked(path); }));
   if (ext == ".bmdata" && dataPicked) items.push_back(item("Edit records in the Data tab", "table", [this, path] { dataPicked(path); }));
