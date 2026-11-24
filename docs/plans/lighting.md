@@ -32,7 +32,7 @@ entries: 512 colours, written in VBlank. Every other approach fails on this hard
 So the plan is: **every palette slot that a light touches knows what it stands for**. That
 can be a colour with a normal (sprites), or a colour with a baked amount of light (tiles).
 Each frame the runtime computes the slot's colour from the lights. The pixels never change,
-only the 15 colours of a few banks. This costs well under 1 % of a frame (section 6). It
+only the 15 colours of a few banks. This costs under 2 % of a frame (section 6). It
 looks the same on the PC, web and GBA without new code there, because the software and
 shader PPUs only ever see palettes.
 
