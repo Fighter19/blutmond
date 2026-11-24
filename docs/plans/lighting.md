@@ -68,9 +68,12 @@ The streamed rows are divided by that weight, so near the torch it is as exact a
 Same tiles and banks as `stream` (19 + 72, 1 + 7), 12 KB of rows instead of 43 KB, 32
 colours a line instead of 112, mean error 0.032 (stream 0.025, normals 0.061): away from the
 torch a band is one colour per line for its whole width, so the band edges show a little
-more. Measured in mGBA, mean lines of a game frame over 300 frames: normals 133, hybrid 150,
+more. Measured in mGBA, mean lines of a game frame over 300 frames: normals 133, hybrid 152,
 stream 176. The weights are built again only when the camera's row or the flicker changes,
-with one division a frame (160 of them cost 60,000 cycles).
+with one division a frame (160 of them cost 60,000 cycles). EVA has only 17 steps, which at
+first showed as horizontal bands 7 to 9 lines tall in the fixed bands (a sixteenth of the
+light each); the rounding error is now carried down the lines (error diffusion), so lines
+alternate between neighbouring steps: about 3,600 cycles and 2 lines more a frame.
 
 **Two torches** (measured in two-screen halls, torches 240 px apart, pillar between them; the
 comparison page has the pictures): up to 4 lights per room, flickering together, so every

@@ -890,7 +890,9 @@ if the last room was lit). Every frame after the effects:
   line in the torch hall), the fixed banks written once on entering the room. The light layer's
   blend weight is set per line: line table slot 0 writes BLDALPHA (EVA = the row's weight × the
   flicker, EVB 16) from a table of 160 entries built again only when the camera's row or the
-  flicker changed (one division a frame). Lit rooms have no room effect that would use slot 0.
+  flicker changed (one division a frame). EVA has 17 steps, so the rounding error of each
+  line is carried on to the next (error diffusion): neighbouring lines alternate between two
+  steps and average out to the weight, rather than showing as horizontal bands. Lit rooms have no room effect that would use slot 0.
 - Several lights (up to 4) flicker together: the tiles have their sum baked in, and a
   sprite slot sums `max(0, N·L) × reach` over the lights. A sheet whose every slot is
   emissive is written once. Shadow rays are kept for the last 8 places (4 px steps) they

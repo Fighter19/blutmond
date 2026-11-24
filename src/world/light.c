@@ -601,11 +601,18 @@ void bmLightPresent(BmGame *g)
         {
           s_builtRow = row;
           s_builtScale = scale;
+          // EVA has 17 steps only: the rounding error is carried on to the next line (error
+          // diffusion), so neighbouring lines alternate between two steps and average out to
+          // the exact weight instead of showing as horizontal bands.
           const uint8_t *pRow = l->pWeights + row;
+          int32_t err = 0;
           for (int32_t y = 0; y < BM_HAL_SCREEN_HEIGHT; y++)
           {
-            int32_t w = (pRow[y] * scale + 0x8000) >> 16;
-            s_weights[y] = (uint16_t)((w < 0 ? 0 : w > 16 ? 16 : w) | 16 << 8);
+            int32_t want = pRow[y] * scale + err;
+            int32_t w = (want + 0x8000) >> 16;
+            w = w < 0 ? 0 : w > 16 ? 16 : w;
+            err = want - (w << 16);
+            s_weights[y] = (uint16_t)(w | 16 << 8);
           }
         }
         if (free) bmVideoSetLineTable(0, BM_PPU_BLDALPHA, s_weights);
