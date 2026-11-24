@@ -9,7 +9,8 @@ six rooms alike but for how they are lit, side by side behind a door of the debu
   torch_hall_fitted   the same, its values each pixel's own light (light_index = fitted)
   torch_hall_normals  the same, its values normals (light_index = normals)
   torch_hall_stream   normals in the tiles, the light per band and line streamed into the
-                      palette by H-blank DMA (light_index = stream)
+                      palette by H-blank DMA (light_index = stream), a ramp across each band
+                      (light_bands = ramp, 5 normals)
   torch_hall_hybrid   the same, streamed only near the torch; elsewhere fixed colours times a
                       blend weight per line (light_index = hybrid)
 
@@ -289,9 +290,9 @@ def main():
                 door("exit_east", W * T - 16, "torch_hall_stream", "exit_west", "east")], rows, extra=[("light_index", "normals")])
     write_room(os.path.join(out, "torch_hall_stream.tmx"), "torch_hall_stream", "Torch hall: streamed", "layer",
                [door("exit_west", 0, "torch_hall_normals", "exit_east", "west"),
-                door("exit_east", W * T - 16, "torch_hall_hybrid", "exit_west", "east")], rows, extra=[("light_index", "stream")])
+                door("exit_east", W * T - 16, "torch_hall_hybrid", "exit_west", "east")], rows, extra=[("light_index", "stream"), ("light_normals", "5"), ("light_bands", "ramp")])
     write_room(os.path.join(out, "torch_hall_hybrid.tmx"), "torch_hall_hybrid", "Torch hall: hybrid", "layer",
-               [door("exit_west", 0, "torch_hall_stream", "exit_east", "west")], rows, extra=[("light_index", "hybrid")])
+               [door("exit_west", 0, "torch_hall_stream", "exit_east", "west")], rows, extra=[("light_index", "hybrid"), ("light_normals", "5"), ("light_bands", "ramp")])
 
 if __name__ == "__main__":
     main()

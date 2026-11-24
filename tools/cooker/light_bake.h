@@ -62,7 +62,11 @@ struct Light
   // weight per line (the light layer's blend weight) for the vertical falloff.
   enum class Index { Shared, Fitted, Normals, Stream, Hybrid } index = Index::Shared;
   int streamBanks = 2;          // Hybrid: banks streamed near the light (room property `light_stream_banks`)
-  int streamNormals = 7;        // Stream: 7 (two bands a bank) or 15 (room property `light_normals`)
+  int streamNormals = 7;        // Stream: 15 or 3 to 7 normals; flat bands: 15 / normals bands a bank (room property `light_normals`)
+  // Stream: what a band's colours are (room property `light_bands`): the light at its middle
+  // column, its mean across the band, or a ramp: a band per bank whose samples (its edges and
+  // between, shared with the neighbours) the pixels pick by an ordered dither of where they are.
+  enum class Bands { Middle, Mean, Ramp } bands = Bands::Middle;
   int bandWidth = 24;           // Stream: a band's width in pixels (room property `light_band`)
   bool fitted = true;           // Shared or Fitted: the values are levels of light
   int directions = 8;           // Shared: how many light directions (room property `light_directions`)

@@ -1077,9 +1077,32 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
   std::vector<light::Vec3> pts;
   std::vector<float> wts;
   for (const auto &[k, e] : counts) pts.push_back(e.first), wts.push_back(e.second);
-  const int perBank = l.streamNormals == 7 ? 2 : 1;
+  // A bank's 15 values. Flat bands (middle, mean): `samples` groups of the normals (a group's
+  // first value 1 + group × groupStride), each group a band of its own.
+  const bool ramp = l.bands == light::Light::Bands::Ramp && l.streamNormals <= 7;
+  const int samples = 15 / l.streamNormals, groupStride = 16 / samples;
+  const int perBank = ramp ? 1 : samples;
   std::vector<light::Vec3> normals = light::cluster(pts, wts, l.streamNormals);
   for (light::Vec3 &n : normals) n = light::normalize(n);
+  // Ramp: one band per bank, and per normal samples of the light across it, from its left edge
+  // to its right (shared with the neighbours, so a bank's edge does not show). The values go
+  // where the pixels are: each normal has its two edges, and the values left go one by one to the
+  // normal whose pixels gain most (share / gaps; the flat wall, where a gradient shows, takes
+  // most). `rampFirst`: a normal's first value.
+  std::vector<int> rampCount(normals.size(), 2), rampFirst(normals.size(), 1);
+  if (ramp && !normals.empty())
+  {
+    std::vector<float> share(normals.size(), 0.0f);
+    for (size_t i = 0; i < pts.size(); i++) share[size_t(light::nearest(normals, light::normalize(pts[i])))] += wts[i];
+    for (int left = 15 - 2 * int(normals.size()); left > 0; left--)
+    {
+      size_t best = 0;
+      for (size_t k = 1; k < normals.size(); k++)
+        if (share[k] / float(rampCount[k] - 1) > share[best] / float(rampCount[best] - 1)) best = k;
+      rampCount[best]++;
+    }
+    for (size_t k = 1; k < normals.size(); k++) rampFirst[k] = rampFirst[k - 1] + rampCount[k - 1];
+  }
   // The bands: across what the lights reach, as many as the banks left hold.
   float x0 = 1e30f, x1 = -1e30f;
   for (const light::Source &src : l.sources)
@@ -1093,7 +1116,9 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
   int banksLeft = std::max(1, 15 - firstBank);
   int bandWidth = std::max(8, l.bandWidth / 8 * 8);
   int bands = int(std::ceil((x1 - x0) / float(bandWidth)));
-  if ((bands + perBank - 1) / perBank > banksLeft)
+  if (ramp) bands = (bands + 1) / 2;   // as many banks as flat bands of 7 normals would take
+  if (ramp && bands > banksLeft) bands = banksLeft;
+  else if ((bands + perBank - 1) / perBank > banksLeft)
   {
     bandWidth = int(std::ceil((x1 - x0) / float(banksLeft * perBank) / 8.0f)) * 8;
     bands = int(std::ceil((x1 - x0) / float(bandWidth)));
@@ -1119,14 +1144,46 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
   std::vector<int> bandOfColumn(size_t(std::max(columns, 1)), 0);
   for (int c = 0; c < columns; c++)
     bandOfColumn[size_t(c)] = total > 0 ? std::min(bands - 1, int(walked[size_t(c)] / total * float(bands))) : 0;
-  std::vector<float> bandX(size_t(bands), x0);
+  std::vector<float> bandX(size_t(bands), x0), bandL(size_t(bands), x0), bandR(size_t(bands), x0 + 8);
   for (int b = 0; b < bands; b++)
   {
     int first = -1, last = -1;
     for (int c = 0; c < columns; c++)
       if (bandOfColumn[size_t(c)] == b) { if (first < 0) first = c; last = c; }
     bandX[size_t(b)] = first < 0 ? x0 : x0 + float(first + last) * 4.0f + 4.0f;
+    if (first >= 0) bandL[size_t(b)] = x0 + float(first * 8), bandR[size_t(b)] = x0 + float(last * 8 + 8);
   }
+  // The lights' direction and falloff that a band's colours (sample j) stand for on row y.
+  auto sampleF = [&](int band, int j, float y) -> light::Vec3 {
+    size_t b = size_t(band);
+    if (ramp) return light::scaledDirection(l, bandL[b] + (bandR[b] - bandL[b]) * float(j) / 65536.0f, y);   // j: where, 16.16
+    if (l.bands == light::Light::Bands::Mean)
+    {
+      light::Vec3 sum{0, 0, 0};
+      int count = 0;
+      for (float x = bandL[b] + 1.0f; x < bandR[b]; x += 2.0f, count++)
+      {
+        light::Vec3 f = light::scaledDirection(l, x, y);
+        sum.x += f.x, sum.y += f.y, sum.z += f.z;
+      }
+      if (count > 0) sum.x /= float(count), sum.y /= float(count), sum.z /= float(count);
+      return sum;
+    }
+    return light::scaledDirection(l, bandX[b], y);
+  };
+  // Ramp: which of a band's samples a pixel takes, the two around it by an ordered dither.
+  static const uint8_t bayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+  auto rampAt = [&](int band, int count, int px, int py, int *pBelow, float *pFraction) {
+    size_t b = size_t(band);
+    float t = std::clamp((float(px) + 0.5f - bandL[b]) / std::max(bandR[b] - bandL[b], 1.0f), 0.0f, 1.0f) * float(count - 1);
+    int j0 = std::min(int(t), count - 2);
+    float f = t - float(j0);
+    *pBelow = j0;
+    *pFraction = f;
+    // Samples far apart (fewer than 4): the nearest, a dither between them would show.
+    float threshold = count < 4 ? 0.5f : (float(bayer[(py & 3) * 4 + (px & 3)]) + 0.5f) / 16.0f;
+    return f > threshold ? j0 + 1 : j0;
+  };
   // Each band's place (slot) in the banks: slot / perBank its bank, slot % perBank its half.
   // Hybrid (light_index = hybrid): the bands nearest the light take the first slots, streamed;
   // the others follow, fixed; with stream every band is streamed.
@@ -1152,19 +1209,85 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
     if (firstBank + banks > 15) report.error("lighting", room.map->path, "the light layer's bands need more banks than are left");
   }
   int nearBanks = (nearBands + perBank - 1) / perBank;
-  // Hybrid: the vertical falloff, how lit a flat surface under the light is on each row against
-  // the light's own row (the light layer's blend weight per line).
-  // Measured over the fixed bands (the streamed ones near the light are exact anyway), so it
-  // falls as the light does where it is used: much slower than right under the light.
-  auto flatAt = [&](float x, float y) { return light::term(l, x, y, light::Vec3{0, 0, 1}); };
-  auto fixedSum = [&](float y) {
-    float sum = 0;
-    for (int b = 0; b < bands; b++)
-      if (b < nearFrom || b >= nearFrom + nearBands) sum += flatAt(bandX[size_t(b)], y);
-    return sum;
+  // A band's values: per normal k its samples j (ramp: rampCount of them across the band; flat:
+  // one). `exact` is the light a sample stands for on room row y (direction · falloff).
+  auto countOf = [&](int k) { return ramp ? rampCount[size_t(k)] : 1; };
+  auto exact = [&](int band, int k, int j, float y) {
+    int count = countOf(k);
+    return std::max(0.0f, light::dot(normals[size_t(k)], sampleF(band, count > 1 ? j * 65536 / (count - 1) : 0, y)));
   };
-  float flatMid = std::max(fixedSum(first.y), 1e-6f);
-  auto vertical = [&](float y) { return std::clamp(fixedSum(y) / flatMid, 0.0f, 1.0f); };
+  auto isFixed = [&](int band) { return hybrid && (band < nearFrom || band >= nearFrom + nearBands); };
+  // Hybrid: the fixed bands' light as (a value per sample) × (a weight per row, the light
+  // layer's blend weight per line), the pair fitted to the light on every row (alternating least
+  // squares, the best such product); the weight's most is 1. The streamed rows are divided by it.
+  int hpxRows = hpx;
+  std::vector<float> rowWeight(size_t(hpxRows), 1.0f);
+  std::map<std::tuple<int, int, int>, float> fixedValue;   // (band, k, j)
+  if (hybrid)
+  {
+    std::vector<std::tuple<int, int, int>> keys;
+    for (int b = 0; b < bands; b++)
+      if (isFixed(b))
+        for (int k = 0; k < int(normals.size()); k++)
+          for (int j = 0; j < countOf(k); j++) keys.emplace_back(b, k, j);
+    std::vector<std::vector<float>> light(keys.size(), std::vector<float>(size_t(hpxRows)));
+    // How many lit pixels use each sample on each row (a ramp's pixel both samples around it,
+    // by how near): the fit is weighted by them, as the light is seen.
+    std::map<std::tuple<int, int, int>, size_t> keyIndex;
+    for (size_t i = 0; i < keys.size(); i++) keyIndex[keys[i]] = i;
+    std::vector<std::vector<float>> use(keys.size(), std::vector<float>(size_t(hpxRows), 0.0f));
+    for (int py = 0; py < hpxRows; py++)
+      for (int px = 0; px < wpx; px++)
+      {
+        int column = int((float(px) - x0) / 8.0f);
+        if (float(px) < x0 || column >= columns) continue;
+        int band = bandOfColumn[size_t(column)];
+        light::Vec3 n;
+        if (!isFixed(band) || state(px, py, &n) != 2 || room.solid.lit(float(px) + 0.5f, float(py) + 0.5f, l, n) <= 0) continue;
+        int k = light::nearest(normals, n), below = 0;
+        float fraction = 0;
+        if (ramp) rampAt(band, countOf(k), px, py, &below, &fraction);
+        use[keyIndex[{band, k, below}]][size_t(py)] += 1 - fraction;
+        if (ramp) use[keyIndex[{band, k, below + 1}]][size_t(py)] += fraction;
+      }
+    for (size_t i = 0; i < keys.size(); i++)
+      for (int y = 0; y < hpxRows; y++) light[i][size_t(y)] = exact(std::get<0>(keys[i]), std::get<1>(keys[i]), std::get<2>(keys[i]), float(y) + 0.5f);
+    std::vector<float> value(keys.size(), 0.0f);
+    for (size_t i = 0; i < keys.size(); i++) value[i] = exact(std::get<0>(keys[i]), std::get<1>(keys[i]), std::get<2>(keys[i]), first.y);
+    for (int round = 0; round < 20; round++)
+    {
+      for (int y = 0; y < hpxRows; y++)
+      {
+        float sum = 0, vv = 0;
+        for (size_t i = 0; i < keys.size(); i++) sum += use[i][size_t(y)] * value[i] * light[i][size_t(y)], vv += use[i][size_t(y)] * value[i] * value[i];
+        if (vv > 0) rowWeight[size_t(y)] = std::max(0.0f, sum / vv);
+      }
+      float most = *std::max_element(rowWeight.begin(), rowWeight.end());
+      if (most <= 0) break;
+      for (float &w : rowWeight) w /= most;
+      for (size_t i = 0; i < keys.size(); i++)
+      {
+        float sum = 0, ww = 0;
+        for (int y = 0; y < hpxRows; y++) sum += use[i][size_t(y)] * rowWeight[size_t(y)] * light[i][size_t(y)], ww += use[i][size_t(y)] * rowWeight[size_t(y)] * rowWeight[size_t(y)];
+        if (ww > 0) value[i] = std::max(0.0f, sum / ww);
+      }
+    }
+    for (size_t i = 0; i < keys.size(); i++) fixedValue[keys[i]] = value[i];
+  }
+  auto vertical = [&](float y) { return rowWeight[size_t(std::clamp(int(y), 0, hpxRows - 1))]; };
+  // What sample (band, k, j) shows on row y. Fixed: its value × the row's weight. Streamed: the
+  // exact light, but a ramp's edge next to a fixed band takes that band's value there (the same
+  // place), so the two meet without a seam.
+  auto bandValue = [&](int band, int k, int j, float y) {
+    if (isFixed(band)) return fixedValue[{band, k, j}] * vertical(y);
+    if (ramp && hybrid)
+    {
+      int last = countOf(k) - 1;
+      if (j == 0 && band > 0 && isFixed(band - 1)) return fixedValue[{band - 1, k, last}] * vertical(y);
+      if (j == last && band + 1 < bands && isFixed(band + 1)) return fixedValue[{band + 1, k, 0}] * vertical(y);
+    }
+    return exact(band, k, j, y);
+  };
 
   Bytes m;
   m.u16(uint32_t(w8));
@@ -1174,7 +1297,7 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
   m.u16(0);
   std::map<std::array<uint8_t, 64>, uint32_t> tileOf;
   size_t litCells = 0, edgeCells = 0, streamPixels = 0;
-  double streamError = 0;
+  double streamError = 0, smoothError = 0;   // smooth: the ramp's dither seen from afar
   for (int cy = 0; cy < h8; cy++)
     for (int cx = 0; cx < w8; cx++)
     {
@@ -1212,16 +1335,22 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
         if (!lit)
         {
           streamError += truth;
+          smoothError += truth;
           streamPixels++;
           continue;
         }
         int k = light::nearest(normals, n);
         int slot = slotOfBand[size_t(band)];
-        t[size_t(p)] = uint8_t(1 + k + (perBank == 2 && (slot & 1) ? 8 : 0));
-        bool streamed = band >= nearFrom && band < nearFrom + nearBands;
-        light::Vec3 F = light::scaledDirection(l, bandX[size_t(band)], streamed ? float(py) + 0.5f : first.y);
-        float value = std::max(0.0f, light::dot(normals[size_t(k)], F)) * (streamed ? 1.0f : vertical(float(py) + 0.5f));
+        float fraction = 0;
+        int below = 0;
+        int count = rampCount[size_t(k)];
+        int group = ramp ? rampAt(band, count, px, py, &below, &fraction) : slot % perBank;
+        t[size_t(p)] = uint8_t(ramp ? rampFirst[size_t(k)] + group : 1 + k + group * groupStride);
+        auto valueOf = [&](int j) { return bandValue(band, k, j, float(py) + 0.5f); };
+        float value = valueOf(ramp ? group : 0);
         streamError += std::abs(truth - value);
+        if (ramp) smoothError += std::abs(truth - ((1 - fraction) * valueOf(below) + fraction * valueOf(below + 1)));
+        else smoothError += std::abs(truth - value);
         streamPixels++;
         any = true;
       }
@@ -1254,15 +1383,21 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
   auto bankColours = [&](Bytes &out, int bank, float y, float scale, bool streamedRow) {
     for (int e = 0; e < 16; e++)
     {
-      int half = perBank == 2 ? e / 8 : 0, k = perBank == 2 ? e % 8 : e;
-      int slot = bank * perBank + half, band = -1;
+      int group = e == 0 ? 0 : (e - 1) / groupStride, k = e == 0 ? -1 : (e - 1) % groupStride;
+      if (ramp)
+      {
+        k = -1;
+        for (size_t i = 0; i < normals.size(); i++)
+          if (e >= rampFirst[i] && e < rampFirst[i] + rampCount[i]) k = int(i), group = e - rampFirst[i];
+      }
+      int slot = ramp ? bank : bank * perBank + group, band = -1;
       for (int b = 0; b < bands; b++)
         if (slotOfBand[size_t(b)] == slot) band = b;
       uint16_t c = 0;
-      if (k != 0 && k - 1 < int(normals.size()) && band >= 0)
+      if (k >= 0 && k < int(normals.size()) && (ramp || group < samples) && band >= 0)
       {
-        light::Vec3 F = light::scaledDirection(l, bandX[size_t(band)], streamedRow ? y : first.y);
-        float v = std::max(0.0f, light::dot(normals[size_t(k - 1)], F)) * most * scale;
+        int j = ramp ? group : 0;
+        float v = (streamedRow ? bandValue(band, k, j, y) : fixedValue[{band, k, j}]) * most * scale;
         auto ch = [&](int i) { return uint32_t(std::clamp(int(std::lround(lc[i] * v)), 0, 31)); };
         c = uint16_t(ch(0) | ch(1) << 5 | ch(2) << 10);
       }
@@ -1295,7 +1430,7 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
   report.info("lighting", room.map->path, std::string(hybrid ? "light layer (hybrid, " + std::to_string(nearBanks) + " banks streamed): " : "light layer (stream): ") + "" + std::to_string(tileOf.size()) + " normal tiles (" + std::to_string(edgeCells) +
               " cells on a shadow's edge), " + std::to_string(normals.size()) + " normals, " + std::to_string(bands) + " bands (narrower near the light) in " + std::to_string(banks) + " banks from bank " + std::to_string(firstBank) + ", " +
               std::to_string(stride) + " colours a line, " + std::to_string(table.data.size()) + " bytes of rows, " + std::to_string(litCells) + " lit cells, mean error " +
-              std::to_string(streamPixels ? streamError / double(streamPixels) : 0.0));
+              std::to_string(streamPixels ? streamError / double(streamPixels) : 0.0) + (ramp ? " (dither seen from afar " + std::to_string(streamPixels ? smoothError / double(streamPixels) : 0.0) + ")" : ""));
   lightSources(lite, l);
   return {m, lite};
 }

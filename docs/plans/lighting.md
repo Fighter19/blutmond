@@ -75,6 +75,23 @@ first showed as horizontal bands 7 to 9 lines tall in the fixed bands (a sixteen
 light each); the rounding error is now carried down the lines (error diffusion), so lines
 alternate between neighbouring steps: about 3,600 cycles and 2 lines more a frame.
 
+**Ramps across the bands** (`light_bands = ramp`, both streamed halls now): with flat bands the
+light can only change where one bank's cells give way to the next (the palette changes per line,
+not along it), so it steps across the screen every 8 to 40 pixels, by up to 32 of 255 next to the
+torch. The values a bank holds need not be one band each: with a ramp a bank is one band, and
+its 15 values are samples of the light across it, per normal (the flat wall, most of the pixels,
+7 samples; the bevels their band's two edges). The tiles say where a pixel is between two
+samples (an ordered dither between them), the stream gives each sample its light per line. The
+edges are shared with the neighbouring banks, so a bank's edge does not show. On the torch's
+row the worst step against the exact light falls from 32 to 10 of 255 and the mean difference
+from 6.5 to 4.1; mean error (seen from afar) 0.023 against 0.025 for the stream, 0.029 against
+0.032 for the hybrid. The hybrid's fixed colours and per-line weights are now fitted together
+(least squares over the pixels that use them), and its streamed bands meet the fixed ones at
+their fitted value, so there is no seam. The cost is tiles: 205 light tiles instead of 72, as a
+cell's dither depends on where in its band it is (19,456 B of the room's video memory, 44 %).
+The same time a frame (152 and 176 lines). `middle` (flat, as before) and `mean` (a band's mean
+light) stay; 5 normals with 20 flat bands is the cheap middle way (85 tiles, smaller steps).
+
 **Two torches** (measured in two-screen halls, torches 240 px apart, pillar between them; the
 comparison page has the pictures): up to 4 lights per room, flickering together, so every
 mode still bakes one sum. Palettes grows from 750 to 908 tiles (89 % of the 1024), shared from

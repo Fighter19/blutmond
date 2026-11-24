@@ -100,7 +100,17 @@ Light find(const tmx::Map &map, Report &report)
   else if (index != "shared") report.error("lighting", map.path, "unknown light_index '" + index + "' (shared, fitted, normals, stream, hybrid)");
   l.streamBanks = std::clamp(std::atoi(map.property("light_stream_banks", "2").c_str()), 0, 14);
   l.fitted = l.index == Light::Index::Shared || l.index == Light::Index::Fitted;
-  l.streamNormals = map.property("light_normals", "7") == "15" ? 15 : 7;
+  {
+    std::string normals = map.property("light_normals", "7");
+    int count = std::atoi(normals.c_str());
+    l.streamNormals = count == 15 || (count >= 3 && count <= 7) ? count : 7;
+    if (l.streamNormals != count) report.error("lighting", map.path, "light_normals is 3 to 7, or 15");
+  }
+  std::string bands = map.property("light_bands", "middle");
+  if (bands == "mean") l.bands = Light::Bands::Mean;
+  else if (bands == "ramp") l.bands = Light::Bands::Ramp;
+  else if (bands != "middle") report.error("lighting", map.path, "unknown light_bands '" + bands + "' (middle, mean, ramp)");
+  if (l.bands == Light::Bands::Ramp && l.streamNormals == 15) report.error("lighting", map.path, "light_bands = ramp needs light_normals 3 to 7");
   l.bandWidth = std::clamp(std::atoi(map.property("light_band", "24").c_str()), 8, 255);
   l.directions = std::clamp(std::atoi(map.property("light_directions", "8").c_str()), 1, 64);
   l.tolerance = std::clamp(float(std::atof(map.property("light_tolerance", "0.1").c_str())), 0.0f, 1.0f);

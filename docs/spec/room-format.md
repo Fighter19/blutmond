@@ -59,7 +59,8 @@ Map-level custom properties:
 | `lighting` | string | `palette` | how the room's `Light` object lights its tiles: `palette` (baked into the room's colours) or `layer` (a light layer added over the room) (below) |
 | `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
 | `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light), `normals` (directions), `stream` (directions, the light streamed line by line) or `hybrid` (as `stream`, only near the lights) (below) |
-| `light_normals` | int | 7 | with `light_index = stream`: 7 (two bands a bank) or 15 directions |
+| `light_normals` | int | 7 | with `light_index = stream` or `hybrid`: 15, or 3 to 7 directions (flat bands: 15 / normals bands a bank) |
+| `light_bands` | string | `middle` | with `light_index = stream` or `hybrid`: a band's colours are the light at its `middle` column, its `mean` across the band, or a `ramp` across it (one band a bank, samples per normal; needs 3 to 7 normals) |
 | `light_band` | int | 24 | with `light_index = stream` or `hybrid`: the bands' mean width in pixels (widened when the banks would not do) |
 | `light_stream_banks` | int | 2 | with `light_index = hybrid`: how many banks (two bands each) are streamed, around the first light |
 | `light_directions` | int | 8 | with `light_index = shared`: how many light directions its tiles are made for |
@@ -126,8 +127,18 @@ only layers without parallax are lit. The two modes:
     for the room's middle row of the light (its height), and the light layer's blend weight is
     set per line (BLDALPHA from a line table) to how lit the fixed bands are on that row against
     that middle row, times the flicker. The streamed rows are divided by that weight, so they come
-    out exact; the fixed bands are exact on the light's row and follow the vertical falloff of
-    the fixed bands as a whole elsewhere.
+    out exact. The fixed colours and the weights are fitted together, as the product closest to
+    the light on every row where lit pixels use them (least squares, weighted by those pixels;
+    the most weight is full light).
+  - `light_bands = ramp` (stream and hybrid): one band per bank, and the bank's 15 values are
+    samples of the light across the band per normal, from its left edge to its right. Each
+    normal has its two edges (the same places as the neighbours' edges, so a bank's edge does not
+    show), and the values left go one at a time to the normal whose pixels gain most (by its
+    share of the pixels and its samples' spacing): with 5 normals the flat wall has 7 samples. A
+    pixel takes the sample before or after it by an ordered 4×4 dither of where it is between
+    them (the nearest when its normal has fewer than 4 samples), so the light ramps across the
+    band. Its tiles depend on where in the band a cell is, so there are more of them. Hybrid: a
+    streamed band's edge next to a fixed band has that band's fitted value there.
   - `normals`: one of 15 normals (the cooker's clusters of the room's normals). The cells
     inside the light's radius are grouped into regions (by the light's strength there first
     and its direction second), a region per bank, whose colours are, each frame,
@@ -593,4 +604,4 @@ room IDs and song names.
   `normal`, `LITE` (in the place of `ROOM`'s reserved field), the light layer (role 3);
   `light_index` (shared or fitted levels of light, bit 7 of `LITE`'s count), `light_directions`;
   `light_index = stream` (bit 6), `light_normals`, `light_band`; `light_index = hybrid` (bit 5),
-  `light_stream_banks`.
+  `light_stream_banks`; `light_bands`, `light_normals` 3 to 7.
