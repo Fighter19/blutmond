@@ -72,8 +72,11 @@ set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets
   ${PROJECT_SOURCE_DIR}/assets/test_room/chasm_room.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_lobby.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_wave.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_spotlight.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_pulse.tmx
-  ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx)
+  ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx
+  ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_layer.tmx)
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
+  ${PROJECT_SOURCE_DIR}/assets/test_room/torch.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/torch.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata
@@ -191,6 +194,8 @@ function(bm_add_gba_image name)
       # Everything of a multiboot image shares 256 KB; the content pool gets what is left
       # (src/hal/gba/gba_mb.ld).
       target_compile_definitions(${target} PRIVATE BM_GBA_MULTIBOOT)
+      # Without the light (src/hal/gba/light_off.c says why).
+      target_sources(${target} PRIVATE ${PROJECT_SOURCE_DIR}/src/hal/gba/light_off.c)
     endif()
     target_link_options(${target} PRIVATE
       -T ${PROJECT_SOURCE_DIR}/src/hal/gba/gba_${kind}.ld
@@ -246,14 +251,14 @@ if(BM_PLATFORM STREQUAL "gba")
   set(BM_TEST_ROOM_PACK ${CMAKE_BINARY_DIR}/test_room_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_ROOM_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_ROOM_PACK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx
-    DEPENDS host_tools ${BM_BMCOOK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+    DEPENDS host_tools ${BM_BMCOOK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png
     COMMENT "Cooking the test room")
   add_custom_target(test_room_pack DEPENDS ${BM_TEST_ROOM_PACK})
 
   set(BM_TEST_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png
     COMMENT "Cooking the test level")
   # For the multiboot images, which share 256 KB with the engine: the same level with the debug
   # rooms, the boss hall (with the boss's sprites, music and voice), the Hall of Abilities behind it,
@@ -264,11 +269,12 @@ if(BM_PLATFORM STREQUAL "gba")
     --absent-room debug_pulse --absent-room debug_gradient --absent-room boss_hall --absent-room ability_hall
     --absent-asset vesper --absent-asset moon_bat --absent-asset vesper_face --absent-asset voice_vesper
     --absent-asset fireball --absent-room guard_room --absent-asset knight --absent-asset bat_armour --absent-asset clang
+    --absent-room torch_hall --absent-room torch_hall_layer --absent-asset torch
     --absent-kind LANG)
   set(BM_TEST_LEVEL_MB_PACK ${CMAKE_BINARY_DIR}/test_level_mb_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_MB_PACK}
     COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png
     COMMENT "Cooking the test level for multiboot")
   # The same level with the scripts also compiled to native code (mondskript.md section 12).
   set(BM_TEST_LEVEL_NATIVE_PACK ${CMAKE_BINARY_DIR}/test_level_native_gba.bmpk)
@@ -277,7 +283,7 @@ if(BM_PLATFORM STREQUAL "gba")
       --script-c ${CMAKE_BINARY_DIR}/test_level_native.c -o ${BM_TEST_LEVEL_NATIVE_PACK}
       ${BM_TEST_LEVEL_BASE_ROOMS} ${BM_TEST_LEVEL_BASE_ASSETS}
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_BASE_ROOMS} ${BM_TEST_LEVEL_BASE_ASSETS}
-      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
+      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
       ${PROJECT_SOURCE_DIR}/tools/mondskript/aot.cpp ${PROJECT_SOURCE_DIR}/tools/cooker/native_module.cpp
     COMMENT "Cooking the test level with native scripts")
   add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
@@ -406,7 +412,7 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_script PRIVATE ${BM_WARNINGS})
 
   add_library(bm_cooker STATIC
-    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp tools/cooker/font_asset.cpp tools/cooker/lang_asset.cpp tools/cooker/world_asset.cpp tools/cooker/figure_asset.cpp src/sound/sound.c src/pack/pack.c src/data/data.c)
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp tools/cooker/font_asset.cpp tools/cooker/lang_asset.cpp tools/cooker/world_asset.cpp tools/cooker/figure_asset.cpp tools/cooker/light_bake.cpp src/sound/sound.c src/pack/pack.c src/data/data.c)
   target_include_directories(bm_cooker PUBLIC tools/cooker src/pack src/sound src/data src/core/public PRIVATE third_party/stb)
   target_link_libraries(bm_cooker PUBLIC bm_script)
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST PRIVATE "BM_NATIVE_INCLUDE_DIR=\"${PROJECT_SOURCE_DIR}/src/script\"")
@@ -518,7 +524,7 @@ if(BM_PLATFORM STREQUAL "host")
   add_custom_command(OUTPUT ${BM_GAME_LEVEL_PACK}
     COMMAND bmcook --profile gba -o ${BM_GAME_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
     DEPENDS bmcook ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES}
-      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png
     COMMENT "Cooking the test level for the game")
   add_custom_target(game_level_pack ALL DEPENDS ${BM_GAME_LEVEL_PACK})
   add_dependencies(game game_level_pack)
@@ -690,7 +696,7 @@ if(BM_PLATFORM STREQUAL "host")
       ${PROJECT_SOURCE_DIR}/tests/scripts/aimer.ms ${PROJECT_SOURCE_DIR}/tests/scripts/spark_shot.ms ${PROJECT_SOURCE_DIR}/tests/scripts/lock_on.ms
       ${PROJECT_SOURCE_DIR}/tests/scripts/circler.ms)
   set_tests_properties(cook_test_level_wind PROPERTIES FIXTURES_REQUIRED wind_room FIXTURES_SETUP test_level_wind)
-  add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk ${cooked}/test_level_wind_gba.bmpk)
+  add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk ${cooked}/test_level_wind_gba.bmpk ${cooked})
   set_tests_properties(test_game PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_wind")
   # Live reload: a variant of the level with one background tile changed.
   add_test(NAME make_room_variant
@@ -1041,6 +1047,14 @@ if(BM_PLATFORM STREQUAL "host")
           push ${cooked}/test_level_variant_gba.bmpk hot run 2 screenshot ${out}/live_after.ppm
           check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+12=0 stats)
       set_tests_properties(live_mgba_hot PROPERTIES FIXTURES_REQUIRED test_level_variant FIXTURES_SETUP live_mgba_hot)
+      # The light (docs/plans/lighting.md) on the GBA: in both torch halls a frame's light stays
+      # within its budget in processor cycles (the room's banks, the sprites' banks), from ROM.
+      foreach(hall torch_hall torch_hall_layer)
+        add_test(NAME light_mgba_${hall}
+          COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${cooked}/test_level_gba.bmpk restart:${hall} run 120
+            check "${elf}:bm_light_cycles+0<=40000" check "${elf}:bm_light_cycles+4<=20000" screenshot ${out}/light_${hall}.ppm)
+        set_tests_properties(light_mgba_${hall} PROPERTIES FIXTURES_REQUIRED test_level_pack)
+      endforeach()
       add_test(NAME live_mgba_hot_changes_one_tile
         COMMAND ${compare} ${out}/live_before.ppm ${out}/live_after.ppm --changed-in 0 0 15 15
           --ignore 32 96 47 127)  # the player's idle animation goes on meanwhile

@@ -83,6 +83,13 @@ void bmHalPaletteWrite(uint16_t index, uint16_t bgr555)
   }
 }
 
+void bmHalPaletteWriteBlock(uint16_t index, const uint16_t *pColours, uint16_t count)
+{
+  volatile uint16_t *p = GBA_PALETTE + index;
+  if (index + count > BM_HAL_PALETTE_SIZE) count = index < BM_HAL_PALETTE_SIZE ? (uint16_t)(BM_HAL_PALETTE_SIZE - index) : 0;
+  for (uint16_t i = 0; i < count; i++) p[i] = pColours[i] & 0x7FFF;
+}
+
 uint16_t bmHalPaletteRead(uint16_t index)
 {
   return index < BM_HAL_PALETTE_SIZE ? GBA_PALETTE[index] : 0;

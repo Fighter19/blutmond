@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<sprite version="1" image="bat.png">
+<sprite version="1" image="bat.png" normal="auto">
  <hitbox x="-6" y="-8" w="12" h="8"/>
  <box kind="hit" name="bite" x="-3" y="-4" w="6" h="4"/>
  <point name="body" x="0" y="-5" angle="0"/>

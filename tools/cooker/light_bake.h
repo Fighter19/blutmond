@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: BSD-2-Clause OR MIT
+// The light of a room as the cooker bakes it (docs/plans/lighting.md): the `Light` object, normal
+// maps of tilesets and sprites (drawn or `auto`), the light's term per pixel with shadows from the
+// collision grid, and the small clustering both lighting modes use.
+#pragma once
+
+#include "cook.h"
+#include "image.h"
+#include "tmx.h"
+
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace bm::light {
+
+/// Light levels of the baked mode (`palette`): level 0 is ambient only, 7 the most.
+constexpr int LEVELS = 8;
+/// The light layer's region banks at most (mode `layer`).
+constexpr int MAX_REGIONS = 12;
+/// Normals of the light layer (its tiles' values 1 to 15).
+constexpr int LAYER_NORMALS = 15;
+
+enum class Mode { None = 0, Palette = 1, Layer = 2 };
+
+struct Vec3
+{
+  float x = 0, y = 0, z = 1;
+};
+
+Vec3 normalize(Vec3 v);
+inline float dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+
+struct Light
+{
+  Mode mode = Mode::None;
+  int objectId = 0;
+  float x = 0, y = 0;
+  float radius = 72, height = 12;
+  float intensity = 1, flicker = 0;
+  int flickerSpeed = 6;
+  uint16_t colour = 0x029F;   // BGR555 of #ffc080 as the cooker converts it
+  float ambient = 1;
+  float gain = 0.5f;          // the light layer's strength (it adds, the baked mode multiplies)
+  bool shadows = true;
+};
+
+/// The room's light: its one `Light` object and the map's `lighting` and `ambient`. Mode None
+/// without a light. More than one light, or a mode that is not `palette` or `layer`, is reported.
+Light find(const tmx::Map &map, Report &report);
+
+/// `(1 - d²/r²)²` inside the radius, else 0.
+float falloff(const Light &light, float d2);
+
+/// How lit a surface at room pixel (px, py) with normal n is at intensity 1 (0 to 1), without
+/// shadows: max(0, n·L) × falloff, L from the pixel to the light raised by its height.
+float term(const Light &light, float px, float py, Vec3 n);
+
+/// The light's direction from (px, py), scaled by the falloff there (what a region bank stands
+/// for in mode `layer`).
+Vec3 scaledDirection(const Light &light, float px, float py);
+
+/// Solid cells of the collision grid (shape full, solid on all sides), for shadows.
+struct Solid
+{
+  int width = 0, height = 0, cell = 16;
+  std::vector<uint8_t> cells;
+
+  /// From a COLL chunk's data (room-format.md §7).
+  static Solid fromChunk(const std::vector<uint8_t> &coll);
+  bool at(int cx, int cy) const;
+  /// Whether a straight line from (px, py) to the light crosses a solid cell other than the one
+  /// the pixel lies in.
+  bool shadowed(float px, float py, const Light &light) const;
+};
+
+/// Decodes a normal from a normal map pixel (RGB: x right, y down, z toward the viewer).
+Vec3 decodeNormal(const uint8_t *rgba);
+/// Encodes one (alpha 255).
+void encodeNormal(Vec3 n, uint8_t *rgba);
+
+/// Normals made from a drawing (`auto`): per cell of cellW × cellH, the height is the brightness
+/// plus a bevel that rises from the cell's opaque edge, smoothed; the normals follow its slope.
+Image autoNormals(const Image &image, int cellW, int cellH);
+
+/// The normal map of a tileset: its property `normal` (an image beside it, the sheet's size, or
+/// `auto`). nullptr without one (flat). Loaded once per path.
+std::shared_ptr<Image> tilesetNormals(const tmx::Tileset &tileset, Report &report);
+
+/// k-means of weighted points into at most k centres (fewer when there are fewer distinct
+/// points), started from the farthest points so the result does not depend on chance.
+std::vector<Vec3> cluster(const std::vector<Vec3> &points, const std::vector<float> &weights, int k);
+
+/// The index of the nearest centre.
+int nearest(const std::vector<Vec3> &centres, Vec3 p);
+
+}  // namespace bm::light

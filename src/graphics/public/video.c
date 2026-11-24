@@ -124,18 +124,16 @@ BmResult bmBgSetLineScrollX(uint8_t bg, const int16_t *pOffsets)
 
 void bmPaletteLoadBg(uint16_t first, const BmColor *pColors, uint16_t count)
 {
-  for (uint16_t i = 0; i < count && first + i < 256; i++)
-  {
-    bmHalPaletteWrite((uint16_t)(first + i), pColors[i].color);
-  }
+  if (first >= 256) return;
+  if (first + count > 256) count = (uint16_t)(256 - first);
+  bmHalPaletteWriteBlock(first, &pColors[0].color, count);
 }
 
 void bmPaletteLoadObj(uint16_t first, const BmColor *pColors, uint16_t count)
 {
-  for (uint16_t i = 0; i < count && first + i < 256; i++)
-  {
-    bmHalPaletteWrite((uint16_t)(BM_HAL_PALETTE_OBJ_OFFSET + first + i), pColors[i].color);
-  }
+  if (first >= 256) return;
+  if (first + count > 256) count = (uint16_t)(256 - first);
+  bmHalPaletteWriteBlock((uint16_t)(BM_HAL_PALETTE_OBJ_OFFSET + first), &pColors[0].color, count);
 }
 
 BmResult bmTilesLoadBg(uint8_t charBlock, uint16_t tileIndex, const void *pData, uint32_t size)

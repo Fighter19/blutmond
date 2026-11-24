@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<sprite version="1" image="player_torso.png">
+<sprite version="1" image="player_torso.png" normal="auto">
  <hitbox x="0" y="0" w="0" h="0" />
  <frame x="0" y="0" w="16" h="32" ax="8" ay="17" />
  <frame x="16" y="0" w="16" h="32" ax="8" ay="17" />

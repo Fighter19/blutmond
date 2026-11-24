@@ -3017,6 +3017,103 @@ static void testTheGrapple(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+
+// The torch halls (docs/plans/lighting.md §7): the same room lit two ways. In both the player is
+// brighter right under the torch than left of it, and behind the pillar, as far from the torch
+// as on the left, only the ambient light reaches it (the pillar's shadow). The flicker is a pure
+// function of the frame. With an output directory the six pictures go there side by side
+// (torch_halls.ppm: palettes on the left, the light layer on the right).
+static const char *s_outDir;
+
+static int32_t bankBrightness(uint8_t bank)
+{
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  int32_t sum = 0;
+  for (int i = 1; i < 16; i++)
+  {
+    uint16_t c = ppu->palette[256 + bank * 16 + i];
+    sum += (c & 31) + ((c >> 5) & 31) + ((c >> 10) & 31);
+  }
+  return sum;
+}
+
+static void testTheTorchHalls(void)
+{
+  static const char *const halls[2] = {"torch_hall", "torch_hall_layer"};
+  static const int32_t xs[3] = {96, 184, 272};   // left of the torch, under it, behind the pillar
+  static uint16_t shots[2][3][BM_PPU_WIDTH * BM_PPU_HEIGHT];
+  int32_t bright[2][3];
+  for (int h = 0; h < 2; h++)
+  {
+    startWith(s_data, s_size, halls[h]);
+    TEST_ASSERT(s_game.light.mode == (h == 0 ? BM_LIGHT_PALETTE : BM_LIGHT_LAYER));
+    // The flicker: the same at the same frame, changing over time, around the intensity.
+    int32_t base = (int32_t)s_game.light.intensity * 4, lo = base, hi = base;
+    TEST_ASSERT(bmLightIntensity(&s_game.light, 60) == bmLightIntensity(&s_game.light, 60));
+    for (uint32_t f = 0; f < 600; f++)
+    {
+      int32_t v = bmLightIntensity(&s_game.light, f);
+      lo = v < lo ? v : lo;
+      hi = v > hi ? v : hi;
+    }
+    TEST_ASSERT(hi > lo + base / 8 && lo >= base - base * s_game.light.flicker / 255 - 1 && hi <= base + base * s_game.light.flicker / 255 + 1);
+    for (int p = 0; p < 3; p++)
+    {
+      bmBodyPlace(&s_game.player, xs[p], 160);
+      frames(30, 0);           // the camera follows
+      s_game.frame = 1000;     // the same flicker in every picture
+      frames(1, 0);
+      bright[h][p] = bankBrightness(0);
+      bmHalHostRender(shots[h][p]);
+    }
+    printf("    %s: player brightness %d left, %d under the torch, %d behind the pillar\n", halls[h], (int)bright[h][0], (int)bright[h][1], (int)bright[h][2]);
+    TEST_ASSERT(bright[h][1] > bright[h][0] && bright[h][0] > bright[h][2]);
+    const BmPpuState *ppu = bmHalHostGetPpu();
+    if (h == 1)
+    {
+      // The light layer is shown and added over the room: first target with the UI, EVA = EVB = 16.
+      uint8_t bg = s_game.light.layerBg;
+      TEST_ASSERT(bg < 3 && (bmPpuReg(ppu, BM_PPU_DISPCNT) & BM_PPU_DISPCNT_BG(bg)) != 0);
+      TEST_ASSERT((bmPpuReg(ppu, BM_PPU_BLDCNT) & (1u << bg)) != 0 && bmPpuReg(ppu, BM_PPU_BLDALPHA) == (16 | 16 << 8));
+    }
+  }
+  // Both halls light the player alike: the sprites are lit the same way in both.
+  for (int p = 0; p < 3; p++) TEST_ASSERT(bright[0][p] == bright[1][p]);
+  // Out of the halls the player's colours are its own again.
+  startWith(s_data, s_size, "torch_hall");
+  int32_t lit = bankBrightness(0);
+  TEST_ASSERT(bmEffectsTeleport(&s_game, (uint32_t)bmGameFindRoom(&s_pack, "debug_lobby"), 40, 160));
+  frames(BM_TELEPORT_FRAMES + 2, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "debug_lobby") == 0);
+  TEST_ASSERT(s_game.light.mode == BM_LIGHT_NONE && bankBrightness(0) > lit);
+  if (s_outDir == NULL) return;
+  char path[512];
+  snprintf(path, sizeof(path), "%s/torch_halls.ppm", s_outDir);
+  FILE *f = fopen(path, "wb");
+  TEST_ASSERT(f != NULL);
+  if (f == NULL) return;
+  const int gap = 4, w = BM_PPU_WIDTH * 2 + gap, hgt = BM_PPU_HEIGHT * 3 + gap * 2;
+  fprintf(f, "P6\n%d %d\n255\n", w, hgt);
+  for (int y = 0; y < hgt; y++)
+    for (int x = 0; x < w; x++)
+    {
+      int row = y / (BM_PPU_HEIGHT + gap), ry = y % (BM_PPU_HEIGHT + gap);
+      int col = x / (BM_PPU_WIDTH + gap), rx = x % (BM_PPU_WIDTH + gap);
+      uint8_t rgb[3] = {255, 255, 255};
+      if (ry < BM_PPU_HEIGHT && rx < BM_PPU_WIDTH)
+      {
+        uint16_t c = shots[col][row][ry * BM_PPU_WIDTH + rx];
+        for (int k = 0; k < 3; k++)
+        {
+          uint8_t v = (uint8_t)((c >> (5 * k)) & 31);
+          rgb[k] = (uint8_t)((v << 3) | (v >> 2));
+        }
+      }
+      fwrite(rgb, 1, 3, f);
+    }
+  fclose(f);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -3027,6 +3124,7 @@ int main(int argc, char **argv)
   s_data = readFile(argv[1], &s_size);
   if (s_data == NULL) return 1;
   if (argc > 2) s_windData = readFile(argv[2], &s_windSize);
+  if (argc > 3) s_outDir = argv[3];
 
   RUN_TEST(testAutopilotPlaysThroughTheLevel);
   RUN_TEST(testFallingIntoAPitRespawnsOnSafeGround);
@@ -3050,6 +3148,7 @@ int main(int argc, char **argv)
   RUN_TEST(testSpritesAcrossRooms);
   RUN_TEST(testWaitingForARoom);
   RUN_TEST(testDialogueScrolls);
+  RUN_TEST(testTheTorchHalls);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

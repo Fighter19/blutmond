@@ -344,11 +344,13 @@ BAT_ARMOUR = [
 ]
 
 
-def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=(), palettes=(), points=()):
+def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=(), palettes=(), points=(), normal=None):
     """`boxes`: sprite-wide boxes (kind, name, x, y, w, h); `extra`: frames of other sizes
     after the regular ones, as (x, y, w, h, ax, ay); `palettes`: other palettes of the same
-    pixels, as (name, [(from, to), ...]) colour swaps (#rrggbb)."""
-    out = ['<?xml version="1.0" encoding="UTF-8"?>', '<sprite version="1" image="%s">' % image]
+    pixels, as (name, [(from, to), ...]) colour swaps (#rrggbb); `normal`: its normals for the
+    light (lighting.md), "auto" or a normal map."""
+    head = '<sprite version="1" image="%s"%s>' % (image, ' normal="%s"' % normal if normal else "")
+    out = ['<?xml version="1.0" encoding="UTF-8"?>', head]
     out.append(' <hitbox x="%d" y="%d" w="%d" h="%d"/>' % hitbox)
     for kind, name, bx, by, bw, bh in boxes:
         out.append(' <box kind="%s" name="%s" x="%d" y="%d" w="%d" h="%d"/>' % (kind, name, bx, by, bw, bh))
@@ -556,14 +558,14 @@ def main():
     ], extra=extra, palettes=[
         # Wearing the chain mail (layered-sprites.md §5): the coat in steel.
         ("steel", [("#b51021", "#8c94a5"), ("#820a18", "#5a6270")]),
-    ])
+    ], normal="auto")
     sheet(BAT_FRAMES, 2, 16, 16).save(os.path.join(out, "bat.png"))
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [
         ("idle", True, [(0, 8), (1, 8)]),
     ], boxes=[("hit", "bite", -3, -4, 6, 4)], palettes=[
         # The red bat (the Fast Bat's): the same drawing, its colours swapped.
         ("red", [("#6b428c", "#b02838"), ("#422963", "#64141e"), ("#ffe763", "#fff8c8")]),
-    ], points=[("body", 0, -5, 0)])
+    ], points=[("body", 0, -5, 0)], normal="auto")
     sheet([BAT_ARMOUR, BAT_ARMOUR], 2, 16, 16).save(os.path.join(out, "bat_armour.png"))
     sprite_file(os.path.join(out, "bat_armour.bmsprite"), "bat_armour.png", 2, 2, 16, 16, (8, 8), (0, 0, 0, 0), [
         ("idle", True, [(0, 8), (1, 8)]),

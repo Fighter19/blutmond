@@ -24,6 +24,7 @@ The file name without its extension is the sprite's **name**; the game finds spr
 | Element | Attributes | Meaning |
 |---|---|---|
 | `sprite` | `version` (1), `image` | the sheet, relative to the sprite file. Transparent pixels (alpha below 128, or magenta `#ff00ff`) are not drawn |
+| `sprite` | `normal`, `emissive`, `shiny` | for the light of lit rooms ([../plans/lighting.md](../plans/lighting.md)): `normal` a normal map beside the sheet (its size; RGB x right, y down, z toward the viewer) or `auto` (a bevel from each frame's outline and the drawing's brightness); `emissive="true"`: not lit at all (a flame); `shiny`: colours (`#rrggbb`, separated by commas) whose slots get a highlight. With any of them the sprite is written as version 5 |
 | `hitbox` (in `sprite`) | `x`, `y`, `w`, `h` | the hitbox of every frame that has none of its own, relative to the anchor |
 | `frame` | `x`, `y`, `w`, `h`; `ax`, `ay` | a rectangle of the sheet (1 to 128 pixels each way) and the **anchor** inside it: the point that is placed at the object's position. For actors that is the feet (bottom centre), as in rooms ([room-format.md](room-format.md) §5). Frames are numbered in file order from 0 |
 | `hitbox` (in `frame`) | `x`, `y`, `w`, `h` | this frame's own hitbox |
@@ -57,6 +58,7 @@ u32 offset of: frames, pieces, animations, steps, palette, tiles      (from the 
 u32 offset of: box index, boxes, box names   u16 boxes   u8 box names   u8 flags (bit 0: the tiles are packed)
 u16 palettes   u16 0
 u32 offset of: point index, point names   u16 points   u8 point names   u8 0    (version 4)
+u32 offset of: slot normals (0: none)                                         (version 5)
 
 frame (12 bytes):     u16 first piece, u8 piece count, u8 box count,
                       s8 hitbox x, y, u8 hitbox w, h,
@@ -81,6 +83,8 @@ point index:          u16 first point of each frame, then one past the last (fra
 point (4 bytes):      s8 x, y (relative to the anchor), u8 angle, u8 name (index into the
                       point names, bits 0-6) | 0x80 for order behind
 point names:          u16 string id each
+slot normals:         16 × (s8 x, y, z (127 = 1.0), u8 flags: 1 emissive, 2 shiny), for the
+                      palette slots (slot 0 unused), padded to four bytes before them
 ```
 
 Shape and size give the piece's pixels as on the hardware: square 8, 16, 32, 64; wide 16×8,
@@ -130,6 +134,11 @@ using the chunk.
 - 4: points (`point` in the file, the point tables in `SPRT`); figures (`.bmfigure`, `FIGR`).
 - 4.1: direction sets (`directions`, `from`, `to`; bit 1 of an animation's flags); figure
   layers in `aim` mode.
+- 5: light: `normal`, `emissive`, `shiny` in the file; slot normals in `SPRT` (header 72
+  bytes). With normals a colour may take several slots, one per direction its pixels face:
+  each colour starts as one slot with its pixels' mean normal, and while slots are left the
+  one whose normals spread most is split in two; a pixel takes its colour's slot with the
+  nearest normal. Palette variants keep the slots, so a variant is lit like the default.
 
 ## Figures
 

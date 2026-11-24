@@ -43,6 +43,7 @@ void readTilesetBody(const xml::Element &ts, Tileset &out, const std::string &di
   out.tileHeight = std::stoi(ts.attr("tileheight", "0"));
   out.tileCount = std::stoi(ts.attr("tilecount", "0"));
   out.columns = std::stoi(ts.attr("columns", "0"));
+  out.properties = readProperties(&ts);
   if (const xml::Element *img = ts.child("image"))
   {
     out.imagePath = join(dir, img->attr("source"));

@@ -16,6 +16,7 @@ extern "C" {
 #include "sprite_asset.h"
 #include "world_asset.h"
 #include "figure_asset.h"
+#include "light_bake.h"
 
 #include <algorithm>
 #include <cctype>
@@ -24,6 +25,7 @@ extern "C" {
 #include <map>
 #include <set>
 #include <sstream>
+#include <tuple>
 #include <stdexcept>
 
 namespace bm {
@@ -387,6 +389,10 @@ struct GraphicsLayer
   RoleId role = ROLE_MAIN;
   int width8 = 0, height8 = 0;      // in 8x8 cells
   std::vector<TileRef> cells;
+  // A room lit in mode `layer` (lighting.md): per pixel 0 transparent, 1 opaque and unlit, 2 lit
+  // (with its normal).
+  std::vector<uint8_t> pixelState;
+  std::vector<light::Vec3> normals;
 };
 
 struct RoomWork
@@ -394,6 +400,8 @@ struct RoomWork
   const tmx::Map *map = nullptr;
   std::string id;
   std::vector<GraphicsLayer> layers;
+  light::Light light;               // mode None: not lit
+  light::Solid solid;               // for its shadows
 };
 
 struct AreaWork
@@ -405,18 +413,69 @@ struct AreaWork
   std::vector<std::string> firstUse;  // where each unique tile was first seen
   std::vector<int> bankOf;
   std::vector<std::vector<uint16_t>> banks;  // colours per bank (index 0 = transparent)
+  // Lit in mode `palette` (lighting.md): colours 0x8000 and up stand for (colour, light level).
+  std::vector<std::pair<uint16_t, uint8_t>> lit;
+  std::map<uint32_t, uint16_t> litIndex;
+  // Tiles stored as they are (palette indices), after the area's: the light layer's.
+  std::vector<std::array<uint8_t, 64>> rawTiles;
+
+  uint16_t litColour(uint16_t colour, int level)
+  {
+    if (level <= 0) return colour;
+    uint32_t key = uint32_t(colour) << 8 | uint32_t(level);
+    auto it = litIndex.find(key);
+    if (it != litIndex.end()) return it->second;
+    uint16_t id = uint16_t(0x8000 + lit.size());
+    lit.emplace_back(colour, uint8_t(level));
+    litIndex[key] = id;
+    return id;
+  }
+  uint16_t albedo(uint16_t c) const { return c >= 0x8000 && c != 0xFFFF ? lit[c - 0x8000].first : c; }
+  uint8_t level(uint16_t c) const { return c >= 0x8000 && c != 0xFFFF ? lit[c - 0x8000].second : 0; }
 };
+
+// A lit tile with more than 15 (colour, level) pairs: the pairs used least go to the nearest
+// level of their colour the tile has, else to the colour unlit, until 15 are left.
+void fitLitTile(Tile &t, AreaWork &area)
+{
+  for (;;)
+  {
+    std::map<uint16_t, int> count;
+    for (uint16_t c : t)
+      if (c != TRANSPARENT) count[c]++;
+    if (count.size() <= 15) return;
+    uint16_t least = 0;
+    int fewest = 1 << 30;
+    for (const auto &[c, n] : count)
+      if (c >= 0x8000 && n < fewest) fewest = n, least = c;
+    if (fewest == 1 << 30) return;   // only plain colours: reported later
+    uint16_t a = area.albedo(least);
+    int lv = area.level(least), bestD = 99;
+    uint16_t to = a;
+    for (const auto &[c, n] : count)
+    {
+      if (c == least || area.albedo(c) != a) continue;
+      int d = std::abs(int(area.level(c)) - lv);
+      if (d < bestD) bestD = d, to = c;
+    }
+    for (uint16_t &c : t)
+      if (c == least) c = to;
+  }
+}
 
 std::string location(const tmx::Map &map, const tmx::Layer &layer, int x, int y)
 {
   return map.path + " layer '" + layer.name + "' at " + std::to_string(x) + "," + std::to_string(y);
 }
 
+Bytes collisionChunk(const tmx::Map &map, Report &report);
+
 // Cuts every graphics layer of a room into 8x8 tiles and deduplicates them (with flips)
 // against the area's tiles.
 void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const Profile &profile, Report &report)
 {
   const tmx::Map &map = *room.map;
+  const light::Light &lightOf = room.light;
   int layers4bpp = 0;
   for (const tmx::Layer &layer : map.layers)
   {
@@ -447,6 +506,15 @@ void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const 
     gl.width8 = layer.width * sub;
     gl.height8 = layer.height * subY;
     gl.cells.resize(size_t(gl.width8) * gl.height8);
+    // Lit: the layers that scroll with the room (a background with parallax is not).
+    bool lit = lightOf.mode != light::Mode::None && layer.parallaxX == 1.0f && layer.parallaxY == 1.0f;
+    if (lightOf.mode != light::Mode::None && !lit)
+      report.info("lighting", map.path + " layer '" + layer.name + "'", "a layer with parallax is not lit");
+    if (lightOf.mode == light::Mode::Layer)
+    {
+      gl.pixelState.assign(size_t(gl.width8) * 8 * gl.height8 * 8, 0);
+      gl.normals.assign(gl.pixelState.size(), light::Vec3{});
+    }
 
     for (int my = 0; my < layer.height; my++)
     {
@@ -492,6 +560,43 @@ void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const 
               }
             int flip = (fh ? FLIP_H : 0) | (fv ? FLIP_V : 0);
             t = flipped(t, flip);  // pixels as they appear on screen
+
+            if (lightOf.mode != light::Mode::None)
+            {
+              std::shared_ptr<Image> normalMap = lit ? light::tilesetNormals(*ts, report) : nullptr;
+              int cellX = mx * sub + sx, cellY = my * subY + sy;
+              for (int py = 0; py < 8; py++)
+                for (int px = 0; px < 8; px++)
+                {
+                  uint16_t &c = t[py * 8 + px];
+                  if (c == TRANSPARENT) continue;
+                  int wx = cellX * 8 + px, wy = cellY * 8 + py;
+                  size_t at = size_t(wy) * size_t(gl.width8) * 8 + size_t(wx);
+                  if (!lit)
+                  {
+                    if (!gl.pixelState.empty()) gl.pixelState[at] = 1;
+                    continue;
+                  }
+                  // The source pixel of this screen pixel, and its normal turned with the flips.
+                  int sxp = (flip & FLIP_H) ? 7 - px : px, syp = (flip & FLIP_V) ? 7 - py : py;
+                  int ix = tx + srcX * 8 + sxp, iy = ty + srcY * 8 + syp;
+                  light::Vec3 n;
+                  if (normalMap && ix < normalMap->width && iy < normalMap->height) n = light::decodeNormal(normalMap->pixel(ix, iy));
+                  if (flip & FLIP_H) n.x = -n.x;
+                  if (flip & FLIP_V) n.y = -n.y;
+                  float fx = float(wx) + 0.5f, fy = float(wy) + 0.5f;
+                  if (lightOf.mode == light::Mode::Layer)
+                  {
+                    gl.pixelState[at] = 2;
+                    gl.normals[at] = n;
+                    continue;
+                  }
+                  float tv = room.solid.shadowed(fx, fy, lightOf) ? 0.0f : light::term(lightOf, fx, fy, n);
+                  int level = int(std::lround(tv * float(light::LEVELS - 1)));
+                  c = area.litColour(c, std::clamp(level, 0, light::LEVELS - 1));
+                }
+              if (lightOf.mode == light::Mode::Palette) fitLitTile(t, area);
+            }
 
             TileRef ref;
             if (!isEmpty(t))
@@ -582,7 +687,10 @@ void packPalettes(AreaWork &area, const Profile &profile, Report &report)
   for (const auto &b : banks)
   {
     std::vector<uint16_t> colours(b.begin(), b.end());
-    std::stable_sort(colours.begin(), colours.end(), [](uint16_t a, uint16_t c) { return luminance(a) < luminance(c); });
+    std::stable_sort(colours.begin(), colours.end(), [&](uint16_t a, uint16_t c) {
+      int la = luminance(area.albedo(a)) + area.level(a), lc = luminance(area.albedo(c)) + area.level(c);
+      return la < lc;
+    });
     colours.insert(colours.begin(), 0);  // index 0: transparent
     area.banks.push_back(colours);
   }
@@ -606,7 +714,7 @@ uint8_t colourIndex(const AreaWork &area, int bank, uint16_t c)
 Bytes tileChunk(const AreaWork &area, const Profile &profile)
 {
   Bytes b;
-  b.u16(uint32_t(area.uniqueTiles.size()));
+  b.u16(uint32_t(area.uniqueTiles.size() + area.rawTiles.size()));
   b.u8(4);
   b.u8(profile.tileFormat == TileFormat::SnesPlanar4bpp ? 1 : 0);
   for (size_t i = 0; i < area.uniqueTiles.size(); i++)
@@ -633,6 +741,8 @@ Bytes tileChunk(const AreaWork &area, const Profile &profile)
       b.data.insert(b.data.end(), planes, planes + 32);
     }
   }
+  for (const auto &idx : area.rawTiles)
+    for (int p = 0; p < 64; p += 2) b.u8(uint32_t(idx[size_t(p)] | (idx[size_t(p + 1)] << 4)));
   return b;
 }
 
@@ -646,7 +756,7 @@ Bytes paletteChunk(const AreaWork &area, uint16_t backdrop)
   for (size_t bank = 0; bank < area.banks.size(); bank++)
     for (int i = 0; i < 16; i++)
     {
-      uint16_t c = i < int(area.banks[bank].size()) ? area.banks[bank][size_t(i)] : 0;
+      uint16_t c = i < int(area.banks[bank].size()) ? area.albedo(area.banks[bank][size_t(i)]) : 0;
       if (bank == 0 && i == 0) c = backdrop;
       b.u16(c);
     }
@@ -846,6 +956,215 @@ std::string roomIdOf(const tmx::Map &map)
   return world::roomIdOf(map);
 }
 
+// The head of a LITE chunk (lighting.md): the light, 20 bytes.
+void lightHead(Bytes &b, const light::Light &l, uint32_t extra, uint32_t firstBank, uint32_t bankCount)
+{
+  auto u8of = [](float v, float scale) { return uint32_t(std::clamp(int(std::lround(v * scale)), 0, 255)); };
+  b.u8(l.mode == light::Mode::Layer ? 2 : 1);
+  b.u8(extra);
+  b.u8(firstBank);
+  b.u8(bankCount);
+  b.s16(int32_t(std::lround(l.x)));
+  b.s16(int32_t(std::lround(l.y)));
+  b.u8(u8of(l.radius, 1));
+  b.u8(u8of(l.height, 1));
+  b.u16(l.colour);
+  b.u8(u8of(l.ambient, 255));
+  b.u8(u8of(l.flicker, 255));
+  b.u8(uint32_t(l.flickerSpeed));
+  b.u8(u8of(l.intensity, 64));
+  b.u8(u8of(l.gain, 64));
+  b.u8(l.shadows ? 1 : 0);
+  b.u16(0);
+}
+
+// Mode `palette`: the light level of every entry of the area's banks.
+Bytes paletteLightChunk(const RoomWork &room, const AreaWork &area, Report &report)
+{
+  Bytes b;
+  lightHead(b, room.light, light::LEVELS, 0, uint32_t(area.banks.size()));
+  size_t lit = 0;
+  for (const auto &bank : area.banks)
+    for (int i = 0; i < 16; i++)
+    {
+      uint8_t level = i < int(bank.size()) && i > 0 ? area.level(bank[size_t(i)]) : 0;
+      lit += level != 0;
+      b.u8(level);
+    }
+  report.info("lighting", room.map->path, "baked into the palettes: " + std::to_string(area.lit.size()) + " (colour, light level) pairs, " +
+              std::to_string(area.uniqueTiles.size()) + " tiles, " + std::to_string(area.banks.size()) + " banks");
+  (void)lit;
+  return b;
+}
+
+// Mode `layer`: normal tiles over the room, a bank per region of the light, and its LITE.
+std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Report &report)
+{
+  const light::Light &l = room.light;
+  const GraphicsLayer *main = nullptr, *back = nullptr;
+  for (const GraphicsLayer &gl : room.layers)
+  {
+    if (gl.role == ROLE_MAIN) main = &gl;
+    if (gl.role == ROLE_BACKGROUND) back = &gl;
+    if (gl.role == ROLE_FOREGROUND)
+      report.error("lighting", room.map->path, "a room lit with the light layer has no foreground layer (the light layer takes its place)");
+  }
+  int w8 = main ? main->width8 : back ? back->width8 : 0, h8 = main ? main->height8 : back ? back->height8 : 0;
+  int wpx = w8 * 8;
+  // What shows at a pixel: the main layer's, else the background's.
+  auto state = [&](int x, int y, light::Vec3 *pN) -> int {
+    for (const GraphicsLayer *gl : {main, back})
+    {
+      if (gl == nullptr || gl->pixelState.empty()) continue;
+      size_t at = size_t(y) * size_t(wpx) + size_t(x);
+      if (gl->pixelState[at] == 0) continue;
+      if (pN) *pN = gl->normals[at];
+      return gl->pixelState[at];
+    }
+    return 0;
+  };
+  // Lit cells: their middle inside the radius, some pixel lit.
+  std::vector<int> cellRegion(size_t(w8) * h8, -1);
+  std::vector<light::Vec3> cellF;
+  std::vector<int> litCells;
+  std::map<std::tuple<int, int, int>, std::pair<light::Vec3, float>> normalCounts;
+  for (int cy = 0; cy < h8; cy++)
+    for (int cx = 0; cx < w8; cx++)
+    {
+      float mx = float(cx * 8 + 4), my = float(cy * 8 + 4);
+      float dx = l.x - mx, dy = l.y - my;
+      if (light::falloff(l, dx * dx + dy * dy) <= 0) continue;
+      bool any = false;
+      for (int y = 0; y < 8; y++)
+        for (int x = 0; x < 8; x++)
+        {
+          light::Vec3 n;
+          if (state(cx * 8 + x, cy * 8 + y, &n) != 2) continue;
+          any = true;
+          auto key = std::make_tuple(int(std::lround(n.x * 16)), int(std::lround(n.y * 16)), int(std::lround(n.z * 16)));
+          auto &e = normalCounts[key];
+          e.first = n;
+          e.second += 1;
+        }
+      if (!any) continue;
+      litCells.push_back(cy * w8 + cx);
+      cellF.push_back(light::scaledDirection(l, mx, my));
+    }
+  std::vector<light::Vec3> pts;
+  std::vector<float> wts;
+  for (const auto &[k, e] : normalCounts) pts.push_back(e.first), wts.push_back(e.second);
+  std::vector<light::Vec3> normals = light::cluster(pts, wts, light::LAYER_NORMALS);
+  for (light::Vec3 &n : normals) n = light::normalize(n);
+  int firstBank = int(area.banks.size());
+  int regions = std::min(light::MAX_REGIONS, 15 - firstBank);
+  if (regions < 1)
+  {
+    report.error("lighting", room.map->path, "no palette bank is left for the light layer");
+    regions = 1;
+  }
+  // Regions: the cells clustered by how strong the light is there first, its direction second
+  // (falloff steps show more than a slightly other direction), each region's light the mean of
+  // its cells'. A cell nearer to no light at all than to any region stays dark.
+  auto keyOf = [](light::Vec3 f) {
+    float m = std::sqrt(f.x * f.x + f.y * f.y + f.z * f.z);
+    return light::Vec3{f.x * 0.5f, f.y * 0.5f, m};
+  };
+  std::vector<light::Vec3> keys;
+  for (const light::Vec3 &f : cellF) keys.push_back(keyOf(f));
+  std::vector<light::Vec3> keyCentres = light::cluster(keys, std::vector<float>(keys.size(), 1.0f), regions);
+  keyCentres.push_back(light::Vec3{0, 0, 0});   // no light
+  std::vector<light::Vec3> centres(keyCentres.size() - 1, light::Vec3{0, 0, 0});
+  std::vector<float> members(centres.size(), 0);
+  for (size_t i = 0; i < litCells.size(); i++)
+  {
+    int k = light::nearest(keyCentres, keys[i]);
+    if (k == int(centres.size())) k = -1;
+    cellRegion[size_t(litCells[i])] = k;
+    if (k < 0) continue;
+    centres[size_t(k)].x += cellF[i].x;
+    centres[size_t(k)].y += cellF[i].y;
+    centres[size_t(k)].z += cellF[i].z;
+    members[size_t(k)] += 1;
+  }
+  for (size_t k = 0; k < centres.size(); k++)
+    if (members[k] > 0) centres[k] = {centres[k].x / members[k], centres[k].y / members[k], centres[k].z / members[k]};
+
+  // The normal tiles, merged; map entries name the tile and the region's bank.
+  Bytes m;
+  m.u16(uint32_t(w8));
+  m.u16(uint32_t(h8));
+  m.u8(0);
+  m.u8(0);
+  m.u16(0);
+  std::map<std::array<uint8_t, 64>, uint32_t> tileOf;
+  size_t edgeTiles = 0;
+  for (int cy = 0; cy < h8; cy++)
+    for (int cx = 0; cx < w8; cx++)
+    {
+      int region = cellRegion[size_t(cy) * w8 + cx];
+      if (region < 0)
+      {
+        m.u16(0);
+        continue;
+      }
+      std::array<uint8_t, 64> t{};
+      bool any = false, shadowEdge = false;
+      for (int y = 0; y < 8; y++)
+        for (int x = 0; x < 8; x++)
+        {
+          light::Vec3 n;
+          int px = cx * 8 + x, py = cy * 8 + y;
+          if (state(px, py, &n) != 2) continue;
+          if (room.solid.shadowed(float(px) + 0.5f, float(py) + 0.5f, l))
+          {
+            shadowEdge = true;
+            continue;
+          }
+          t[size_t(y * 8 + x)] = uint8_t(1 + light::nearest(normals, n));
+          any = true;
+        }
+      if (!any)
+      {
+        m.u16(0);
+        continue;
+      }
+      edgeTiles += shadowEdge;
+      auto it = tileOf.find(t);
+      uint32_t tile;
+      if (it != tileOf.end()) tile = it->second;
+      else
+      {
+        tile = uint32_t(area.uniqueTiles.size() + area.rawTiles.size());
+        area.rawTiles.push_back(t);
+        tileOf[t] = tile;
+      }
+      m.u16(tile | uint32_t(firstBank + region) << 12);
+    }
+
+  Bytes lite;
+  lightHead(lite, l, uint32_t(normals.size()), uint32_t(firstBank), uint32_t(centres.size()));
+  for (size_t i = 0; i < size_t(light::LAYER_NORMALS); i++)
+  {
+    light::Vec3 n = i < normals.size() ? normals[i] : light::Vec3{};
+    lite.u8(uint32_t(int8_t(std::lround(n.x * 127))) & 255);
+    lite.u8(uint32_t(int8_t(std::lround(n.y * 127))) & 255);
+    lite.u8(uint32_t(int8_t(std::lround(n.z * 127))) & 255);
+    lite.u8(0);
+  }
+  for (const light::Vec3 &f : centres)
+  {
+    lite.s16(int32_t(std::lround(f.x * 4096)));
+    lite.s16(int32_t(std::lround(f.y * 4096)));
+    lite.s16(int32_t(std::lround(f.z * 4096)));
+    lite.u16(0);
+  }
+  report.info("lighting", room.map->path, "light layer: " + std::to_string(area.rawTiles.size()) + " normal tiles (" +
+              std::to_string(edgeTiles) + " cells on a shadow's edge), " + std::to_string(normals.size()) + " normals, " +
+              std::to_string(centres.size()) + " region banks from bank " + std::to_string(firstBank) + ", " +
+              std::to_string(litCells.size()) + " lit cells");
+  return {m, lite};
+}
+
 }  // namespace
 
 std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &options, Report &report)
@@ -863,7 +1182,14 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     rooms[i].id = roomIdOf(maps[i]);
     if (!roomIds.insert(rooms[i].id).second)
       report.error("does-not-fit", maps[i].path, "room id '" + rooms[i].id + "' is used twice");
-    std::string areaName = maps[i].property("area", "default");
+    // A lit room (lighting.md) is an area of its own: its tiles and palettes are its light's.
+    rooms[i].light = light::find(maps[i], report);
+    if (rooms[i].light.mode != light::Mode::None)
+    {
+      Report quiet;
+      rooms[i].solid = light::Solid::fromChunk(collisionChunk(maps[i], quiet).data);
+    }
+    std::string areaName = rooms[i].light.mode != light::Mode::None ? "@lit:" + rooms[i].id : maps[i].property("area", "default");
     auto it = std::find_if(areas.begin(), areas.end(), [&](const AreaWork &a) { return a.name == areaName; });
     if (it == areas.end())
     {
@@ -923,14 +1249,19 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
                    " can address " + std::to_string(profile.maxTiles));
     }
     packPalettes(area, profile, report);
+    // The light layer (lighting.md, mode `layer`): its normal tiles after the area's, banks after
+    // its banks, a map and the light's table; made now so the tiles go into the area's chunk.
+    std::map<const RoomWork *, std::pair<Bytes, Bytes>> lightLayers;   // map, LITE
+    for (RoomWork *room : area.rooms)
+      if (room->light.mode == light::Mode::Layer) lightLayers[room] = buildLightLayer(*room, area, report);
 
     uint16_t areaGroup = uint16_t(1 + a);
     uint16_t backdrop = parseColour(area.rooms.front()->map->property("backdrop", "#000000"));
 
     Bytes vlay;
     vlay.u16(0);
-    vlay.u16(uint32_t(area.uniqueTiles.size()));
-    vlay.u16(uint32_t(area.uniqueTiles.size()));
+    vlay.u16(uint32_t(area.uniqueTiles.size() + area.rawTiles.size()));
+    vlay.u16(uint32_t(area.uniqueTiles.size() + area.rawTiles.size()));
     vlay.u16(0);
     vlay.u16(0); vlay.u16(0); vlay.u16(0); vlay.u16(0);
     vlay.u8((1u << area.banks.size()) - 1);
@@ -956,16 +1287,35 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       const tmx::Map &map = *room->map;
       uint16_t roomGroup = uint16_t(256 + (room - rooms.data()));
 
-      std::vector<std::pair<const GraphicsLayer *, uint32_t>> layerChunks;
-      // The runtime gives each layer two of six screen blocks.
-      if (room->layers.size() > 3)
-        report.error("layers", map.path, "a room can have at most 3 graphics layers (it has " + std::to_string(room->layers.size()) + ")");
+      struct LayerEntry { uint32_t role, priority, chunk; float parallaxX, parallaxY; };
+      std::vector<LayerEntry> layerChunks;
+      // The runtime gives each layer two of six screen blocks; the light layer is one of them.
+      size_t layerCount = room->layers.size() + (room->light.mode == light::Mode::Layer ? 1 : 0);
+      if (layerCount > 3)
+        report.error("layers", map.path, "a room can have at most 3 graphics layers (it has " + std::to_string(room->layers.size()) +
+                     (room->light.mode == light::Mode::Layer ? ", and the light layer takes one" : "") + ")");
       std::vector<std::pair<uint32_t, uint32_t>> levelChunks;
+      // The light layer first: as BG 0 it lies in front of the others of its priority.
+      uint32_t liteChunk = 0;
+      if (room->light.mode == light::Mode::Layer)
+      {
+        const auto &[m, lite] = lightLayers[room];
+        uint32_t chunk = shared.add(writer, BM_CHUNK_TMAP, BM_CATEGORY_LEVEL, roomGroup, m);
+        layerChunks.push_back({3, 1, chunk, 1.0f, 1.0f});
+        levelChunks.emplace_back(chunk, uint32_t(m.data.size()));
+        liteChunk = add(writer, BM_CHUNK_LITE, BM_CATEGORY_LEVEL, roomGroup, lite);
+      }
+      else if (room->light.mode == light::Mode::Palette)
+      {
+        liteChunk = add(writer, BM_CHUNK_LITE, BM_CATEGORY_LEVEL, roomGroup, paletteLightChunk(*room, area, report));
+      }
       for (const GraphicsLayer &gl : room->layers)
       {
+        static const uint8_t priorities[3] = {2, 1, 0};
         Bytes m = mapChunk(gl, area, profile);
-        layerChunks.emplace_back(&gl, shared.add(writer, BM_CHUNK_TMAP, BM_CATEGORY_LEVEL, roomGroup, m));
-        levelChunks.emplace_back(layerChunks.back().second, uint32_t(m.data.size()));
+        uint32_t chunk = shared.add(writer, BM_CHUNK_TMAP, BM_CATEGORY_LEVEL, roomGroup, m);
+        layerChunks.push_back({uint32_t(gl.role), priorities[gl.role], chunk, gl.layer->parallaxX, gl.layer->parallaxY});
+        levelChunks.emplace_back(chunk, uint32_t(m.data.size()));
       }
       Bytes coll = collisionChunk(map, report);
       uint32_t collChunk = shared.add(writer, BM_CHUNK_COLL, BM_CATEGORY_LEVEL, roomGroup, coll);
@@ -1007,15 +1357,14 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       r.u16(objsChunk);
       r.u16(vlayChunk);
       r.u16(strings.id(room->id));
-      r.u16(0);
-      for (const auto &[gl, chunk] : layerChunks)
+      r.u16(liteChunk);   // the light (LITE), 0: none
+      for (const LayerEntry &l : layerChunks)
       {
-        static const uint8_t priorities[3] = {2, 1, 0};
-        r.u8(uint32_t(gl->role));
-        r.u8(priorities[gl->role]);
-        r.u16(chunk);
-        r.s32(toFix(gl->layer->parallaxX));
-        r.s32(toFix(gl->layer->parallaxY));
+        r.u8(l.role);
+        r.u8(l.priority);
+        r.u16(l.chunk);
+        r.s32(toFix(l.parallaxX));
+        r.s32(toFix(l.parallaxY));
       }
       r.u16(vlayChunk);
       r.u16(paleChunk);

@@ -14,7 +14,7 @@ content moves into the spec and the plan shrinks to what is still open.
 | [versioning.md](versioning.md) | versions of runtime, content and save games; incremental updates of a game on a flash cartridge |
 | [hitboxes.md](hitboxes.md) | hit, hurt and guard boxes per animation frame, how hits are decided, projectiles, editing and showing boxes in the editor |
 | [layered-sprites.md](layered-sprites.md) | figures made of several sprite layers, attachment points, direction sets for aiming, palette variants, enemy variants as data |
-| [lighting.md](lighting.md) | one light per room: a light layer of normal tiles blended over the room, lit palettes with normals for sprites, figure palettes with a bank per piece; the flickering torch hall |
+| [lighting.md](lighting.md) | one light per room: baked into the palettes or a light layer of normal tiles blended over the room (both built, to compare), lit palettes with normals for sprites, figure palettes with a bank per piece (open); the torch halls |
 | [dialogue.md](dialogue.md) | dialogue (text box, speakers, choices, story flags, translation), cutscenes that direct actors and the camera, and their editor views |
 
 ## How the plans depend on each other

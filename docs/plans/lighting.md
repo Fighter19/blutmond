@@ -1,6 +1,40 @@
 # Plan: a light layer and lit palettes (normal-mapped light on the GBA)
 
-Status: planned, nothing built.
+Status: both techniques for tiles built side by side, and lit sprites
+([../spec/room-format.md](../spec/room-format.md) §1 "Light", §7 `LITE`;
+[../spec/sprite-format.md](../spec/sprite-format.md) version 5;
+[../spec/runtime-core.md](../spec/runtime-core.md) §12 "The light"). A room chooses with its
+property `lighting`: `palette` (the light baked into the room's palettes, the first version of
+this plan) or `layer` (the light layer of section 3). Only rooms with a `Light` object are lit;
+every other room is as before. The test level's debug lobby has a fifth door into the torch
+halls: "Torch hall: palettes" and, through its east door, "Torch hall: light layer", alike but
+for the mode (`tools/make_torch_hall.py`; `test_game` writes both side by side into
+`test-output/torch_halls.ppm`). Where it differs:
+
+- **Regions** of the light layer: at most 12 (not 8), clustered by the light's strength first
+  and its direction second, so they lie in rings. A 2x2 dither between neighbouring regions
+  was tried and looked worse (a checkerboard of 8 px cells); without it the rings step.
+- **The UI** over a lit room in mode `layer` is blended at EVB 16 instead of 8 (one pair of
+  weights for both), not through the line table: its boxes are lighter there.
+- **Figure palettes and a bank per piece** (section 4) are not built: a sprite's normals split
+  its own 15 slots (each colour into a few directions while slots are left), the player's legs
+  and torso keep a bank each, and figures sharing a sheet and palette share a bank and the
+  light of the one nearest to it. The player's and the bat's normals are `auto`, not drawn.
+- **The editor** shows lit rooms unlit in the Room tab (its play mode runs the light); the
+  views of section 8 are not built. **Scripts** (section 9, step 5) are not built.
+- **Multiboot** images leave the light out (`src/hal/gba/light_off.c`): their packs have no lit
+  room.
+- **Cost** on the GBA, measured in mGBA: about 26,000 cycles a frame for the room's banks and
+  11,000 for the sprites' (13 % of a frame), from ROM; IWRAM has no room for the kernels in
+  every image. Both halls run at 60 frames a second (`light_mgba_*` tests keep the budget).
+- A new `Light` property `gain` (the light layer's strength: it adds the light, while the baked
+  mode multiplies it).
+
+Compared in the test level: the baked mode looks better (the light multiplies each colour, the
+falloff is smooth to the pixel) and costs tiles (498 for the hall, against 19 room tiles and 69
+normal tiles with the light layer) and 6 banks; the light layer keeps the room's tiles and
+palette as drawn, but its light is added (the bricks wash toward the torch's colour), its
+falloff steps by region, it takes a background layer and up to 12 banks.
 
 The light of a room shades the room's tiles and the player by the direction their surfaces
 face, the way a normal map does in a 3D engine. The bricks of the wall show their edges, the

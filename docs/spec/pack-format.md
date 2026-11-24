@@ -64,9 +64,9 @@ chunk formats named in section 3.
 - **Rooms** are numbered by the order of their `ROOM` chunks in the table, from 0. Room 0 is
   where a new game starts.
 - **What the cooker writes**, in this order: per area `VLAY`, `PALE`, `TILE`, then per room of
-  the area its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `FIGR`, every `SONG`, every `FONT`,
+  the area (if lit: its light layer's `TMAP` and its `LITE`) its `TMAP`s, `COLL`, `OBJS`, `ROOM`; then every `SPRT`, every `FIGR`, every `SONG`, every `FONT`,
   every `MODB`, optionally `MODN`, every `DTAB`, the `LANG`s, and `STRS`.
-- **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `PALE`, `TILE`, `SPRT`, `FIGR`, `SONG`,
+- **What the runtime reads**: `ROOM`, `TMAP`, `COLL`, `OBJS`, `LITE`, `PALE`, `TILE`, `SPRT`, `FIGR`, `SONG`,
   `FONT`, `MODB`, `MODN`, `DTAB`, `LANG`, `WRLD`, `MIGR`, `STRS`. `VLAY` is written but not read; where things go in video memory is
   fixed in the runtime ([runtime-core.md](runtime-core.md) §6).
 - **Limits**: 3 graphics layers per room; 255 areas; the tiles of an area must fit the
@@ -255,6 +255,7 @@ and, if the runtime reads it directly, adding a storage back end (see
 | `TILE` | tile graphics, 4 or 8 bpp, profile tile format |
 | `TMAP` | tile map of one layer, profile map entry format |
 | `ROOM`, `COLL`, `SHAP`, `OBJS` | room data, see [room-format.md](room-format.md) §7 |
+| `LITE` | the light of a lit room ([room-format.md](room-format.md) §1, §7) |
 | `EFCT` | raster effect: per-line register tables |
 | `SPRT` | one sprite: palette bank, tiles, frames as hardware sprite pieces, hitboxes, animations ([sprite-format.md](sprite-format.md)) |
 | `SONG` | one song or sound effect: instruments, note events and its samples ([sound-format.md](sound-format.md)) |

@@ -13,6 +13,10 @@
 
 #define BM_SPRITE_MAX_PALETTES 16
 
+// A palette slot's flags (sprite-format.md, version 5).
+#define BM_SPRITE_SLOT_EMISSIVE 1   // not lit: stays as drawn
+#define BM_SPRITE_SLOT_SHINY 2      // a highlight where it faces between the light and the eye
+
 typedef struct BmSpriteSheet
 {
   const uint8_t *pData;
@@ -31,6 +35,8 @@ typedef struct BmSpriteSheet
   // Version 4: points (NULL: none): an index of frameCount + 1 entries, 4 bytes a point, names.
   const uint8_t *pPointIndex, *pPoints, *pPointNames;
   uint8_t pointNameCount;
+  // Version 5: per palette slot a normal (s8 x, y, z) and flags (BM_SPRITE_SLOT_*), NULL: none.
+  const uint8_t *pNormals;
   // Where it was loaded.
   uint16_t tileBase;
   uint8_t bank;

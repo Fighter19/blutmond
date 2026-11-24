@@ -20,6 +20,7 @@ typedef enum BmRoomRole {
   BM_ROOM_ROLE_BACKGROUND = 0,
   BM_ROOM_ROLE_MAIN = 1,
   BM_ROOM_ROLE_FOREGROUND = 2,
+  BM_ROOM_ROLE_LIGHT = 3,        // the light layer (light.h): shown and blended by the light
 } BmRoomRole;
 
 typedef struct BmRoomLayer
@@ -47,6 +48,7 @@ typedef struct BmRoom
   uint16_t objectCount;
   uint16_t musicId;          // string id of the room's song, 0xFFFF: none
   uint16_t tilesChunk, paletteChunk, collisionChunk, objectsChunk;
+  uint16_t liteChunk;          // the room's light (LITE, light.h), 0: none
   const uint8_t *pCollision;   // the COLL chunk's data: in the pack, or unpacked
   uint32_t collisionSize;
   uint8_t layerCount;

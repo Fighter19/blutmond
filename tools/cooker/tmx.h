@@ -27,6 +27,7 @@ struct Tileset
   int tileWidth = 0, tileHeight = 0, tileCount = 0, columns = 0;
   std::string imagePath;
   std::shared_ptr<Image> image;  // loaded on demand
+  Properties properties;          // the tileset's own (e.g. `normal`, lighting.md)
   std::map<int, Properties> tileProperties;
   std::map<int, std::string> tileTypes;
 

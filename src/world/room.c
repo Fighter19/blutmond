@@ -79,6 +79,7 @@ BmResult bmRoomOpenWith(BmRoom *pRoom, const BmPack *pPack, uint32_t index, uint
   pRoom->paletteChunk = bmRead16(p + 32);
   pRoom->collisionChunk = bmRead16(p + 34);
   pRoom->objectsChunk = bmRead16(p + 36);
+  pRoom->liteChunk = bmRead16(p + 42);
   pRoom->pCollision = roomChunk(pPack, pRoom->collisionChunk, pBuffer, bufferSize, &used, &pRoom->collisionSize);
   if (pRoom->pCollision == NULL)
   {
@@ -319,7 +320,8 @@ BmResult bmRoomShow(BmRoom *pRoom, int32_t cameraX, int32_t cameraY)
       .priority = pLayer->priority,
     });
     pLayer->loaded = false;
-    mask |= (uint8_t)(1u << pLayer->bg);
+    // The light layer shows only while the light blends it (light.h).
+    if (pLayer->role != BM_ROOM_ROLE_LIGHT) mask |= (uint8_t)(1u << pLayer->bg);
   }
   bmRoomSetCamera(pRoom, cameraX, cameraY);
   bmVideoSetLayers(mask, true);

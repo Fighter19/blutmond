@@ -391,7 +391,7 @@ static void testPalettes()
   TEST_ASSERT(!r2.hasErrors() && d.variants.size() == 2 && d.variants[1][size_t(body)] == bgr(255 - 0x6b, 255 - 0x42, 255 - 0x8c));
   // Into the chunk: two palettes after the default, their names after them.
   std::vector<uint8_t> b = sprite::chunk(s, d, 1, {2}, {}, {10, 11, 12});
-  TEST_ASSERT(b[12] == 68 && b[52] == 3);   // version 4: the bat has a point (body)
+  TEST_ASSERT(b[12] == 72 && b[52] == 3);   // version 5: the bat has a point (body) and normals (lighting.md)
   uint32_t paletteAt = uint32_t(b[28] | b[29] << 8 | b[30] << 16 | b[31] << 24);
   TEST_ASSERT((b[paletteAt + 32 + body * 2] | b[paletteAt + 32 + body * 2 + 1] << 8) == bgr(0xb0, 0x28, 0x38));
   TEST_ASSERT(b[paletteAt + 96] == 10 && b[paletteAt + 98] == 11 && b[paletteAt + 100] == 12);

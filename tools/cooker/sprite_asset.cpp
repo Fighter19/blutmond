@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause OR MIT
 #include "sprite_asset.h"
 
+#include "light_bake.h"
 #include "overrides.h"
 #include "xml.h"
 
@@ -104,6 +105,17 @@ Sprite load(const std::string &path)
   if (s.imageAttr.empty()) throw std::runtime_error(path + ": no image");
   s.imagePath = (fs::path(path).parent_path() / s.imageAttr).lexically_normal().string();
   s.image = std::make_shared<Image>(loadImage(s.imagePath));
+  s.normalAttr = root->attr("normal");
+  s.emissive = root->attr("emissive") == "true";
+  {
+    std::string list = root->attr("shiny");
+    size_t at = 0;
+    while ((at = list.find('#', at)) != std::string::npos && at + 7 <= list.size())
+    {
+      s.shiny.push_back(uint32_t(std::stoul(list.substr(at + 1, 6), nullptr, 16)));
+      at += 7;
+    }
+  }
   auto box = [](const xml::Element *e) { return Box{toInt(e, "x", 0), toInt(e, "y", 0), toInt(e, "w", 0), toInt(e, "h", 0)}; };
   auto boxes = [&](const xml::Element *parent) {
     std::vector<NamedBox> out;
@@ -199,7 +211,21 @@ bool save(const Sprite &s, std::string *pError)
     if (pError) *pError = "cannot write " + s.path;
     return false;
   }
-  out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<sprite version=\"1\" image=\"" << s.imageAttr << "\">\n";
+  out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<sprite version=\"1\" image=\"" << s.imageAttr << "\"";
+  if (!s.normalAttr.empty()) out << " normal=\"" << s.normalAttr << "\"";
+  if (s.emissive) out << " emissive=\"true\"";
+  if (!s.shiny.empty())
+  {
+    out << " shiny=\"";
+    for (size_t i = 0; i < s.shiny.size(); i++)
+    {
+      char hex[16];
+      std::snprintf(hex, sizeof(hex), "%s#%06x", i ? "," : "", s.shiny[i]);
+      out << hex;
+    }
+    out << "\"";
+  }
+  out << ">\n";
   out << " <hitbox x=\"" << s.hitbox.x << "\" y=\"" << s.hitbox.y << "\" w=\"" << s.hitbox.w << "\" h=\"" << s.hitbox.h << "\"/>\n";
   auto writeBoxes = [&](const std::vector<NamedBox> &boxes, const char *indent) {
     for (const NamedBox &b : boxes)
@@ -388,6 +414,137 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
     out.variants.push_back(pal);
   }
 
+  // Light (lighting.md): the slots become (colour, normal) pairs. Each colour starts as one slot
+  // with the mean normal of its pixels; while slots are left, the one whose normals spread most
+  // is split in two. A pixel takes the slot of its colour with the nearest normal.
+  const bool lit = !s.normalAttr.empty() || s.emissive || !s.shiny.empty();
+  std::vector<light::Vec3> pixelNormal;   // per sheet pixel
+  struct Slot { uint8_t colour; light::Vec3 normal; };
+  std::vector<Slot> slots;
+  std::vector<std::vector<int>> slotsOfColour(16);
+  if (lit)
+  {
+    pixelNormal.assign(size_t(img.width) * img.height, light::Vec3{});
+    if (s.normalAttr == "auto")
+    {
+      for (const Frame &f : s.frames)
+      {
+        Image part;
+        part.width = std::max(0, std::min(f.w, img.width - f.x));
+        part.height = std::max(0, std::min(f.h, img.height - f.y));
+        part.rgba.resize(size_t(part.width) * part.height * 4);
+        for (int y = 0; y < part.height; y++)
+          for (int x = 0; x < part.width; x++)
+            std::copy(img.pixel(f.x + x, f.y + y), img.pixel(f.x + x, f.y + y) + 4, &part.rgba[(size_t(y) * part.width + x) * 4]);
+        Image n = light::autoNormals(part, part.width, part.height);
+        for (int y = 0; y < part.height; y++)
+          for (int x = 0; x < part.width; x++) pixelNormal[size_t(f.y + y) * img.width + f.x + x] = light::decodeNormal(n.pixel(x, y));
+      }
+    }
+    else if (!s.normalAttr.empty())
+    {
+      std::string np = (fs::path(s.path).parent_path() / s.normalAttr).lexically_normal().string();
+      try
+      {
+        Image n = loadImage(np);
+        if (n.width != img.width || n.height != img.height) report.error("lighting", np, "a normal map must be the size of its sheet");
+        else
+          for (int y = 0; y < img.height; y++)
+            for (int x = 0; x < img.width; x++) pixelNormal[size_t(y) * img.width + x] = light::decodeNormal(n.pixel(x, y));
+      }
+      catch (const std::exception &e)
+      {
+        report.error("lighting", np, e.what());
+      }
+    }
+    // The normals of each colour's pixels.
+    std::vector<std::vector<light::Vec3>> of(16);
+    for (const Frame &f : s.frames)
+      for (int y = 0; y < f.h; y++)
+        for (int x = 0; x < f.w; x++)
+          if (uint16_t c = colourAt(f.x + x, f.y + y); c != NONE) of[indexOf[c]].push_back(pixelNormal[size_t(f.y + y) * img.width + f.x + x]);
+    struct Group { uint8_t colour; std::vector<light::Vec3> normals; light::Vec3 mean; float spread; };
+    auto measure = [](Group &g) {
+      light::Vec3 m{0, 0, 0};
+      for (const light::Vec3 &n : g.normals) m.x += n.x, m.y += n.y, m.z += n.z;
+      float k = g.normals.empty() ? 1.0f : float(g.normals.size());
+      g.mean = light::normalize({m.x / k, m.y / k, m.z / k});
+      g.spread = 0;
+      for (const light::Vec3 &n : g.normals)
+      {
+        float dx = n.x - g.mean.x, dy = n.y - g.mean.y, dz = n.z - g.mean.z;
+        g.spread += dx * dx + dy * dy + dz * dz;
+      }
+    };
+    std::vector<Group> groups;
+    for (size_t k = 1; k <= sorted.size(); k++)
+    {
+      groups.push_back({uint8_t(k), of[k], {}, 0});
+      measure(groups.back());
+    }
+    while (groups.size() < 15 && !s.normalAttr.empty())
+    {
+      size_t worst = 0;
+      for (size_t g = 1; g < groups.size(); g++)
+        if (groups[g].spread > groups[worst].spread) worst = g;
+      if (groups.empty() || groups[worst].spread < 0.5f) break;
+      std::vector<light::Vec3> centres = light::cluster(groups[worst].normals, std::vector<float>(groups[worst].normals.size(), 1.0f), 2);
+      if (centres.size() < 2) break;
+      Group a{groups[worst].colour, {}, {}, 0}, b{groups[worst].colour, {}, {}, 0};
+      for (const light::Vec3 &n : groups[worst].normals) (light::nearest(centres, n) == 0 ? a : b).normals.push_back(n);
+      if (a.normals.empty() || b.normals.empty()) break;
+      measure(a);
+      measure(b);
+      groups[worst] = a;
+      groups.push_back(b);
+    }
+    // Slots in the order of their colours, then from the top-lit to the bottom-lit.
+    std::stable_sort(groups.begin(), groups.end(), [](const Group &x, const Group &y) {
+      return x.colour != y.colour ? x.colour < y.colour : x.mean.y < y.mean.y;
+    });
+    for (const Group &g : groups)
+    {
+      slotsOfColour[g.colour].push_back(int(slots.size()) + 1);
+      slots.push_back({g.colour, g.mean});
+    }
+    // The palettes over the new slots, and each slot's normal and flags.
+    auto spread = [&](const std::vector<uint16_t> &pal) {
+      std::vector<uint16_t> outPal(16, 0);
+      for (size_t i = 0; i < slots.size(); i++) outPal[i + 1] = pal[slots[i].colour];
+      return outPal;
+    };
+    std::vector<uint16_t> base = out.palette;
+    out.palette = spread(base);
+    for (auto &v : out.variants) v = spread(v);
+    out.normals.assign(16, {0, 0, 127, 0});
+    for (size_t i = 0; i < slots.size(); i++)
+    {
+      const light::Vec3 &n = slots[i].normal;
+      uint8_t flags = s.emissive ? 1 : 0;
+      for (uint32_t rgb : s.shiny)
+        if (bgr(rgb) == base[slots[i].colour]) flags |= 2;
+      out.normals[i + 1] = {int8_t(std::lround(n.x * 127)), int8_t(std::lround(n.y * 127)), int8_t(std::lround(n.z * 127)), int8_t(flags)};
+    }
+    if (slots.size() > sorted.size())
+      report.info("lighting", s.path, std::to_string(sorted.size()) + " colours in " + std::to_string(slots.size()) + " lit slots");
+  }
+  auto slotOf = [&](uint16_t c, int px, int py) -> uint8_t {
+    uint8_t k = indexOf[c];
+    if (!lit) return k;
+    const std::vector<int> &mine = slotsOfColour[k];
+    if (mine.size() <= 1) return mine.empty() ? k : uint8_t(mine[0]);
+    light::Vec3 n = pixelNormal[size_t(py) * img.width + px];
+    int best = mine[0];
+    float bestD = 1e30f;
+    for (int sl : mine)
+    {
+      const light::Vec3 &m = slots[size_t(sl - 1)].normal;
+      float d = (m.x - n.x) * (m.x - n.x) + (m.y - n.y) * (m.y - n.y) + (m.z - n.z) * (m.z - n.z);
+      if (d < bestD) bestD = d, best = sl;
+    }
+    return uint8_t(best);
+  };
+
   // Frames into pieces. Identical pieces (the same run of tiles) are stored once.
   std::map<std::vector<uint8_t>, int> runs;
   for (size_t fi = 0; fi < s.frames.size(); fi++)
@@ -431,7 +588,7 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
     auto index = [&](int px, int py) -> uint8_t {
       if (px >= f.w || py >= f.h) return 0;
       uint16_t c = colourAt(f.x + px, f.y + py);
-      return c == NONE ? 0 : indexOf[c];
+      return c == NONE ? 0 : slotOf(c, f.x + px, f.y + py);
     };
     std::vector<uint8_t> filled(size_t(tw) * th, 0), covered(size_t(tw) * th, 0);
     int minX = f.w, minY = f.h, maxX = -1, maxY = -1;
@@ -543,8 +700,10 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   // Version 4 (only a sprite with points): the header goes on with the points' tables.
   size_t points = 0;
   for (const CookedFrame &f : c.frames) points += f.points.size();
-  const bool withPoints = points != 0;
-  const uint32_t header = withPoints ? 68 : 56;
+  const bool withNormals = !c.normals.empty();
+  const bool withPoints = points != 0 || withNormals;
+  // Version 5 (a sprite with light): the header goes on with the normals' offset.
+  const uint32_t header = withNormals ? 72 : withPoints ? 68 : 56;
   const uint32_t palettes = 1 + uint32_t(c.variants.size());
   uint32_t framesAt = header, piecesAt = framesAt + uint32_t(c.frames.size()) * 12, animsAt = piecesAt + uint32_t(pieces) * 6;
   uint32_t stepsAt = animsAt + uint32_t(s.animations.size()) * 8, paletteAt = stepsAt + uint32_t(steps) * 4;
@@ -553,6 +712,7 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
   uint32_t namesAt = boxesAt + uint32_t(boxes) * 6;
   uint32_t pointIndexAt = namesAt + uint32_t(c.boxNames.size()) * 2;
   uint32_t pointsAt = pointIndexAt + uint32_t(c.frames.size() + 1) * 2, pointNamesAt = pointsAt + uint32_t(points) * 4;
+  uint32_t normalsAt = (pointNamesAt + uint32_t(c.pointNames.size()) * 2 + 3) & ~3u;
 
   u16(nameId);
   u16(uint32_t(c.frames.size()));
@@ -582,6 +742,7 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
     u8(int(c.pointNames.size()));
     u8(0);
   }
+  if (withNormals) u32(normalsAt);
 
   uint32_t pieceStart = 0;
   for (const CookedFrame &f : c.frames)
@@ -675,6 +836,9 @@ std::vector<uint8_t> chunk(const Sprite &s, const Cooked &c, uint16_t nameId, co
     for (size_t i = 0; i < c.pointNames.size(); i++) u16(i < pointNameIds.size() ? pointNameIds[i] : 0xFFFF);
   }
   while (b.size() % 4) u8(0);
+  if (withNormals)
+    for (const auto &n : c.normals)
+      for (int8_t v : n) u8(uint8_t(v));
   return b;
 }
 

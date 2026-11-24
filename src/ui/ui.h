@@ -154,6 +154,9 @@ void bmUiShow(BmUi *pUi, bool shown);
 /// show the room through them, dimmed; white text and frames stay bright.
 void bmUiBlend(void);
 
+/// A room's light layer on background `bg` (light.h), -1 none: bmUiBlend blends it too.
+void bmUiSetLightLayer(int8_t bg);
+
 /// Once a frame, in the vertical blank: background 3 on or off, the rows of the map that
 /// changed.
 void bmUiPresent(BmUi *pUi);

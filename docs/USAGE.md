@@ -51,10 +51,18 @@ position, health, and on the GBA how much of the frame the game took); `--overla
 from the start.
 
 **The debug lobby**: holding L and R and pressing Start gives the Debug Mirror (Items). Using it
-teleports, with a wave, to a lobby with four doors: Wave, Spotlight, Pulse and Dusk, a room
-for each screen effect, and a teleporter at the east end back to the first room. `--room ID`
-starts in that room (`--room debug_lobby`), `--debug-item` puts the mirror in the bag at the
-start.
+teleports, with a wave, to a lobby with five doors: Wave, Spotlight, Pulse and Dusk, a room
+for each screen effect, the torch halls, and a teleporter back to the first room. `--room ID`
+starts in that room (`--room debug_lobby`, `--room torch_hall`), `--debug-item` puts the mirror
+in the bag at the start.
+
+**The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): two rooms alike but
+for how their flickering torch lights the walls, side by side for comparing. The first,
+"Torch hall: palettes", has the light baked into its colours; its east door leads to "Torch
+hall: light layer", where a layer of normal tiles is added over the room. The player and the
+bat are lit the same way in both; behind the pillar they are in its shadow.
+`tools/make_torch_hall.py` draws them. `test_game` writes the six pictures it compares into
+`build/test-output/torch_halls.ppm` (palettes left, light layer right).
 
 Sounds: each enemy struck sounds its own (an `Enemy` record's `hit_sound`: the bats squeak; the
 moon bat and the training dummy name theirs in their scripts), an item picked up chimes (the

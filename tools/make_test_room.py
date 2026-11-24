@@ -499,12 +499,17 @@ DEBUG_ROOMS = [("debug_wave", "Wave", "wave", 96), ("debug_spotlight", "Spotligh
                ("debug_pulse", "Pulse", "pulse", 320), ("debug_gradient", "Dusk", "gradient", 432)]
 
 
+# The door to the torch halls (tools/make_torch_hall.py), right of the teleporter.
+TORCH_DOOR_X = 592
+
+
 def write_debug_lobby(path):
     """The debug lobby (the Debug Mirror takes the player there): a door into a room per
-    screen effect, each under a stone arch, and a teleporter back to the start."""
-    w, h = 36, 12
+    screen effect, each under a stone arch, one into the torch halls, and a teleporter back to
+    the start."""
+    w, h = 40, 12
     main_layer = debug_floor(w, h)
-    for _, _, _, x in DEBUG_ROOMS:
+    for _, _, _, x in DEBUG_ROOMS + [("torch_hall", "Torch hall", "", TORCH_DOOR_X)]:
         tx = x // T
         for y in range(5, 7):
             main_layer[y][tx - 2] = gid("stone")
@@ -518,7 +523,7 @@ def write_debug_lobby(path):
                ("WeaponStand", "lance", 480, 160, 0, 0, True, [("Gives", "Lance")]),
                ("Gift", "crimson", 264, 160, 0, 0, True, [("Gives", "CrimsonCharm")]),
                ("Gift", "moon", 376, 160, 0, 0, True, [("Gives", "MoonCharm")])]
-    for room, _, _, x in DEBUG_ROOMS:
+    for room, _, _, x in DEBUG_ROOMS + [("torch_hall", "Torch hall", "", TORCH_DOOR_X)]:
         objects.append(("Door", "to_" + room, x - 16, 112, 32, 48, False, [("target_room", room), ("target_door", "exit_west"), ("direction", "north"), ("panel", "door_panel")]))
     write_small_room(path, "debug_lobby", "debug", w, h, main_layer, objects, props=[("title", "Debug lobby")])
 

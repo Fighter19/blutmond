@@ -13,6 +13,7 @@
 #define HEADER_SIZE_V2 52   // version 2: the boxes' tables follow the version 1 header
 #define HEADER_SIZE_V3 56   // version 3: and the number of palettes
 #define HEADER_SIZE_V4 68   // version 4: and the points' tables
+#define HEADER_SIZE_V5 72   // version 5: and the slots' normals
 #define POINT_SIZE 4
 #define BOX_SIZE 6
 #define FRAME_SIZE 12
@@ -84,6 +85,13 @@ BmResult bmSpriteSheetOpen(BmSpriteSheet *s, const BmPack *pPack, uint32_t chunk
     if (n == 0 || n > BM_SPRITE_MAX_PALETTES || at[4] + (uint32_t)n * 34 > size) return BM_ERROR_INVALID_ARGUMENT;
     s->paletteCount = (uint8_t)n;
     s->pPaletteNames = s->pPalette + n * 32;
+  }
+  // Version 5: the normals of the palette slots (16 x 4 bytes; offset 0: none).
+  if (at[0] >= HEADER_SIZE_V5 && size >= HEADER_SIZE_V5)
+  {
+    uint32_t normalsAt = bmRead32(p + 68);
+    if (normalsAt != 0 && normalsAt + 64 > size) return BM_ERROR_INVALID_ARGUMENT;
+    if (normalsAt != 0) s->pNormals = p + normalsAt;
   }
   // Version 4: the points (sprite-format.md).
   if (at[0] >= HEADER_SIZE_V4 && size >= HEADER_SIZE_V4)

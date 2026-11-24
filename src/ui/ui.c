@@ -601,8 +601,23 @@ void bmUiRebind(BmUi *ui, const BmPack *pPack)
   bmUiRestore(ui);
 }
 
+static int8_t s_lightBg = -1;
+
+void bmUiSetLightLayer(int8_t bg)
+{
+  s_lightBg = bg;
+}
+
 void bmUiBlend(void)
 {
+  if (s_lightBg >= 0)
+  {
+    // A room lit with a light layer (light.h): it is added over the room, and so is the UI,
+    // at full weight (one pair of weights serves both).
+    uint8_t room = (uint8_t)((BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2)) & ~BM_LAYER_BG(s_lightBg));
+    bmBlendSet(BM_BLEND_ALPHA, (uint8_t)(BM_LAYER_BG(BM_UI_BG) | BM_LAYER_BG(s_lightBg)), (uint8_t)(room | BM_LAYER_OBJ | BM_LAYER_BACKDROP), 16, 16, 0);
+    return;
+  }
   bmBlendSet(BM_BLEND_ALPHA, BM_LAYER_BG(BM_UI_BG), BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2) | BM_LAYER_OBJ | BM_LAYER_BACKDROP,
              BM_UI_BLEND_UI, BM_UI_BLEND_BEHIND, 0);
 }

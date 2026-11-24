@@ -99,6 +99,11 @@ struct Sprite
   std::vector<Frame> frames;
   std::vector<Animation> animations;
   std::vector<PaletteVariant> palettes;   // besides the sheet's own ("default")
+  // Light (docs/plans/lighting.md): `normal` a normal map beside the sheet or `auto`; `emissive`
+  // (not lit); `shiny` source colours (#rrggbb) that get a highlight.
+  std::string normalAttr;
+  bool emissive = false;
+  std::vector<uint32_t> shiny;
 };
 
 /// Loads a sprite file and its sheet. Throws std::runtime_error on errors.
@@ -133,6 +138,9 @@ struct Cooked
   std::vector<uint16_t> palette;      // 16 entries, 0 transparent
   std::vector<std::string> paletteNames;           // of the variants, in file order
   std::vector<std::vector<uint16_t>> variants;     // 16 entries each, the same slots
+  // Per slot a normal (s8 x, y, z) and flags (1 emissive, 2 shiny): empty for a sprite without
+  // light (then written as version 4 or less).
+  std::vector<std::array<int8_t, 4>> normals;
   std::vector<std::array<uint8_t, 64>> tiles;  // palette indices
   std::vector<CookedFrame> frames;
   int maxPieces = 0;                  // hardware sprites the largest frame needs

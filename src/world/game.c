@@ -7,6 +7,7 @@
 #include "data.h"
 #include "commands.h"
 #include "effects.h"
+#include "light.h"
 #include "text.h"
 
 #include "hal.h"
@@ -29,6 +30,7 @@ static uint8_t kindOf(const char *cls)
   if (strcmp(cls, "Breakable") == 0) return BM_OBJECT_BREAKABLE;
   if (strcmp(cls, "PushBlock") == 0 || strcmp(cls, "PressurePlate") == 0 || strcmp(cls, "Gate") == 0) return BM_OBJECT_PUZZLE;
   if (strcmp(cls, "GrappleAnchor") == 0) return BM_OBJECT_GRAPPLE_ANCHOR;
+  if (strcmp(cls, "Light") == 0) return BM_OBJECT_LIGHT;
   return BM_OBJECT_OTHER;
 }
 
@@ -1005,7 +1007,9 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   enterRoomSound(g);
   bmMapEnterRoom(g);
   preloadSprites(g);
-  return bmRoomShow(&g->room, 0, 0);
+  BmResult shown = bmRoomShow(&g->room, 0, 0);
+  if (shown == BM_SUCCESS) bmLightEnterRoom(g);
+  return shown;
 }
 
 static void readOptions(BmGame *g);
@@ -1053,6 +1057,7 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   updateCamera(g);
   updateSprites(g);
   bmEffectsPresent(g);
+  bmLightPresent(g);
   return BM_SUCCESS;
 }
 
@@ -1970,6 +1975,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   updateCamera(g);
   updateSprites(g);
   bmEffectsPresent(g);
+  bmLightPresent(g);
   hudFrame(g);
   bmUiPresent(&g->ui);
 
@@ -2258,6 +2264,7 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   updateSprites(g);
   g->fxApplied = 7;   // the video state was rebuilt: every slot is set again or switched off
   bmEffectsPresent(g);
+  bmLightPresent(g);
   return BM_SUCCESS;
 }
 

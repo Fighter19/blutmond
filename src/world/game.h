@@ -10,6 +10,7 @@
 
 #include "attachments.h"
 #include "screens.h"
+#include "light.h"
 #include "inventory.h"
 #include "map.h"
 #include "actors.h"
@@ -67,6 +68,7 @@ typedef enum BmObjectKind {
   BM_OBJECT_BREAKABLE,   // a wall or floor that a hit breaks (bmGameBreak)
   BM_OBJECT_PUZZLE,      // PushBlock, PressurePlate, Gate (puzzle.h draws them)
   BM_OBJECT_GRAPPLE_ANCHOR,   // a point the grapple bites (grapple.h draws it)
+  BM_OBJECT_LIGHT,       // the room's light (light.h; cooked into its LITE chunk, not drawn)
 } BmObjectKind;
 
 typedef struct BmObjectView
@@ -230,6 +232,8 @@ typedef struct BmGame
   BmHits hits;
   // Menus and other screens (screens.h); while one is open the room stands still.
   BmScreens screens;
+  // The room's light (light.h): presentation, not state.
+  BmLight light;
   // The dialogue box (say): shown until A is pressed.
   uint8_t dialogue;
   uint16_t dialogueSpeaker, dialogueLine;   // string ids

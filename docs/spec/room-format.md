@@ -56,6 +56,8 @@ Map-level custom properties:
 | `echo_feedback` | int | preset's | how loud each repeat comes back: 0-255 (256 would be as loud) |
 | `echo_damping` | int | preset's | how much treble each repeat loses: 0 none - 255 most |
 | `muffle` | int | preset's | a low pass over everything heard: 0 none - 255 most |
+| `lighting` | string | `palette` | how the room's `Light` object lights its tiles: `palette` (baked into the room's colours) or `layer` (a light layer added over the room) (below) |
+| `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
 
 **Acoustics.** While the player is in a room with any of the last five properties, the
 room's echo is heard instead of the one the playing song brings (sound-format.md), over the
@@ -65,6 +67,30 @@ song's); `hall` 120, 150, 60, 0; `cave` 200, 120, 150, 0 (a far, dull echo); `wa
 200, 200 (everything muffled). The numbers change a preset's values or, without `acoustics`,
 make the room's own (the rest 0). On the GBA damping or muffle cost about a twentieth of a
 frame (`echo` alone costs what a song's echo does).
+
+**Light** ([../plans/lighting.md](../plans/lighting.md)). A room with a `Light` object (§5) is
+lit: its tiles, and the sprites in it, are shaded by the direction their surfaces face, from
+normal maps. A tileset gets its normals from its own property `normal`: an image beside it of
+the tileset's size (RGB: x right, y down, z toward the viewer, as usual for normal maps), or
+`auto` (made from the drawing: a bevel at the edges of each tile and its brightness); without
+one its tiles face the viewer. A lit room is an area of its own (its `area` is not read), and
+only layers without parallax are lit. The two modes:
+
+- `palette`: per pixel the cooker works out how much light reaches it at full intensity
+  (`max(0, N·L) × falloff`, L toward the light raised by its `height`, 0 where a straight line
+  to the light crosses a solid collision cell other than the pixel's own), in 8 levels, and
+  every (colour, level) pair becomes a palette entry; tiles are merged on those pairs. Each
+  frame an entry is `colour × min(1, ambient + intensity × light colour × level / 7)`. A tile
+  with more than 15 pairs gives its rarest ones the nearest level of their colour.
+- `layer`: the room's colours stay as drawn and are darkened to the ambient; a **light
+  layer** (a fourth layer, role 3 in `ROOM`, so the room may have at most 2 graphics layers of
+  its own) holds per pixel one of 15 normals (the cooker's clusters of the room's normals) and
+  is added over the room by alpha blending (EVA 16, EVB 16). Its cells inside the light's
+  radius are grouped into regions (at most 12, by the light's strength there first and its
+  direction second); a region's cells use one palette bank, whose 15 colours are, each frame,
+  `intensity × gain × light colour × max(0, N·F)` with F the region's direction scaled by its
+  falloff. Normal tiles are merged as usual; cells on a shadow's edge have their shadowed
+  pixels empty.
 
 The map's tile size MUST be a multiple of 8. Map width and height MUST be at least one screen
 of the profile (240×160 px on GBA).
@@ -389,6 +415,7 @@ Objects live in the `objects` layer.
 | `PushBlock` | rectangle | solid, pushed by the player as long as they push, falling where nothing holds it (§3.9): `push_frames` |
 | `PressurePlate` | rectangle (on a floor) | pressed by a push block on it or the player standing on it (§3.9): `gate` (the name of the Gate it opens) |
 | `Gate` | rectangle (whole cells) | solid while closed; slides up while a plate holds it open (§3.9) |
+| `Light` | point | the room's one light (§1, "Light"): `colour` (`#ffc080`), `radius` (px, 72, at most 255), `height` (px out of the wall toward the viewer, 12), `intensity` (1.0), `flicker` (0 to 1: how far the intensity wavers, 0), `flicker_speed` (frames per step of the flicker, 6), `gain` (the light layer's strength, 0.5), `shadows` (true) |
 
 Game classes (enemies, NPCs, lanterns) are written in Mondskript and used the same way.
 
@@ -432,10 +459,10 @@ little endian; offsets are from the start of the chunk.
           u16 collision_chunk, objects_chunk;
           u16 vram_layout_chunk;           // VLAY of the area
           u16 room_id;                     // string ID
-          u16 reserved;
+          u16 lite_chunk;                  // LITE of the room's light, 0: not lit
         }
         struct BmRoomLayer {               // 12 bytes, layer_count times
-          u8  role;                        // 0 background, 1 main, 2 foreground
+          u8  role;                        // 0 background, 1 main, 2 foreground, 3 light layer
           u8  priority;                    // 0 front .. 3 back: background 2, main 1, foreground 0
           u16 map_chunk;                   // TMAP
           fix parallax_x, parallax_y;
@@ -447,6 +474,19 @@ little endian; offsets are from the start of the chunk.
         u8  reserved; u16 reserved;
         u16 entries[width * height];       // row major. GBA: tile number in bits 0-9, 0x400 mirrored
                                            // left-right, 0x800 mirrored top-bottom, palette bank << 12
+'LITE'  u8  mode;                         // 1 palette, 2 layer
+        u8  count;                        // palette: levels (8); layer: normals (15)
+        u8  first_bank, bank_count;       // palette: 0 and the area's banks; layer: the regions' banks
+        s16 x, y;                         // the light, room pixels
+        u8  radius, height;               // px
+        u16 colour;                       // BGR555
+        u8  ambient, flicker;             // 0..255 = 0..1
+        u8  flicker_speed;                // frames per step
+        u8  intensity, gain;              // 64 = 1.0
+        u8  shadows; u16 0;               // 20 bytes
+        palette: u8 level[bank_count * 16]           // per palette entry, 0 = ambient only
+        layer:   { s8 x, y, z; u8 0; } normal[15]    // 127 = 1.0
+                 { s16 x, y, z; u16 0; } region[bank_count]   // falloff × direction, 4096 = 1.0
 'COLL'  u16 width, height;                 // in cells
         u8  cell_size; u8 pad[3];
         u8  cells[width * height][2];      // row major, §3.2
@@ -495,3 +535,5 @@ room IDs and song names.
 - 0.2.1: room properties `attach` and `Class.variable`; the `@room` object in `OBJS`.
 - 0.2.2: room properties `effect`, `effect_a`, `effect_b`, `title`.
 - 0.2.3: room acoustics: `acoustics`, `echo`, `echo_feedback`, `echo_damping`, `muffle`.
+- 0.2.4: light: the `Light` object, room properties `lighting` and `ambient`, tileset property
+  `normal`, `LITE` (in the place of `ROOM`'s reserved field), the light layer (role 3).

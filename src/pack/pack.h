@@ -44,6 +44,7 @@ enum {
   BM_CHUNK_WRLD = BM_FOURCC('W', 'R', 'L', 'D'),   // the world map (src/world/map.h)
   BM_CHUNK_MIGR = BM_FOURCC('M', 'I', 'G', 'R'),   // save layouts of earlier versions (src/world/state.h)
   BM_CHUNK_FIGR = BM_FOURCC('F', 'I', 'G', 'R'),   // a figure: sprites in layers (src/world/figure.h)
+  BM_CHUNK_LITE = BM_FOURCC('L', 'I', 'T', 'E'),   // the light of a room (src/world/light.h)
 };
 
 /// Storage layout (header flags bits 0-3), docs/spec/pack-format.md §2.6.

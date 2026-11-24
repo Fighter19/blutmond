@@ -68,6 +68,11 @@ def main(argv):
 
     def write(name, upper_layer):
         r = ET.Element("sprite", {"version": "1", "image": name + ".png"})
+        # Light (lighting.md): `auto` normals, emissive and shiny carry over (a drawn normal map
+        # would need splitting too, so it does not).
+        for key in ("normal", "emissive", "shiny"):
+            if root.get(key) and (key != "normal" or root.get(key) == "auto"):
+                r.set(key, root.get(key))
         present = colours(high if upper_layer else low)
         for child in root:
             if child.tag == "frame":

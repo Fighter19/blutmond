@@ -862,6 +862,33 @@ pieces share a matrix, the opening its own (the doors in object order, matrices 
 size, priority 1. Doors more than 64 px off screen are skipped. The panel's sprite, the direction and
 the ground are found when the room's sprites are bound.
 
+**The light** (`src/world/light.h`, [room-format.md](room-format.md) §1 "Light"): when a room
+is shown its `LITE` is read (none: not lit; the sprite banks then get their own colours back
+if the last room was lit). Every frame after the effects:
+
+- The intensity: `intensity × (1 + flicker × n)`, n smoothed value noise (-1..1) from a hash of
+  `frame / flicker_speed` plus a second octave at twice the speed and a quarter of the weight.
+  A pure function of the frame counter: nothing of the light is state.
+- `palette`: every background bank with lit entries (all of them on entering) gets
+  `colour × min(1, ambient + intensity × light colour × level / (levels - 1))`, per channel in
+  sixteenths of 256, rounded.
+- `layer`: on entering the room's banks are darkened to the ambient; every frame each region's
+  bank gets `intensity × gain × light colour × max(0, N·F)` per normal. The light layer is
+  shown and blended (first targets the UI layer and the light layer, second the rest, EVA 16,
+  EVB 16: the UI's boxes are then added at full weight too) while no screen is open, no room
+  effect and no teleport; else it is hidden.
+- Sprites: every sprite bank (0-12) in use is lit for one figure: the player's banks for the
+  player (its middle 14 px above its feet), another bank for the nearest actor drawn with its
+  sheet (8 px above its anchor), none: ambient only. The light reaching it is
+  `(1 - d²/r²)²`, 0 beyond the radius or when a line from it to the light crosses a solid
+  collision cell; each slot is `colour × min(1, ambient + light × max(0, N·L))` with L toward
+  the light raised by its height, emissive slots as drawn, shiny slots plus `(N·H)^8` of the
+  light's colour (H halfway between L and the viewer). A sheet without normals faces the
+  viewer. A bank out of the light is written once while it stays out.
+- The multiboot images have no light (their packs have no lit room; one pushed to them is shown
+  unlit). On the GBA a torch hall's light costs about 37,000 cycles a frame (`bm_light_cycles`:
+  the room's banks, the sprites', the blend).
+
 **Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has
 it and the player has none (the menu does not open then). The test level's mirror teleports to
 the debug lobby.

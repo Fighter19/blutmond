@@ -40,6 +40,9 @@ void bmHalVideoInit(void);
 /// Writes one palette entry (BGR555).
 void bmHalPaletteWrite(uint16_t index, uint16_t bgr555);
 
+/// Writes `count` palette entries from `index` on (BGR555; entries past the palette are left out).
+void bmHalPaletteWriteBlock(uint16_t index, const uint16_t *pColours, uint16_t count);
+
 /// Reads one palette entry (BGR555).
 uint16_t bmHalPaletteRead(uint16_t index);
 

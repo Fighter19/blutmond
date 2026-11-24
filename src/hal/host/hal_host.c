@@ -66,6 +66,12 @@ void bmHalPaletteWrite(uint16_t index, uint16_t bgr555)
   }
 }
 
+void bmHalPaletteWriteBlock(uint16_t index, const uint16_t *pColours, uint16_t count)
+{
+  ensureInit();
+  for (uint16_t i = 0; i < count && index + i < BM_HAL_PALETTE_SIZE; i++) s_ppu.palette[index + i] = pColours[i] & 0x7FFF;
+}
+
 uint16_t bmHalPaletteRead(uint16_t index)
 {
   ensureInit();
