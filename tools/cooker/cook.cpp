@@ -418,6 +418,9 @@ struct AreaWork
   std::map<uint32_t, uint16_t> litIndex;
   // Tiles stored as they are (palette indices), after the area's: the light layer's.
   std::vector<std::array<uint8_t, 64>> rawTiles;
+  // Mode `palette`: how far the levels are from each pixel's true light (for the report).
+  double litError = 0;
+  size_t litPixels = 0;
 
   uint16_t litColour(uint16_t colour, int level)
   {
@@ -592,8 +595,10 @@ void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const 
                     continue;
                   }
                   float tv = room.solid.shadowed(fx, fy, lightOf) ? 0.0f : light::term(lightOf, fx, fy, n);
-                  int level = int(std::lround(tv * float(light::LEVELS - 1)));
-                  c = area.litColour(c, std::clamp(level, 0, light::LEVELS - 1));
+                  int level = std::clamp(int(std::lround(tv * float(light::LEVELS - 1))), 0, light::LEVELS - 1);
+                  area.litError += std::abs(double(tv) - double(level) / double(light::LEVELS - 1));
+                  area.litPixels++;
+                  c = area.litColour(c, level);
                 }
               if (lightOf.mode == light::Mode::Palette) fitLitTile(t, area);
             }
@@ -992,7 +997,8 @@ Bytes paletteLightChunk(const RoomWork &room, const AreaWork &area, Report &repo
       b.u8(level);
     }
   report.info("lighting", room.map->path, "baked into the palettes: " + std::to_string(area.lit.size()) + " (colour, light level) pairs, " +
-              std::to_string(area.uniqueTiles.size()) + " tiles, " + std::to_string(area.banks.size()) + " banks");
+              std::to_string(area.uniqueTiles.size()) + " tiles, " + std::to_string(area.banks.size()) + " banks, mean error " +
+              std::to_string(area.litPixels ? area.litError / double(area.litPixels) : 0.0));
   (void)lit;
   return b;
 }
@@ -1496,7 +1502,8 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
   m.u8(0);
   m.u16(0);
   std::map<std::array<uint8_t, 64>, uint32_t> tileOf;
-  size_t edgeTiles = 0;
+  size_t edgeTiles = 0, normalPixels = 0;
+  double normalError = 0;
   for (int cy = 0; cy < h8; cy++)
     for (int cx = 0; cx < w8; cx++)
     {
@@ -1519,7 +1526,11 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
             shadowEdge = true;
             continue;
           }
-          t[size_t(y * 8 + x)] = uint8_t(1 + light::nearest(normals, n));
+          int k = light::nearest(normals, n);
+          t[size_t(y * 8 + x)] = uint8_t(1 + k);
+          normalError += std::abs(light::term(l, float(px) + 0.5f, float(py) + 0.5f, n) -
+                                  std::max(0.0f, light::dot(normals[size_t(k)], centres[size_t(region)])));
+          normalPixels++;
           any = true;
         }
       if (!any)
@@ -1560,7 +1571,7 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
   report.info("lighting", room.map->path, "light layer: " + std::to_string(area.rawTiles.size()) + " normal tiles (" +
               std::to_string(edgeTiles) + " cells on a shadow's edge), " + std::to_string(normals.size()) + " normals, " +
               std::to_string(centres.size()) + " region banks from bank " + std::to_string(firstBank) + ", " +
-              std::to_string(litCells.size()) + " lit cells");
+              std::to_string(litCells.size()) + " lit cells, mean error " + std::to_string(normalPixels ? normalError / double(normalPixels) : 0.0));
   return {m, lite};
 }
 
