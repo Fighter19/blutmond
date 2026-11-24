@@ -1150,33 +1150,89 @@ std::pair<Bytes, Bytes> buildSharedLayer(const RoomWork &room, AreaWork &area, R
   std::vector<uint16_t> entries(size_t(w8) * h8, 0);
   std::map<std::array<uint8_t, 64>, uint32_t> tileOf;
   float error = 0;
-  size_t measured = 0, edgeCells = 0;
+  size_t measured = 0, edgeCells = 0, ownCells = 0;
   for (size_t i = 0; i < litCells.size(); i++)
   {
     int cx = litCells[i] % w8, cy = litCells[i] / w8;
-    int bank = light::nearest(strengths, cellFall[i]);
-    float scale = strengths[size_t(bank)].x * strengths[size_t(bank)].x;
-    std::array<uint8_t, 64> t{};
-    bool any = false, edge = false;
+    // Two ways for the cell: the shared tile (the pattern for its slope, its strength the
+    // bank's), or, where the light changes too fast for that across the cell (near the light),
+    // a tile of its own: each pixel's own light on the same ladder, in the bank that fits it
+    // best: where the light changes across the cell by more than the tolerance (of full light),
+    // which is near the light, and the cell's own tile is nearer to the truth.
+    struct Px { int p; float truth; bool shadow; float pattern; };
+    std::vector<Px> px;
+    bool edge = false;
     for (int p = 0; p < 64; p++)
     {
       light::Vec3 n;
-      int px = cx * 8 + p % 8, py = cy * 8 + p / 8;
-      if (state(px, py, &n) != 2) continue;
-      float fx = float(px) + 0.5f, fy = float(py) + 0.5f;
+      int x = cx * 8 + p % 8, y = cy * 8 + p / 8;
+      if (state(x, y, &n) != 2) continue;
+      float fx = float(x) + 0.5f, fy = float(y) + 0.5f;
       float truth = light::term(l, fx, fy, n);
       bool shadow = truth > 0 && room.solid.shadowed(fx, fy, l);
       edge |= shadow;
-      float pattern = patternOf(i, n);
-      // The nearest step; nearer to no light at all: none.
+      px.push_back({p, shadow ? 0.0f : truth, shadow, patternOf(i, n)});
+    }
+    // The nearest step of `v` (0: nearer to no light at all).
+    auto step = [&](float v) {
       int k = 0;
-      float bestD = pattern;
-      for (size_t j = 0; j < ladder.size() && !shadow; j++)
-        if (std::abs(ladder[j] - pattern) < bestD) bestD = std::abs(ladder[j] - pattern), k = int(j) + 1;
-      error += std::abs((shadow ? 0 : truth) - (k ? scale * ladder[size_t(k - 1)] : 0.0f));
+      float bestD = v;
+      for (size_t j = 0; j < ladder.size(); j++)
+        if (std::abs(ladder[j] - v) < bestD) bestD = std::abs(ladder[j] - v), k = int(j) + 1;
+      return k;
+    };
+    auto valueOf = [&](int k, float scale) { return k ? scale * ladder[size_t(k - 1)] : 0.0f; };
+    int bank = light::nearest(strengths, cellFall[i]);
+    float scale = strengths[size_t(bank)].x * strengths[size_t(bank)].x;
+    std::array<uint8_t, 64> t{};
+    float sharedError = 0;
+    for (const Px &q : px)
+    {
+      int k = q.shadow ? 0 : step(q.pattern);
+      t[size_t(q.p)] = uint8_t(k);
+        sharedError += std::abs(q.truth - valueOf(k, scale));
+    }
+    // How much a flat surface's light changes across the cell (its corners): much only near
+    // the light.
+    float lo = 1e30f, hi = 0;
+    for (int corner = 0; corner < 4; corner++)
+    {
+      float qx = float(cx * 8 + (corner & 1) * 8), qy = float(cy * 8 + (corner >> 1) * 8);
+      float v = light::term(l, qx, qy, light::Vec3{0, 0, 1});
+      lo = std::min(lo, v);
+      hi = std::max(hi, v);
+    }
+    if (!px.empty() && hi - lo > l.tolerance)
+    {
+      int bestBank = bank;
+      float bestError = sharedError;
+      std::array<uint8_t, 64> bestTile = t;
+      for (size_t b = 0; b < strengths.size(); b++)
+      {
+        float sc = strengths[b].x * strengths[b].x, e = 0;
+        std::array<uint8_t, 64> u{};
+        for (const Px &q : px)
+        {
+          int k = q.truth > 0 && sc > 0 ? step(q.truth / sc) : 0;
+          u[size_t(q.p)] = uint8_t(k);
+          e += std::abs(q.truth - valueOf(k, sc));
+        }
+        if (e < bestError) bestError = e, bestBank = int(b), bestTile = u;
+      }
+      if (bestBank != bank || bestTile != t)
+      {
+        ownCells++;
+        bank = bestBank;
+        scale = strengths[size_t(bank)].x * strengths[size_t(bank)].x;
+        t = bestTile;
+      }
+    }
+    bool any = false;
+    for (const Px &q : px)
+    {
+      error += std::abs(q.truth - valueOf(t[size_t(q.p)], scale));
       measured++;
-      t[size_t(p)] = uint8_t(k);
-      any |= k != 0;
+      any |= t[size_t(q.p)] != 0;
     }
     if (!any) continue;
     edgeCells += edge;
@@ -1199,7 +1255,8 @@ std::pair<Bytes, Bytes> buildSharedLayer(const RoomWork &room, AreaWork &area, R
     for (size_t k = 0; k < 15; k++)
       lite.u16(uint32_t(k < ladder.size() ? std::clamp(int(std::lround(st.x * st.x * ladder[k] * 4096)), 0, 32767) : 0));
   report.info("lighting", room.map->path, "light layer (shared): " + std::to_string(tileOf.size()) + " light tiles (" + std::to_string(edgeCells) +
-              " cells on a shadow's edge), " + std::to_string(dirs.size()) + " light directions, " + std::to_string(strengths.size()) +
+              " cells on a shadow's edge, " + std::to_string(ownCells) + " near the light with their own light), " +
+              std::to_string(dirs.size()) + " light directions, " + std::to_string(strengths.size()) +
               " banks from bank " + std::to_string(firstBank) + ", " + std::to_string(litCells.size()) + " lit cells, mean error " +
               std::to_string(measured ? error / float(measured) : 0.0f));
   return {m, lite};

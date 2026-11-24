@@ -60,6 +60,7 @@ Map-level custom properties:
 | `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
 | `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light) or `normals` (directions) (below) |
 | `light_directions` | int | 8 | with `light_index = shared`: how many light directions its tiles are made for |
+| `light_tolerance` | float | 0.1 | with `light_index = shared`: a cell across which a flat surface's light changes by more than this (of full light) gets a tile of its own (near the light) |
 
 **Acoustics.** While the player is in a room with any of the last five properties, the
 room's echo is heard instead of the one the playing song brings (sound-format.md), over the
@@ -99,7 +100,10 @@ only layers without parallax are lit. The two modes:
     brightness). The patterns of all lit pixels are fitted to one ladder of 15 steps, the
     same in every bank; a bank's colours are its strength × the ladder. So the same drawing
     under the same slope gives the same tile, whatever its strength: a repeated brick is one
-    tile for each slope it is lit from. Cells on a shadow's edge have tiles of their own.
+    tile for each slope it is lit from. Cells on a shadow's edge have tiles of their own,
+    and so have the cells near the light, where its strength changes fast across a cell (by
+    more than `light_tolerance` between the corners): there each pixel takes the step of its
+    own light on the same ladder, in the bank that fits the cell best.
   - `fitted`: a level of light. The cooker works out each pixel's light as for `palette` (its
     normal, distance and shadow), groups the cells by how lit they are (mean and brightest
     pixel) into the banks, and fits each bank's 15 levels to its pixels (1D k-means); a pixel

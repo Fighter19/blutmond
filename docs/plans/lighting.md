@@ -20,20 +20,24 @@ cell. `shared` quantizes it so that tiles repeat: the light is split into the ce
 against a flat surface, from its normal and the light's slope across the wall, one of 8 slopes
 for the room, fitted to the cells by the error they cause), the patterns on one ladder of 15
 steps fitted to all the room's pixels. A brick under the same slope is the same tile at any
-distance; only cells on a shadow's edge are tiles of their own. Mean error against each
-pixel's true light: shared 0.026, fitted 0.0066 (of full light).
+distance. The distance is quantized per cell (one strength for its 8x8 pixels, one of 14):
+far from the light that hardly shows, but near it the light changes by half across two
+cells, so there (where it changes by more than `light_tolerance` across a cell: 72 cells,
+about 40 px around the torch) a cell has a tile of its own, each pixel its own light on the
+same ladder. Cells on a shadow's edge have their own tiles too. Mean error against each
+pixel's true light: shared 0.021, fitted 0.0066 (of full light).
 
 Compared in the test level (radius 160):
 
 | | palettes | light layer, shared | light layer, fitted | light layer, normals |
 |---|---|---|---|---|
-| look | the light multiplies each colour; smooth | added; smooth, the bevels a little coarser | added; smooth | added; steps from region to region |
-| tiles | 676 (the room's own, lit) | 19 room + 177 light (72 without shadows) | 19 + 644 | 19 + 40 |
+| look | the light multiplies each colour; smooth | added; smooth, the bevels and the falloff far from the light a little coarser | added; smooth | added; steps from region to region |
+| tiles | 676 (the room's own, lit) | 19 room + 238 light (72 without shadows and the light's surroundings) | 19 + 644 | 19 + 40 |
 | banks | 8 | 1 + 14 | 1 + 14 | 1 + 14 |
 | layers | the room's 3 | 2 + the light layer | 2 + the light layer | 2 + the light layer |
-| tile memory (32 KB: char blocks 0-1, 1024 tiles) | 676 tiles, 21,632 B (66 %) | 196 tiles, 6,272 B (19 %) | 663 tiles, 21,216 B (65 %) | 59 tiles, 1,888 B (6 %) |
+| tile memory (32 KB: char blocks 0-1, 1024 tiles) | 676 tiles, 21,632 B (66 %) | 257 tiles, 8,224 B (25 %) | 663 tiles, 21,216 B (65 %) | 59 tiles, 1,888 B (6 %) |
 | map memory (12 KB: screen blocks 26-31, 4 KB a layer) | 2 layers, 8 KB (67 %) | 3 layers, 12 KB (100 %) | 12 KB (100 %) | 12 KB (100 %) |
-| the room's video memory (44 KB) | 29,824 B (68 %) | 18,560 B (42 %) | 33,504 B (76 %) | 14,176 B (32 %) |
+| the room's video memory (44 KB) | 29,824 B (68 %) | 20,512 B (47 %) | 33,504 B (76 %) | 14,176 B (32 %) |
 | background palette (15 banks; the 16th is the UI's) | 8 (53 %) | 15 (100 %) | 15 (100 %) | 15 (100 %) |
 
 The same hall unlit takes 19 tiles (608 B) and 2 layers' maps (8 KB): 8,800 B, 20 % of the

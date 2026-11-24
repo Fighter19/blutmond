@@ -50,6 +50,7 @@ struct Light
   enum class Index { Shared, Fitted, Normals } index = Index::Shared;
   bool fitted = true;           // Shared or Fitted: the values are levels of light
   int directions = 8;           // Shared: how many light directions (room property `light_directions`)
+  float tolerance = 0.1f;       // Shared: a cell across which the light changes more (of full light) gets a tile of its own
 };
 
 /// The room's light: its one `Light` object and the map's `lighting` and `ambient`. Mode None
