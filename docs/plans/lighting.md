@@ -31,6 +31,15 @@ Compared in the test level (radius 160):
 | tiles | 676 (the room's own, lit) | 19 room + 177 light (72 without shadows) | 19 + 644 | 19 + 40 |
 | banks | 8 | 1 + 14 | 1 + 14 | 1 + 14 |
 | layers | the room's 3 | 2 + the light layer | 2 + the light layer | 2 + the light layer |
+| tile memory (32 KB: char blocks 0-1, 1024 tiles) | 676 tiles, 21,632 B (66 %) | 196 tiles, 6,272 B (19 %) | 663 tiles, 21,216 B (65 %) | 59 tiles, 1,888 B (6 %) |
+| map memory (12 KB: screen blocks 26-31, 4 KB a layer) | 2 layers, 8 KB (67 %) | 3 layers, 12 KB (100 %) | 12 KB (100 %) | 12 KB (100 %) |
+| the room's video memory (44 KB) | 29,824 B (68 %) | 18,560 B (42 %) | 33,504 B (76 %) | 14,176 B (32 %) |
+| background palette (15 banks; the 16th is the UI's) | 8 (53 %) | 15 (100 %) | 15 (100 %) | 15 (100 %) |
+
+The same hall unlit takes 19 tiles (608 B) and 2 layers' maps (8 KB): 8,800 B, 20 % of the
+room's video memory, and 1 bank. The UI's tiles (char block 2) and map (screen block 25) and
+sprite memory (32 KB) are the same in every hall: the sprites' normals only regroup their
+colours, the player's and the bat's sheets keep their tiles.
 
 Where it differs from the plan below:
 
