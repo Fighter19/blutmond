@@ -56,12 +56,15 @@ for each screen effect, the torch halls, and a teleporter back to the first room
 starts in that room (`--room debug_lobby`, `--room torch_hall`), `--debug-item` puts the mirror
 in the bag at the start.
 
-**The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): four rooms alike
+**The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): six rooms alike
 but for how their flickering torch lights the walls, side by side for comparing, each behind
 the east door of the one before. "Torch hall: palettes" has the light baked into its colours;
 the others add a light layer over the room: "Torch hall: light layer" one whose tiles repeat
 (a brick's pattern for one of 8 light directions, the strength in the palette bank), "Torch
-hall: fitted" one fitted to each pixel's light, "Torch hall: normals" one of normals. The player and the
+hall: fitted" one fitted to each pixel's light, "Torch hall: normals" one of normals,
+"Torch hall: streamed" one whose light is streamed into its palette line by line (H-blank DMA)
+and "Torch hall: hybrid" one streamed only near the torch. The last two are in the game's pack
+(PC, browser, cartridge), not in the multiboot one. The player and the
 bat are lit the same way in both; behind the pillar they are in its shadow.
 `tools/make_torch_hall.py` draws them. `test_game` writes the six pictures it compares into
 `build/test-output/torch_halls.ppm` (the halls left to right).
