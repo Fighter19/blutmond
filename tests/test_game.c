@@ -3018,11 +3018,11 @@ static void testTheGrapple(void)
 }
 
 
-// The torch halls (docs/plans/lighting.md §7): the same room lit five ways. In both the player is
+// The torch halls (docs/plans/lighting.md §7): the same room lit six ways. In both the player is
 // brighter right under the torch than left of it, and behind the pillar, as far from the torch
 // as on the left, only the ambient light reaches it (the pillar's shadow). The flicker is a pure
 // function of the frame. With an output directory the six pictures go there side by side
-// (torch_halls.ppm: palettes, light layer shared, fitted, of normals, streamed, left to right).
+// (torch_halls.ppm: palettes, light layer shared, fitted, of normals, streamed, hybrid, left to right).
 static const char *s_outDir;
 
 static int32_t bankBrightness(uint8_t bank)
@@ -3039,11 +3039,11 @@ static int32_t bankBrightness(uint8_t bank)
 
 static void testTheTorchHalls(void)
 {
-  static const char *const halls[5] = {"torch_hall", "torch_hall_layer", "torch_hall_fitted", "torch_hall_normals", "torch_hall_stream"};
+  static const char *const halls[6] = {"torch_hall", "torch_hall_layer", "torch_hall_fitted", "torch_hall_normals", "torch_hall_stream", "torch_hall_hybrid"};
   static const int32_t xs[3] = {96, 184, 272};   // left of the torch, under it, behind the pillar
-  static uint16_t shots[5][3][BM_PPU_WIDTH * BM_PPU_HEIGHT];
-  int32_t bright[5][3];
-  for (int h = 0; h < 5; h++)
+  static uint16_t shots[6][3][BM_PPU_WIDTH * BM_PPU_HEIGHT];
+  int32_t bright[6][3];
+  for (int h = 0; h < 6; h++)
   {
     startWith(s_data, s_size, halls[h]);
     TEST_ASSERT(s_game.light.mode == (h == 0 ? BM_LIGHT_PALETTE : BM_LIGHT_LAYER));
@@ -3070,13 +3070,23 @@ static void testTheTorchHalls(void)
     TEST_ASSERT(bright[h][1] > bright[h][0] && bright[h][0] > bright[h][2]);
     const BmPpuState *ppu = bmHalHostGetPpu();
     TEST_ASSERT(s_game.light.fitted == (h == 1 || h == 2));
-    TEST_ASSERT(s_game.light.stream == (h == 4));
+    TEST_ASSERT(s_game.light.stream == (h >= 4) && s_game.light.hybrid == (h == 5));
     if (h >= 1 && h <= 3)
     {
       // The light layer is shown and added over the room: first target with the UI, EVA = EVB = 16.
       uint8_t bg = s_game.light.layerBg;
       TEST_ASSERT(bg < 3 && (bmPpuReg(ppu, BM_PPU_DISPCNT) & BM_PPU_DISPCNT_BG(bg)) != 0);
       TEST_ASSERT((bmPpuReg(ppu, BM_PPU_BLDCNT) & (1u << bg)) != 0 && bmPpuReg(ppu, BM_PPU_BLDALPHA) == (16 | 16 << 8));
+    }
+    if (h == 5)
+    {
+      // Hybrid: two banks streamed, the rest fixed; the blend weight follows a line table.
+      uint8_t bg = s_game.light.layerBg;
+      TEST_ASSERT(s_game.light.streamStride == 32 && s_game.light.fixedBanks >= 1);
+      TEST_ASSERT(ppu->pStreamRows != NULL && ppu->streamCount == 32);
+      bool weights = false;
+      for (int t = 0; t < BM_PPU_LINE_TABLES; t++) weights |= ppu->lineTables[t].reg == BM_PPU_BLDALPHA;
+      TEST_ASSERT(weights && (bmPpuReg(ppu, BM_PPU_BLDCNT) & (1u << bg)) != 0);
     }
     if (h == 4)
     {
@@ -3089,9 +3099,10 @@ static void testTheTorchHalls(void)
       TEST_ASSERT((bldcnt & (1u << bg)) != 0 && (bldcnt & 8u) == 0 && (alpha >> 8) == 16 && (alpha & 31) >= 6 && (alpha & 31) <= 16);
     }
   }
-  // The halls light the player alike: the sprites are lit the same way in all five.
+  // The halls light the player alike: the sprites are lit the same way in all six.
   for (int p = 0; p < 3; p++)
-    TEST_ASSERT(bright[0][p] == bright[1][p] && bright[0][p] == bright[2][p] && bright[0][p] == bright[3][p] && bright[0][p] == bright[4][p]);
+    TEST_ASSERT(bright[0][p] == bright[1][p] && bright[0][p] == bright[2][p] && bright[0][p] == bright[3][p] && bright[0][p] == bright[4][p] &&
+                bright[0][p] == bright[5][p]);
   // Out of the halls the player's colours are its own again.
   startWith(s_data, s_size, "torch_hall");
   int32_t lit = bankBrightness(0);
@@ -3105,7 +3116,7 @@ static void testTheTorchHalls(void)
   FILE *f = fopen(path, "wb");
   TEST_ASSERT(f != NULL);
   if (f == NULL) return;
-  const int gap = 4, w = BM_PPU_WIDTH * 5 + gap * 4, hgt = BM_PPU_HEIGHT * 3 + gap * 2;
+  const int gap = 4, w = BM_PPU_WIDTH * 6 + gap * 5, hgt = BM_PPU_HEIGHT * 3 + gap * 2;
   fprintf(f, "P6\n%d %d\n255\n", w, hgt);
   for (int y = 0; y < hgt; y++)
     for (int x = 0; x < w; x++)

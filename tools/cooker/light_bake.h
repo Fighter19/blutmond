@@ -58,7 +58,10 @@ struct Light
   // fitted its own light, levels fitted per bank; normals one of 15 directions.
   // stream: normals in the tiles, the light per band and line streamed into the palette (H-blank
   // DMA, cartridge images only).
-  enum class Index { Shared, Fitted, Normals, Stream } index = Index::Shared;
+  // hybrid: as stream, but only the banks near the light streamed; the others fixed, times a
+  // weight per line (the light layer's blend weight) for the vertical falloff.
+  enum class Index { Shared, Fitted, Normals, Stream, Hybrid } index = Index::Shared;
+  int streamBanks = 2;          // Hybrid: banks streamed near the light (room property `light_stream_banks`)
   int streamNormals = 7;        // Stream: 7 (two bands a bank) or 15 (room property `light_normals`)
   int bandWidth = 24;           // Stream: a band's width in pixels (room property `light_band`)
   bool fitted = true;           // Shared or Fitted: the values are levels of light

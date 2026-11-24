@@ -1,6 +1,6 @@
 # Plan: a light layer and lit palettes (normal-mapped light on the GBA)
 
-Status: four ways of lighting the tiles built side by side, and lit sprites
+Status: six ways of lighting the tiles built side by side (four, then two streamed), and lit sprites
 ([../spec/room-format.md](../spec/room-format.md) §1 "Light", §7 `LITE`;
 [../spec/sprite-format.md](../spec/sprite-format.md) version 5;
 [../spec/runtime-core.md](../spec/runtime-core.md) §12 "The light"). A room chooses with its
@@ -9,7 +9,8 @@ this plan) or `layer` (the light layer of section 3), whose values are, by `ligh
 `shared` (the default), `fitted` or `normals` (section 3 as planned). Only rooms with a
 `Light` object are lit; every other room is as before. The test level's debug lobby has a
 fifth door into the torch halls, one behind the other: "palettes", "light layer" (shared),
-"fitted", "normals" (`tools/make_torch_hall.py`; `test_game` writes all four side by side into
+"fitted", "normals", and in the PC, browser and pushed cartridge packs "streamed" and "hybrid"
+(`tools/make_torch_hall.py`; `test_game` writes all six side by side into
 `test-output/torch_halls.ppm`).
 
 **The light layer's values.** The flicker only scales the light, so a pixel needs one number,
@@ -55,8 +56,21 @@ the other light layers: 19 room + 72 light tiles (15,200 B of video memory, 34 %
 banks, 43 KB of rows in the pack, mean error 0.025 (normals 0.061, shared 0.020). The light's
 code drops from 32,400 to 3,000 cycles a frame, but the DMA stalls the CPU for about 48,000
 (112 colours a line, about 3 cycles each from ROM): a game frame takes 172 of its 228 lines
-against 157 with the other light layers. Fewer bands or 7 normals instead of 15 are the
-ways to cheaper; streaming only the lines the light reaches is the next.
+against 157 with the other light layers (peak lines; the mean of 300 frames in the same build
+as the hybrid below: 176 against 133).
+
+**The hybrid** (`light_index = hybrid`, the sixth torch hall, same platforms): the light split
+into across (X) and down (Y). Only the 2 banks (4 bands) around the torch are streamed, where
+the light changes fastest both ways; the other 5 banks hold fixed colours for the light's own
+row, and the light layer's blend weight follows the room row line by line (BLDALPHA from a
+line table, H-blank DMA channel 0) with the fixed bands' vertical falloff times the flicker.
+The streamed rows are divided by that weight, so near the torch it is as exact as `stream`.
+Same tiles and banks as `stream` (19 + 72, 1 + 7), 12 KB of rows instead of 43 KB, 32
+colours a line instead of 112, mean error 0.032 (stream 0.025, normals 0.061): away from the
+torch a band is one colour per line for its whole width, so the band edges show a little
+more. Measured in mGBA, mean lines of a game frame over 300 frames: normals 133, hybrid 150,
+stream 176. The weights are built again only when the camera's row or the flicker changes,
+with one division a frame (160 of them cost 60,000 cycles).
 
 **Two torches** (measured in two-screen halls, torches 240 px apart, pillar between them; the
 comparison page has the pictures): up to 4 lights per room, flickering together, so every

@@ -1127,6 +1127,44 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
       if (bandOfColumn[size_t(c)] == b) { if (first < 0) first = c; last = c; }
     bandX[size_t(b)] = first < 0 ? x0 : x0 + float(first + last) * 4.0f + 4.0f;
   }
+  // Each band's place (slot) in the banks: slot / perBank its bank, slot % perBank its half.
+  // Hybrid (light_index = hybrid): the bands nearest the light take the first slots, streamed;
+  // the others follow, fixed; with stream every band is streamed.
+  const bool hybrid = l.index == light::Light::Index::Hybrid;
+  const light::Source first = l.sources.empty() ? light::Source{l.x, l.y} : l.sources[0];
+  int nearBands = hybrid ? std::min(bands, l.streamBanks * perBank) : bands;
+  int nearFrom = 0;
+  if (hybrid && nearBands > 0)
+  {
+    int middle = 0;
+    for (int b = 1; b < bands; b++)
+      if (std::abs(bandX[size_t(b)] - first.x) < std::abs(bandX[size_t(middle)] - first.x)) middle = b;
+    nearFrom = std::clamp(middle - (nearBands - 1) / 2, 0, bands - nearBands);
+  }
+  std::vector<int> slotOfBand(size_t(bands), 0);
+  {
+    int next = 0;
+    for (int b = nearFrom; b < nearFrom + nearBands; b++) slotOfBand[size_t(b)] = next++;
+    next = (next + perBank - 1) / perBank * perBank;   // the fixed bands start at a bank of their own
+    for (int b = 0; b < bands; b++)
+      if (b < nearFrom || b >= nearFrom + nearBands) slotOfBand[size_t(b)] = next++;
+    banks = (next + perBank - 1) / perBank;
+    if (firstBank + banks > 15) report.error("lighting", room.map->path, "the light layer's bands need more banks than are left");
+  }
+  int nearBanks = (nearBands + perBank - 1) / perBank;
+  // Hybrid: the vertical falloff, how lit a flat surface under the light is on each row against
+  // the light's own row (the light layer's blend weight per line).
+  // Measured over the fixed bands (the streamed ones near the light are exact anyway), so it
+  // falls as the light does where it is used: much slower than right under the light.
+  auto flatAt = [&](float x, float y) { return light::term(l, x, y, light::Vec3{0, 0, 1}); };
+  auto fixedSum = [&](float y) {
+    float sum = 0;
+    for (int b = 0; b < bands; b++)
+      if (b < nearFrom || b >= nearFrom + nearBands) sum += flatAt(bandX[size_t(b)], y);
+    return sum;
+  };
+  float flatMid = std::max(fixedSum(first.y), 1e-6f);
+  auto vertical = [&](float y) { return std::clamp(fixedSum(y) / flatMid, 0.0f, 1.0f); };
 
   Bytes m;
   m.u16(uint32_t(w8));
@@ -1178,9 +1216,12 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
           continue;
         }
         int k = light::nearest(normals, n);
-        t[size_t(p)] = uint8_t(1 + k + (perBank == 2 && (band & 1) ? 8 : 0));
-        light::Vec3 F = light::scaledDirection(l, bandX[size_t(band)], float(py) + 0.5f);
-        streamError += std::abs(truth - std::max(0.0f, light::dot(normals[size_t(k)], F)));
+        int slot = slotOfBand[size_t(band)];
+        t[size_t(p)] = uint8_t(1 + k + (perBank == 2 && (slot & 1) ? 8 : 0));
+        bool streamed = band >= nearFrom && band < nearFrom + nearBands;
+        light::Vec3 F = light::scaledDirection(l, bandX[size_t(band)], streamed ? float(py) + 0.5f : first.y);
+        float value = std::max(0.0f, light::dot(normals[size_t(k)], F)) * (streamed ? 1.0f : vertical(float(py) + 0.5f));
+        streamError += std::abs(truth - value);
         streamPixels++;
         any = true;
       }
@@ -1200,41 +1241,58 @@ std::pair<Bytes, Bytes> buildStreamLayer(const RoomWork &room, AreaWork &area, R
         area.rawTiles.push_back(t);
         tileOf[t] = tile;
       }
-      m.u16(tile | uint32_t(firstBank + band / perBank) << 12);
+      m.u16(tile | uint32_t(firstBank + slotOfBand[size_t(band)] / perBank) << 12);
     }
 
-  // The rows: one per room pixel row and one more (a screen at the bottom reads one past it).
+  // The rows: one per room pixel row and one more (a screen at the bottom reads one past it),
+  // of the streamed banks. Hybrid: divided by the row's weight, which the light layer's blend
+  // multiplies them with again.
   float most = l.intensity * (1.0f + l.flicker) * l.gain;
   float lc[3] = {float(l.colour & 31), float((l.colour >> 5) & 31), float((l.colour >> 10) & 31)};
-  int rows = hpx + 1, stride = banks * 16;
+  int rows = hpx + 1, stride = nearBanks * 16;
+  // The colours of a bank (by its slots) for a row (`y`) and a scale.
+  auto bankColours = [&](Bytes &out, int bank, float y, float scale, bool streamedRow) {
+    for (int e = 0; e < 16; e++)
+    {
+      int half = perBank == 2 ? e / 8 : 0, k = perBank == 2 ? e % 8 : e;
+      int slot = bank * perBank + half, band = -1;
+      for (int b = 0; b < bands; b++)
+        if (slotOfBand[size_t(b)] == slot) band = b;
+      uint16_t c = 0;
+      if (k != 0 && k - 1 < int(normals.size()) && band >= 0)
+      {
+        light::Vec3 F = light::scaledDirection(l, bandX[size_t(band)], streamedRow ? y : first.y);
+        float v = std::max(0.0f, light::dot(normals[size_t(k - 1)], F)) * most * scale;
+        auto ch = [&](int i) { return uint32_t(std::clamp(int(std::lround(lc[i] * v)), 0, 31)); };
+        c = uint16_t(ch(0) | ch(1) << 5 | ch(2) << 10);
+      }
+      out.u16(c);
+    }
+  };
   Bytes table;
   for (int y = 0; y < rows; y++)
   {
     float fy = float(std::min(y, hpx - 1)) + 0.5f;
-    for (int b = 0; b < banks; b++)
-      for (int e = 0; e < 16; e++)
-      {
-        int half = perBank == 2 ? e / 8 : 0, k = perBank == 2 ? e % 8 : e;
-        int band = b * perBank + half;
-        uint16_t c = 0;
-        if (k != 0 && k - 1 < int(normals.size()) && band < bands)
-        {
-          light::Vec3 F = light::scaledDirection(l, bandX[size_t(band)], fy);
-          float v = std::max(0.0f, light::dot(normals[size_t(k - 1)], F)) * most;
-          auto ch = [&](int i) { return uint32_t(std::clamp(int(std::lround(lc[i] * v)), 0, 31)); };
-          c = uint16_t(ch(0) | ch(1) << 5 | ch(2) << 10);
-        }
-        table.u16(c);
-      }
+    float scale = hybrid ? 1.0f / std::max(vertical(fy), 1.0f / 16.0f) : 1.0f;
+    for (int b = 0; b < nearBanks; b++) bankColours(table, b, fy, scale, true);
+  }
+  Bytes fixed, weights;
+  if (hybrid)
+  {
+    for (int b = nearBanks; b < banks; b++) bankColours(fixed, b, first.y, 1.0f, false);
+    for (int y = 0; y < rows; y++) weights.u8(uint32_t(std::lround(vertical(float(std::min(y, hpx - 1)) + 0.5f) * 255)));
+    while (weights.data.size() % 4) weights.u8(0);
   }
   Bytes lite;
-  lightHead(lite, l, 0x40 | uint32_t(normals.size()), uint32_t(firstBank), uint32_t(banks));
+  lightHead(lite, l, (hybrid ? 0x20 : 0x40) | uint32_t(normals.size()), uint32_t(firstBank), uint32_t(banks));
   lite.u16(uint32_t(rows));
   lite.u16(uint32_t(stride));
   lite.u16(uint32_t(bandWidth));
-  lite.u16(0);
+  lite.u16(hybrid ? uint32_t(banks - nearBanks) : 0);   // hybrid: the fixed banks
   lite.data.insert(lite.data.end(), table.data.begin(), table.data.end());
-  report.info("lighting", room.map->path, "light layer (stream): " + std::to_string(tileOf.size()) + " normal tiles (" + std::to_string(edgeCells) +
+  lite.data.insert(lite.data.end(), fixed.data.begin(), fixed.data.end());
+  lite.data.insert(lite.data.end(), weights.data.begin(), weights.data.end());
+  report.info("lighting", room.map->path, std::string(hybrid ? "light layer (hybrid, " + std::to_string(nearBanks) + " banks streamed): " : "light layer (stream): ") + "" + std::to_string(tileOf.size()) + " normal tiles (" + std::to_string(edgeCells) +
               " cells on a shadow's edge), " + std::to_string(normals.size()) + " normals, " + std::to_string(bands) + " bands (narrower near the light) in " + std::to_string(banks) + " banks from bank " + std::to_string(firstBank) + ", " +
               std::to_string(stride) + " colours a line, " + std::to_string(table.data.size()) + " bytes of rows, " + std::to_string(litCells) + " lit cells, mean error " +
               std::to_string(streamPixels ? streamError / double(streamPixels) : 0.0));
@@ -1651,7 +1709,7 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
       report.error("lighting", room.map->path, "a room lit with the light layer has no foreground layer (the light layer takes its place)");
   }
   int w8 = main ? main->width8 : back ? back->width8 : 0, h8 = main ? main->height8 : back ? back->height8 : 0;
-  if (l.index == light::Light::Index::Stream) return buildStreamLayer(room, area, report, main, back, w8, h8);
+  if (l.index == light::Light::Index::Stream || l.index == light::Light::Index::Hybrid) return buildStreamLayer(room, area, report, main, back, w8, h8);
   if (l.index == light::Light::Index::Shared) return buildSharedLayer(room, area, report, main, back, w8, h8);
   if (l.index == light::Light::Index::Fitted) return buildFittedLayer(room, area, report, main, back, w8, h8);
   int wpx = w8 * 8;

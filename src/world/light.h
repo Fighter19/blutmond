@@ -45,6 +45,9 @@ typedef struct BmLight
   bool fresh;                // the room was just entered: every bank is set
   bool fitted;               // layer mode: the values are levels of light, not normals
   bool stream;               // layer mode: the light layer's banks are streamed line by line
+  bool hybrid;               // ... only the first streamStride / 16 of them; the others fixed (pFixed),
+  uint8_t fixedBanks;        // ... times a weight per room row (pWeights, 255 = 1) as the blend weight
+  const uint8_t *pFixed, *pWeights;
   const uint16_t *pStream;   // ... these rows of colours (streamRows of streamStride)
   uint16_t streamRows, streamStride;
   const uint8_t *pPalette;   // the room's palette (PALE) as drawn ...

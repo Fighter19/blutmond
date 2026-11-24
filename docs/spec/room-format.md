@@ -58,9 +58,10 @@ Map-level custom properties:
 | `muffle` | int | preset's | a low pass over everything heard: 0 none - 255 most |
 | `lighting` | string | `palette` | how the room's `Light` object lights its tiles: `palette` (baked into the room's colours) or `layer` (a light layer added over the room) (below) |
 | `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
-| `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light), `normals` (directions) or `stream` (directions, the light streamed line by line) (below) |
+| `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light), `normals` (directions), `stream` (directions, the light streamed line by line) or `hybrid` (as `stream`, only near the lights) (below) |
 | `light_normals` | int | 7 | with `light_index = stream`: 7 (two bands a bank) or 15 directions |
-| `light_band` | int | 24 | with `light_index = stream`: the bands' mean width in pixels (widened when the banks would not do) |
+| `light_band` | int | 24 | with `light_index = stream` or `hybrid`: the bands' mean width in pixels (widened when the banks would not do) |
+| `light_stream_banks` | int | 2 | with `light_index = hybrid`: how many banks (two bands each) are streamed, around the first light |
 | `light_directions` | int | 8 | with `light_index = shared`: how many light directions its tiles are made for |
 | `light_tolerance` | float | 0.1 | with `light_index = shared`: a cell across which a flat surface's light changes by more than this (of full light) gets a tile of its own (near the light) |
 
@@ -120,6 +121,13 @@ only layers without parallax are lit. The two modes:
     For every room pixel row and band the cooker writes the band's colours:
     `light colour × intensity × (1 + flicker) × gain × max(0, N·F)` with F the lights'
     direction and falloff at the band's middle column on that row. Shadowed pixels are empty.
+  - `hybrid`: as `stream`, but only the `light_stream_banks` banks whose bands are nearest the
+    first light are streamed (32 colours a line instead of 112). The others hold fixed colours
+    for the room's middle row of the light (its height), and the light layer's blend weight is
+    set per line (BLDALPHA from a line table) to how lit the fixed bands are on that row against
+    that middle row, times the flicker. The streamed rows are divided by that weight, so they come
+    out exact; the fixed bands are exact on the light's row and follow the vertical falloff of
+    the fixed bands as a whole elsewhere.
   - `normals`: one of 15 normals (the cooker's clusters of the room's normals). The cells
     inside the light's radius are grouped into regions (by the light's strength there first
     and its direction second), a region per bank, whose colours are, each frame,
@@ -528,6 +536,11 @@ little endian; offsets are from the start of the chunk.
         fitted:  u16 level[bank_count][15]           // 4096 = 1.0
         stream (count bit 6): u16 rows, u16 stride (bank_count × 16), u16 band width, u16 0,
                  u16 colour[rows][stride]            // BGR555, a row per room pixel row and one more
+        hybrid (count bit 5): u16 rows, u16 stride (streamed banks × 16), u16 band width,
+                 u16 fixed_banks,
+                 u16 colour[rows][stride]            // the streamed banks, divided by the weight
+                 u16 fixed[fixed_banks × 16]         // BGR555, the other banks' colours
+                 u8  weight[rows], padded to 4       // 255 = full light (the light's own row)
 'COLL'  u16 width, height;                 // in cells
         u8  cell_size; u8 pad[3];
         u8  cells[width * height][2];      // row major, §3.2
@@ -579,4 +592,5 @@ room IDs and song names.
 - 0.2.4: light: the `Light` object (up to 4, flickering together), room properties `lighting` and `ambient`, tileset property
   `normal`, `LITE` (in the place of `ROOM`'s reserved field), the light layer (role 3);
   `light_index` (shared or fitted levels of light, bit 7 of `LITE`'s count), `light_directions`;
-  `light_index = stream` (bit 6), `light_normals`, `light_band`.
+  `light_index = stream` (bit 6), `light_normals`, `light_band`; `light_index = hybrid` (bit 5),
+  `light_stream_banks`.

@@ -8,6 +8,7 @@
 
 #include "game.h"
 #include "hal.h"
+#include "ppu.h"
 #include "ui.h"
 #include "video.h"
 
@@ -74,6 +75,9 @@ static int16_t s_faces[15][15] BM_EWRAM_BSS;
 #define RAY_CACHE 8
 static struct { int16_t x, y; uint8_t source, shadowed, used; } s_rays[RAY_CACHE] BM_EWRAM_BSS;
 static uint8_t s_rayNext BM_EWRAM_BSS;
+static bool s_weightTable BM_EWRAM_BSS;   // line table slot 0 holds a hybrid light's weights
+static uint16_t s_weights[BM_HAL_SCREEN_HEIGHT] BM_EWRAM_BSS;   // that table
+static int32_t s_builtRow BM_EWRAM_BSS, s_builtScale BM_EWRAM_BSS;   // what it was built for (-1: nothing)
 
 uint32_t bm_light_banks BM_EWRAM_BSS;   // sprite banks lit in the last frame (tests read it)
 
@@ -99,6 +103,9 @@ void bmLightEnterRoom(BmGame *g)
   bmUiSetLightLayer(-1);
   bmUiSetLightWeight(16, true);
   bmVideoSetPaletteStream(0, 0, NULL);
+  if (s_weightTable) bmVideoSetLineTable(0, 0, NULL);   // the last room's weights per line
+  s_weightTable = false;
+  s_builtRow = -1;
   memset(s_rays, 0, sizeof(s_rays));   // another room's collision
   uint32_t size = 0;
   const uint8_t *p = g->room.liteChunk != 0 ? bmPackChunkData(g->pPack, g->room.liteChunk, &size) : NULL;
@@ -154,16 +161,22 @@ void bmLightEnterRoom(BmGame *g)
     // Bit 7 of the count: the values are fitted levels of light (15 per bank) instead of
     // normals; bit 6: the light is streamed (rows of colours after the head).
     l->fitted = (l->levels & 0x80) != 0;
-    l->stream = (l->levels & 0x40) != 0;
-    l->normalCount = l->levels & 0x3F;
+    l->hybrid = (l->levels & 0x20) != 0;   // bit 5: some banks streamed, the others fixed
+    l->stream = (l->levels & 0x60) != 0;
+    l->normalCount = l->levels & 0x1F;
     uint32_t need = l->fitted ? LITE_HEAD + (uint32_t)l->bankCount * 30 : LITE_HEAD + 60 + (uint32_t)l->bankCount * 8;
     if (l->stream && size >= LITE_HEAD + 8)
     {
       l->streamRows = bmRead16(p + LITE_HEAD);
       l->streamStride = bmRead16(p + LITE_HEAD + 2);
       l->pStream = (const uint16_t *)(const void *)(p + LITE_HEAD + 8);
-      need = LITE_HEAD + 8 + (uint32_t)l->streamRows * l->streamStride * 2;
-      if (l->streamStride != (uint32_t)l->bankCount * 16 || l->streamRows < BM_HAL_SCREEN_HEIGHT + 1 || ((uintptr_t)l->pStream & 1)) need = 0xFFFFFFFFu;
+      l->fixedBanks = l->hybrid ? (uint8_t)bmRead16(p + LITE_HEAD + 6) : 0;
+      need = LITE_HEAD + 8 + (uint32_t)l->streamRows * l->streamStride * 2 + (uint32_t)l->fixedBanks * 32 + (l->hybrid ? l->streamRows : 0);
+      l->pFixed = (const uint8_t *)l->pStream + (uint32_t)l->streamRows * l->streamStride * 2;
+      l->pWeights = l->pFixed + (uint32_t)l->fixedBanks * 32;
+      if (l->streamStride + (uint32_t)l->fixedBanks * 16 != (uint32_t)l->bankCount * 16 || l->streamRows < BM_HAL_SCREEN_HEIGHT + 1 ||
+          ((uintptr_t)l->pStream & 1))
+        need = 0xFFFFFFFFu;
     }
     if (l->normalCount > 15 || l->bankCount == 0 || l->firstBank + l->bankCount > 15 || size < need) l->mode = BM_LIGHT_NONE;
     for (uint8_t i = 0; i < g->room.layerCount; i++)
@@ -373,7 +386,17 @@ static void presentLayer(BmGame *g, bool all)
       bmHalPaletteWriteBlock((uint16_t)((first + b) * 16), out, 16);
     }
   }
-  if (l->stream) return;   // the light layer's banks are streamed (bmLightPresent)
+  if (l->stream)
+  {
+    // Streamed (bmLightPresent); hybrid: the fixed banks after the streamed ones, once.
+    if (all)
+      for (uint8_t b = 0; b < l->fixedBanks; b++)
+      {
+        for (uint32_t i = 0; i < 16; i++) out[i] = bmRead16(l->pFixed + (b * 16 + i) * 2);
+        bmHalPaletteWriteBlock((uint16_t)((l->firstBank + l->streamStride / 16 + b) * 16), out, 16);
+      }
+    return;
+  }
   int32_t strength = l->now * l->gain >> 6;   // 256 = 1.0
   int32_t cr = l->red * strength, cg = l->green * strength, cb = l->blue * strength;
   for (uint8_t r = 0; r < l->bankCount; r++)
@@ -562,11 +585,33 @@ void bmLightPresent(BmGame *g)
       int32_t row = g->room.cameraY;
       if (row < 0) row = 0;
       if (row > (int32_t)l->streamRows - (BM_HAL_SCREEN_HEIGHT + 1)) row = (int32_t)l->streamRows - (BM_HAL_SCREEN_HEIGHT + 1);
-      if (free) bmVideoSetPaletteStream((uint16_t)(l->firstBank * 16), l->streamStride, l->pStream + (uint32_t)row * l->streamStride);
+      if (free && l->streamStride != 0) bmVideoSetPaletteStream((uint16_t)(l->firstBank * 16), l->streamStride, l->pStream + (uint32_t)row * l->streamStride);
       else bmVideoSetPaletteStream(0, 0, NULL);
       int32_t base = (int32_t)l->intensity * 4, most = base + base * l->flicker / 255;
       int32_t eva = most > 0 ? (16 * l->now + most / 2) / most : 16;
       bmUiSetLightWeight((uint8_t)(eva < 0 ? 0 : eva > 16 ? 16 : eva), false);
+      if (l->hybrid)
+      {
+        // The vertical falloff and the flicker together: the light layer's blend weight per
+        // line (line table slot 0; lit rooms have no screen effect that would use it).
+        // One division a frame: the weight is the row's byte times a 16.16 factor. Built anew
+        // only when the camera's row or the flicker changed.
+        int32_t scale = most > 0 ? (16 * 65536 * l->now) / (255 * most) : 16 * 65536 / 255;
+        if (row != s_builtRow || scale != s_builtScale)
+        {
+          s_builtRow = row;
+          s_builtScale = scale;
+          const uint8_t *pRow = l->pWeights + row;
+          for (int32_t y = 0; y < BM_HAL_SCREEN_HEIGHT; y++)
+          {
+            int32_t w = (pRow[y] * scale + 0x8000) >> 16;
+            s_weights[y] = (uint16_t)((w < 0 ? 0 : w > 16 ? 16 : w) | 16 << 8);
+          }
+        }
+        if (free) bmVideoSetLineTable(0, BM_PPU_BLDALPHA, s_weights);
+        else bmVideoSetLineTable(0, 0, NULL);
+        s_weightTable = free;
+      }
     }
     bmUiSetLightLayer(free ? (int8_t)l->layerBg : -1);
     if (free) bmUiBlend();
