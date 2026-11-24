@@ -207,7 +207,8 @@ In serialisation order. Count is the array length.
 
 Sizes with this table: a save game is 655 bytes of payload, a link transfer 501, a snapshot
 2915 (2921 with the autopilot); each plus the 16-byte header. The buffers for a snapshot and a
-pushed state hold 3072 bytes (150 left: the next fields need them made larger). Attachment slots 0 to 11 are the
+pushed state hold 3328 bytes (in a multiboot image they are in IWRAM, which has no more to
+give: a larger state needs fields made smaller first). Attachment slots 0 to 11 are the
 player's (8 to 11 the abilities', in `abilityKey` the record each holds), 12 to 15 the room's. A snapshot is larger than one
 link packet: `STATE_DATA` and `STATE_PUT` carry it in parts ([link-protocol.md](link-protocol.md)).
 

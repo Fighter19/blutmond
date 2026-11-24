@@ -6,6 +6,7 @@
 #include "game.h"
 #include "hal_host.h"
 #include "hits.h"
+#include "live.h"
 #include "state.h"
 #include "physical_device.h"
 #include "text.h"
@@ -221,7 +222,7 @@ static void testTheBatChasesHitsAndGoesHome(void)
   TEST_ASSERT(s_game.actors.y[bat] > y0);
 
   // A save state in the middle of the chase continues exactly the same.
-  static uint8_t snap[3072];
+  static uint8_t snap[BM_LIVE_STATE_CAPACITY];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
@@ -365,7 +366,7 @@ static void testAnAttachmentMakesThePlayerJumpHigher(void)
   TEST_ASSERT(t->fields[2 * BM_SCRIPT_MAX_FIELDS + 1] == 1);   // Jumps
   TEST_ASSERT(t->fields[2 * BM_SCRIPT_MAX_FIELDS + 2] == 1);   // Presses: the game button Jump
   // A snapshot taken with it attached brings it back, bound to its class.
-  static uint8_t snap[3072];
+  static uint8_t snap[BM_LIVE_STATE_CAPACITY];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
@@ -712,7 +713,7 @@ static void testAHitStrikesOnce(void)
   s_game.player.facing = 1;
   frames(1, BM_KEY_B);
   TEST_ASSERT(bmHitsLive(&s_game) == 1);
-  static uint8_t snap[3072];
+  static uint8_t snap[BM_LIVE_STATE_CAPACITY];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
@@ -995,7 +996,7 @@ static void testTheMenus(void)
   TEST_ASSERT(s_game.health == 25 && bmInventoryCount(inv, potion) == 1);
   press(BM_KEY_B);
   // A state taken in the Start menu comes back in it, drawn again.
-  static uint8_t snap[3072];
+  static uint8_t snap[BM_LIVE_STATE_CAPACITY];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);
@@ -1452,7 +1453,7 @@ static void testADropFallsAndIsTaken(void)
   frames(60, 0);
   TEST_ASSERT(a->y[drop] == BM_FIX(160));   // on the floor
   // A snapshot with it comes back with it.
-  static uint8_t snap[3072];
+  static uint8_t snap[BM_LIVE_STATE_CAPACITY];
   BmStateBlock block = bmGameStateBlock(&s_game);
   uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
   TEST_ASSERT(size > 0);

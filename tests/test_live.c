@@ -186,7 +186,7 @@ static void testStateGetAndPut(void)
 {
   BmLinkMaster m;
   start(&m);
-  static uint8_t snap[3072];
+  static uint8_t snap[BM_LIVE_STATE_CAPACITY];
   uint32_t size = 0;
   TEST_ASSERT(bmLiveMasterGetState(&m, BM_STATE_SNAPSHOT, snap, sizeof(snap), &size));
   TEST_ASSERT(size > BM_STATE_HEADER_SIZE);

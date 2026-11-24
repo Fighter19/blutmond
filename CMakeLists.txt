@@ -255,10 +255,10 @@ if(BM_PLATFORM STREQUAL "gba")
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level")
   # For the multiboot images, which share 256 KB with the engine: the same level with the debug
-  # rooms and the translations left out (pack-format.md §0: their entries stay, flagged absent),
-  # so that the rest arrives later over the link as an update (a pack set, runtime-abi.md §0).
+  # rooms, the Hall of Abilities and the translations left out (pack-format.md §0: their
+  # entries stay, flagged absent); a fitted push brings them later (runtime-abi.md §0).
   set(BM_TEST_LEVEL_ABSENT --absent-room debug_lobby --absent-room debug_wave --absent-room debug_spotlight
-    --absent-room debug_pulse --absent-room debug_gradient --absent-kind LANG)
+    --absent-room debug_pulse --absent-room debug_gradient --absent-room ability_hall --absent-kind LANG)
   set(BM_TEST_LEVEL_MB_PACK ${CMAKE_BINARY_DIR}/test_level_mb_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_MB_PACK}
     COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}

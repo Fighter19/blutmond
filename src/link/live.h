@@ -20,7 +20,7 @@
 
 #define BM_LIVE_RUNTIME_VERSION 5   // 5: takes packs that leave chunks out (fitted push)
 #define BM_LIVE_MAX_CHUNKS 512
-#define BM_LIVE_STATE_CAPACITY 3072
+#define BM_LIVE_STATE_CAPACITY 3328
 
 // Input mirror (below): key changes kept on each side, and how often the state is compared.
 #define BM_LIVE_INPUT_CHANGES 16

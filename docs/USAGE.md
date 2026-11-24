@@ -225,7 +225,7 @@ image in the emulator with `--mgba build-gba/game.gba` (there also `run N`, `che
 `screenshot`). The comment at the top of `tools/bmlink/bmlink.c` lists everything.
 
 A multiboot GBA has about 84 KB for pushed packs; the whole test level is 90 KB, so
-`game_mb` carries it without its debug rooms and translations (the cooker's `--absent-room`
+`game_mb` carries it without its debug rooms, the Hall of Abilities and the translations (the cooker's `--absent-room`
 and `--absent-kind`). A pack that fits beside the running one arrives while the game plays
 on; a larger one replaces it, the game standing still until it is there. Either way only the
 chunks that changed are sent (when it replaces the running one: also those that moved). A

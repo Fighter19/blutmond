@@ -28,8 +28,8 @@ chunk formats named in section 3.
   door there does not open); a left-out `LANG` is not offered. `STRS` is never left out.
   The cooker writes such a pack when told `--absent-room ID` (the room and every chunk only
   left-out rooms name) or `--absent-kind KIND` (every chunk of that kind); the multiboot game
-  `game_mb` carries the test level without its five debug rooms and translations (78 KB
-  instead of 90 KB). The live link leaves chunks out the same way to fit a pack to a
+  `game_mb` carries the test level without its five debug rooms, the Hall of Abilities and
+  the translations (76 KB instead of 89 KB). The live link leaves chunks out the same way to fit a pack to a
   runtime (a fitted push, [runtime-abi.md](runtime-abi.md) §0).
 - **Update packs** (minor 2, reader and `bmPackMakeUpdate` only; nothing sends them yet):
   bit 7 (`0x80`, in base) of an entry: the chunk lies in a base pack, at `offset` there. Such
