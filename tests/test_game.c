@@ -3018,11 +3018,11 @@ static void testTheGrapple(void)
 }
 
 
-// The torch halls (docs/plans/lighting.md §7): the same room lit three ways. In both the player is
+// The torch halls (docs/plans/lighting.md §7): the same room lit four ways. In both the player is
 // brighter right under the torch than left of it, and behind the pillar, as far from the torch
 // as on the left, only the ambient light reaches it (the pillar's shadow). The flicker is a pure
 // function of the frame. With an output directory the six pictures go there side by side
-// (torch_halls.ppm: palettes, light layer fitted, light layer of normals, left to right).
+// (torch_halls.ppm: palettes, light layer shared, fitted, of normals, left to right).
 static const char *s_outDir;
 
 static int32_t bankBrightness(uint8_t bank)
@@ -3039,11 +3039,11 @@ static int32_t bankBrightness(uint8_t bank)
 
 static void testTheTorchHalls(void)
 {
-  static const char *const halls[3] = {"torch_hall", "torch_hall_layer", "torch_hall_normals"};
+  static const char *const halls[4] = {"torch_hall", "torch_hall_layer", "torch_hall_fitted", "torch_hall_normals"};
   static const int32_t xs[3] = {96, 184, 272};   // left of the torch, under it, behind the pillar
-  static uint16_t shots[3][3][BM_PPU_WIDTH * BM_PPU_HEIGHT];
-  int32_t bright[3][3];
-  for (int h = 0; h < 3; h++)
+  static uint16_t shots[4][3][BM_PPU_WIDTH * BM_PPU_HEIGHT];
+  int32_t bright[4][3];
+  for (int h = 0; h < 4; h++)
   {
     startWith(s_data, s_size, halls[h]);
     TEST_ASSERT(s_game.light.mode == (h == 0 ? BM_LIGHT_PALETTE : BM_LIGHT_LAYER));
@@ -3069,7 +3069,7 @@ static void testTheTorchHalls(void)
     printf("    %s: player brightness %d left, %d under the torch, %d behind the pillar\n", halls[h], (int)bright[h][0], (int)bright[h][1], (int)bright[h][2]);
     TEST_ASSERT(bright[h][1] > bright[h][0] && bright[h][0] > bright[h][2]);
     const BmPpuState *ppu = bmHalHostGetPpu();
-    TEST_ASSERT(s_game.light.fitted == (h == 1));
+    TEST_ASSERT(s_game.light.fitted == (h == 1 || h == 2));
     if (h >= 1)
     {
       // The light layer is shown and added over the room: first target with the UI, EVA = EVB = 16.
@@ -3078,8 +3078,8 @@ static void testTheTorchHalls(void)
       TEST_ASSERT((bmPpuReg(ppu, BM_PPU_BLDCNT) & (1u << bg)) != 0 && bmPpuReg(ppu, BM_PPU_BLDALPHA) == (16 | 16 << 8));
     }
   }
-  // The halls light the player alike: the sprites are lit the same way in all three.
-  for (int p = 0; p < 3; p++) TEST_ASSERT(bright[0][p] == bright[1][p] && bright[0][p] == bright[2][p]);
+  // The halls light the player alike: the sprites are lit the same way in all four.
+  for (int p = 0; p < 3; p++) TEST_ASSERT(bright[0][p] == bright[1][p] && bright[0][p] == bright[2][p] && bright[0][p] == bright[3][p]);
   // Out of the halls the player's colours are its own again.
   startWith(s_data, s_size, "torch_hall");
   int32_t lit = bankBrightness(0);
@@ -3093,7 +3093,7 @@ static void testTheTorchHalls(void)
   FILE *f = fopen(path, "wb");
   TEST_ASSERT(f != NULL);
   if (f == NULL) return;
-  const int gap = 4, w = BM_PPU_WIDTH * 3 + gap * 2, hgt = BM_PPU_HEIGHT * 3 + gap * 2;
+  const int gap = 4, w = BM_PPU_WIDTH * 4 + gap * 3, hgt = BM_PPU_HEIGHT * 3 + gap * 2;
   fprintf(f, "P6\n%d %d\n255\n", w, hgt);
   for (int y = 0; y < hgt; y++)
     for (int x = 0; x < w; x++)

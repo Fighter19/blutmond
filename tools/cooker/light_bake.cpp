@@ -85,9 +85,12 @@ Light find(const tmx::Map &map, Report &report)
   auto s = p.find("shadows");
   l.shadows = s == p.end() || s->second != "false";
   l.ambient = std::clamp(float(std::atof(map.property("ambient", "1").c_str())), 0.0f, 1.0f);
-  std::string index = map.property("light_index", "fitted");
-  if (index != "fitted" && index != "normals") report.error("lighting", map.path, "unknown light_index '" + index + "' (fitted, normals)");
-  l.fitted = index != "normals";
+  std::string index = map.property("light_index", "shared");
+  if (index == "fitted") l.index = Light::Index::Fitted;
+  else if (index == "normals") l.index = Light::Index::Normals;
+  else if (index != "shared") report.error("lighting", map.path, "unknown light_index '" + index + "' (shared, fitted, normals)");
+  l.fitted = l.index != Light::Index::Normals;
+  l.directions = std::clamp(std::atoi(map.property("light_directions", "8").c_str()), 1, 64);
   return l;
 }
 
@@ -146,12 +149,17 @@ bool Solid::shadowed(float px, float py, const Light &light) const
   float dx = light.x - px, dy = light.y - py;
   float len = std::sqrt(dx * dx + dy * dy);
   int steps = int(len * 2) + 1;
+  // The solid cells the ray starts in (the wall or floor the pixel is part of) do not shadow
+  // it; a solid cell after it has been in the open does.
+  bool open = !at(sx, sy);
   for (int k = 1; k < steps; k++)
   {
     float t = float(k) / float(steps);
     int cx = int(std::floor((px + dx * t) / float(cell))), cy = int(std::floor((py + dy * t) / float(cell)));
-    if ((cx == sx && cy == sy) || (cx == lx && cy == ly)) continue;
-    if (at(cx, cy)) return true;
+    if (cx == lx && cy == ly) continue;
+    bool solid = at(cx, cy);
+    if (!solid) open = true;
+    else if (open) return true;
   }
   return false;
 }

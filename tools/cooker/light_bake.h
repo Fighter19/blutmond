@@ -18,7 +18,7 @@ namespace bm::light {
 /// Light levels of the baked mode (`palette`): level 0 is ambient only, 7 the most.
 constexpr int LEVELS = 8;
 /// The light layer's region banks at most (mode `layer`).
-constexpr int MAX_REGIONS = 12;
+constexpr int MAX_REGIONS = 14;
 /// Normals of the light layer (its tiles' values 1 to 15).
 constexpr int LAYER_NORMALS = 15;
 
@@ -45,8 +45,11 @@ struct Light
   float gain = 0.5f;          // the light layer's strength (it adds, the baked mode multiplies)
   bool shadows = true;
   // Mode `layer`: what the light layer's 15 values stand for (room property `light_index`):
-  // fitted (default) a pixel's whole light, normals one of 15 directions.
-  bool fitted = true;
+  // shared (default) a pixel's light for one of a few light directions, scaled per bank;
+  // fitted its own light, levels fitted per bank; normals one of 15 directions.
+  enum class Index { Shared, Fitted, Normals } index = Index::Shared;
+  bool fitted = true;           // Shared or Fitted: the values are levels of light
+  int directions = 8;           // Shared: how many light directions (room property `light_directions`)
 };
 
 /// The room's light: its one `Light` object and the map's `lighting` and `ambient`. Mode None
@@ -73,8 +76,8 @@ struct Solid
   /// From a COLL chunk's data (room-format.md §7).
   static Solid fromChunk(const std::vector<uint8_t> &coll);
   bool at(int cx, int cy) const;
-  /// Whether a straight line from (px, py) to the light crosses a solid cell other than the one
-  /// the pixel lies in.
+  /// Whether a straight line from (px, py) to the light crosses a solid cell, but for the solid
+  /// cells it starts in (the wall the pixel is on).
   bool shadowed(float px, float py, const Light &light) const;
 };
 

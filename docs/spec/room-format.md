@@ -58,7 +58,8 @@ Map-level custom properties:
 | `muffle` | int | preset's | a low pass over everything heard: 0 none - 255 most |
 | `lighting` | string | `palette` | how the room's `Light` object lights its tiles: `palette` (baked into the room's colours) or `layer` (a light layer added over the room) (below) |
 | `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
-| `light_index` | string | `fitted` | with `lighting = layer`, what the light layer's values stand for: `fitted` (levels of light) or `normals` (directions) (below) |
+| `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light) or `normals` (directions) (below) |
+| `light_directions` | int | 8 | with `light_index = shared`: how many light directions its tiles are made for |
 
 **Acoustics.** While the player is in a room with any of the last five properties, the
 room's echo is heard instead of the one the playing song brings (sound-format.md), over the
@@ -86,8 +87,19 @@ only layers without parallax are lit. The two modes:
 - `layer`: the room's colours stay as drawn and are darkened to the ambient; a **light
   layer** (a fourth layer, role 3 in `ROOM`, so the room may have at most 2 graphics layers of
   its own) is added over the room by alpha blending (EVA 16, EVB 16). Its lit cells use at
-  most 12 palette banks, and a pixel's value (1 to 15, 0 none) one of its bank's colours.
+  most 14 palette banks, and a pixel's value (1 to 15, 0 none) one of its bank's colours.
   What a value stands for (`light_index`):
+  - `shared`: a level of light, made so that tiles repeat. A pixel's light is split into its
+    cell's **strength**, how lit a flat surface is there (`falloff × Lz`), which is the
+    cell's bank (up to 14 strengths, clustered on their square roots), and its **pattern**,
+    how lit it is against a flat surface, `nz + nx tx + ny ty` with t = (Lx, Ly) / Lz, the
+    light's slope. The cells share `light_directions` slopes: clustered from the cells'
+    directions, then refined in a few rounds (each cell takes the slope that gets its pixels'
+    true light nearest; each slope moves to the mean of its cells', weighted by their
+    brightness). The patterns of all lit pixels are fitted to one ladder of 15 steps, the
+    same in every bank; a bank's colours are its strength × the ladder. So the same drawing
+    under the same slope gives the same tile, whatever its strength: a repeated brick is one
+    tile for each slope it is lit from. Cells on a shadow's edge have tiles of their own.
   - `fitted`: a level of light. The cooker works out each pixel's light as for `palette` (its
     normal, distance and shadow), groups the cells by how lit they are (mean and brightest
     pixel) into the banks, and fits each bank's 15 levels to its pixels (1D k-means); a pixel
@@ -548,4 +560,4 @@ room IDs and song names.
 - 0.2.3: room acoustics: `acoustics`, `echo`, `echo_feedback`, `echo_damping`, `muffle`.
 - 0.2.4: light: the `Light` object, room properties `lighting` and `ambient`, tileset property
   `normal`, `LITE` (in the place of `ROOM`'s reserved field), the light layer (role 3);
-  `light_index` (fitted levels of light, bit 7 of `LITE`'s count).
+  `light_index` (shared or fitted levels of light, bit 7 of `LITE`'s count), `light_directions`.

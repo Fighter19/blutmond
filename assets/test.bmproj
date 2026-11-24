@@ -14,6 +14,7 @@
  <room path="test_room/debug_gradient.tmx"/>
  <room path="test_room/torch_hall.tmx"/>
  <room path="test_room/torch_hall_layer.tmx"/>
+ <room path="test_room/torch_hall_fitted.tmx"/>
  <room path="test_room/torch_hall_normals.tmx"/>
  <assets path="test_room"/>
  <assets path="engine"/>

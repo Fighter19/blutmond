@@ -106,7 +106,7 @@
   </object>
   <object id="6" name="exit_east" type="Door" x="464" y="112" width="16" height="48">
    <properties>
-    <property name="target_room" value="torch_hall_normals" />
+    <property name="target_room" value="torch_hall_fitted" />
     <property name="target_door" value="exit_west" />
     <property name="direction" value="east" />
     <property name="panel" value="door_panel" />

@@ -1,36 +1,40 @@
 # Plan: a light layer and lit palettes (normal-mapped light on the GBA)
 
-Status: three ways of lighting the tiles built side by side, and lit sprites
+Status: four ways of lighting the tiles built side by side, and lit sprites
 ([../spec/room-format.md](../spec/room-format.md) §1 "Light", §7 `LITE`;
 [../spec/sprite-format.md](../spec/sprite-format.md) version 5;
 [../spec/runtime-core.md](../spec/runtime-core.md) §12 "The light"). A room chooses with its
 property `lighting`: `palette` (the light baked into the room's palettes, the first version of
 this plan) or `layer` (the light layer of section 3), whose values are, by `light_index`,
-`fitted` levels of light (the default) or `normals` (section 3 as planned). Only rooms with a
+`shared` (the default), `fitted` or `normals` (section 3 as planned). Only rooms with a
 `Light` object are lit; every other room is as before. The test level's debug lobby has a
-fifth door into the torch halls, one behind the other: "palettes", "light layer" (fitted),
-"normals" (`tools/make_torch_hall.py`; `test_game` writes all three side by side into
+fifth door into the torch halls, one behind the other: "palettes", "light layer" (shared),
+"fitted", "normals" (`tools/make_torch_hall.py`; `test_game` writes all four side by side into
 `test-output/torch_halls.ppm`).
 
-**Fitted values** (instead of normals): the flicker only scales the light, so a pixel needs one
-number, its light at full intensity, `max(0, N·L) × falloff` with its shadow. The cooker works
-that out per pixel (direction, distance and shadow merged into it), groups the lit cells by
-how lit they are into the banks, and fits each bank's 15 levels to its pixels; a pixel takes
-its bank's nearest level (mean error in the hall: 0.0075 of full light). The light layer then
-keeps the gradients and the bevels; the cost is that a light tile is almost never repeated.
+**The light layer's values.** The flicker only scales the light, so a pixel needs one number,
+its light at full intensity (`max(0, N·L) × falloff`, with its shadow). `fitted` stores that
+per pixel (direction, distance and shadow merged): smooth, but a tile for nearly every lit
+cell. `shared` quantizes it so that tiles repeat: the light is split into the cell's strength
+(how lit a flat surface is there, in the palette bank) and the pixel's pattern (how lit it is
+against a flat surface, from its normal and the light's slope across the wall, one of 8 slopes
+for the room, fitted to the cells by the error they cause), the patterns on one ladder of 15
+steps fitted to all the room's pixels. A brick under the same slope is the same tile at any
+distance; only cells on a shadow's edge are tiles of their own. Mean error against each
+pixel's true light: shared 0.026, fitted 0.0066 (of full light).
 
 Compared in the test level (radius 160):
 
-| | palettes | light layer, fitted | light layer, normals |
-|---|---|---|---|
-| look | the light multiplies each colour; smooth | the light is added (bricks wash toward the torch's colour); smooth | added; steps from region to region |
-| tiles | 573 (the room's own, lit) | 19 room tiles + 556 light tiles | 19 + 95 |
-| banks | 9 | 1 + 12 | 1 + 12 |
-| layers | the room's 3 | 2 + the light layer | 2 + the light layer |
+| | palettes | light layer, shared | light layer, fitted | light layer, normals |
+|---|---|---|---|---|
+| look | the light multiplies each colour; smooth | added; smooth, the bevels a little coarser | added; smooth | added; steps from region to region |
+| tiles | 676 (the room's own, lit) | 19 room + 177 light (72 without shadows) | 19 + 644 | 19 + 40 |
+| banks | 8 | 1 + 14 | 1 + 14 | 1 + 14 |
+| layers | the room's 3 | 2 + the light layer | 2 + the light layer | 2 + the light layer |
 
 Where it differs from the plan below:
 
-- **Regions** of the normals' light layer: at most 12 (not 8), clustered by the light's
+- **Regions** of the normals' light layer (and the banks of the others): at most 14 (not 8), clustered by the light's
   strength first and its direction second, so they lie in rings. A 2x2 dither between
   neighbouring regions was tried and looked worse (a checkerboard of 8 px cells).
 - **The UI** over a room with a light layer is blended at EVB 16 instead of 8 (one pair of
@@ -43,7 +47,7 @@ Where it differs from the plan below:
   views of section 8 are not built. **Scripts** (section 9, step 5) are not built.
 - **Multiboot** images leave the light out (`src/hal/gba/light_off.c`): their packs have no lit
   room.
-- **Cost** on the GBA, measured in mGBA: about 26,000 to 28,000 cycles a frame for the room's
+- **Cost** on the GBA, measured in mGBA: about 26,000 to 32,000 cycles a frame for the room's
   banks and 11,000 for the sprites' (13 % of a frame), from ROM; IWRAM has no room for the
   kernels in every image. All halls run at 60 frames a second (`light_mgba_*` tests keep the
   budget).

@@ -1001,6 +1001,210 @@ Bytes paletteLightChunk(const RoomWork &room, const AreaWork &area, Report &repo
 std::pair<Bytes, Bytes> buildFittedLayer(const RoomWork &room, AreaWork &area, Report &report, const GraphicsLayer *main, const GraphicsLayer *back,
                                          int w8, int h8);
 
+// Mode `layer`, values shared (light_index = shared): a cell's light is split in two. Its
+// pattern, how much each pixel faces the light, comes from the pixel's normal and one of a few
+// light directions (the cells' directions clustered: `light_directions`), in 15 steps; the
+// same drawing under the same direction gives the same tile, so tiles are merged as the room's
+// are. How strong the light is there, its falloff, is the cell's bank: every bank is the same
+// 15 steps scaled by one of up to 12 strengths (the cells' falloff clustered). Shadowed pixels
+// have no light (so cells on a shadow's edge have tiles of their own).
+std::pair<Bytes, Bytes> buildSharedLayer(const RoomWork &room, AreaWork &area, Report &report, const GraphicsLayer *main, const GraphicsLayer *back,
+                                         int w8, int h8)
+{
+  const light::Light &l = room.light;
+  int wpx = w8 * 8;
+  auto state = [&](int x, int y, light::Vec3 *pN) -> int {
+    for (const GraphicsLayer *gl : {main, back})
+    {
+      if (gl == nullptr || gl->pixelState.empty()) continue;
+      size_t at = size_t(y) * size_t(wpx) + size_t(x);
+      if (gl->pixelState[at] == 0) continue;
+      if (pN) *pN = gl->normals[at];
+      return gl->pixelState[at];
+    }
+    return 0;
+  };
+  std::vector<int> litCells;
+  std::vector<light::Vec3> cellDir, cellFall;
+  for (int cy = 0; cy < h8; cy++)
+    for (int cx = 0; cx < w8; cx++)
+    {
+      float mx = float(cx * 8) + 4, my = float(cy * 8) + 4;
+      float dx = l.x - mx, dy = l.y - my, f = light::falloff(l, dx * dx + dy * dy);
+      if (f <= 0) continue;
+      bool any = false;
+      for (int p = 0; p < 64 && !any; p++) any = state(cx * 8 + p % 8, cy * 8 + p / 8, nullptr) == 2;
+      if (!any) continue;
+      litCells.push_back(cy * w8 + cx);
+      // Split: how lit a flat surface is here (the bank) and the light's slope across it (the
+      // pattern): N·L = Lz (nz + nx tx + ny ty) with t = (Lx, Ly) / Lz.
+      light::Vec3 dir = light::normalize({dx, dy, l.height});
+      float lz = std::max(dir.z, 0.05f);
+      cellDir.push_back(dir);
+      cellFall.push_back(light::Vec3{f * lz, 0, 0});
+    }
+  int firstBank = int(area.banks.size());
+  int banks = std::min(light::MAX_REGIONS, 15 - firstBank);
+  if (banks < 1)
+  {
+    report.error("lighting", room.map->path, "no palette bank is left for the light layer");
+    banks = 1;
+  }
+  // The light directions: the cells' directions clustered as unit vectors (so the few cells
+  // near the light, where it changes fast, get theirs too); each one's slope t = (Lx, Ly) / Lz.
+  std::vector<light::Vec3> dirs = light::cluster(cellDir, std::vector<float>(cellDir.size(), 1.0f), l.directions);
+  for (light::Vec3 &d : dirs)
+  {
+    d = light::normalize(d);
+    float lz = std::max(d.z, 0.05f);
+    d = light::Vec3{d.x / lz, d.y / lz, 0};
+  }
+  // Then refined on what they are for: each cell takes the direction whose pattern, at the
+  // cell's own strength, is nearest to its pixels' true light; each direction moves to the mean
+  // slope of its cells, weighted by how bright they are. A few rounds.
+  std::vector<int> cellClass(litCells.size(), 0);
+  {
+    struct Px { light::Vec3 n; float truth; };
+    std::vector<std::vector<Px>> pixels(litCells.size());
+    for (size_t i = 0; i < litCells.size(); i++)
+    {
+      int cx = litCells[i] % w8, cy = litCells[i] / w8;
+      for (int p = 0; p < 64; p++)
+      {
+        light::Vec3 n;
+        int px = cx * 8 + p % 8, py = cy * 8 + p / 8;
+        if (state(px, py, &n) != 2) continue;
+        pixels[i].push_back({n, light::term(l, float(px) + 0.5f, float(py) + 0.5f, n)});
+      }
+    }
+    for (int round = 0; round < 8; round++)
+    {
+      for (size_t i = 0; i < litCells.size(); i++)
+      {
+        float best = 1e30f;
+        for (size_t c = 0; c < dirs.size(); c++)
+        {
+          float e = 0;
+          for (const Px &q : pixels[i])
+            e += std::abs(cellFall[i].x * std::min(4.0f, std::max(0.0f, q.n.z + q.n.x * dirs[c].x + q.n.y * dirs[c].y)) - q.truth);
+          if (e < best) best = e, cellClass[i] = int(c);
+        }
+      }
+      std::vector<light::Vec3> sum(dirs.size(), light::Vec3{0, 0, 0});
+      std::vector<float> weight(dirs.size(), 0);
+      for (size_t i = 0; i < litCells.size(); i++)
+      {
+        float lz = std::max(cellDir[i].z, 0.05f), w = cellFall[i].x * cellFall[i].x;
+        sum[size_t(cellClass[i])].x += cellDir[i].x / lz * w;
+        sum[size_t(cellClass[i])].y += cellDir[i].y / lz * w;
+        weight[size_t(cellClass[i])] += w;
+      }
+      for (size_t c = 0; c < dirs.size(); c++)
+        if (weight[c] > 0) dirs[c] = light::Vec3{sum[c].x / weight[c], sum[c].y / weight[c], 0};
+    }
+  }
+  // A pixel's pattern: how lit it is against a flat surface there (1: as lit as a flat one).
+  // The strengths, spaced as the eye sees them (clustered on their square roots: steps in the
+  // dark show more).
+  std::vector<light::Vec3> roots;
+  for (const light::Vec3 &f : cellFall) roots.push_back(light::Vec3{std::sqrt(f.x), 0, 0});
+  std::vector<light::Vec3> strengths = light::cluster(roots, std::vector<float>(roots.size(), 1.0f), banks);
+  std::sort(strengths.begin(), strengths.end(), [](const light::Vec3 &a, const light::Vec3 &b) { return a.x < b.x; });
+  for (size_t i = 0; i < cellFall.size(); i++) cellFall[i] = roots[i];   // compared as roots
+  // The 15 steps of the pattern, one ladder for every bank: fitted to all the room's lit pixels
+  // (1D k-means over their patterns, weighted by how bright they are), so the steps lie where
+  // the pixels are (around a flat surface's 1) and not evenly.
+  auto patternOf = [&](size_t i, const light::Vec3 &n) {
+    const light::Vec3 &tc = dirs[size_t(cellClass[i])];
+    return std::min(4.0f, std::max(0.0f, n.z + n.x * tc.x + n.y * tc.y));
+  };
+  std::vector<float> ladder;
+  {
+    std::map<int, float> counts;
+    for (size_t i = 0; i < litCells.size(); i++)
+    {
+      int cx = litCells[i] % w8, cy = litCells[i] / w8;
+      float weight = cellFall[i].x;   // the root of its strength
+      for (int p = 0; p < 64; p++)
+      {
+        light::Vec3 n;
+        if (state(cx * 8 + p % 8, cy * 8 + p / 8, &n) != 2) continue;
+        float v = patternOf(i, n);
+        if (v > 0.02f) counts[int(std::lround(v * 256))] += weight;
+      }
+    }
+    std::vector<light::Vec3> pts;
+    std::vector<float> wts;
+    for (const auto &[k, c] : counts) pts.push_back(light::Vec3{float(k) / 256.0f, 0, 0}), wts.push_back(c);
+    for (const light::Vec3 &c : light::cluster(pts, wts, 15)) ladder.push_back(c.x);
+    std::sort(ladder.begin(), ladder.end());
+    if (ladder.empty()) ladder.push_back(1.0f);
+  }
+
+  Bytes m;
+  m.u16(uint32_t(w8));
+  m.u16(uint32_t(h8));
+  m.u8(0);
+  m.u8(0);
+  m.u16(0);
+  std::vector<uint16_t> entries(size_t(w8) * h8, 0);
+  std::map<std::array<uint8_t, 64>, uint32_t> tileOf;
+  float error = 0;
+  size_t measured = 0, edgeCells = 0;
+  for (size_t i = 0; i < litCells.size(); i++)
+  {
+    int cx = litCells[i] % w8, cy = litCells[i] / w8;
+    int bank = light::nearest(strengths, cellFall[i]);
+    float scale = strengths[size_t(bank)].x * strengths[size_t(bank)].x;
+    std::array<uint8_t, 64> t{};
+    bool any = false, edge = false;
+    for (int p = 0; p < 64; p++)
+    {
+      light::Vec3 n;
+      int px = cx * 8 + p % 8, py = cy * 8 + p / 8;
+      if (state(px, py, &n) != 2) continue;
+      float fx = float(px) + 0.5f, fy = float(py) + 0.5f;
+      float truth = light::term(l, fx, fy, n);
+      bool shadow = truth > 0 && room.solid.shadowed(fx, fy, l);
+      edge |= shadow;
+      float pattern = patternOf(i, n);
+      // The nearest step; nearer to no light at all: none.
+      int k = 0;
+      float bestD = pattern;
+      for (size_t j = 0; j < ladder.size() && !shadow; j++)
+        if (std::abs(ladder[j] - pattern) < bestD) bestD = std::abs(ladder[j] - pattern), k = int(j) + 1;
+      error += std::abs((shadow ? 0 : truth) - (k ? scale * ladder[size_t(k - 1)] : 0.0f));
+      measured++;
+      t[size_t(p)] = uint8_t(k);
+      any |= k != 0;
+    }
+    if (!any) continue;
+    edgeCells += edge;
+    auto it = tileOf.find(t);
+    uint32_t tile;
+    if (it != tileOf.end()) tile = it->second;
+    else
+    {
+      tile = uint32_t(area.uniqueTiles.size() + area.rawTiles.size());
+      area.rawTiles.push_back(t);
+      tileOf[t] = tile;
+    }
+    entries[size_t(litCells[i])] = uint16_t(tile | uint32_t(firstBank + bank) << 12);
+  }
+  for (uint16_t e : entries) m.u16(e);
+
+  Bytes lite;
+  lightHead(lite, l, 0x80 | 15, uint32_t(firstBank), uint32_t(strengths.size()));
+  for (const light::Vec3 &st : strengths)
+    for (size_t k = 0; k < 15; k++)
+      lite.u16(uint32_t(k < ladder.size() ? std::clamp(int(std::lround(st.x * st.x * ladder[k] * 4096)), 0, 32767) : 0));
+  report.info("lighting", room.map->path, "light layer (shared): " + std::to_string(tileOf.size()) + " light tiles (" + std::to_string(edgeCells) +
+              " cells on a shadow's edge), " + std::to_string(dirs.size()) + " light directions, " + std::to_string(strengths.size()) +
+              " banks from bank " + std::to_string(firstBank) + ", " + std::to_string(litCells.size()) + " lit cells, mean error " +
+              std::to_string(measured ? error / float(measured) : 0.0f));
+  return {m, lite};
+}
+
 // Mode `layer`, values fitted (light_index = fitted): a pixel's value stands for its whole light
 // at full intensity, `max(0, N·L) × falloff`, 0 in shadow; its direction, distance and shadow
 // are worked out here, per pixel. The light only scales at run time, so a bank is 15 levels of
@@ -1146,7 +1350,8 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
       report.error("lighting", room.map->path, "a room lit with the light layer has no foreground layer (the light layer takes its place)");
   }
   int w8 = main ? main->width8 : back ? back->width8 : 0, h8 = main ? main->height8 : back ? back->height8 : 0;
-  if (l.fitted) return buildFittedLayer(room, area, report, main, back, w8, h8);
+  if (l.index == light::Light::Index::Shared) return buildSharedLayer(room, area, report, main, back, w8, h8);
+  if (l.index == light::Light::Index::Fitted) return buildFittedLayer(room, area, report, main, back, w8, h8);
   int wpx = w8 * 8;
   // What shows at a pixel: the main layer's, else the background's.
   auto state = [&](int x, int y, light::Vec3 *pN) -> int {

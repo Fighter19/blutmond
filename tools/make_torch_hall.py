@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BSD-2-Clause OR MIT
 """Draws the torch halls of the test level (docs/plans/lighting.md §7) and writes their rooms:
-three rooms alike but for how they are lit, side by side behind a door of the debug lobby.
+four rooms alike but for how they are lit, side by side behind a door of the debug lobby.
 
   torch_hall        lighting = palette: the light baked into the room's colours
-  torch_hall_layer  lighting = layer: a light layer added over the room, its values each
-                    pixel's light (light_index = fitted)
-  torch_hall_normals  the same with the light layer's values normals (light_index = normals)
+  torch_hall_layer  lighting = layer: a light layer added over the room, its values a pixel's
+                    light for one of 8 light directions, its bank the strength (shared)
+  torch_hall_fitted   the same, its values each pixel's own light (light_index = fitted)
+  torch_hall_normals  the same, its values normals (light_index = normals)
 
 usage: make_torch_hall.py <assets/test_room>
 
 Writes torch_tiles.png (bricks, flagstones, a pillar) and torch_tiles_n.png (their normal map:
 x right, y down, z toward the viewer), torch.png and torch.bmsprite (a bracket and a flame of
-four frames, emissive), torch_hall.tmx, torch_hall_layer.tmx and torch_hall_normals.tmx. Everything is drawn here.
+four frames, emissive), torch_hall*.tmx (four). Everything is drawn here.
 """
 import math
 import os
@@ -273,9 +274,12 @@ def main():
                 door("exit_east", W * T - 16, "torch_hall_layer", "exit_west", "east")], rows)
     write_room(os.path.join(out, "torch_hall_layer.tmx"), "torch_hall_layer", "Torch hall: light layer", "layer",
                [door("exit_west", 0, "torch_hall", "exit_east", "west"),
-                door("exit_east", W * T - 16, "torch_hall_normals", "exit_west", "east")], rows)
+                door("exit_east", W * T - 16, "torch_hall_fitted", "exit_west", "east")], rows)
+    write_room(os.path.join(out, "torch_hall_fitted.tmx"), "torch_hall_fitted", "Torch hall: fitted", "layer",
+               [door("exit_west", 0, "torch_hall_layer", "exit_east", "west"),
+                door("exit_east", W * T - 16, "torch_hall_normals", "exit_west", "east")], rows, extra=[("light_index", "fitted")])
     write_room(os.path.join(out, "torch_hall_normals.tmx"), "torch_hall_normals", "Torch hall: normals", "layer",
-               [door("exit_west", 0, "torch_hall_layer", "exit_east", "west")], rows, extra=[("light_index", "normals")])
+               [door("exit_west", 0, "torch_hall_fitted", "exit_east", "west")], rows, extra=[("light_index", "normals")])
 
 if __name__ == "__main__":
     main()

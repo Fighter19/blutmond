@@ -74,7 +74,7 @@ set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_spotlight.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_pulse.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_layer.tmx
-  ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
+  ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_fitted.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/torch.ms
@@ -1055,7 +1055,7 @@ if(BM_PLATFORM STREQUAL "host")
       set_tests_properties(live_mgba_hot PROPERTIES FIXTURES_REQUIRED test_level_variant FIXTURES_SETUP live_mgba_hot)
       # The light (docs/plans/lighting.md) on the GBA: in both torch halls a frame's light stays
       # within its budget in processor cycles (the room's banks, the sprites' banks), from ROM.
-      foreach(hall torch_hall torch_hall_layer torch_hall_normals)
+      foreach(hall torch_hall torch_hall_layer torch_hall_fitted torch_hall_normals)
         add_test(NAME light_mgba_${hall}
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${cooked}/test_level_gba.bmpk restart:${hall} run 120
             check "${elf}:bm_light_cycles+0<=40000" check "${elf}:bm_light_cycles+4<=20000" screenshot ${out}/light_${hall}.ppm)
