@@ -2713,6 +2713,54 @@ static void testAimingTheTorso(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// Sprite memory across rooms (layered-sprites.md §3): sheets stay loaded across rooms until a
+// room needs the space. The debug lobby, the boss hall, then the chasm: the grapple's anchors
+// are loaded with the room (they were left out before). The chasm, then the boss hall, then a
+// portrait the room did not load beforehand: what earlier rooms left goes, nothing is missing.
+static int8_t fightSheets(void)
+{
+  // What the boss fight draws: the boss, its fireballs, the drops, the two portraits.
+  const char *names[] = { "moon_bat", "fireball", "drop", "hero_face", "vesper_face", "spark" };
+  int8_t worst = 0;
+  for (unsigned k = 0; k < sizeof(names) / sizeof(names[0]); k++)
+  {
+    int s = sheetOf(names[k]);
+    int8_t b = s >= 0 ? bmGameSheetBank(&s_game, (int8_t)s, 0) : -1;
+    if (b < worst) worst = b;
+  }
+  return worst;
+}
+
+static void testSpritesAcrossRooms(void)
+{
+  startWith(s_data, s_size, "debug_lobby");
+  frames(3, 0);
+  int32_t boss = bmGameFindRoom(&s_pack, "boss_hall"), chasm = bmGameFindRoom(&s_pack, "chasm_room");
+  int32_t puzzle = bmGameFindRoom(&s_pack, "puzzle_room"), guard = bmGameFindRoom(&s_pack, "guard_room");
+  TEST_ASSERT(boss >= 0 && chasm >= 0 && puzzle >= 0 && guard >= 0);
+  bmGameMovePlayer(&s_game, (uint32_t)boss, 40, 160);
+  frames(3, 0);
+  TEST_ASSERT(fightSheets() >= 0);
+  frames(2, 0);
+  bmGameMovePlayer(&s_game, (uint32_t)chasm, 480, 160);
+  frames(3, 0);
+  int grapple = sheetOf("grapple");
+  TEST_ASSERT(grapple >= 0 && s_game.grapple.anchorCount == 2);
+  TEST_ASSERT(s_game.sheetTile[grapple] != BM_GAME_NO_TILES && banksOf(grapple, -1) >= 1 && s_game.spriteMisses == 0);
+  // Round the other rooms, then the boss hall and its fight again: nothing missing.
+  bmGameMovePlayer(&s_game, (uint32_t)puzzle, 40, 160);
+  frames(3, 0);
+  bmGameMovePlayer(&s_game, (uint32_t)guard, 40, 160);
+  frames(3, 0);
+  bmGameMovePlayer(&s_game, (uint32_t)chasm, 480, 160);
+  frames(3, 0);
+  bmGameMovePlayer(&s_game, (uint32_t)boss, 40, 160);
+  frames(3, 0);
+  TEST_ASSERT(fightSheets() >= 0);
+  frames(2, 0);
+  TEST_ASSERT(s_game.spriteMisses == 0);
+}
+
 // The grapple (grapple.h) in the chasm (assets/test_room/chasm_room.tmx): nothing without the
 // ability, which the pedestal gives; R to the anchor over the chasm and from it to the next,
 // held level, and down onto the west floor; up the tower's ledge; the bat (light) pulled to
@@ -2860,6 +2908,7 @@ int main(int argc, char **argv)
   RUN_TEST(testBreakableWallsAndCrates);
   RUN_TEST(testThePushBlockPuzzle);
   RUN_TEST(testSheetsAndPalettesPerRoom);
+  RUN_TEST(testSpritesAcrossRooms);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

@@ -284,7 +284,57 @@ static void findPlayer(BmGame *g)
   if (bmSpriteSheetAnim(s, g->pPack, "push") < 0) g->playerAnims[BM_PLAYER_ANIM_PUSH] = g->playerAnims[BM_PLAYER_ANIM_RUN];
 }
 
+static int8_t sheetBank(BmGame *g, int8_t sheet, uint8_t palette);
+
+// Notes a pair the room draws (once).
+static void noteUsed(BmGame *g, int8_t sheet, uint8_t palette)
+{
+  for (uint8_t k = 0; k < g->usedCount; k++)
+    if (g->usedSheet[k] == sheet && g->usedPalette[k] == palette) return;
+  if (g->usedCount < sizeof(g->usedSheet)) g->usedSheet[g->usedCount] = sheet, g->usedPalette[g->usedCount++] = palette;
+}
+
 int8_t bmGameSheetBank(BmGame *g, int8_t sheet, uint8_t palette)
+{
+  if (sheet < 0 || (uint8_t)sheet >= g->sheetCount) return -1;
+  if (palette >= g->sheets[sheet].paletteCount) palette = 0;
+  uint16_t misses = g->spriteMisses;
+  int8_t bank = sheetBank(g, sheet, palette);
+  if (g->spriteMisses == misses)
+  {
+    if (bank >= 0) noteUsed(g, sheet, palette);
+    return bank;
+  }
+  // It did not fit beside what earlier rooms left (a dialogue's portrait, an effect): those
+  // go, what this room has drawn is loaded again, then this one. Pictures already given out
+  // this frame may show the old tiles for one frame.
+  bool stale = false;   // something loaded that this room has not drawn (not the player's)
+  for (uint8_t k = 0; k < g->sheetCount && !stale; k++)
+  {
+    if (g->sheetTile[k] == BM_GAME_NO_TILES) continue;
+    bool kept = false;
+    for (uint8_t i = 0; i < g->playerSheetCount; i++) kept |= g->playerSheets[i] == (int8_t)k;
+    for (uint8_t i = 0; i < g->usedCount; i++) kept |= g->usedSheet[i] == (int8_t)k;
+    stale = !kept;
+  }
+  for (uint8_t b = 0; b < BM_GAME_BANKS && !stale; b++)
+  {
+    if (g->bankSheet[b] == 0xFF) continue;
+    bool kept = false;
+    for (uint8_t i = 0; i < g->playerSheetCount; i++) kept |= g->playerSheets[i] == (int8_t)g->bankSheet[b];
+    for (uint8_t i = 0; i < g->usedCount; i++) kept |= g->usedSheet[i] == (int8_t)g->bankSheet[b] && g->usedPalette[i] == g->bankPalette[b];
+    stale = !kept;
+  }
+  if (!stale) return bank;   // nothing to make room with: it stays missing (counted)
+  g->spriteMisses = misses;
+  forgetSprites(g);
+  for (uint8_t k = 0; k < g->usedCount; k++) sheetBank(g, g->usedSheet[k], g->usedPalette[k]);
+  bank = sheetBank(g, sheet, palette);
+  if (bank >= 0) noteUsed(g, sheet, palette);
+  return bank;
+}
+
+static int8_t sheetBank(BmGame *g, int8_t sheet, uint8_t palette)
 {
   if (sheet < 0 || (uint8_t)sheet >= g->sheetCount) return -1;
   BmSpriteSheet *s = &g->sheets[sheet];
@@ -880,11 +930,16 @@ static void preloadSprites(BmGame *g)
   int8_t sheets[24];
   uint8_t palettes[24], n = 0;
   const BmActors *a = &g->actors;
+  g->usedCount = 0;   // a new room: what it draws is counted anew
   for (uint16_t i = 0; i < g->objectCount && n < 24; i++)
     if (g->objectSheet[i] >= 0) sheets[n] = g->objectSheet[i], palettes[n++] = 0;
   for (uint8_t i = 0; a->hasModule && i < a->count && n < 24; i++)
     if (!a->gone[i] && a->sheet[i] >= 0) sheets[n] = a->sheet[i], palettes[n++] = a->palette[i];
   if (g->puzzle.sheet >= 0 && n < 24) sheets[n] = g->puzzle.sheet, palettes[n++] = 0;
+  // The grapple's anchors, and the extra layers of kinds (the Iron Bat's armour).
+  if (g->grapple.anchorCount != 0 && g->grapple.sheet >= 0 && n < 24) sheets[n] = g->grapple.sheet, palettes[n++] = 0;
+  for (uint8_t i = 0; a->hasModule && i < a->count && n < 24; i++)
+    if (!a->gone[i] && a->extraSheet[i] >= 0) sheets[n] = a->extraSheet[i], palettes[n++] = 0;
   // What is new: tiles of sheets not loaded, banks for pairs without one (each counted once).
   uint32_t tiles = 0, banks = 0;
   for (uint8_t k = 0; k < n; k++)

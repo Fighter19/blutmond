@@ -583,9 +583,14 @@ room by room. When a room is entered, every other sheet is forgotten and the oth
 their objects have), door panels and the puzzle's are loaded. A sheet not loaded yet is loaded
 the first time it is drawn (an effect, an object made at run time): its tiles after the last
 loaded ones (a sheet that would pass tile 1024 is not drawn), and each (sheet, palette) pair
-takes the lowest free bank of 0 to 12, its 16 colours that palette's (with none free: a bank
-with another palette of the sheet; none: not drawn). What did not fit is counted
-(`spriteMisses`). Which sheet is where is derived, not state. Sprite tiles are mapped
+takes the lowest free bank of 0 to 12, its 16 colours that palette's. One that does not fit
+(tiles or a bank) while sheets the room has not drawn are still there from earlier rooms:
+those are forgotten, the pairs the room has drawn since it was entered are loaded again (at
+new places: what was given out earlier in that frame may show other tiles for one frame), then
+this one. Still no room: a bank with another palette of the sheet; none: not drawn. What did
+not fit is counted (`spriteMisses`). When a room is entered, the sheets it needs (its objects',
+the puzzle's, the grapple's if it has anchors, the extra layers of kinds) are counted first;
+only if they do not fit beside what is loaded is everything but the player's forgotten. Which sheet is where is derived, not state. Sprite tiles are mapped
 one-dimensionally.
 
 **Animation state**: `anim`, `finished`, `step`, `timer`.

@@ -165,6 +165,11 @@ typedef struct BmGame
   uint16_t tileNext, tileFloor;
   uint8_t bankSheet[BM_GAME_BANKS], bankPalette[BM_GAME_BANKS];
   uint16_t spriteMisses;                       // sheets or banks that did not fit (counted)
+  // The (sheet, palette) pairs the room has drawn since it was entered: what is loaded again
+  // when one more does not fit beside the sheets earlier rooms left (bmGameSheetBank).
+  uint8_t usedCount;
+  int8_t usedSheet[32];
+  uint8_t usedPalette[32];
   int8_t playerSheet;                          // -1: the built-in figure
   // The player as a figure (figure.h): the figure "player" if the pack has one (playerSheet is
   // its root layer's sheet), else the sprite "player" alone (layerCount 0). Its layers' sheets
