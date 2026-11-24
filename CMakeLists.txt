@@ -684,7 +684,8 @@ if(BM_PLATFORM STREQUAL "host")
       ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${cooked}/room2_wind.tmx ${BM_TEST_LEVEL_BASE_ASSETS} ${PROJECT_SOURCE_DIR}/tests/scripts/wind.ms ${PROJECT_SOURCE_DIR}/tests/scripts/capable.ms ${PROJECT_SOURCE_DIR}/tests/scripts/shield.ms
       ${PROJECT_SOURCE_DIR}/tests/scripts/knight.ms ${PROJECT_SOURCE_DIR}/tests/scripts/knight.bmsprite ${PROJECT_SOURCE_DIR}/tests/scripts/heavy.ms ${PROJECT_SOURCE_DIR}/tests/scripts/drill.ms ${PROJECT_SOURCE_DIR}/tests/scripts/knife.ms ${PROJECT_SOURCE_DIR}/tests/scripts/thrower.ms ${PROJECT_SOURCE_DIR}/tests/scripts/bolt.ms ${PROJECT_SOURCE_DIR}/tests/scripts/turret.ms ${PROJECT_SOURCE_DIR}/tests/scripts/parry.ms
       ${PROJECT_SOURCE_DIR}/tests/scripts/jab.ms ${PROJECT_SOURCE_DIR}/tests/scripts/painter.ms
-      ${PROJECT_SOURCE_DIR}/tests/scripts/aimer.ms ${PROJECT_SOURCE_DIR}/tests/scripts/spark_shot.ms)
+      ${PROJECT_SOURCE_DIR}/tests/scripts/aimer.ms ${PROJECT_SOURCE_DIR}/tests/scripts/spark_shot.ms ${PROJECT_SOURCE_DIR}/tests/scripts/lock_on.ms
+      ${PROJECT_SOURCE_DIR}/tests/scripts/circler.ms)
   set_tests_properties(cook_test_level_wind PROPERTIES FIXTURES_REQUIRED wind_room FIXTURES_SETUP test_level_wind)
   add_test(NAME test_game COMMAND test_game ${cooked}/test_level_gba.bmpk ${cooked}/test_level_wind_gba.bmpk)
   set_tests_properties(test_game PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_wind")
@@ -1054,12 +1055,12 @@ if(BM_PLATFORM STREQUAL "host")
         set(elf ${BM_GBA_BUILD_DIR}/${image}.elf)
         # The full level, also on a multiboot GBA: the variant does not fit beside the embedded
         # pack there and replaces it (src/link/live.h). Into the boss hall within the run; on a
-        # multiboot GBA the pack is fitted around the first room (runtime-abi.md §0): beside
-        # the scripts, songs and sprites only that room fits, and the run stays in it.
+        # multiboot GBA the pack is fitted around the first room (runtime-abi.md §0): the second
+        # room comes with it, the boss hall does not, and the run stays in the second room.
         set(level test_level)
         set(rooms 2)
         if(image MATCHES "_mb$")
-          set(rooms 0)
+          set(rooms 1)
         endif()
         add_test(NAME live_mgba_bit_errors_${image}
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/${image}.gba --errors 2000 2000 run 30 hello

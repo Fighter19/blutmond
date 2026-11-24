@@ -532,6 +532,16 @@ value is dropped and counts as a script error.
 | 122 | `spawn_at_point(#Class, #layer, #point)` | `spawn` at that place, the new object's `angle` the point's; it faces left if `64 < angle < 192` |
 | 123 | `fly_angle(a, speed)` | `fly(speed * cos(a) >> 8, speed * sin(a) >> 8)` |
 
+| 124 | `handle_valid(h)` | `h` not 0, `h & 255` is `1 +` an object that is not gone, and its `serial == h >> 8` (mondskript.md §11, "Handles") |
+| 125 | `nearest_enemy(range, #how)` | the nearest object (by `dist` between the middles of the hitboxes) of another team, not hidden, with health above 0, within `range`; `#InFront`: only those on the side the caller faces (or straight above or below); a handle, or 0 |
+| 126 | `distance_to(a)` | `dist` from the caller's middle to `a`'s (the player's middle: its anchor, half its height up) |
+| 127 | `angle_to(a)` | `bmAngleOf` from the caller's middle to `a`'s |
+| 128 | `owner_face(a)` | from an attachment: the player faces `a`'s side (nothing if straight above or below) |
+| 129 | `layer_track(#layer, a, speed)` | the layer's `track = a`, `speed`; every frame (before it turns) its `goal` is the angle from the layer's anchor to `a`'s middle; once `a` is gone `track = 0` and the layer stays where it got to. `layer_aim` and `layer_turn` end it |
+| 130 | `marker_show(a, #sprite)` | that sprite's first animation is drawn at `a`'s middle (at time `frame`, priority 0, before the effects: in front of everything but the portrait) until `marker_hide` or `a` is gone (`markerTarget`, `markerSprite`: snapshot state) |
+| 131 | `marker_hide()` | no marker |
+| 132 | `self()` | a handle to the calling object (0 from an attachment) |
+
 Layer functions (112-122) work only from the player's attachments, on the player's figure (a
 layer named by the figure file); from an object, or for a layer the figure does not have,
 they do nothing and read 0.
@@ -551,7 +561,9 @@ remember the slot; from a room's attachment they do nothing.
 `dist(a, b) = max(|a|, |b|) + min(|a|, |b|) / 2`.
 
 Actor variables by index: 0 `x`, 1 `y`, 2 `home_x`, 3 `home_y`, 4 `facing`, 5 `health`, 6
-`team`, 7 `weight` (1 when it starts), 8 `angle` (0 when it starts; `spawn_at_point` sets it). Writing `facing` stores -1 for a negative value, else 1. `home_x` and `home_y` cannot
+`team`, 7 `weight` (1 when it starts), 8 `angle` (0 when it starts; `spawn_at_point` sets it).
+An object made at run time keeps where it was made (`home_x`, `home_y`) in the state
+(`spawnHomeX/Y`); before, a loaded state put its home where it was. Writing `facing` stores -1 for a negative value, else 1. `home_x` and `home_y` cannot
 be written. `health` and `team` start at 0 when an object starts anew; `team` keeps the low 8
 bits. An attachment of the player reads the player's `x`, `y`, `facing`, `health` and `team`
 (1) and can write only `health`, clamped to 1..30; one of the room reads the camera's `x`,

@@ -197,7 +197,7 @@ every other file of the same module.
 
 | Area | Implemented | Not yet |
 |---|---|---|
-| Types | `bool`, `int`, `fix`, `name`, `text`, enums; every variable takes 4 bytes | `byte`/`short` and unsigned types in classes, `fix16`, `vec`, structs as variables, arrays, handles (`C`, `C?`) |
+| Types | `bool`, `int`, `fix`, `name`, `text`, enums; every variable takes 4 bytes; handles to objects `Actor?` (variables) and `Actor` (what `if a := h` binds, and what runtime functions take), see "Handles" below | `byte`/`short` and unsigned types in classes, `fix16`, `vec`, structs as variables, arrays, handles of a class (`Bat?`) |
 | Enums | `enum E { A, B }` before the class or in a file of its own; variables and parameters of type `E`; values written `E.A`, or just `A` where the type is known (defaults, `defaultproperties`); `==` and `!=` between values of the same enum. An enum is not a number: assigning one to `int` or to another enum is an error | `switch`, conversion to `int` |
 | Structures | `struct S { ... }` and `struct S is Base { ... }` declared and laid out for records: field types, alignment, defaults, sizes, see "Structures" below; roles after a colon, `struct S is Base : item, equip(Weapon), stat_source(stats) { ... }` ([data-format.md](data-format.md) §6) | structures as variables of a class |
 | Records | `record<S>` variables, parameters and results, `#Name` as a record, field access (`.field`, `.inner.field`, `.array[2]`, through `record<T>` fields), `for x in records(S)`; [data-format.md](data-format.md) §5 | a dynamic array index |
@@ -206,10 +206,29 @@ every other file of the same module.
 | Events | Actor: `spawn()`, `tick()`, `touch()` (the player starts touching the object); Attachment: `attached()`, `detached()`, `tick()`, `press(name button)`, `release(name button)`, `jumped()`, `landed()`; both: `hit(int amount)` (struck: for an attachment, the player was), `struck(int amount)` (a hit of its own struck another); Actor: `wall()` (a moving object entered a solid cell); both: `blocked(int amount)` (a guard box
 stopped a hit), `guarded(int amount)` (a hit of its own was stopped); Attachment: `damage_in(int amount)`, `damage_out(int amount)` (filters: `set_damage(n)` changes what strikes the player or what the player's hit does, `damage_is(element)` tells its element; runtime-core.md §6, §10); Screen: `opened()`, `closed()`, `tick()`, `press(name)`, `release(name)`; in the class and per state | `dies`, `enter_room`, `leave_room`, `use`, `message`, the target and element of a hit |
 | States | `state` with events and state code after `begin:`, `gotostate`, `start_state`; latent `sleep(frames)`, `finish_anim()`, `wait_until(condition)` | functions overridden per state; locals and `for` in state code (their values would not survive a wait: use variables of the class) |
-| Statements | `var` locals, `if`/`else`, `while`, `loop`, `for x in a..b`, `break`, `continue`, `return`, assignment with `=`, `+=`, `-=`, `*=`, `/=` | `switch`, `match`, queries |
+| Statements | `var` locals, `if`/`else`, `if a := h { } else { }`, `while`, `loop`, `for x in a..b`, `break`, `continue`, `return`, assignment with `=`, `+=`, `-=`, `*=`, `/=` | `switch`, `match`, `for x in query` |
 | Expressions | `+ - * / %`, comparisons, `&& || !` (short circuit), `fix(...)`, `int(...)`; integer literals become `fix` where `fix` is expected; mixing `int` and `fix` is an error | |
 | defaultproperties | values of variables, `start_state`, `sprite = "name"` | component and struct fields |
 | Run time | 8 scripted objects per room, 16 values of `save` variables kept across rooms and in the save game; an inventory of 64 kinds of things up to 255 each and 16 stat values ([state.md](state.md) §4) | more objects and variables |
+
+### Handles
+
+A variable of type `Actor?` holds an object or nothing (`null`, what it starts with). It is
+used only through a check: `if a := Target { ... } else { ... }` binds `a` (of type `Actor`)
+in the block when `Target` is not null and its object is still there; otherwise the `else`
+block runs. Runtime functions that take an `Actor` need a checked one; passing an `Actor?` is a
+compile error ("check it first"). An `Actor` goes wherever an `Actor?` does. A variable cannot
+be an `Actor` (it would start empty), and an `Actor?` cannot be `save` or `link` (an object is
+there only in its room). Comparisons and member access (`a.x`) are not built: runtime functions
+read what is needed.
+
+At run time a handle is `serial << 8 | (index + 1)` (0: null): `serial` is a 16-bit count per
+object place that changes whenever another object takes the place, the object is destroyed,
+or a room is entered (snapshot state, actors.h), so an old handle fails the check instead of
+referring to another object. The check is the runtime function `handle_valid` (124), which the
+compiler calls. Functions with handles (runtime-core.md §7): `nearest_enemy(range, how)`
+(an `Actor?`), `distance_to(a)`, `angle_to(a)`, `owner_face(a)`, `layer_track(#layer, a,
+speed)`, `marker_show(a, #sprite)`, `marker_hide()`, `self()`.
 
 ### Attachments
 

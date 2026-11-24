@@ -57,6 +57,7 @@ typedef struct BmFigure
 /// What can change in a layer while the game runs (layer_* in scripts): snapshot state.
 typedef struct BmFigureLayerState
 {
+  uint32_t track;     // a handle (actors.h) the layer turns toward every frame (0: none)
   BmAnimState anim;   // an `own` or `aim` layer's, or one a script plays (BM_LAYER_PLAYED)
   uint16_t sprite;    // string id of a sprite shown instead of the figure's (0xFFFF: the figure's)
   uint8_t palette;    // a palette of its sprite (0xFF: the figure's)

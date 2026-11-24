@@ -444,6 +444,21 @@ static void animateLayers(BmGame *g)
   for (uint8_t i = 0; i < g->playerFigure.layerCount; i++)
   {
     BmFigureLayerState *l = &g->playerLayers[i];
+    // Tracking an object: the goal is the way to its middle from the layer's anchor; once the
+    // object is gone the layer stays where it got to.
+    if (l->track != 0)
+    {
+      int32_t t = bmActorsHandleIndex(g, l->track);
+      if (t < 0) l->track = 0;
+      else
+      {
+        int32_t lx, ly, tx, ty;
+        uint8_t unused;
+        bmGamePlayerPoint(g, (int8_t)i, 0xFFFF, &lx, &ly, &unused);
+        bmActorsCentre(g, (uint8_t)t, &tx, &ty);
+        l->goal = bmAngleOf(tx - BM_FIX_INT(lx), ty - BM_FIX_INT(ly));
+      }
+    }
     if (l->speed != 0) l->angle = bmAngleToward(l->angle, l->goal, l->speed);
     int8_t s = layerSheet(g, i);
     if (i == 0 || s < 0) continue;
@@ -508,8 +523,14 @@ int32_t bmGameLayerCall(BmGame *g, uint16_t api, const int32_t *args)
   case BM_SCRIPT_API_layer_aim:
     l->angle = (uint8_t)args[1];
     l->speed = 0;
+    l->track = 0;
+    return 0;
+  case BM_SCRIPT_API_layer_track:
+    l->track = bmActorsHandleIndex(g, (uint32_t)args[1]) >= 0 ? (uint32_t)args[1] : 0;
+    l->speed = (uint8_t)(args[2] < 0 ? 0 : args[2] > 255 ? 255 : args[2]);
     return 0;
   case BM_SCRIPT_API_layer_turn:
+    l->track = 0;
     l->goal = (uint8_t)args[1];
     l->speed = (uint8_t)(args[2] < 0 ? 0 : args[2] > 255 ? 255 : args[2]);
     if (l->speed == 0) l->angle = l->goal;
@@ -637,6 +658,18 @@ static void updateSprites(BmGame *g)
     if (bmGameSheetBank(g, s, 0) >= 0)
       next = (uint8_t)(next + bmSpriteSheetDraw(&g->sheets[s], bmAnimFrameAt(&g->sheets[s], 0, g->frame), BM_GAME_PORTRAIT_X,
                                                 BM_GAME_PORTRAIT_Y, false, 0, next, 4));
+  }
+  // The marker (marker_show) at its object's middle, in front of it.
+  if (g->markerTarget != 0)
+  {
+    int32_t t = bmActorsHandleIndex(g, g->markerTarget), s = sheetNamed(g, g->markerSprite), mx, my;
+    if (t < 0) g->markerTarget = 0;
+    else if (bmGameSheetBank(g, (int8_t)s, 0) >= 0)
+    {
+      bmActorsCentre(g, (uint8_t)t, &mx, &my);
+      next = (uint8_t)(next + bmSpriteSheetDraw(&g->sheets[s], bmAnimFrameAt(&g->sheets[s], 0, g->frame), mx - camX, my - camY, false, 0,
+                                                next, 4));
+    }
   }
   // Effects (sparks, debris) in front of the figures they are on, the player too.
   for (uint8_t k = 0; k < BM_GAME_EFFECTS && next < BM_GAME_MAX_OAM; k++)
@@ -1865,6 +1898,7 @@ static const BmStateField s_gameFields[] = {
   F(playerAnim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerAnim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   // The player's layers (figure.h); the root's animation is playerAnim.
+  F(playerLayers[0].track, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   F(playerLayers[0].sprite, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerLayers[0].palette, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerLayers[0].angle, BM_TYPE_U8, BM_STATE_SNAPSHOT),
@@ -1875,6 +1909,7 @@ static const BmStateField s_gameFields[] = {
   F(playerLayers[1].anim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerLayers[1].anim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerLayers[1].anim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[1].track, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   F(playerLayers[1].sprite, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerLayers[1].palette, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerLayers[1].angle, BM_TYPE_U8, BM_STATE_SNAPSHOT),
@@ -1885,6 +1920,7 @@ static const BmStateField s_gameFields[] = {
   F(playerLayers[2].anim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerLayers[2].anim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerLayers[2].anim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[2].track, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   F(playerLayers[2].sprite, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerLayers[2].palette, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerLayers[2].angle, BM_TYPE_U8, BM_STATE_SNAPSHOT),
@@ -1895,6 +1931,7 @@ static const BmStateField s_gameFields[] = {
   F(playerLayers[3].anim.finished, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerLayers[3].anim.step, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerLayers[3].anim.timer, BM_TYPE_U16, BM_STATE_SNAPSHOT),
+  F(playerLayers[3].track, BM_TYPE_U32, BM_STATE_SNAPSHOT),
   F(playerLayers[3].sprite, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(playerLayers[3].palette, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(playerLayers[3].angle, BM_TYPE_U8, BM_STATE_SNAPSHOT),
@@ -1921,6 +1958,11 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.weight, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.angle, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.extraHidden, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.serial, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.spawnHomeX, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.spawnHomeY, BM_TYPE_FIX, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  F(markerTarget, BM_TYPE_U32, BM_STATE_SNAPSHOT),
+  F(markerSprite, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   BM_STATE_ARRAY(BmGame, actors.animFinished, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animStep, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),

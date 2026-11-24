@@ -1,6 +1,6 @@
 # Plan: layered sprites and variants
 
-Status: steps 1 to 5 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
+Status: steps 1 to 6 built. Palettes: `palette` (a second image or `swap`s) in the sprite file,
 a palette table in `SPRT` version 3 ([../spec/sprite-format.md](../spec/sprite-format.md)), the
 room object's property `palette`, `set_palette` and `flash` in scripts. Sheets: every sheet's
 data opened once per pack, sprite memory and banks given out room by room per (sheet, palette)
@@ -47,8 +47,21 @@ chain mail: the coat in steel). Where it differs: the fields are found by name i
 has one extra layer, not a figure of its own (objects as figures, with `figure look`, are left
 for later); a weapon layer filled by the equipped weapon is not built (the test level's
 weapons are drawn into the player's frames); the Data tab does nothing new (a kind is a record
-like any other, made there by copying a row). Steps 6 and 7 are open. Milestone M18 in
-[../PLAN.md](../PLAN.md).
+like any other, made there by copying a row).
+
+Step 6 built: optional handles in Mondskript (`Actor?`, `null`, `if a := h { } else { }`;
+[../spec/mondskript.md](../spec/mondskript.md) §11 "Handles"), handles with serials at run
+time, `nearest_enemy`, `distance_to`, `angle_to`, `owner_face`, `layer_track`, `marker_show`
+and `marker_hide`, `self` (runtime-core.md §7). The test pack's `LockOn` (Select locks on and
+lets go, B shoots a `Spark` from the hand) and `Circler` (a bat flying a circle round the
+player): the torso goes through all nine directions on both facings while the legs stand or
+run, a snapshot taken mid-turn goes on byte for byte, a shot from the hand strikes the bat, and
+the lock ends when the bat is gone. Where it differs: handles are of `Actor` only, not of a
+class (`Bat?`); `t.alive()` is the check itself; the lock and the bolt are in the test pack,
+not in the test level's spells (whose casts stay at the player's anchor), and there is no lock
+button of its own (Select, the second quick slot's, here); the marker is a sprite named by the
+script, drawn at the target's middle, not at a point `centre`. Step 7 is open. Milestone M18
+in [../PLAN.md](../PLAN.md).
 
 ## Dependencies
 

@@ -204,6 +204,9 @@ typedef struct BmGame
   BmFigureLayerState playerLayers[BM_FIGURE_MAX_LAYERS];   // the player's layers ([0].anim unused: playerAnim)
   uint8_t playerLayerPalette[BM_FIGURE_MAX_LAYERS];      // the palette each layer's figure line names
   uint16_t equipPalette;   // string id of the palette the equipment names (look_palette), 0xFFFF none; derived
+  // The marker (marker_show): a sprite's first animation drawn at an object's middle.
+  uint32_t markerTarget;   // a handle, 0: none
+  uint16_t markerSprite;   // string id of the sprite
   // Scripted objects of the room (docs/spec/mondskript.md).
   BmActors actors;
   // What the player carries and wears (docs/plans/structures.md §7).

@@ -60,10 +60,16 @@ static bool ascending(const BmPack *pPack)
 // A fitted push: which chunks keep their bytes (the rest are left out, BM_PACK_ENTRY_ABSENT),
 // the size and checksum of the pack that results. Its table is the full pack's, so chunk
 // indices, room numbers and string ids stay.
+#define FIT_MAX_ROOMS 64
+
 typedef struct FitPlan
 {
   uint8_t keep[BM_LIVE_MAX_CHUNKS / 8];
   uint32_t size, crc, leftOut;
+  // Working space, here rather than on the stack (a GBA sends with a small one).
+  uint8_t named[BM_LIVE_MAX_CHUNKS / 8];
+  int32_t queue[FIT_MAX_ROOMS];
+  uint8_t seen[FIT_MAX_ROOMS];
 } FitPlan;
 
 static bool kept(const FitPlan *f, uint32_t i) { return f == NULL || (f->keep[i / 8] & (1u << (i % 8))) != 0; }
@@ -142,8 +148,6 @@ static void sentEntry(const BmPack *pPack, const FitPlan *f, uint32_t i, uint32_
   }
 }
 
-#define FIT_MAX_ROOMS 64
-
 // The chunk of room number `room`, or -1.
 static int32_t roomChunk(const BmPack *pPack, int32_t room)
 {
@@ -196,16 +200,17 @@ static uint32_t roomExits(const BmPack *pPack, int32_t room, int32_t *pOut, uint
   return out;
 }
 
-// Picks what goes into `budget` bytes: every chunk no room names (but the languages), the room
-// `room`, room 0, then the other rooms nearest to them through doors first (then the ones no
-// door leads to, in order; each whole, if it fits), then the languages.
+// Picks what goes into `budget` bytes: every chunk no room names (but the songs and the
+// languages), the room `room`, room 0, the songs, then the other rooms nearest to them through
+// doors first (then the ones no door leads to, in order; each whole, if it fits), then the
+// languages.
 static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan *f)
 {
   uint32_t count = bmPackChunkCount(pPack);
   if (count > BM_LIVE_MAX_CHUNKS || (pPack->header.flags & BM_PACK_FLAG_UPDATE)) return false;
   memset(f, 0, sizeof(*f));
   f->size = BM_PACK_HEADER_SIZE + count * BM_PACK_CHUNK_ENTRY_SIZE;
-  uint8_t named[BM_LIVE_MAX_CHUNKS / 8] = { 0 };
+  uint8_t *named = f->named;
   int32_t rooms = 0;
   for (uint32_t i = 0; i < count; i++)
   {
@@ -220,16 +225,25 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
   {
     BmChunkEntry e;
     bmPackGetChunk(pPack, i, &e);
-    if (e.id != BM_CHUNK_ROOM && e.id != BM_CHUNK_LANG && !(named[i / 8] & (1u << (i % 8)))) fitKeep(pPack, f, i);
+    if (e.id != BM_CHUNK_ROOM && e.id != BM_CHUNK_LANG && e.id != BM_CHUNK_SONG && !(named[i / 8] & (1u << (i % 8)))) fitKeep(pPack, f, i);
   }
   if (f->size > budget) return false;
   // Breadth first from the room asked for and room 0.
-  int32_t queue[FIT_MAX_ROOMS];
-  uint8_t seen[FIT_MAX_ROOMS] = { 0 };
+  int32_t *queue = f->queue;
+  uint8_t *seen = f->seen;
   uint32_t head = 0, tail = 0;
   if (rooms > FIT_MAX_ROOMS) rooms = FIT_MAX_ROOMS;
   if (room >= 0 && room < rooms) seen[room] = 1, queue[tail++] = room;
   if (!seen[0] && rooms > 0) seen[0] = 1, queue[tail++] = 0;
+  // The room asked for and room 0, then the songs (a song left out is silence, a room left
+  // out cannot be entered), then the rest nearest first.
+  for (uint32_t k = 0; k < tail; k++) fitRoom(pPack, f, queue[k], budget);
+  for (uint32_t i = 0; i < count; i++)
+  {
+    BmChunkEntry e;
+    bmPackGetChunk(pPack, i, &e);
+    if (e.id == BM_CHUNK_SONG && f->size + fitCost(pPack, f, i) <= budget) fitKeep(pPack, f, i);
+  }
   while (head < tail)
   {
     int32_t r = queue[head++];

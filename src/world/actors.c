@@ -763,6 +763,64 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     a->currentSlot = slot;
     break;
   }
+  case BM_SCRIPT_API_handle_valid:
+    *result = bmActorsHandleIndex(g, (uint32_t)args[0]) >= 0;
+    break;
+  case BM_SCRIPT_API_self:
+    *result = i < BM_ACTORS_MAX ? (int32_t)bmActorsHandle(g, i) : 0;
+    break;
+  case BM_SCRIPT_API_nearest_enemy:
+  case BM_SCRIPT_API_distance_to:
+  case BM_SCRIPT_API_angle_to:
+  case BM_SCRIPT_API_owner_face:
+  {
+    // From the figure calling: an object, or the player (its attachments, the room's).
+    int32_t fx, fy, facing = i < BM_ACTORS_MAX ? a->facing[i] : g->player.facing;
+    uint8_t team = i < BM_ACTORS_MAX ? a->team[i] : BM_HITS_PLAYER_TEAM;
+    if (i < BM_ACTORS_MAX) bmActorsCentre(g, i, &fx, &fy);
+    else
+    {
+      fx = BM_FIX_INT(g->player.x);
+      fy = BM_FIX_INT(g->player.y) - (g->player.flipped ? -1 : 1) * g->playerParams.height / 2;
+    }
+    if (api == BM_SCRIPT_API_nearest_enemy)
+    {
+      // The nearest object of another team that can be struck (health above 0), within
+      // `range` (dist), and in front if #InFront.
+      const char *how = bmPackString(g->pPack, (uint16_t)args[1]);
+      bool inFront = how != NULL && strcmp(how, "InFront") == 0;
+      int32_t best = -1, bestDistance = args[0] + 1;
+      for (uint8_t k = 0; k < a->count; k++)
+      {
+        if (k == i || a->gone[k] || a->hidden[k] || a->team[k] == team || a->health[k] <= 0) continue;
+        int32_t cx, cy;
+        bmActorsCentre(g, k, &cx, &cy);
+        if (inFront && (cx - fx) * facing < 0) continue;
+        int32_t d = distance(cx - fx, cy - fy);
+        if (d < bestDistance) best = k, bestDistance = d;
+      }
+      *result = best >= 0 ? (int32_t)bmActorsHandle(g, (uint8_t)best) : 0;
+      break;
+    }
+    int32_t t = bmActorsHandleIndex(g, (uint32_t)args[0]);
+    if (t < 0) break;
+    int32_t tx, ty;
+    bmActorsCentre(g, (uint8_t)t, &tx, &ty);
+    if (api == BM_SCRIPT_API_distance_to) *result = distance(tx - fx, ty - fy);
+    else if (api == BM_SCRIPT_API_angle_to) *result = bmAngleOf(tx - fx, ty - fy);
+    else if (i == BM_ACTORS_OWNER && tx != fx) g->player.facing = (int8_t)(tx < fx ? -1 : 1);
+    break;
+  }
+  case BM_SCRIPT_API_layer_track:
+    if (i == BM_ACTORS_OWNER) *result = bmGameLayerCall(g, api, args);
+    break;
+  case BM_SCRIPT_API_marker_show:
+    g->markerTarget = bmActorsHandleIndex(g, (uint32_t)args[0]) >= 0 ? (uint32_t)args[0] : 0;
+    g->markerSprite = (uint16_t)args[1];
+    break;
+  case BM_SCRIPT_API_marker_hide:
+    g->markerTarget = 0;
+    break;
   case BM_SCRIPT_API_set_palette:
   {
     // A palette of its sprite by name; one it does not have: its own.
@@ -1305,8 +1363,9 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->object[total] = 0xFF;
     a->kind[total] = 0;
     a->extraSheet[total] = -1;
-    a->homeX[total] = a->x[total];
-    a->homeY[total] = a->y[total];
+    // Its home (where it was made) comes with the state (spawnHome).
+    a->homeX[total] = a->spawnHomeX[total];
+    a->homeY[total] = a->spawnHomeY[total];
     uint16_t cls = a->classIndex[total];
     uint16_t spriteId = bmVmClassSprite(&a->modules[a->classModule[cls]], a->classInModule[cls]);
     a->sheet[total] = sheetNamed(g, spriteId != BM_VM_NONE ? bmPackString(g->pPack, spriteId)
@@ -1317,7 +1376,11 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
   if (fresh || perObject)
   {
     a->count = n;
-    for (uint8_t i = 0; i < BM_ACTORS_MAX; i++) a->spawned[i] = a->gone[i] = 0;
+    for (uint8_t i = 0; i < BM_ACTORS_MAX; i++)
+    {
+      a->spawned[i] = a->gone[i] = 0;
+      a->serial[i]++;   // handles held from before do not refer to these
+    }
   }
   else a->count = total;
   if (!fresh && !perObject) return;
@@ -1534,10 +1597,11 @@ static bool spawnNamed(BmGame *g, const char *name, int32_t x, int32_t y, uint32
   }
   a->classIndex[i] = (uint16_t)cls;
   a->object[i] = 0xFF;
+  a->serial[i]++;
   a->spawned[i] = 1;
   a->gone[i] = 0;
-  a->homeX[i] = a->x[i] = x;
-  a->homeY[i] = a->y[i] = y;
+  a->spawnHomeX[i] = a->homeX[i] = a->x[i] = x;
+  a->spawnHomeY[i] = a->homeY[i] = a->y[i] = y;
   a->facing[i] = 1;
   a->hidden[i] = a->touching[i] = 0;
   a->health[i] = 0;
@@ -1614,10 +1678,32 @@ void bmActorsMove(BmGame *g)
   }
 }
 
+int32_t bmActorsHandleIndex(const BmGame *g, uint32_t h)
+{
+  const BmActors *a = &g->actors;
+  uint32_t i = (h & 0xFF) - 1;
+  if (h == 0 || i >= a->count || a->gone[i] || a->serial[i] != (uint16_t)(h >> 8)) return -1;
+  return (int32_t)i;
+}
+
+uint32_t bmActorsHandle(const BmGame *g, uint8_t i)
+{
+  return (uint32_t)g->actors.serial[i] << 8 | (uint32_t)(i + 1);
+}
+
+void bmActorsCentre(const BmGame *g, uint8_t i, int32_t *pX, int32_t *pY)
+{
+  int32_t x, y, w, h;
+  boxOf(g, i, &x, &y, &w, &h);
+  *pX = x + w / 2;
+  *pY = y + h / 2;
+}
+
 void bmActorsDestroy(BmGame *g, uint8_t i)
 {
   BmActors *a = &g->actors;
   if (i >= a->count) return;
+  a->serial[i]++;
   a->gone[i] = 1;
   a->hidden[i] = 1;
   a->touching[i] = 0;

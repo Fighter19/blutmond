@@ -19,6 +19,8 @@ typedef enum BmScriptType {
   BM_SCRIPT_TEXT,   // string id, written "text"
   BM_SCRIPT_ENUM,   // a value of an enum (0, 1, ...); which enum only the compiler knows
   BM_SCRIPT_RECORD, // record<S>: the key of a record (FNV-1a of its name), 0 none
+  BM_SCRIPT_HANDLE, // Actor: a handle to an object that was there when it was checked (mondskript.md §6)
+  BM_SCRIPT_OPTIONAL, // Actor?: a handle or null (0); checked with `if a := h { ... }`
 } BmScriptType;
 
 // X(name, result type, argument count, argument types (4)..., latent)
@@ -147,7 +149,16 @@ typedef enum BmScriptType {
   X(layer_point_y,     FIX,  2, NAME,  NAME,  VOID,  VOID, 0) \
   X(layer_point_angle, INT,  2, NAME,  NAME,  VOID,  VOID, 0) \
   X(spawn_at_point,    BOOL, 3, NAME,  NAME,  NAME,  VOID, 0) \
-  X(fly_angle,         VOID, 2, INT,   FIX,   VOID,  VOID, 0)
+  X(fly_angle,         VOID, 2, INT,   FIX,   VOID,  VOID, 0) \
+  X(handle_valid,      BOOL, 1, OPTIONAL, VOID, VOID, VOID, 0) \
+  X(nearest_enemy,     OPTIONAL, 2, INT, NAME,  VOID,  VOID, 0) \
+  X(distance_to,       INT,  1, HANDLE, VOID, VOID,  VOID, 0) \
+  X(angle_to,          INT,  1, HANDLE, VOID, VOID,  VOID, 0) \
+  X(owner_face,        VOID, 1, HANDLE, VOID, VOID,  VOID, 0) \
+  X(layer_track,       VOID, 3, NAME,  HANDLE, INT,  VOID, 0) \
+  X(marker_show,       VOID, 2, HANDLE, NAME, VOID,  VOID, 0) \
+  X(marker_hide,       VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(self,              HANDLE, 0, VOID, VOID, VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the

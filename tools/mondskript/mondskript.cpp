@@ -67,7 +67,7 @@ const char *const kActorOnly[] = {
 };
 const char *const kBaseClasses[] = {"Actor", "Attachment", "Screen"};   // by BmScriptKind
 const char *const kKeywords[] = {"class", "extends", "var", "const", "function", "event", "state", "begin", "gotostate", "if", "else",
-                                 "while", "for", "in", "loop", "break", "continue", "return", "defaultproperties", "true", "false",
+                                 "while", "for", "in", "loop", "break", "continue", "return", "defaultproperties", "true", "false", "null",
                                  "save", "link", "transient", "derived", "wait_until", "enum", "struct", "is"};
 const char *const kTypes[] = {"bool", "int", "fix", "name", "text"};
 
@@ -210,7 +210,7 @@ std::vector<Token> lex(const std::string &src)
       t.text = std::string(1, c);
       for (const char *p : two)
         if (i + 1 < src.size() && src[i] == p[0] && src[i + 1] == p[1]) t.text = p;
-      if (!std::strchr("+-*/%=<>!(){};,.:&|[]", c)) throw CompileError{line, col, std::string("unexpected character '") + c + "'"};
+      if (!std::strchr("+-*/%=<>!(){};,.:&|[]?", c)) throw CompileError{line, col, std::string("unexpected character '") + c + "'"};
       advance(t.text.size());
     }
     out.push_back(t);
@@ -928,6 +928,13 @@ private:
       pos_++;
       return true;
     }
+    // A handle to an object (mondskript.md §6): Actor, or Actor? (optional).
+    if (isWord("Actor"))
+    {
+      pos_++;
+      *pType = acceptPunct("?") ? BM_SCRIPT_OPTIONAL : BM_SCRIPT_HANDLE;
+      return true;
+    }
     if (isWord("record") && isPunct("<", 1))
     {
       pos_ += 2;
@@ -1087,7 +1094,11 @@ private:
           else if (acceptWord("derived")) f.flags |= BM_SCRIPT_FIELD_TRANSIENT;
           else break;
         }
+        Token typeTok = peek();
         if (!parseType(&f.type)) error(peek(), "expected a type (bool, int, fix, name, text, an enum or record<S>)");
+        if (f.type == BM_SCRIPT_HANDLE) error(typeTok, "a variable that holds an object starts empty: Actor? (and is checked before use)");
+        if (f.type == BM_SCRIPT_OPTIONAL && (f.flags & (BM_SCRIPT_FIELD_SAVE | BM_SCRIPT_FIELD_LINK)))
+          error(typeTok, "an object is there only in this room: an Actor? cannot be saved or sent");
         f.typeLabel = tn(f.type);
         Token name = expectIdent("the name of the variable");
         f.name = name.text;
@@ -1305,6 +1316,14 @@ private:
     if ((want == BM_SCRIPT_RECORD && isRecordType(v.type)) || (want == BM_SCRIPT_ENUM && isEnumType(v.type))) return;
     // A record from a runtime function (of no known structure) goes into any record<S>.
     if (v.type == BM_SCRIPT_RECORD && isRecordType(want)) return;
+    // A checked handle goes where one that may be null does; the other way it must be checked.
+    if (v.type == BM_SCRIPT_HANDLE && want == BM_SCRIPT_OPTIONAL)
+    {
+      v.type = BM_SCRIPT_OPTIONAL;
+      return;
+    }
+    if (v.type == BM_SCRIPT_OPTIONAL && want == BM_SCRIPT_HANDLE)
+      error(at, std::string(what) + " must be an Actor that is there: check the Actor? first (if a := it { ... })");
     if (v.type != want)
       error(at, std::string(what) + " must be " + tn(want) + ", this is " + tn(v.type) +
                     (v.type == BM_SCRIPT_INT && want == BM_SCRIPT_FIX ? " (write fix(...) to convert)"
@@ -1416,6 +1435,7 @@ private:
     }
     if (t.kind != Tok::Ident) error(t, t.kind == Tok::End ? "the file ends in the middle of an expression" : "unexpected '" + t.text + "'");
     if (t.text == "true" || t.text == "false") { v.isConst = true; v.type = BM_SCRIPT_BOOL; v.value = t.text == "true"; return v; }
+    if (t.text == "null") { v.isConst = true; v.type = BM_SCRIPT_OPTIONAL; v.value = 0; return v; }
 
     if (isPunct("("))
     {
@@ -1800,6 +1820,46 @@ private:
     }
     if (acceptWord("if"))
     {
+      // if a := handle { ... }: a is the object, when the handle is not null and the object
+      // still there (mondskript.md §6).
+      if (peek().kind == Tok::Ident && isPunct(":=", 1))
+      {
+        Token name = next();
+        pos_++;
+        Token at = peek();
+        Value h = expression();
+        expectType(h, BM_SCRIPT_OPTIONAL, at, "what is checked");
+        scopes_.emplace_back();
+        int saved = localTop_;
+        int reg = declareLocal(name, BM_SCRIPT_HANDLE);
+        if (h.isConst)
+        {
+          tempTop_ = reg;
+          materialise(h, at);
+          tempTop_ = localTop_;
+        }
+        else if (h.reg != reg) op2(BM_OP_MOVE, reg, h.reg);
+        int ok = temp(at);
+        int arg = temp(at);
+        op2(BM_OP_MOVE, arg, reg);
+        op2(BM_OP_CALLN, ok, BM_SCRIPT_API_handle_valid | (arg << 8));
+        size_t toElse = jump(BM_OP_JZ, ok);
+        tempTop_ = localTop_;
+        block();
+        scopes_.pop_back();
+        localTop_ = saved;
+        tempTop_ = localTop_;
+        if (acceptWord("else"))
+        {
+          size_t toEnd = jump(BM_OP_JMP, 0);
+          patch(toElse);
+          if (isWord("if")) statement();
+          else block();
+          patch(toEnd);
+        }
+        else patch(toElse);
+        return;
+      }
       Value c = condition();
       size_t toElse = jump(BM_OP_JZ, materialise(c, t));
       block();
@@ -2060,8 +2120,8 @@ bool Module::ok() const
 
 const char *typeName(BmScriptType type)
 {
-  static const char *const names[] = {"nothing", "bool", "int", "fix", "name", "text", "enum", "record"};
-  return int(type) >= 0 && int(type) <= BM_SCRIPT_RECORD ? names[type] : "enum";
+  static const char *const names[] = {"nothing", "bool", "int", "fix", "name", "text", "enum", "record", "Actor", "Actor?"};
+  return int(type) >= 0 && int(type) <= BM_SCRIPT_OPTIONAL ? names[type] : "enum";
 }
 
 const char *dataTypeName(BmDataType type)

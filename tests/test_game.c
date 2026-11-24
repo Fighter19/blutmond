@@ -2551,6 +2551,97 @@ static void testEquipmentShows(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// The lock (layered-sprites.md step 6; the wind pack's LockOn, Circler and Spark): Select locks
+// on to a bat flying a circle; the marker sits on it, the player faces it and the torso turns
+// after it through the aiming directions while the legs stand or run; a snapshot taken
+// mid-turn goes on the same; a shot from the hand strikes it; Select again lets go. Handles
+// go stale when the object is gone.
+static void testTheLock(void)
+{
+  if (s_windData == NULL) return;
+  startWith(s_windData, s_windSize, NULL);   // the first room: no wind
+  frames(3, 0);
+  BmGame *g = &s_game;
+  bmBodyPlace(&g->player, 120, 160);
+  frames(2, 0);
+  // Round the player's middle: it passes over, behind, under and in front.
+  int bat = spawnAs("Circler", 120, 160 - 24, BM_ACTORS_ROOM);
+  TEST_ASSERT(bat >= 0);
+  TEST_ASSERT(bmAttachmentsAttach(g, 3, stringId("LockOn"), 0));
+  frames(2, 0);
+  frames(1, BM_KEY_SELECT);
+  frames(1, 0);
+  const BmFigureLayerState *l = &g->playerLayers[1];
+  TEST_ASSERT(bmActorsHandleIndex(g, g->markerTarget) == bat && bmActorsHandleIndex(g, l->track) == bat && l->speed == 6);
+  TEST_ASSERT(l->flags & BM_LAYER_PLAYED);
+  // Round and round: the torso through the directions, facing either way.
+  const BmSpriteSheet *ts = &g->sheets[g->playerLayerSheet[1]];
+  int32_t aim = bmSpriteSheetAnim(ts, g->pPack, "aim");
+  bool seen[9] = { false }, facedLeft = false, facedRight = false;
+  for (int f = 0; f < 140; f++)
+  {
+    frames(1, 0);
+    TEST_ASSERT(l->anim.anim == aim && bmActorsHandleIndex(g, l->track) == bat);
+    seen[bmSpriteSheetDirectionStep(ts, (uint8_t)aim, bmAngleOfDrawing(l->angle, g->player.facing < 0, false))] = true;
+    facedLeft |= g->player.facing < 0;
+    facedRight |= g->player.facing > 0;
+  }
+  int directions = 0;
+  for (int k = 0; k < 9; k++) directions += seen[k];
+  printf("    %d of 9 directions, faced left %d, right %d\n", directions, facedLeft, facedRight);
+  TEST_ASSERT(directions >= 7 && facedLeft && facedRight);
+  // The legs run while the torso aims.
+  frames(8, BM_KEY_LEFT);
+  TEST_ASSERT(g->playerAnim.anim == g->playerAnims[BM_PLAYER_ANIM_RUN] && l->anim.anim == aim);
+  frames(4, 0);
+  // A snapshot mid-turn goes on the same.
+  static uint8_t snap[BM_LIVE_STATE_CAPACITY], a1[BM_LIVE_STATE_CAPACITY], a2[BM_LIVE_STATE_CAPACITY];
+  BmStateBlock block = bmGameStateBlock(g);
+  uint32_t size = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, snap, sizeof(snap));
+  TEST_ASSERT(size > 0);
+  printf("    snapshot locked on: %u bytes\n", (unsigned)size);
+  frames(30, 0);
+  uint32_t n1 = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, a1, sizeof(a1));
+  TEST_ASSERT(bmStateRead(&block, 1, snap, size) == BM_STATE_OK && bmGameAfterLoad(g) == BM_SUCCESS);
+  frames(30, 0);
+  uint32_t n2 = bmStateWrite(&block, 1, BM_STATE_SNAPSHOT, a2, sizeof(a2));
+  {
+    uint32_t at = 16;
+    for (uint16_t fi = 0; fi < block.fieldCount; fi++)
+    {
+      const BmStateField *fd = &block.pFields[fi];
+      if (!(fd->flags & BM_STATE_SNAPSHOT) && !(fd->flags & (BM_STATE_SAVE | BM_STATE_LINK))) continue;
+      uint32_t n = bmStateTypeSize(fd->type) * fd->count;
+      for (uint32_t k = at; k < at + n && k < n1; k++)
+        if (a1[k] != a2[k]) { printf("field %s differs (at %u)\n", fd->name, k); break; }
+      at += n;
+    }
+  }
+  TEST_ASSERT(n1 == n2 && memcmp(a1, a2, n1) == 0);
+  // Shots from the hand until one strikes.
+  int32_t health = s_game.actors.health[bat];
+  for (int shot = 0; shot < 8 && s_game.actors.health[bat] == health; shot++)
+  {
+    frames(1, BM_KEY_B);
+    for (int f = 0; f < 40 && s_game.actors.health[bat] == health; f++) frames(1, 0);
+  }
+  TEST_ASSERT(s_game.actors.health[bat] < health);
+  // Select lets go: the torso follows the legs again, no marker.
+  frames(1, BM_KEY_SELECT);
+  frames(1, 0);
+  TEST_ASSERT(g->markerTarget == 0 && !(l->flags & BM_LAYER_PLAYED));
+  // Locked again, then the bat is gone: the handle is stale, the lock and the marker end.
+  frames(1, BM_KEY_SELECT);
+  frames(1, 0);
+  uint32_t handle = g->markerTarget;
+  TEST_ASSERT(bmActorsHandleIndex(g, handle) == bat);
+  bmActorsDestroy(g, (uint8_t)bat);
+  TEST_ASSERT(bmActorsHandleIndex(g, handle) < 0);
+  frames(2, 0);
+  TEST_ASSERT(g->markerTarget == 0 && l->track == 0 && !(l->flags & BM_LAYER_PLAYED));
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 // Aiming (layered-sprites.md step 4; the wind pack's Aimer and Spark): an attachment plays the
 // torso's direction set and turns it toward a point by 8 a frame; the torso shows the step
 // nearest to its angle while the legs go on with their own animation; the hand point moves
@@ -2772,6 +2863,7 @@ int main(int argc, char **argv)
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);
+  RUN_TEST(testTheLock);
   RUN_TEST(testTheGrapple);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);

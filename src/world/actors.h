@@ -80,6 +80,13 @@ typedef struct BmActors
   int8_t extraSheet[BM_ACTORS_MAX];
   uint16_t extraPoint[BM_ACTORS_MAX];
   uint8_t extraHidden[BM_ACTORS_MAX];
+  // Handles (mondskript.md §6): a script holds an object as serial << 8 | (index + 1); the
+  // serial of a place changes when another object takes it, it is destroyed, or a room is
+  // entered, so an old handle never refers to another object.
+  uint16_t serial[BM_ACTORS_MAX];
+  // Where an object made at run time was made: its home_x/home_y, kept in the state (a room
+  // object's home is its place in the room).
+  int32_t spawnHomeX[BM_ACTORS_MAX], spawnHomeY[BM_ACTORS_MAX];
   uint8_t flash[BM_ACTORS_MAX];        // frames it is drawn all white (flash)
   uint8_t affinity[BM_ACTORS_MAX];     // elements it is weak to (bits 0-3) and resists (4-7)
   int32_t knock[BM_ACTORS_MAX];        // fix: pixels per frame it is pushed by the last hit
@@ -154,6 +161,13 @@ int32_t bmActorsClassNamed(const struct BmGame *pGame, const char *name);
 /// when their middle enters a solid cell, and those with a lifetime count it down (destroyed,
 /// or hidden if they belong to the room, at 0).
 void bmActorsMove(struct BmGame *pGame);
+
+/// The object a handle refers to, or -1 (null, gone, or another object there now).
+int32_t bmActorsHandleIndex(const struct BmGame *pGame, uint32_t handle);
+/// A handle to object `i`.
+uint32_t bmActorsHandle(const struct BmGame *pGame, uint8_t i);
+/// The middle of object `i`'s hitbox (room pixels): where aiming and markers point.
+void bmActorsCentre(const struct BmGame *pGame, uint8_t i, int32_t *pX, int32_t *pY);
 
 void bmActorsDestroy(struct BmGame *pGame, uint8_t actor);
 
