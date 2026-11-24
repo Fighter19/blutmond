@@ -22,6 +22,7 @@ extern "C" {
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <set>
 #include <sstream>
