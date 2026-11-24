@@ -82,15 +82,18 @@ static bool kept(const FitPlan *f, uint32_t i) { return f == NULL || (f->keep[i 
 
 static uint32_t padded(uint32_t n) { return (n + 3u) & ~3u; }
 
-// The chunks a ROOM chunk names (room-format.md §5: maps, collision, objects, area), each once.
+// The chunks a ROOM chunk names (room-format.md §5: maps, collision, objects, area, its light),
+// each once.
+#define ROOM_REFS (5 + 1 + 8)
 static uint32_t roomRefs(const BmPack *pPack, uint32_t index, uint16_t *pRefs)
 {
   BmChunkEntry e;
   const uint8_t *r = bmPackChunkData(pPack, index, NULL);
   if (r == NULL || !bmPackGetChunk(pPack, index, &e) || e.id != BM_CHUNK_ROOM || e.size < 44) return 0;
   uint32_t n = 0, count = bmPackChunkCount(pPack);
-  uint16_t all[5 + 8];
+  uint16_t all[ROOM_REFS];
   for (uint32_t k = 0; k < 5; k++) all[n++] = bmRead16(r + 30 + 2 * k);
+  if (bmRead16(r + 42) != 0) all[n++] = bmRead16(r + 42);   // LITE (0: not lit)
   for (uint32_t l = 0; l < r[5] && l < 8 && 44u + l * 12u + 4u <= e.size; l++) all[n++] = bmRead16(r + 44 + l * 12 + 2);
   uint32_t out = 0;
   for (uint32_t k = 0; k < n; k++)
@@ -125,7 +128,7 @@ static void fitRoom(const BmPack *pPack, FitPlan *f, int32_t room, uint32_t budg
     bmPackGetChunk(pPack, i, &e);
     if (e.id != BM_CHUNK_ROOM || room-- != 0) continue;
     if ((e.flags & BM_PACK_ENTRY_ABSENT) || kept(f, i)) return;
-    uint16_t refs[13];
+    uint16_t refs[ROOM_REFS];
     uint32_t n = roomRefs(pPack, i, refs), cost = fitCost(pPack, f, i);
     for (uint32_t k = 0; k < n; k++) cost += fitCost(pPack, f, refs[k]);
     if (f->size + cost > budget) return;
@@ -171,7 +174,7 @@ static int32_t roomChunk(const BmPack *pPack, int32_t room)
 static uint32_t roomExits(const BmPack *pPack, int32_t room, int32_t *pOut, uint32_t max)
 {
   int32_t chunk = roomChunk(pPack, room);
-  uint16_t refs[13];
+  uint16_t refs[ROOM_REFS];
   uint32_t n = chunk < 0 ? 0 : roomRefs(pPack, (uint32_t)chunk, refs), out = 0;
   for (uint32_t k = 0; k < n; k++)
   {
@@ -220,7 +223,7 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
   int32_t rooms = 0;
   for (uint32_t i = 0; i < count; i++)
   {
-    uint16_t refs[13];
+    uint16_t refs[ROOM_REFS];
     uint32_t n = roomRefs(pPack, i, refs);
     for (uint32_t k = 0; k < n; k++) named[refs[k] / 8] |= (uint8_t)(1u << (refs[k] % 8));
     BmChunkEntry e;

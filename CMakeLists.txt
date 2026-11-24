@@ -266,10 +266,9 @@ if(BM_PLATFORM STREQUAL "gba")
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png
     COMMENT "Cooking the test level")
-  # The cartridge game's own pack (game.gba, also on the project's pages): the test level with the
-  # streamed and the hybrid torch hall. What it sends to another GBA (Select + Start) is the test
-  # level without them, embedded beside it: the multiboot runtime there has no light, and the
-  # two halls' rows of light would not fit its memory.
+  # The cartridge game's own pack (game.gba and game_send.gba, also on the project's pages): the
+  # test level with the streamed and the hybrid torch hall. Sent to another GBA it is fitted
+  # around the room the sender is in, as any pack larger than the other side takes.
   set(BM_GAME_CART_PACK ${CMAKE_BINARY_DIR}/test_level_cart_gba.bmpk)
   add_custom_command(OUTPUT ${BM_GAME_CART_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_GAME_CART_PACK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS}
@@ -344,9 +343,6 @@ if(BM_PLATFORM STREQUAL "gba")
       add_dependencies(${variant} bootstrap_mb game_mb)
       target_compile_definitions(${variant} PRIVATE BM_GAME_SEND "BM_BOOTSTRAP_PATH=\"${CMAKE_BINARY_DIR}/bootstrap_mb.gba\""
         "BM_RUNTIME_PATH=\"${CMAKE_BINARY_DIR}/game_mb.gba\"")
-      # Both play the cartridge game's pack and have the test level beside it to send where the
-      # other side could not hold that one (bmTransferSendWith).
-      target_compile_definitions(${variant} PRIVATE "BM_SEND_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
       if(variant STREQUAL "game_send")
         target_compile_definitions(${variant} PRIVATE BM_SEND_FRAME=800)
       endif()
@@ -391,7 +387,7 @@ if(BM_PLATFORM STREQUAL "gba")
   endforeach()
 
   set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_transfer.S PROPERTIES
-    OBJECT_DEPENDS "${CMAKE_BINARY_DIR}/bootstrap_mb.gba;${CMAKE_BINARY_DIR}/game_mb.gba;${BM_TEST_LEVEL_PACK}")
+    OBJECT_DEPENDS "${CMAKE_BINARY_DIR}/bootstrap_mb.gba;${CMAKE_BINARY_DIR}/game_mb.gba")
 
   bm_add_gba_image(room_viewer apps/room_viewer/main.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
   # The embedded pack is pulled in by the assembler, which the build system cannot see: every
@@ -1089,6 +1085,11 @@ if(BM_PLATFORM STREQUAL "host")
             check "${elf}:bm_light_cycles+0<=40000" check "${elf}:bm_light_cycles+4<=20000" screenshot ${out}/light_${hall}.ppm)
         set_tests_properties(light_mgba_${hall} PROPERTIES FIXTURES_REQUIRED test_level_pack FAIL_REGULAR_EXPRESSION ": [1-9][0-9]* chunks sent")
       endforeach()
+      # A room's light (LITE) is its own: the cartridge game's pack, fitted for a multiboot GBA,
+      # leaves out the light of the rooms it leaves out (else their tables would not fit).
+      add_test(NAME light_fit_mb
+        COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game_mb.gba run 60 push ${BM_GBA_BUILD_DIR}/test_level_cart_gba.bmpk restart run 30)
+      set_tests_properties(light_fit_mb PROPERTIES PASS_REGULAR_EXPRESSION "restart: ok")
       add_test(NAME live_mgba_hot_changes_one_tile
         COMMAND ${compare} ${out}/live_before.ppm ${out}/live_after.ppm --changed-in 0 0 15 15
           --ignore 32 96 47 127)  # the player's idle animation goes on meanwhile

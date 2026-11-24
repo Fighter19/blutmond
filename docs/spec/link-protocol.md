@@ -380,7 +380,7 @@ A game on a cartridge brings the GBA on the other end of a link cable to where i
 | The other GBA | What is sent |
 |---|---|
 | runs the game (cartridge) | the `link` part of the game state (`STATE_PUT`, `APPLY` state) |
-| runs the runtime with other content | the pack first, only the chunks it lacks (sections 3, [streaming.md](streaming.md)), applied as a restart; then the state. A pack larger than the runtime takes (a multiboot GBA) is fitted around the room the sender is in ([runtime-abi.md](runtime-abi.md) §0), or, where the sender has a smaller pack for this (`bmTransferSendWith`, its rooms numbered as the first's), that one is sent instead: the test game's cartridge sends the test level without its two streamed torch halls |
+| runs the runtime with other content | the pack first, only the chunks it lacks (sections 3, [streaming.md](streaming.md)), applied as a restart; then the state. A pack larger than the runtime takes (a multiboot GBA) is fitted around the room the sender is in ([runtime-abi.md](runtime-abi.md) §0) |
 | runs the bootstrap | the runtime as a multiboot image through the bootstrap, then as above |
 | waits in its BIOS (no cartridge) | the bootstrap through the BIOS's multiboot protocol (256 kHz), then as above |
 

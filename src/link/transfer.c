@@ -134,13 +134,6 @@ static bool hello(void)
 BmTransferResult bmTransferSend(const BmTransferImages *pImages, const uint8_t *pPack, uint32_t packSize, int32_t room,
                                 const uint8_t *pState, uint32_t stateSize, BmTransferStats *pStats)
 {
-  return bmTransferSendWith(pImages, pPack, packSize, NULL, 0, room, pState, stateSize, pStats);
-}
-
-BmTransferResult bmTransferSendWith(const BmTransferImages *pImages, const uint8_t *pPack, uint32_t packSize,
-                                    const uint8_t *pSmaller, uint32_t smallerSize, int32_t room,
-                                    const uint8_t *pState, uint32_t stateSize, BmTransferStats *pStats)
-{
   BmTransferStats stats;
   memset(&stats, 0, sizeof(stats));
   BmTransferResult result = BM_TRANSFER_OK;
@@ -194,18 +187,9 @@ BmTransferResult bmTransferSendWith(const BmTransferImages *pImages, const uint8
     }
   }
 
-  // Content: only if the other side runs something else, and then only what it lacks. The
-  // smaller pack instead where the other side does not run this one and could not hold it.
+  // Content: only if the other side runs something else, and then only what it lacks.
   BmPack pack;
   if (result == BM_TRANSFER_OK && bmPackOpen(&pack, pPack, packSize, false) != BM_PACK_OK) result = BM_TRANSFER_PACK_REFUSED;
-  if (result == BM_TRANSFER_OK && pSmaller != NULL && packSize > s_remote.hello.poolCapacity &&
-      (s_remote.hello.activeSize != pack.size || s_remote.hello.activeCrc != pack.header.crc32))
-  {
-    pPack = pSmaller;
-    packSize = smallerSize;
-    stats.sentSmaller = 1;
-    if (bmPackOpen(&pack, pPack, packSize, false) != BM_PACK_OK) result = BM_TRANSFER_PACK_REFUSED;
-  }
   if (result == BM_TRANSFER_OK && (s_remote.hello.activeSize != pack.size || s_remote.hello.activeCrc != pack.header.crc32))
   {
     BmLivePushStats push;

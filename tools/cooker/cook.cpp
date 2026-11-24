@@ -2718,6 +2718,7 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       std::vector<uint32_t> refs = {uint32_t(r[30] | r[31] << 8), uint32_t(r[32] | r[33] << 8), uint32_t(r[34] | r[35] << 8),
                                     uint32_t(r[36] | r[37] << 8), uint32_t(r[38] | r[39] << 8)};
       for (uint32_t l = 0; l < r[5] && 44u + l * 12u + 4u <= c.entry.size; l++) refs.push_back(uint32_t(r[44 + l * 12 + 2] | r[44 + l * 12 + 3] << 8));
+      if (uint32_t lite = uint32_t(r[42] | r[43] << 8); lite != 0) refs.push_back(lite);   // the room's light (0: not lit)
       std::sort(refs.begin(), refs.end());
       refs.erase(std::unique(refs.begin(), refs.end()), refs.end());
       for (uint32_t ref : refs)
