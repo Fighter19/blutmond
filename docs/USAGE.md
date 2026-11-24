@@ -338,6 +338,9 @@ So far this ran against the emulator with a test client; see [HARDWARE.md](HARDW
 
 With two GBAs on a link cable, Select + Start in the cartridge game (`build-gba/game.gba`)
 brings the other GBA to the same room and position, booting it first if it has no cartridge.
+A GBA without the cartridge gets the test level without the streamed and the hybrid torch hall
+(the multiboot runtime has no light, and they would not fit its memory), so sending from inside
+one of those two halls cannot bring it there.
 So far only between two emulated GBAs:
 
 ```

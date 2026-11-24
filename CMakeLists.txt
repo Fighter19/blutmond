@@ -75,9 +75,9 @@ set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_layer.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_fitted.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
-# The PC and browser game's pack adds the streamed and the hybrid torch hall (its rows of light are 43 KB; the
-# packs the tests compare and push between devices, the cartridge's and the multiboot pack leave
-# it out). On the GBA it comes pushed over the link into the cartridge game (light_mgba_*).
+# The game's pack (PC, browser and the cartridge game.gba) adds the streamed and the hybrid torch
+# hall (their rows of light are 55 KB): the packs the tests compare and push between devices,
+# what a GBA sends to another and the multiboot pack leave them out.
 set(BM_TEST_LEVEL_CART_ROOMS ${BM_TEST_LEVEL_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_stream.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_hybrid.tmx)
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
@@ -266,6 +266,15 @@ if(BM_PLATFORM STREQUAL "gba")
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png
     COMMENT "Cooking the test level")
+  # The cartridge game's own pack (game.gba, also on the project's pages): the test level with the
+  # streamed and the hybrid torch hall. What it sends to another GBA (Select + Start) is the test
+  # level without them, embedded beside it: the multiboot runtime there has no light, and the
+  # two halls' rows of light would not fit its memory.
+  set(BM_GAME_CART_PACK ${CMAKE_BINARY_DIR}/test_level_cart_gba.bmpk)
+  add_custom_command(OUTPUT ${BM_GAME_CART_PACK}
+    COMMAND ${BM_BMCOOK} --profile gba -o ${BM_GAME_CART_PACK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png
+    COMMENT "Cooking the test level for the cartridge game")
   # For the multiboot images, which share 256 KB with the engine: the same level with the debug
   # rooms, the boss hall (with the boss's sprites, music and voice), the Hall of Abilities behind it,
   # the Guard Room (with its knight and the Iron Bat's armour)
@@ -297,7 +306,7 @@ if(BM_PLATFORM STREQUAL "gba")
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
       ${PROJECT_SOURCE_DIR}/tools/mondskript/aot.cpp ${PROJECT_SOURCE_DIR}/tools/cooker/native_module.cpp
     COMMENT "Cooking the test level with native scripts")
-  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
+  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_GAME_CART_PACK} ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
 
   # The game, played with the buttons, and the same with the autopilot (for tests and demos).
   # embed_pack.S is compiled per target with that target's BM_PACK_PATH.
@@ -335,6 +344,9 @@ if(BM_PLATFORM STREQUAL "gba")
       add_dependencies(${variant} bootstrap_mb game_mb)
       target_compile_definitions(${variant} PRIVATE BM_GAME_SEND "BM_BOOTSTRAP_PATH=\"${CMAKE_BINARY_DIR}/bootstrap_mb.gba\""
         "BM_RUNTIME_PATH=\"${CMAKE_BINARY_DIR}/game_mb.gba\"")
+      # Both play the cartridge game's pack and have the test level beside it to send where the
+      # other side could not hold that one (bmTransferSendWith).
+      target_compile_definitions(${variant} PRIVATE "BM_SEND_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
       if(variant STREQUAL "game_send")
         target_compile_definitions(${variant} PRIVATE BM_SEND_FRAME=800)
       endif()
@@ -352,6 +364,8 @@ if(BM_PLATFORM STREQUAL "gba")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${CMAKE_BINARY_DIR}/no_pack.bmpk\"")
       elseif(target MATCHES "_mb$")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_MB_PACK}\"")
+      elseif(variant STREQUAL "game" OR variant STREQUAL "game_send")
+        target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_GAME_CART_PACK}\"")
       else()
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
       endif()
@@ -377,13 +391,13 @@ if(BM_PLATFORM STREQUAL "gba")
   endforeach()
 
   set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_transfer.S PROPERTIES
-    OBJECT_DEPENDS "${CMAKE_BINARY_DIR}/bootstrap_mb.gba;${CMAKE_BINARY_DIR}/game_mb.gba")
+    OBJECT_DEPENDS "${CMAKE_BINARY_DIR}/bootstrap_mb.gba;${CMAKE_BINARY_DIR}/game_mb.gba;${BM_TEST_LEVEL_PACK}")
 
   bm_add_gba_image(room_viewer apps/room_viewer/main.c ${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S)
   # The embedded pack is pulled in by the assembler, which the build system cannot see: every
   # image that embeds one is assembled again when either pack changes.
   set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S PROPERTIES
-    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK};${BM_TEST_LEVEL_MB_PACK};${BM_TEST_LEVEL_NATIVE_PACK};${BM_SCRIPT_BENCH_PACK}")
+    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK};${BM_GAME_CART_PACK};${BM_TEST_LEVEL_MB_PACK};${BM_TEST_LEVEL_NATIVE_PACK};${BM_SCRIPT_BENCH_PACK}")
   foreach(target ${BM_GBA_TARGETS})
     add_dependencies(${target} test_room_pack)
     target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_ROOM_PACK}\"")
@@ -720,6 +734,12 @@ if(BM_PLATFORM STREQUAL "host")
   add_test(NAME cook_test_level_variant
     COMMAND bmcook --profile gba -o ${cooked}/test_level_variant_gba.bmpk ${cooked}/room_variant.tmx ${variant_rooms} ${BM_TEST_LEVEL_ASSETS})
   set_tests_properties(cook_test_level_variant PROPERTIES FIXTURES_REQUIRED room_variant_tmx FIXTURES_SETUP test_level_variant)
+  # The same variant of the cartridge game's pack (with the streamed and the hybrid torch hall).
+  set(cart_variant_rooms ${BM_TEST_LEVEL_CART_ROOMS})
+  list(REMOVE_ITEM cart_variant_rooms ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx)
+  add_test(NAME cook_test_level_cart_variant
+    COMMAND bmcook --profile gba -o ${cooked}/test_level_cart_variant_gba.bmpk ${cooked}/room_variant.tmx ${cart_variant_rooms} ${BM_TEST_LEVEL_ASSETS})
+  set_tests_properties(cook_test_level_cart_variant PROPERTIES FIXTURES_REQUIRED room_variant_tmx FIXTURES_SETUP test_level_cart_variant)
   add_executable(test_live tests/test_live.c apps/game/autopilot.c apps/game/game_live.c)
   target_link_libraries(test_live PRIVATE blutmond bm_link_host)
   target_include_directories(test_live PRIVATE apps/game)
@@ -1035,7 +1055,7 @@ if(BM_PLATFORM STREQUAL "host")
             ${cooked}/test_level_gba.bmpk ${BM_GBA_BUILD_DIR}/game_autoplay.gba ${BM_GBA_BUILD_DIR}/game_autoplay.elf)
         add_test(NAME input_mirror_pc_to_gba
           COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/mirror_session.py to $<TARGET_FILE:bmlink> $<TARGET_FILE:game>
-            ${cooked}/test_level_gba.bmpk ${BM_GBA_BUILD_DIR}/game.gba ${BM_GBA_BUILD_DIR}/game.elf)
+            ${CMAKE_BINARY_DIR}/test_level_gba.bmpk ${BM_GBA_BUILD_DIR}/game.gba ${BM_GBA_BUILD_DIR}/game.elf)   # the cartridge game's pack
         set_tests_properties(input_mirror_gba_to_pc input_mirror_pc_to_gba PROPERTIES FIXTURES_REQUIRED test_level_pack TIMEOUT 240)
       endif()
 
@@ -1056,16 +1076,18 @@ if(BM_PLATFORM STREQUAL "host")
       set(elf ${BM_GBA_BUILD_DIR}/game.elf)
       add_test(NAME live_mgba_hot
         COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 screenshot ${out}/live_before.ppm
-          push ${cooked}/test_level_variant_gba.bmpk hot run 2 screenshot ${out}/live_after.ppm
+          push ${cooked}/test_level_cart_variant_gba.bmpk hot run 2 screenshot ${out}/live_after.ppm
           check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+12=0 stats)
-      set_tests_properties(live_mgba_hot PROPERTIES FIXTURES_REQUIRED test_level_variant FIXTURES_SETUP live_mgba_hot)
-      # The light (docs/plans/lighting.md) on the GBA: in both torch halls a frame's light stays
-      # within its budget in processor cycles (the room's banks, the sprites' banks), from ROM.
+      set_tests_properties(live_mgba_hot PROPERTIES FIXTURES_REQUIRED test_level_cart_variant FIXTURES_SETUP live_mgba_hot)
+      # The light (docs/plans/lighting.md) on the GBA: in every torch hall of the cartridge game a
+      # frame's light stays within its budget in processor cycles (the room's banks, the sprites'
+      # banks), from ROM. Its own pack pushed only restarts it in the hall: no chunk is sent, so
+      # every hall is in the cartridge.
       foreach(hall torch_hall torch_hall_layer torch_hall_fitted torch_hall_normals torch_hall_stream torch_hall_hybrid)
         add_test(NAME light_mgba_${hall}
-          COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${CMAKE_BINARY_DIR}/test_level_gba.bmpk restart:${hall} run 120
+          COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${BM_GBA_BUILD_DIR}/test_level_cart_gba.bmpk restart:${hall} run 120
             check "${elf}:bm_light_cycles+0<=40000" check "${elf}:bm_light_cycles+4<=20000" screenshot ${out}/light_${hall}.ppm)
-        set_tests_properties(light_mgba_${hall} PROPERTIES FIXTURES_REQUIRED test_level_pack)
+        set_tests_properties(light_mgba_${hall} PROPERTIES FIXTURES_REQUIRED test_level_pack FAIL_REGULAR_EXPRESSION ": [1-9][0-9]* chunks sent")
       endforeach()
       add_test(NAME live_mgba_hot_changes_one_tile
         COMMAND ${compare} ${out}/live_before.ppm ${out}/live_after.ppm --changed-in 0 0 15 15

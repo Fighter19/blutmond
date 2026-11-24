@@ -9,7 +9,7 @@ this plan) or `layer` (the light layer of section 3), whose values are, by `ligh
 `shared` (the default), `fitted` or `normals` (section 3 as planned). Only rooms with a
 `Light` object are lit; every other room is as before. The test level's debug lobby has a
 fifth door into the torch halls, one behind the other: "palettes", "light layer" (shared),
-"fitted", "normals", and in the PC, browser and pushed cartridge packs "streamed" and "hybrid"
+"fitted", "normals", and in the game's pack (PC, browser and the cartridge `game.gba`) "streamed" and "hybrid"
 (`tools/make_torch_hall.py`; `test_game` writes all six side by side into
 `test-output/torch_halls.ppm`).
 
@@ -46,8 +46,8 @@ room's video memory, and 1 bank. The UI's tiles (char block 2) and map (screen b
 sprite memory (32 KB) are the same in every hall: the sprites' normals only regroup their
 colours, the player's and the bat's sheets keep their tiles.
 
-**The streamed light layer** (`light_index = stream`, the fifth torch hall; PC, browser and,
-pushed over the link, the cartridge game, not multiboot): the tiles hold one of 7 normals
+**The streamed light layer** (`light_index = stream`, the fifth torch hall; PC, browser and the
+cartridge game, not multiboot): the tiles hold one of 7 normals
 (72 tiles, a brick one tile wherever it is), and the light is streamed into the light layer's
 banks line by line by H-blank DMA from a table in the pack, a row per room pixel row: exact
 from line to line, by bands of 8 to 40 pixels across (narrower near the torch). The flicker is

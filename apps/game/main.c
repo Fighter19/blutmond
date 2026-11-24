@@ -193,6 +193,19 @@ extern const uint8_t bm_embedded_runtime[], bm_embedded_runtime_end[];
 // meanwhile; afterwards it listens on the port again.
 static void sendToOther(const uint8_t *pPackData, uint32_t packSize)
 {
+  // The cartridge game has a smaller pack to send where the other side could not hold the one it
+  // plays (a multiboot GBA, which has no light either): the test level without the torch halls
+  // that stream their light. Not when it plays another pack (pushed or exported).
+  const uint8_t *pSmaller = NULL;
+  uint32_t smallerSize = 0;
+#  ifdef BM_SEND_PACK_PATH
+  extern const uint8_t bm_embedded_send_pack[], bm_embedded_send_pack_end[];
+  if (pPackData == bm_embedded_pack)
+  {
+    pSmaller = bm_embedded_send_pack;
+    smallerSize = (uint32_t)(bm_embedded_send_pack_end - bm_embedded_send_pack);
+  }
+#  endif
   static uint8_t state[BM_LIVE_STATE_CAPACITY] BM_EWRAM_BSS;
   BmStateBlock blocks[2];
   uint32_t n = bmGameLiveStateBlocks(&s_gameLive, blocks, 2);
@@ -202,7 +215,7 @@ static void sendToOther(const uint8_t *pPackData, uint32_t packSize)
   BmTransferStats stats;
   bmHalLinkStop();
   uint32_t started = bmHalCycles();
-  BmTransferResult result = bmTransferSend(&images, pPackData, packSize, (int32_t)s_game.roomIndex, state, size, &stats);
+  BmTransferResult result = bmTransferSendWith(&images, pPackData, packSize, pSmaller, smallerSize, (int32_t)s_game.roomIndex, state, size, &stats);
   bm_game_stats.sendCycles = bmHalCycles() - started;
   bm_game_stats.sendWords = stats.words;
   bm_game_stats.sendRuntimeCycles = stats.runtimeCycles;

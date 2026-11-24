@@ -38,6 +38,7 @@ typedef struct BmTransferImages
 typedef struct BmTransferStats
 {
   uint8_t usedMultiboot, usedBootstrap, sentPack;
+  uint8_t sentSmaller;         // bmTransferSendWith: the smaller pack went
   uint32_t runtimeTries;       // times the runtime image was sent
   uint32_t runtimeCycles;      // processor cycles sending it took (0 where time is not measured)
   uint32_t chunksSent, bytesSent;
@@ -51,3 +52,8 @@ typedef struct BmTransferStats
 /// port must not be listening (bmHalLinkStop); it is left idle.
 BmTransferResult bmTransferSend(const BmTransferImages *pImages, const uint8_t *pPack, uint32_t packSize, int32_t room,
                                 const uint8_t *pState, uint32_t stateSize, BmTransferStats *pStats);
+/// The same with a smaller pack (`pSmaller`, its rooms numbered as the first's) for a side that
+/// does not run `pPack` and could not hold it (a multiboot GBA): that one is sent instead.
+BmTransferResult bmTransferSendWith(const BmTransferImages *pImages, const uint8_t *pPack, uint32_t packSize,
+                                    const uint8_t *pSmaller, uint32_t smallerSize, int32_t room,
+                                    const uint8_t *pState, uint32_t stateSize, BmTransferStats *pStats);
