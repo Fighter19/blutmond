@@ -67,6 +67,7 @@ file(GLOB BM_TEST_LEVEL_SAMPLES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/assets/t
 set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/boss_hall.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/ability_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/guard_room.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/puzzle_room.tmx
+  ${PROJECT_SOURCE_DIR}/assets/test_room/chasm_room.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_lobby.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_wave.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_spotlight.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_pulse.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx)
@@ -109,6 +110,9 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/puzzle.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/drag.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/thud.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/grapple.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/grapple.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/hook.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/crate.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/crumble.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/fireball.bmsprite

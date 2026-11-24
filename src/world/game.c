@@ -28,6 +28,7 @@ static uint8_t kindOf(const char *cls)
   if (strcmp(cls, "SavePoint") == 0) return BM_OBJECT_SAVE_POINT;
   if (strcmp(cls, "Breakable") == 0) return BM_OBJECT_BREAKABLE;
   if (strcmp(cls, "PushBlock") == 0 || strcmp(cls, "PressurePlate") == 0 || strcmp(cls, "Gate") == 0) return BM_OBJECT_PUZZLE;
+  if (strcmp(cls, "GrappleAnchor") == 0) return BM_OBJECT_GRAPPLE_ANCHOR;
   return BM_OBJECT_OTHER;
 }
 
@@ -437,6 +438,7 @@ static void updateSprites(BmGame *g)
 
   next = (uint8_t)(next + bmActorsDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
   next = (uint8_t)(next + bmPuzzleDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
+  next = (uint8_t)(next + bmGrappleDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
   next = (uint8_t)(next + bmEffectsDrawDoors(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
 
   // Other objects: the sprite named like their class (its first animation, until scripts play
@@ -629,6 +631,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   }
   loadSprites(g);
   bmPuzzleEnterRoom(g, fresh);
+  bmGrappleEnterRoom(g, fresh);
   bmCommandsPrepare(g);
   bmActorsEnterRoom(g, fresh);
   if (fresh) bmAttachmentsEnterRoom(g);
@@ -1356,7 +1359,10 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   }
   uint32_t events = 0;
   g->puzzle.pushing = 0;   // bmPuzzleFrame says when the player pushes
-  if (g->doorSeq != 0 && in.dx != 0)
+  // The grapple (grapple.h): while it pulls the player, it moves them, not the body step.
+  bool grappled = g->doorSeq == 0 && g->dialogue == 0 && bmGrappleFrame(g, keys, pressed);
+  if (grappled) {}
+  else if (g->doorSeq != 0 && in.dx != 0)
   {
     // Through a side door: walking at running speed out over the room's edge, the walls and
     // edges do not hold the player there.
@@ -1584,6 +1590,7 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, actors.anim, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.palette, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.flash, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
+  BM_STATE_ARRAY(BmGame, actors.weight, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animFinished, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animStep, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
   BM_STATE_ARRAY(BmGame, actors.animTimer, BM_TYPE_U16, BM_STATE_SNAPSHOT, BM_ACTORS_MAX),
@@ -1665,6 +1672,19 @@ static const BmStateField s_gameFields[] = {
   BM_STATE_ARRAY(BmGame, puzzle.blockPush, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_PUZZLE_BLOCKS),
   BM_STATE_ARRAY(BmGame, puzzle.gateLift, BM_TYPE_U8, BM_STATE_SNAPSHOT, BM_PUZZLE_GATES),
   F(puzzle.pressed, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(grapple.phase, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(grapple.target, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(grapple.object, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(grapple.timer, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(grapple.cooldown, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(grapple.side, BM_TYPE_S8, BM_STATE_SNAPSHOT),
+  F(grapple.hookX, BM_TYPE_S32, BM_STATE_SNAPSHOT),
+  F(grapple.hookY, BM_TYPE_S32, BM_STATE_SNAPSHOT),
+  F(grapple.speedX, BM_TYPE_S32, BM_STATE_SNAPSHOT),
+  F(grapple.speedY, BM_TYPE_S32, BM_STATE_SNAPSHOT),
+  F(grapple.targetX, BM_TYPE_S16, BM_STATE_SNAPSHOT),
+  F(grapple.targetY, BM_TYPE_S16, BM_STATE_SNAPSHOT),
+  F(grapple.travelled, BM_TYPE_U16, BM_STATE_SNAPSHOT),
 };
 #undef F
 

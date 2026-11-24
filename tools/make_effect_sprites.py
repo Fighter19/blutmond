@@ -18,6 +18,10 @@ puzzle.png, puzzle.bmsprite: what physics puzzles are drawn with (src/world/puzz
 sheet (one palette bank): a stone block bound with iron (32x32, animation block), an iron
 portcullis (16x48, gate), a pressure plate up and pressed (32x8, plate, plate_down). Anchored
 at their top left.
+
+grapple.png, grapple.bmsprite: the grapple (src/world/grapple.h): its hook (animation hook,
+8x8, pointing right, anchored in the middle), a link of its chain (link, 8x8), and the ring of
+an anchor it bites (anchor, 16x16, glinting; anchored in the middle).
 Everything here is drawn by this script.
 """
 import os
@@ -41,6 +45,8 @@ PALETTE = {
     'i': (58, 62, 74, 255),      # iron
     'I': (110, 118, 136, 255),   # iron, lit
     'r': (150, 60, 40, 255),     # rust
+    'g': (180, 136, 36, 255),    # brass
+    'G': (250, 220, 90, 255),    # brass, lit
 }
 
 FRAMES = [
@@ -294,6 +300,71 @@ def plate(pressed):
     return rows
 
 
+HOOK = [
+    "........",
+    "...oo...",
+    "..oIIo..",
+    "oooiIIo.",
+    "oIIIIIIo",
+    "oooiIIo.",
+    "..oIIo..",
+    "...oo...",
+]
+LINK = [
+    "........",
+    "........",
+    "...oo...",
+    "..oIio..",
+    "..oiIo..",
+    "...oo...",
+    "........",
+    "........",
+]
+
+
+def ring(glint):
+    rows = []
+    for y in range(16):
+        row = ""
+        for x in range(16):
+            d2 = (x - 7.5) ** 2 + (y - 7.5) ** 2
+            if 30 <= d2 <= 56:
+                c = 'G' if (glint and x + y < 12) else ('g' if x + y < 16 else 'i')
+            elif 56 < d2 <= 72 or 20 <= d2 < 30:
+                c = 'o'
+            else:
+                c = '.'
+            row += c
+        rows.append(row)
+    return rows
+
+
+def grapple_sheet(out):
+    frames = [HOOK, LINK]
+    img = Image.new("RGBA", (48, 16), (0, 0, 0, 0))
+    for i, f in enumerate(frames):
+        for y, row in enumerate(f):
+            for x, ch in enumerate(row):
+                img.putpixel((i * 8 + x, y), PALETTE[ch])
+    for i, glint in enumerate((False, True)):
+        for y, row in enumerate(ring(glint)):
+            for x, ch in enumerate(row):
+                img.putpixel((16 + i * 16 + x, y), PALETTE[ch])
+    img.save(os.path.join(out, "grapple.png"))
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<sprite version="1" image="grapple.png">',
+             ' <hitbox x="-4" y="-4" w="8" h="8"/>',
+             ' <frame x="0" y="0" w="8" h="8" ax="4" ay="4"/>',
+             ' <frame x="8" y="0" w="8" h="8" ax="4" ay="4"/>',
+             ' <frame x="16" y="0" w="16" h="16" ax="8" ay="8"/>',
+             ' <frame x="32" y="0" w="16" h="16" ax="8" ay="8"/>',
+             ' <animation name="hook" loop="1">', '  <step frame="0" duration="60"/>', ' </animation>',
+             ' <animation name="link" loop="1">', '  <step frame="1" duration="60"/>', ' </animation>',
+             ' <animation name="anchor" loop="1">', '  <step frame="2" duration="50"/>', '  <step frame="3" duration="10"/>', ' </animation>',
+             '</sprite>']
+    with open(os.path.join(out, "grapple.bmsprite"), "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 def puzzle_sheet(out):
     img = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
     def put(px, x0, y0):
@@ -352,6 +423,7 @@ def main():
     sheet(os.path.join(out, "crate.png"), [CRATE])
     sprite_file(os.path.join(out, "crate.bmsprite"), "crate.png", 1, (8, 16), (-7, -15, 14, 15), "idle", [60], True)
     puzzle_sheet(out)
+    grapple_sheet(out)
 
 
 if __name__ == "__main__":

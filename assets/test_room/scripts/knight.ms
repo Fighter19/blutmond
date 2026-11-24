@@ -17,6 +17,7 @@ event spawn() {
   health = Kind.health;
   set_affinity(Kind.weak, Kind.resists);
   set_knockback(25);
+  weight = 3;   // too heavy for the grapple: it pulls the player to the knight
 }
 
 // Whether the player is on the side it faces.

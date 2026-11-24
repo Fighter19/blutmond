@@ -19,6 +19,7 @@
 #include "pack.h"
 #include "room.h"
 #include "puzzle.h"
+#include "grapple.h"
 #include "sound.h"
 #include "sprite.h"
 #include "state.h"
@@ -64,6 +65,7 @@ typedef enum BmObjectKind {
   BM_OBJECT_SAVE_POINT,
   BM_OBJECT_BREAKABLE,   // a wall or floor that a hit breaks (bmGameBreak)
   BM_OBJECT_PUZZLE,      // PushBlock, PressurePlate, Gate (puzzle.h draws them)
+  BM_OBJECT_GRAPPLE_ANCHOR,   // a point the grapple bites (grapple.h draws it)
 } BmObjectKind;
 
 typedef struct BmObjectView
@@ -178,6 +180,8 @@ typedef struct BmGame
   BmCellOverride breakCells[BM_ROOM_MAX_HOLES];
   // Push blocks, pressure plates and gates of the room (puzzle.h).
   BmPuzzle puzzle;
+  // The grapple (grapple.h).
+  BmGrapple grapple;
   // What the collision grid reads in place of its cells: broken walls, blocks, closed gates
   // (bmPuzzleOverrides makes them).
   uint8_t overrideCount;

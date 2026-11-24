@@ -44,6 +44,7 @@ typedef struct BmInventory
 #define BM_STAT_DASH 6
 #define BM_STAT_WALL_SLIDE 7
 #define BM_STAT_GROUND_POUND 8
+#define BM_STAT_GRAPPLE 9        // R shoots the grapple (grapple.h)
 
 /// A stat's value: own plus what attachments and equipment add.
 int32_t bmInventoryStat(const BmInventory *pInv, uint32_t stat);

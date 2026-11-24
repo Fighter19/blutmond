@@ -287,7 +287,7 @@ static void testTheItemTables(void)
 {
   start();
   static const struct { const char *table; uint16_t records; } tables[] = {
-    { "Weapon", 7 }, { "Spell", 5 }, { "Ability", 5 }, { "Consumable", 7 }, { "Armour", 10 }, { "KeyItem", 3 }, { "Command", 17 } };
+    { "Weapon", 7 }, { "Spell", 5 }, { "Ability", 6 }, { "Consumable", 7 }, { "Armour", 10 }, { "KeyItem", 3 }, { "Command", 17 } };
   for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++)
   {
     BmDataTable t;
@@ -1073,12 +1073,12 @@ static void testTheWorldMap(void)
 {
   start();
   frames(3, 0);
-  // The gatehouse and the guard room (2 x 1 cells each), test_room (4 x 1), test_room_2 (2 x 1)
-  // and the boss hall (2 x 1) in a row, the hall of abilities (2 x 2) behind it; the debug
-  // rooms are hidden.
-  TEST_ASSERT(s_game.map.pChunk != NULL && s_game.map.roomCount == 6 && s_game.map.cellCount == 16);
+  // The chasm, the gatehouse and the guard room (2 x 1 cells each), test_room (4 x 1),
+  // test_room_2 (2 x 1) and the boss hall (2 x 1) in a row, the hall of abilities (2 x 2)
+  // behind it; the debug rooms are hidden.
+  TEST_ASSERT(s_game.map.pChunk != NULL && s_game.map.roomCount == 7 && s_game.map.cellCount == 18);
   TEST_ASSERT(s_game.map.room == 0);
-  TEST_ASSERT(exploredCells() == 1 && bmMapPercent(&s_game) == 6);
+  TEST_ASSERT(exploredCells() == 1 && bmMapPercent(&s_game) == 5);
   // The HUD's map: the player's cell in the middle (26, 2), marked, in the room they are in.
   uint16_t look = 0;
   TEST_ASSERT(mapCodeAt(26, 2, &look));
@@ -1089,7 +1089,7 @@ static void testTheWorldMap(void)
   frames(60, BM_KEY_RIGHT);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "test_room_2") == 0);
   frames(5, 0);
-  TEST_ASSERT(s_game.map.room == 1 && exploredCells() == 3 && bmMapPercent(&s_game) == 18);
+  TEST_ASSERT(s_game.map.room == 1 && exploredCells() == 3 && bmMapPercent(&s_game) == 16);
   // The door shows on the HUD's map: test_room's last cell, left of the player, has a door east.
   TEST_ASSERT(mapCodeAt(25, 2, &look) && (look & 0x22) == 0x22 && ((look >> 8) & 3) == BM_UI_MAP_ROOM_KIND);
   TEST_ASSERT(mapCodeAt(26, 2, &look) && (look & 0x88) == 0x88);   // and west in the player's cell
@@ -1099,7 +1099,7 @@ static void testTheWorldMap(void)
   press(BM_KEY_DOWN);
   press(BM_KEY_DOWN);
   press(BM_KEY_A);
-  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Map") && uiShows("18"));
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Map") && uiShows("16"));
   TEST_ASSERT(mapCellsIn(2, 4, 26, 14) == 3);
   // The player's cell blinks: drawn again with the frame.
   int marked = 0;
@@ -2451,6 +2451,123 @@ static void testSheetsAndPalettesPerRoom(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// The grapple (grapple.h) in the chasm (assets/test_room/chasm_room.tmx): nothing without the
+// ability, which the pedestal gives; R to the anchor over the chasm and from it to the next,
+// held level, and down onto the west floor; up the tower's ledge; the bat (light) pulled to
+// the player; one made heavy pulls the player to it; jump lets go; a shot at nothing comes
+// back.
+static void grappleShot(uint16_t held)
+{
+  frames(1, (uint16_t)(held | BM_KEY_R));
+}
+
+static void untilGrappleIdle(int most, uint16_t held)
+{
+  for (int i = 0; i < most && s_game.grapple.phase != BM_GRAPPLE_IDLE; i++) frames(1, held);
+}
+
+static void testTheGrapple(void)
+{
+  startWith(s_data, s_size, "chasm_room");
+  frames(5, 0);
+  const BmGrapple *q = &s_game.grapple;
+  BmBody *b = &s_game.player;
+  TEST_ASSERT(q->anchorCount == 2 && q->sheet >= 0);
+  // Without the ability: nothing.
+  bmBodyPlace(b, 380, 160);
+  b->facing = -1;
+  frames(5, 0);
+  grappleShot(0);
+  frames(3, 0);
+  TEST_ASSERT(q->phase == BM_GRAPPLE_IDLE && bmInventoryStat(&s_game.inventory, BM_STAT_GRAPPLE) == 0);
+  // The pedestal gives it.
+  bmBodyPlace(b, 456, 160);
+  frames(5, 0);
+  TEST_ASSERT(bmInventoryStat(&s_game.inventory, BM_STAT_GRAPPLE) == 1);
+  // A shot at nothing (level, to the right): out and back.
+  b->facing = 1;
+  grappleShot(BM_KEY_RIGHT);
+  TEST_ASSERT(q->phase == BM_GRAPPLE_FLYING && q->target == BM_GRAPPLE_NOTHING);
+  untilGrappleIdle(60, 0);
+  TEST_ASSERT(q->phase == BM_GRAPPLE_IDLE && b->onGround);
+  frames(15, 0);
+  // The bat (light): pulled to the player.
+  int bat = actorOfClass("Bat");
+  bmBodyPlace(b, 470, 160);
+  b->facing = -1;
+  frames(5, 0);
+  grappleShot(0);
+  TEST_ASSERT(q->target == BM_GRAPPLE_OBJECT && q->object == bat);
+  int pulled = 0;
+  for (int i = 0; i < 60 && q->phase != BM_GRAPPLE_BACK && q->phase != BM_GRAPPLE_IDLE; i++)
+  {
+    frames(1, 0);
+    pulled |= q->phase == BM_GRAPPLE_PULL_OBJECT;
+  }
+  int32_t bx = BM_FIX_INT(s_game.actors.x[bat]);
+  TEST_ASSERT(pulled && bx > 440 && abs(BM_FIX_INT(b->x) - bx) < 32 && BM_FIX_INT(b->x) == 470);
+  untilGrappleIdle(60, 0);
+  // Made heavy (as the knight, the boss): the player is pulled to it instead.
+  s_game.actors.weight[bat] = 5;
+  s_game.actors.x[bat] = BM_FIX(410);
+  s_game.actors.y[bat] = BM_FIX(100);
+  bmBodyPlace(b, 470, 160);
+  b->facing = -1;
+  frames(15, 0);
+  bx = BM_FIX_INT(s_game.actors.x[bat]);
+  grappleShot(0);
+  int held = 0;
+  for (int i = 0; i < 60 && q->phase != BM_GRAPPLE_BACK && q->phase != BM_GRAPPLE_IDLE; i++)
+  {
+    frames(1, 0);
+    held |= q->phase == BM_GRAPPLE_PULL_PLAYER;
+  }
+  TEST_ASSERT(held && q->target == BM_GRAPPLE_OBJECT && abs(BM_FIX_INT(b->x) - BM_FIX_INT(s_game.actors.x[bat])) < 24);
+  s_game.actors.hidden[bat] = 1;   // out of the way from here on
+  untilGrappleIdle(60, 0);
+  frames(60, 0);
+  // The anchors across the chasm: up and left to the first, from there level to the second,
+  // and down onto the west floor holding left.
+  bmBodyPlace(b, 356, 160);
+  b->facing = -1;
+  frames(20, 0);
+  grappleShot(0);
+  TEST_ASSERT(q->target == BM_GRAPPLE_ANCHOR && q->targetX == 280);
+  for (int i = 0; i < 60 && q->phase != BM_GRAPPLE_PULL_PLAYER; i++) frames(1, 0);
+  int32_t y0 = BM_FIX_INT(b->y);
+  for (int i = 0; i < 60 && q->phase == BM_GRAPPLE_PULL_PLAYER; i++) frames(1, 0);
+  TEST_ASSERT(abs(BM_FIX_INT(b->x) - 280) <= 8 && BM_FIX_INT(b->y) < y0 && BM_FIX_INT(b->y) < 120 && b->vy < 0);
+  grappleShot(BM_KEY_LEFT);
+  TEST_ASSERT(q->target == BM_GRAPPLE_ANCHOR && q->targetX == 160);
+  for (int i = 0; i < 80 && q->phase != BM_GRAPPLE_BACK; i++) frames(1, 0);
+  TEST_ASSERT(abs(BM_FIX_INT(b->x) - 160) <= 8);
+  for (int i = 0; i < 80 && !b->onGround; i++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(b->onGround && BM_FIX_INT(b->y) == 160 && BM_FIX_INT(b->x) < 128);
+  untilGrappleIdle(60, 0);
+  frames(15, 0);
+  // The tower's ledge (its top at 80): up beside it and onto it.
+  bmBodyPlace(b, 124, 160);
+  b->facing = -1;
+  frames(10, 0);
+  grappleShot(0);
+  for (int i = 0; i < 60 && q->phase == BM_GRAPPLE_FLYING; i++) frames(1, 0);
+  TEST_ASSERT(q->target == BM_GRAPPLE_LEDGE && q->targetY == 80 && q->targetX == 64);
+  for (int i = 0; i < 60 && q->phase == BM_GRAPPLE_PULL_PLAYER; i++) frames(1, 0);
+  frames(5, 0);
+  TEST_ASSERT(b->onGround && BM_FIX_INT(b->y) == 80 && BM_FIX_INT(b->x) < 64);
+  untilGrappleIdle(60, 0);
+  // Jump lets go: from the tower to the first anchor... a jump instead.
+  bmBodyPlace(b, 356, 160);
+  b->facing = -1;
+  frames(20, 0);
+  grappleShot(0);
+  for (int i = 0; i < 60 && q->phase != BM_GRAPPLE_PULL_PLAYER; i++) frames(1, 0);
+  frames(3, 0);
+  frames(1, BM_KEY_A);
+  TEST_ASSERT(q->phase == BM_GRAPPLE_BACK && b->vy < 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -2481,6 +2598,7 @@ int main(int argc, char **argv)
   RUN_TEST(testBreakableWallsAndCrates);
   RUN_TEST(testThePushBlockPuzzle);
   RUN_TEST(testSheetsAndPalettesPerRoom);
+  RUN_TEST(testTheGrapple);
   RUN_TEST(testTheUiLayer);
   RUN_TEST(testTheMenus);
   RUN_TEST(testTheWorldMap);

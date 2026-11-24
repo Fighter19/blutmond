@@ -32,3 +32,9 @@ record SecondWind {
   description = "Once in every room, a blow that would end you leaves you standing."
   behaviour = AbilitySecondWind
 }
+
+record Grapple {
+  title = "Grapple"
+  description = "R: a hook on a chain. Pulls you to anchors and up ledges, pulls small foes to you."
+  stats.grapple = 1
+}

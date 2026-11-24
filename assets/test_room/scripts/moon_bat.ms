@@ -18,6 +18,7 @@ const int Health = 24;
 
 event spawn() {
   set_knockback(0);   // a boss does not budge; it still flashes when struck
+  weight = 10;        // nor does the grapple pull it: the player is pulled to it
   if Defeated {
     hide();
     gotostate Gone;

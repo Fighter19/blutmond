@@ -263,7 +263,8 @@ typedef enum BmScriptApi {
 
 // Variables every actor has, read and written like fields. health: struck only while above
 // 0; team: hits strike only figures of another team (0, the default: enemies; the player is
-// 1). An attachment reads its owner's (the player's) and may write `health`.
+// 1); weight: 1 by default; the grapple pulls one of 2 or less to the player and pulls the
+// player to a heavier one (grapple.h). An attachment reads its owner's (the player's) and may write `health`.
 // X(name, type, writable)
 #define BM_SCRIPT_ACTOR_VARS(X) \
   X(x,      FIX, 1) \
@@ -272,7 +273,8 @@ typedef enum BmScriptApi {
   X(home_y, FIX, 0) \
   X(facing, INT, 1) \
   X(health, INT, 1) \
-  X(team,   INT, 1)
+  X(team,   INT, 1) \
+  X(weight, INT, 1)
 
 typedef enum BmScriptActorVar {
 #define X(name, type, writable) BM_SCRIPT_VAR_##name,

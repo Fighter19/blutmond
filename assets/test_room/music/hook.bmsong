@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="10" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="clink" wave="pulse12" attack="0" decay="4" sustain="0" release="2" volume="110" pan="0"/>
+ <instrument name="thunk" wave="triangle" attack="0" decay="5" sustain="0" release="2" volume="120" pan="0"/>
+ <track name="clink" instrument="clink">
+  <note t="0" key="91" len="2" vel="110"/>
+  <note t="1" key="98" len="3" vel="70"/>
+ </track>
+ <track name="thunk" instrument="thunk">
+  <note t="0" key="45" len="4" vel="100"/>
+ </track>
+</song>

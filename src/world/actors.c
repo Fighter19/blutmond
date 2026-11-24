@@ -773,6 +773,7 @@ static int32_t hostGetVar(void *pContext, BmVmInstance *inst, uint16_t var)
   case BM_SCRIPT_VAR_facing: return a->facing[i];
   case BM_SCRIPT_VAR_health: return a->health[i];
   case BM_SCRIPT_VAR_team: return a->team[i];
+  case BM_SCRIPT_VAR_weight: return a->weight[i];
   default: return 0;
   }
 }
@@ -798,6 +799,7 @@ static void hostSetVar(void *pContext, BmVmInstance *inst, uint16_t var, int32_t
   case BM_SCRIPT_VAR_facing: a->facing[i] = (int8_t)(value < 0 ? -1 : 1); break;
   case BM_SCRIPT_VAR_health: a->health[i] = value; break;
   case BM_SCRIPT_VAR_team: a->team[i] = (uint8_t)value; break;
+  case BM_SCRIPT_VAR_weight: a->weight[i] = (uint8_t)(value < 0 ? 0 : value > 255 ? 255 : value); break;
   default: break;
   }
 }
@@ -1229,6 +1231,7 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     int32_t palette = a->sheet[i] >= 0 ? bmSpriteSheetPalette(&g->sheets[a->sheet[i]], g->pPack, bmGameObjectProperty(g, objectOf(g, i), "palette")) : -1;
     a->palette[i] = (uint8_t)(palette < 0 ? 0 : palette);
     a->flash[i] = 0;
+    a->weight[i] = 1;
     resetMotion(a, i);
     BmAnimState none = { 0, 0, 0, 0 };
     setAnim(a, i, &none);
@@ -1397,6 +1400,7 @@ static bool spawnNamed(BmGame *g, const char *name, int32_t x, int32_t y, uint32
   a->invulnerable[i] = 0;
   a->palette[i] = 0;
   a->flash[i] = 0;
+  a->weight[i] = 1;
   resetMotion(a, i);
   a->madeBy[i] = maker;
   a->madeBySlot[i] = makerSlot;

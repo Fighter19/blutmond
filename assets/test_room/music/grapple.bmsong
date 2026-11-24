@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="150" length="12" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="whirr" wave="pulse25" attack="0" decay="8" sustain="0" release="2" volume="70" pan="0"/>
+ <instrument name="rattle" wave="noise" attack="0" decay="6" sustain="0" release="2" volume="40" pan="0"/>
+ <track name="whirr" instrument="whirr">
+  <note t="0" key="72" len="2" vel="100"/>
+  <note t="2" key="76" len="2" vel="90"/>
+  <note t="4" key="79" len="2" vel="80"/>
+  <note t="6" key="84" len="3" vel="60"/>
+ </track>
+ <track name="rattle" instrument="rattle">
+  <note t="0" key="80" len="8" vel="90"/>
+ </track>
+</song>

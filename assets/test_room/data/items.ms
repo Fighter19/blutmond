@@ -16,7 +16,7 @@ enum GroundMove { Slide, Stop, Keep, Walk }
 enum WeaponStyle { Slash, Thrust }
 enum AirMove { Steer, Keep, Drift }
 // The player's stats (first-items.md §1), read with stat(Stat.Attack).
-enum Stat { MaxHealth, MaxMana, Attack, Defence, Luck, AirJumps, Dash, WallSlide, GroundPound }
+enum Stat { MaxHealth, MaxMana, Attack, Defence, Luck, AirJumps, Dash, WallSlide, GroundPound, Grapple }
 
 struct Item {
   text   title;
@@ -37,6 +37,7 @@ struct StatBlock {
   byte  dash;
   byte  wall_slide;
   byte  ground_pound;
+  byte  grapple;
 }
 
 struct Weapon is Item : item, equip(Weapon), stat_source(stats) {
