@@ -4,7 +4,8 @@
 
 usage: make_engine_font.py <assets/engine>
 
-ASCII 32 to 126 in 8x8 cells, 16 to a row. Each glyph is drawn in 5x7 pixels at (1, 0) of its
+ASCII 32 to 126 in 8x8 cells, 16 to a row, then the marks of BASE_MARKS (the dialogue box's
+"more follows": a filled triangle pointing down). Each glyph is drawn in 5x7 pixels at (1, 0) of its
 cell, in white. The dark shadow below right of it is only in the picture: the cooker keeps the
 white pixels (1 bit each) and the runtime draws the shadow the same way. Drawn by this script,
 so the engine's assets stay free of third-party art.
@@ -164,6 +165,10 @@ LATIN = {
     0x201E: ["     ", "     ", "     ", "     ", "     ", " # # ", "# #  "],           # „
     0x2026: ["     ", "     ", "     ", "     ", "     ", "     ", "# # #"],           # …
 }
+# Marks after ASCII in the first font file (cells 95 on), each a range of one.
+BASE_MARKS = {
+    0x25BC: ["     ", "#####", "#####", " ### ", " ### ", "  #  ", "     "],   # ▼ (more text follows)
+}
 # Ranges of the second font file, in the order of its cells.
 LATIN_RANGES = [(0xA0, 96), (0x152, 2), (0x2018, 7), (0x2026, 1)]
 
@@ -189,14 +194,19 @@ def main():
     # font.png: ASCII 32 to 126.
     first, last = 32, 126
     count = last - first + 1
-    img = Image.new("RGBA", (columns * 8, ((count + columns - 1) // columns) * 8), (0, 0, 0, 0))
+    cells = count + len(BASE_MARKS)
+    img = Image.new("RGBA", (columns * 8, ((cells + columns - 1) // columns) * 8), (0, 0, 0, 0))
     for code in range(first, last + 1):
         draw(img, code - first, GLYPHS[chr(code)], columns)
+    for k, code in enumerate(sorted(BASE_MARKS)):
+        draw(img, count + k, BASE_MARKS[code], columns)
     img.save(os.path.join(out, "font.png"))
     with open(os.path.join(out, "font.bmfont"), "w") as f:
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write('<font version="1" name="font" image="font.png" cell_w="8" cell_h="8">\n')
         f.write(' <range first="%d" count="%d"/>\n' % (first, count))
+        for code in sorted(BASE_MARKS):
+            f.write(' <range first="0x%X" count="1"/>\n' % code)
         f.write('</font>\n')
     # font_latin.png: the same font's accented letters and punctuation (French, German).
     cells = sum(n for _, n in LATIN_RANGES)

@@ -463,8 +463,18 @@ int bmUiText(BmUi *ui, int col, int row, int w, int h, uint16_t textId, const Bm
 int bmUiTextRange(BmUi *ui, int col, int row, int w, int h, uint16_t textId, const BmUiArg *args, uint8_t argCount, int32_t first,
                   int32_t last, int32_t *pCount)
 {
+  return bmUiTextScroll(ui, col, row, w, h, textId, args, argCount, 0, first, last, pCount, NULL);
+}
+
+int bmUiTextScroll(BmUi *ui, int col, int row, int w, int h, uint16_t textId, const BmUiArg *args, uint8_t argCount, int scroll,
+                   int32_t first, int32_t last, int32_t *pCount, bool *pMore)
+{
   if (pCount) *pCount = 0;
+  if (pMore) *pMore = false;
   if (!ui->ready || w < 1 || h < 1) return 0;
+  if (scroll < 0) scroll = 0;
+  h += scroll;   // laid out from the text's first row; rows before `scroll` take no place on screen
+  row -= scroll;
   char text[256];
   bmUiFormat(ui->pPack, ui->language, text, sizeof(text), bmText(ui->pPack, ui->language, textId), args, argCount);
   // Word by word: a word that does not fit on the row goes to the next; one longer than a row
@@ -487,7 +497,7 @@ int bmUiTextRange(BmUi *ui, int col, int row, int w, int h, uint16_t textId, con
     {
       if (x > 0 && x < w)
       {
-        if (n >= first && n < last) put(ui, col + x, row + y, ' ');
+        if (n >= first && n < last && y >= scroll) put(ui, col + x, row + y, ' ');
         x++;
       }
       p++;
@@ -513,14 +523,20 @@ int bmUiTextRange(BmUi *ui, int col, int row, int w, int h, uint16_t textId, con
         if (y >= h) break;
       }
       uint32_t c = bmTextNextChar(&p);
-      if (n >= first && n < last) put(ui, col + x, row + y, c);
+      if (n >= first && n < last && y >= scroll) put(ui, col + x, row + y, c);
       x++;
       n++;
     }
     p = end;
   }
+  if (pMore)
+  {
+    // Text left after the last row shown (but spaces and line breaks).
+    while (*p == ' ' || *p == '\n') p++;
+    *pMore = *p != 0;
+  }
   if (pCount) *pCount = n;
-  return y < h ? y + (x > 0) : h;
+  return (y < h ? y + (x > 0) : h) - scroll;
 }
 
 void bmUiShow(BmUi *ui, bool shown)

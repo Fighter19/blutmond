@@ -2846,6 +2846,47 @@ static void testWaitingForARoom(void)
   free(trimmed);
 }
 
+// A line longer than the dialogue box (the German "Dann bleib. Hier kommst du nicht mehr
+// raus." takes three rows of 21): it appears up to the box's last row and waits with a mark;
+// A scrolls it up a row and the rest appears; then A closes the box. A snapshot keeps the row.
+static void testDialogueScrolls(void)
+{
+  startWith(s_data, s_size, "test_room");
+  frames(3, 0);
+  int de = -1;
+  for (uint8_t k = 0; k < bmTextLanguageCount(&s_pack); k++)
+  {
+    const char *code = bmPackString(&s_pack, bmTextLanguageCode(&s_pack, k));
+    if (code != NULL && strcmp(code, "de") == 0) de = k;
+  }
+  TEST_ASSERT(de >= 0);
+  bmGameSetLanguage(&s_game, (uint8_t)de);
+  bmGameSayLine(&s_game, keyOf("VesperStays"));
+  frames(60, 0);
+  TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueShown == s_game.dialogueLength && s_game.dialogueMore && s_game.dialogueRow == 0);
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  (void)ppu;
+  frames(1, BM_KEY_A);
+  frames(1, 0);
+  TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueRow == 1);
+  frames(60, 0);
+  TEST_ASSERT(s_game.dialogueShown == s_game.dialogueLength && !s_game.dialogueMore);
+  // All of it was shown: the length counts the whole line now.
+  const char *line = bmText(&s_pack, s_game.language, s_game.dialogueLine);
+  TEST_ASSERT(line != NULL && strstr(line, "raus") != NULL && s_game.dialogueLength >= 40);
+  frames(1, BM_KEY_A);
+  frames(1, 0);
+  TEST_ASSERT(s_game.dialogue == 0);
+  // English, short enough: no mark, A closes at once.
+  bmGameSetLanguage(&s_game, 0);
+  bmGameSayLine(&s_game, keyOf("VesperFades"));
+  frames(60, 0);
+  TEST_ASSERT(!s_game.dialogueMore);
+  frames(1, BM_KEY_A);
+  frames(1, 0);
+  TEST_ASSERT(s_game.dialogue == 0 && bm_script_errors == 0);
+}
+
 // The grapple (grapple.h) in the chasm (assets/test_room/chasm_room.tmx): nothing without the
 // ability, which the pedestal gives; R to the anchor over the chasm and from it to the next,
 // held level, and down onto the west floor; up the tower's ledge; the bat (light) pulled to
@@ -2997,6 +3038,7 @@ int main(int argc, char **argv)
   RUN_TEST(testSheetsAndPalettesPerRoom);
   RUN_TEST(testSpritesAcrossRooms);
   RUN_TEST(testWaitingForARoom);
+  RUN_TEST(testDialogueScrolls);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

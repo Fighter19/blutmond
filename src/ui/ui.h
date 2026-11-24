@@ -140,6 +140,12 @@ int bmUiText(BmUi *pUi, int col, int row, int w, int h, uint16_t textId, const B
 int bmUiTextRange(BmUi *pUi, int col, int row, int w, int h, uint16_t textId, const BmUiArg *args, uint8_t argCount, int32_t first,
                   int32_t last, int32_t *pCount);
 
+/// The same with the text scrolled up by `scroll` rows: rows before it are laid out but not
+/// drawn (their characters still count). `*pMore` (if not NULL): text is left after the last
+/// row shown.
+int bmUiTextScroll(BmUi *pUi, int col, int row, int w, int h, uint16_t textId, const BmUiArg *args, uint8_t argCount, int scroll,
+                   int32_t first, int32_t last, int32_t *pCount, bool *pMore);
+
 /// Shows or hides the layer (from the next present).
 void bmUiShow(BmUi *pUi, bool shown);
 

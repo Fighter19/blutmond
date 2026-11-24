@@ -1347,6 +1347,7 @@ void bmGameSpeak(BmGame *g, uint16_t speaker, uint16_t line, uint16_t portrait, 
   g->dialoguePortrait = portrait;
   g->dialogueVoice = voice;
   g->dialogueShown = 0;   // it appears letter by letter (dialogueFrame)
+  g->dialogueRow = 0;
   bmGameDrawDialogue(g);
 }
 
@@ -1357,6 +1358,14 @@ static int dialogueIndent(const BmGame *g)
   return g->dialoguePortrait != 0xFFFF && sheetNamed(g, g->dialoguePortrait) >= 0 ? BM_GAME_PORTRAIT_CELLS : 0;
 }
 
+// The line is longer than the box and the box is full: a mark at its bottom right says A
+// scrolls on.
+static void dialogueMarker(BmGame *g)
+{
+  bool on = g->dialogueMore && g->dialogueShown >= g->dialogueLength;
+  bmUiLabel(&g->ui, 28, 18, on ? "\xE2\x96\xBC" : " ");   // U+25BC, a filled triangle pointing down
+}
+
 void bmGameDrawDialogue(BmGame *g)
 {
   if (g->dialogue == 0 || g->screens.count != 0) return;   // drawn when the menu closes
@@ -1365,11 +1374,13 @@ void bmGameDrawDialogue(BmGame *g)
   bmUiFrame(&g->ui, 0, 15, 30, 5);
   int x = dialogueIndent(g);
   bmUiLabel(&g->ui, 1 + x, 16, bmText(g->pPack, g->language, g->dialogueSpeaker));
-  // The letters shown so far; and how many there are.
+  // The letters shown so far (from the row scrolled to); and how many there are up to the
+  // box's last row, and whether more follow.
   int32_t count = 0;
-  bmUiTextRange(&g->ui, 2 + x, 17, 27 - x, 2, g->dialogueLine, NULL, 0, 0, g->dialogueShown, &count);
+  bmUiTextScroll(&g->ui, 2 + x, 17, 26 - x, 2, g->dialogueLine, NULL, 0, g->dialogueRow, 0, g->dialogueShown, &count, &g->dialogueMore);
   g->dialogueLength = (uint8_t)(count > 255 ? 255 : count);
   if (g->dialogueShown > g->dialogueLength) g->dialogueShown = g->dialogueLength;
+  dialogueMarker(g);
   bmUiShow(&g->ui, true);
 }
 
@@ -1380,7 +1391,8 @@ static void dialogueFrame(BmGame *g)
   if (g->dialogue == 0 || g->screens.count != 0 || g->dialogueShown >= g->dialogueLength) return;
   int32_t n = g->dialogueShown++;
   int x = dialogueIndent(g);
-  bmUiTextRange(&g->ui, 2 + x, 17, 27 - x, 2, g->dialogueLine, NULL, 0, n, n + 1, NULL);
+  bmUiTextScroll(&g->ui, 2 + x, 17, 26 - x, 2, g->dialogueLine, NULL, 0, g->dialogueRow, n, n + 1, NULL, NULL);
+  if (g->dialogueShown >= g->dialogueLength) dialogueMarker(g);
   if (g->dialogueVoice == 0xFFFF || (n & 1) != 0) return;
   // The letter: the n-th character of the line as shown.
   const char *p = bmText(g->pPack, g->language, g->dialogueLine);
@@ -1755,12 +1767,19 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   }
   if (g->dialogue != 0 && (pressed & BM_KEY_A))
   {
-    // A shows the rest of the line at once; when it is all there, the box goes.
+    // A shows the rest of what fits at once; with the box full and more of the line to come,
+    // the text scrolls up a row and goes on appearing; when it is all there, the box goes.
     if (g->dialogueShown < g->dialogueLength)
     {
       int x = dialogueIndent(g);
-      bmUiTextRange(&g->ui, 2 + x, 17, 27 - x, 2, g->dialogueLine, NULL, 0, g->dialogueShown, 0x7FFFFFFF, NULL);
+      bmUiTextScroll(&g->ui, 2 + x, 17, 26 - x, 2, g->dialogueLine, NULL, 0, g->dialogueRow, g->dialogueShown, 0x7FFFFFFF, NULL, NULL);
       g->dialogueShown = g->dialogueLength;
+      dialogueMarker(g);
+    }
+    else if (g->dialogueMore && g->dialogueRow < 255)
+    {
+      g->dialogueRow++;
+      bmGameDrawDialogue(g);
     }
     else endDialogue(g);
     pressed = (uint16_t)(pressed & ~BM_KEY_A);
@@ -2028,6 +2047,7 @@ static const BmStateField s_gameFields[] = {
   F(dialogueVoice, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(dialogueShown, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(dialogueLength, BM_TYPE_U8, BM_STATE_SNAPSHOT),
+  F(dialogueRow, BM_TYPE_U8, BM_STATE_SNAPSHOT),
   F(doorCooldown, BM_TYPE_U16, BM_STATE_SNAPSHOT),
   F(saveCooldown, BM_TYPE_U16, BM_STATE_TRANSIENT),
   F(deaths, BM_TYPE_U32, BM_STATE_SAVE),

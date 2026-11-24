@@ -235,7 +235,9 @@ typedef struct BmGame
   uint16_t dialogueSpeaker, dialogueLine;   // string ids
   uint16_t dialoguePortrait;                // the speaker's sprite (its name's string id), 0xFFFF none
   uint16_t dialogueVoice;                   // the speaker's voice: a sound effect's name, 0xFFFF none
-  uint8_t dialogueShown, dialogueLength;    // letters of the line shown so far, and in all
+  uint8_t dialogueShown, dialogueLength;    // letters of the line shown so far, and up to the box's last row
+  uint8_t dialogueRow;                      // rows of the line scrolled away (it is longer than the box)
+  bool dialogueMore;                        // more of the line after the box's last row (derived)
   // The UI layer (src/ui/ui.h): menus, dialogue, the HUD, the debug overlay. What it shows is
   // presentation, not game state.
   BmUi ui;

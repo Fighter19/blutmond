@@ -303,9 +303,14 @@ start:
   (characters of the line as wrapped: spaces and line breaks count) are drawn. In each game
   frame without a screen, after the buttons, one more appears; when its number n is even, a
   voice is set and the character is a letter or digit (A-Z, a-z, 0-9, or any code from U+00C0),
-  the voice plays as an effect `(code * 7) % 5 - 2` semitones higher. A pressed while the line
-  is not all there shows the rest (no jump); pressed when it is, it closes the box. Drawn again
-  after the layer was cleared, as far as it had come. A pressed in a frame while `dialogue != 0` (step 3 of section 3): the rows
+  the voice plays as an effect `(code * 7) % 5 - 2` semitones higher. The text is 2 rows of
+  `26 - indent` cells from (2 + indent, 17); a line longer than that **scrolls**: rows before
+  `dialogueRow` (snapshot) are laid out but not drawn, and `dialogueLength` counts the
+  characters up to the box's last row. When they are all there and more of the line follows,
+  a filled triangle (U+25BC, a glyph of the engine's font) at (28, 18) says so; A then scrolls the text up a row (`dialogueRow + 1`, the box drawn
+  again with what was shown) and the rest goes on appearing. A pressed while the box's rows are
+  not all there shows them at once (no jump); pressed when they are and nothing follows, it
+  closes the box. Drawn again after the layer was cleared, as far as it had come. A pressed in a frame while `dialogue != 0` (step 3 of section 3): the rows
   are cleared, `dialogue = 0`, and that A is no jump.
 - **Hurt(damage)** (hazards, `hurt_player`): Strike(damage, `x + facing`), so the push is
   backwards.
