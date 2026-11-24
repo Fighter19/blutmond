@@ -98,6 +98,11 @@ struct CookOptions
   std::string nativeIncludeDir;
   /// If set: the linked native module with debug information is written here (for GDB).
   std::string nativeElf;
+  /// Left out of the pack, their entries kept (flagged absent, pack-format.md §0), so that an
+  /// update brings them later (pack sets): the rooms with these IDs, with every chunk only they
+  /// use, and every chunk of these kinds (four-character codes, e.g. "LANG").
+  std::vector<std::string> absentRooms;
+  std::vector<std::string> absentKinds;
   /// If set: the C made from the scripts is written here.
   std::string scriptC;
 };

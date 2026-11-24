@@ -46,6 +46,8 @@ typedef struct BmTransferStats
 } BmTransferStats;
 
 /// Sends. `pPack` is the pack running here, `pState` the state to hand over (bmStateWrite with
-/// BM_STATE_LINK). The serial port must not be listening (bmHalLinkStop); it is left idle.
-BmTransferResult bmTransferSend(const BmTransferImages *pImages, const uint8_t *pPack, uint32_t packSize,
+/// BM_STATE_LINK), `room` the room it is in: where the other side takes less than the whole
+/// pack (a multiboot GBA), the pack is fitted around it (bmLiveMasterPushPackFor). The serial
+/// port must not be listening (bmHalLinkStop); it is left idle.
+BmTransferResult bmTransferSend(const BmTransferImages *pImages, const uint8_t *pPack, uint32_t packSize, int32_t room,
                                 const uint8_t *pState, uint32_t stateSize, BmTransferStats *pStats);

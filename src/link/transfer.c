@@ -131,7 +131,7 @@ static bool hello(void)
   return there;
 }
 
-BmTransferResult bmTransferSend(const BmTransferImages *pImages, const uint8_t *pPack, uint32_t packSize,
+BmTransferResult bmTransferSend(const BmTransferImages *pImages, const uint8_t *pPack, uint32_t packSize, int32_t room,
                                 const uint8_t *pState, uint32_t stateSize, BmTransferStats *pStats)
 {
   BmTransferStats stats;
@@ -196,7 +196,7 @@ BmTransferResult bmTransferSend(const BmTransferImages *pImages, const uint8_t *
     BmLiveStatus status;
     uint32_t id = 0x47324700u | (s_words & 0xFF);
     stats.sentPack = 1;
-    if (!bmLiveMasterPushPack(&s_master, pPack, packSize, id, &s_remote, &push) || !bmLiveMasterApply(&s_master, id, BM_LIVE_RESTART, NULL, &status))
+    if (!bmLiveMasterPushPackFor(&s_master, pPack, packSize, id, &s_remote, room, &push) || !bmLiveMasterApply(&s_master, id, BM_LIVE_RESTART, NULL, &status))
       result = BM_TRANSFER_LINK_FAILED;
     else if (status.result != BM_LIVE_OK) result = BM_TRANSFER_PACK_REFUSED;
     stats.chunksSent = push.chunksSent;

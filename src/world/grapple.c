@@ -436,7 +436,8 @@ bool bmGrappleFrame(BmGame *g, uint16_t keys, uint16_t pressed)
 uint8_t bmGrappleDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
 {
   const BmGrapple *q = &g->grapple;
-  if (bmGameSheetBank(g, q->sheet, 0) < 0) return 0;
+  // Nothing to draw (no anchors, the hook put away): its sheet is not even loaded.
+  if ((q->phase == BM_GRAPPLE_IDLE && q->anchorCount == 0) || bmGameSheetBank(g, q->sheet, 0) < 0) return 0;
   const BmSpriteSheet *s = &g->sheets[q->sheet];
   int32_t camX = g->room.cameraX, camY = g->room.cameraY;
   uint8_t used = 0;

@@ -75,7 +75,7 @@ static void testTheRuntimeGoesThroughTheBootstrap(void)
   BmTransferImages images = { NULL, 0, s_runtime, sizeof(s_runtime) };
   BmTransferStats stats;
   // The model never becomes a runtime, so the transfer ends there.
-  TEST_ASSERT(bmTransferSend(&images, s_pack, sizeof(s_pack), s_state, sizeof(s_state), &stats) == BM_TRANSFER_NO_RUNTIME);
+  TEST_ASSERT(bmTransferSend(&images, s_pack, sizeof(s_pack), -1, s_state, sizeof(s_state), &stats) == BM_TRANSFER_NO_RUNTIME);
   TEST_ASSERT(m.started && stats.usedBootstrap && !stats.usedMultiboot && stats.runtimeTries == 1);
   TEST_ASSERT(m.size == 1004 && memcmp(m.image, s_runtime, sizeof(s_runtime)) == 0 && m.image[1003] == 0);
 }
@@ -89,7 +89,7 @@ static void testALostWordStartsAgain(void)
   memset(&m, 0, sizeof(m));
   m.reply = BM_BOOTSTRAP_IDLE;
   bmHalHostLinkSetPeer(model, &m);
-  bmTransferSend(&images, s_pack, sizeof(s_pack), s_state, sizeof(s_state), NULL);
+  bmTransferSend(&images, s_pack, sizeof(s_pack), -1, s_state, sizeof(s_state), NULL);
   TEST_ASSERT(m.started && m.checksumAt > 251);
   const uint32_t drops[] = { m.checksumAt - 100, m.checksumAt - 251, m.checksumAt - 1, m.checksumAt, m.checksumAt + 1 };
   for (unsigned k = 0; k < sizeof(drops) / sizeof(drops[0]); k++)
@@ -97,7 +97,7 @@ static void testALostWordStartsAgain(void)
     memset(&m, 0, sizeof(m));
     m.reply = BM_BOOTSTRAP_IDLE;
     m.dropAt = drops[k];
-    BmTransferResult result = bmTransferSend(&images, s_pack, sizeof(s_pack), s_state, sizeof(s_state), &stats);
+    BmTransferResult result = bmTransferSend(&images, s_pack, sizeof(s_pack), -1, s_state, sizeof(s_state), &stats);
     if (result != BM_TRANSFER_NO_RUNTIME) printf("  word %u lost: result %d after %u tries, %u starts\n", (unsigned)drops[k], (int)result, (unsigned)stats.runtimeTries, (unsigned)m.starts);
     TEST_ASSERT(result == BM_TRANSFER_NO_RUNTIME);
     // Whichever word was lost, the image that was started is the whole one. (If only the
@@ -117,13 +117,13 @@ static void testNobodyThere(void)
 {
   BmTransferStats stats;
   bmHalHostLinkSetPeer(nobody, NULL);
-  TEST_ASSERT(bmTransferSend(NULL, s_pack, sizeof(s_pack), s_state, sizeof(s_state), &stats) == BM_TRANSFER_NO_PEER);
+  TEST_ASSERT(bmTransferSend(NULL, s_pack, sizeof(s_pack), -1, s_state, sizeof(s_state), &stats) == BM_TRANSFER_NO_PEER);
   BmTransferImages images = { NULL, 0, s_runtime, sizeof(s_runtime) };
-  TEST_ASSERT(bmTransferSend(&images, s_pack, sizeof(s_pack), s_state, sizeof(s_state), &stats) == BM_TRANSFER_NO_PEER);
+  TEST_ASSERT(bmTransferSend(&images, s_pack, sizeof(s_pack), -1, s_state, sizeof(s_state), &stats) == BM_TRANSFER_NO_PEER);
   // With a bootstrap image the BIOS is tried, and does not answer either.
   images.pBootstrap = s_runtime;
   images.bootstrapSize = 512;
-  TEST_ASSERT(bmTransferSend(&images, s_pack, sizeof(s_pack), s_state, sizeof(s_state), &stats) == BM_TRANSFER_BOOT_FAILED);
+  TEST_ASSERT(bmTransferSend(&images, s_pack, sizeof(s_pack), -1, s_state, sizeof(s_state), &stats) == BM_TRANSFER_BOOT_FAILED);
   TEST_ASSERT(stats.usedMultiboot && !stats.usedBootstrap);
   bmHalHostLinkSetPeer(NULL, NULL);
 }

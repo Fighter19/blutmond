@@ -1429,6 +1429,59 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     report.info("colour-override", asset,
                 std::to_string(used.size()) + " source colours replaced for profile " + profile.name + " (" + overridesPath(asset) + ")");
 
+  // Left out for an update to bring (pack sets, pack-format.md §0): the rooms asked for, and
+  // what only they use (their maps, collision, objects; an area's graphics no kept room
+  // shows), and every chunk of the kinds asked for. The entries stay: chunk numbers and string
+  // ids are the same as in the full pack, so an update made from it fits this one.
+  if (!options.absentRooms.empty() || !options.absentKinds.empty())
+  {
+    std::set<uint16_t> absentIds;
+    for (const std::string &id : options.absentRooms)
+    {
+      if (!roomIds.count(id)) report.warning("absent", "room '" + id + "'", "no room has this id");
+      absentIds.insert(strings.id(id));
+    }
+    std::vector<int> users(writer.chunkCount, 0), absentUsers(writer.chunkCount, 0);
+    std::vector<bool> absent(writer.chunkCount, false);
+    for (uint32_t k = 0; k < writer.chunkCount; k++)
+    {
+      const BmPackWriterChunk &c = writer.pChunks[k];
+      if (c.entry.id != BM_CHUNK_ROOM || c.entry.size < 44) continue;
+      const uint8_t *r = c.pData;
+      bool gone = absentIds.count(uint16_t(r[40] | r[41] << 8)) != 0;
+      absent[k] = gone;
+      std::vector<uint32_t> refs = {uint32_t(r[30] | r[31] << 8), uint32_t(r[32] | r[33] << 8), uint32_t(r[34] | r[35] << 8),
+                                    uint32_t(r[36] | r[37] << 8), uint32_t(r[38] | r[39] << 8)};
+      for (uint32_t l = 0; l < r[5] && 44u + l * 12u + 4u <= c.entry.size; l++) refs.push_back(uint32_t(r[44 + l * 12 + 2] | r[44 + l * 12 + 3] << 8));
+      std::sort(refs.begin(), refs.end());
+      refs.erase(std::unique(refs.begin(), refs.end()), refs.end());
+      for (uint32_t ref : refs)
+        if (ref < writer.chunkCount)
+        {
+          users[ref]++;
+          if (gone) absentUsers[ref]++;
+        }
+    }
+    std::set<uint32_t> kinds;
+    for (const std::string &kind : options.absentKinds)
+    {
+      if (kind.size() != 4) report.warning("absent", kind, "a kind of chunk is four characters (LANG, MODB, ...)");
+      else kinds.insert(BM_FOURCC(kind[0], kind[1], kind[2], kind[3]));
+    }
+    uint32_t chunks = 0, bytes = 0;
+    for (uint32_t k = 0; k < writer.chunkCount; k++)
+    {
+      BmPackWriterChunk &c = writer.pChunks[k];
+      bool gone = absent[k] || (users[k] != 0 && users[k] == absentUsers[k]) || kinds.count(c.entry.id) != 0;
+      if (!gone || c.entry.id == BM_CHUNK_STRS) continue;
+      c.entry.flags = BM_PACK_ENTRY_ABSENT;
+      chunks++;
+      bytes += c.entry.size;
+    }
+    report.info("absent", "project", std::to_string(chunks) + " chunks left out (" + std::to_string(bytes) +
+                                         " bytes): an update brings them (pack sets)");
+  }
+
   std::vector<uint8_t> out;
   if (!report.hasErrors())
   {

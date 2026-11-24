@@ -57,24 +57,226 @@ static bool ascending(const BmPack *pPack)
   return true;
 }
 
+// A fitted push: which chunks keep their bytes (the rest are left out, BM_PACK_ENTRY_ABSENT),
+// the size and checksum of the pack that results. Its table is the full pack's, so chunk
+// indices, room numbers and string ids stay.
+typedef struct FitPlan
+{
+  uint8_t keep[BM_LIVE_MAX_CHUNKS / 8];
+  uint32_t size, crc, leftOut;
+} FitPlan;
+
+static bool kept(const FitPlan *f, uint32_t i) { return f == NULL || (f->keep[i / 8] & (1u << (i % 8))) != 0; }
+
+static uint32_t padded(uint32_t n) { return (n + 3u) & ~3u; }
+
+// The chunks a ROOM chunk names (room-format.md §5: maps, collision, objects, area), each once.
+static uint32_t roomRefs(const BmPack *pPack, uint32_t index, uint16_t *pRefs)
+{
+  BmChunkEntry e;
+  const uint8_t *r = bmPackChunkData(pPack, index, NULL);
+  if (r == NULL || !bmPackGetChunk(pPack, index, &e) || e.id != BM_CHUNK_ROOM || e.size < 44) return 0;
+  uint32_t n = 0, count = bmPackChunkCount(pPack);
+  uint16_t all[5 + 8];
+  for (uint32_t k = 0; k < 5; k++) all[n++] = bmRead16(r + 30 + 2 * k);
+  for (uint32_t l = 0; l < r[5] && l < 8 && 44u + l * 12u + 4u <= e.size; l++) all[n++] = bmRead16(r + 44 + l * 12 + 2);
+  uint32_t out = 0;
+  for (uint32_t k = 0; k < n; k++)
+  {
+    bool seen = all[k] >= count;
+    for (uint32_t j = 0; j < out && !seen; j++) seen = pRefs[j] == all[k];
+    if (!seen) pRefs[out++] = all[k];
+  }
+  return out;
+}
+
+static uint32_t fitCost(const BmPack *pPack, const FitPlan *f, uint32_t i)
+{
+  BmChunkEntry e;
+  if (kept(f, i) || !bmPackGetChunk(pPack, i, &e) || (e.flags & BM_PACK_ENTRY_ABSENT)) return 0;
+  return padded(e.size);
+}
+
+static void fitKeep(const BmPack *pPack, FitPlan *f, uint32_t i)
+{
+  f->size += fitCost(pPack, f, i);
+  f->keep[i / 8] |= (uint8_t)(1u << (i % 8));
+}
+
+// The room `room` (its number) with what it names, if that fits in `budget`.
+static void fitRoom(const BmPack *pPack, FitPlan *f, int32_t room, uint32_t budget)
+{
+  uint32_t count = bmPackChunkCount(pPack);
+  for (uint32_t i = 0; i < count && room >= 0; i++)
+  {
+    BmChunkEntry e;
+    bmPackGetChunk(pPack, i, &e);
+    if (e.id != BM_CHUNK_ROOM || room-- != 0) continue;
+    if ((e.flags & BM_PACK_ENTRY_ABSENT) || kept(f, i)) return;
+    uint16_t refs[13];
+    uint32_t n = roomRefs(pPack, i, refs), cost = fitCost(pPack, f, i);
+    for (uint32_t k = 0; k < n; k++) cost += fitCost(pPack, f, refs[k]);
+    if (f->size + cost > budget) return;
+    fitKeep(pPack, f, i);
+    for (uint32_t k = 0; k < n; k++) fitKeep(pPack, f, refs[k]);
+    return;
+  }
+}
+
+// An entry of the table as sent: the pack's own, or (fitted) with the new offset or left out.
+// `pAt`: where the next kept chunk goes.
+static void sentEntry(const BmPack *pPack, const FitPlan *f, uint32_t i, uint32_t *pAt, uint8_t *pOut)
+{
+  memcpy(pOut, pPack->pData + pPack->header.tocOffset + i * BM_PACK_CHUNK_ENTRY_SIZE, BM_PACK_CHUNK_ENTRY_SIZE);
+  if (f == NULL) return;
+  if (kept(f, i))
+  {
+    bmLinkPut32(pOut + 4, *pAt);
+    *pAt += padded(bmRead32(pOut + 8));
+  }
+  else
+  {
+    bmLinkPut32(pOut + 4, 0);
+    bmLinkPut32(pOut + 8, 0);
+    pOut[16] |= BM_PACK_ENTRY_ABSENT;
+  }
+}
+
+// Picks what goes into `budget` bytes: every chunk no room names (but the languages), the room
+// `room`, room 0, the other rooms in order (each whole, if it fits), then the languages.
+static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan *f)
+{
+  uint32_t count = bmPackChunkCount(pPack);
+  if (count > BM_LIVE_MAX_CHUNKS || (pPack->header.flags & BM_PACK_FLAG_UPDATE)) return false;
+  memset(f, 0, sizeof(*f));
+  f->size = BM_PACK_HEADER_SIZE + count * BM_PACK_CHUNK_ENTRY_SIZE;
+  uint8_t named[BM_LIVE_MAX_CHUNKS / 8] = { 0 };
+  int32_t rooms = 0;
+  for (uint32_t i = 0; i < count; i++)
+  {
+    uint16_t refs[13];
+    uint32_t n = roomRefs(pPack, i, refs);
+    for (uint32_t k = 0; k < n; k++) named[refs[k] / 8] |= (uint8_t)(1u << (refs[k] % 8));
+    BmChunkEntry e;
+    bmPackGetChunk(pPack, i, &e);
+    if (e.id == BM_CHUNK_ROOM) rooms++;
+  }
+  for (uint32_t i = 0; i < count; i++)
+  {
+    BmChunkEntry e;
+    bmPackGetChunk(pPack, i, &e);
+    if (e.id != BM_CHUNK_ROOM && e.id != BM_CHUNK_LANG && !(named[i / 8] & (1u << (i % 8)))) fitKeep(pPack, f, i);
+  }
+  if (f->size > budget) return false;
+  fitRoom(pPack, f, room, budget);
+  for (int32_t k = 0; k < rooms; k++) fitRoom(pPack, f, k, budget);
+  for (uint32_t i = 0; i < count; i++)
+  {
+    BmChunkEntry e;
+    bmPackGetChunk(pPack, i, &e);
+    if (e.id == BM_CHUNK_LANG && f->size + fitCost(pPack, f, i) <= budget) fitKeep(pPack, f, i);
+  }
+
+  // The checksum of what results: the table, then the kept chunks with their padding.
+  static const uint8_t zeros[4] = { 0 };
+  uint32_t at = BM_PACK_HEADER_SIZE + count * BM_PACK_CHUNK_ENTRY_SIZE, crc = 0;
+  for (uint32_t i = 0; i < count; i++)
+  {
+    uint8_t entry[BM_PACK_CHUNK_ENTRY_SIZE];
+    sentEntry(pPack, f, i, &at, entry);
+    crc = bmCrc32(crc, entry, sizeof(entry));
+  }
+  for (uint32_t i = 0; i < count; i++)
+  {
+    uint32_t n = 0;
+    const uint8_t *data = bmPackChunkStored(pPack, i, &n);
+    if (!kept(f, i) || data == NULL)
+    {
+      f->leftOut += data != NULL;
+      continue;
+    }
+    crc = bmCrc32(crc, data, n);
+    crc = bmCrc32(crc, zeros, padded(n) - n);
+  }
+  f->crc = crc;
+  return true;
+}
+
+int32_t bmLiveMasterFindRoom(const uint8_t *pPack, uint32_t size, const char *roomId)
+{
+  BmPack pack;
+  if (roomId == NULL || bmPackOpen(&pack, pPack, size, false) != BM_PACK_OK) return -1;
+  const uint8_t *strs = NULL;
+  uint32_t strsSize = 0, count = bmPackChunkCount(&pack);
+  for (uint32_t i = 0; i < count && strs == NULL; i++)
+  {
+    BmChunkEntry e;
+    bmPackGetChunk(&pack, i, &e);
+    if (e.id == BM_CHUNK_STRS) strs = bmPackChunkData(&pack, i, &strsSize);
+  }
+  if (strs == NULL || strsSize < 4) return -1;
+  int32_t room = 0;
+  for (uint32_t i = 0; i < count; i++)
+  {
+    BmChunkEntry e;
+    bmPackGetChunk(&pack, i, &e);
+    if (e.id != BM_CHUNK_ROOM) continue;
+    const uint8_t *r = bmPackChunkData(&pack, i, NULL);
+    uint32_t id = r != NULL && e.size >= 44 ? bmRead16(r + 40) : 0xFFFFu;
+    if (id < bmRead16(strs) && 4u + 4u * id + 4u <= strsSize)
+    {
+      uint32_t at = bmRead32(strs + 4 + 4 * id);
+      size_t len = strlen(roomId);
+      if (at < strsSize && len < strsSize - at && memcmp(strs + at, roomId, len + 1) == 0) return room;
+    }
+    room++;
+  }
+  return -1;
+}
+
 bool bmLiveMasterPushPack(BmLinkMaster *m, const uint8_t *pPack, uint32_t size, uint32_t id, const BmLiveRemote *r,
                           BmLivePushStats *pStats)
+{
+  return bmLiveMasterPushPackFor(m, pPack, size, id, r, -1, pStats);
+}
+
+bool bmLiveMasterPushPackFor(BmLinkMaster *m, const uint8_t *pPack, uint32_t size, uint32_t id, const BmLiveRemote *r,
+                             int32_t room, BmLivePushStats *pStats)
 {
   BmPack pack;
   BmLivePushStats stats = { 0 };
   if (bmPackOpen(&pack, pPack, size, true) != BM_PACK_OK) return false;
-  uint8_t buf[BM_LINK_MAX_PAYLOAD];
+  static uint8_t buf[BM_LINK_MAX_PAYLOAD] BM_EWRAM_BSS;
+  // Larger than the runtime takes at all (runtime version 5 on): fitted, with as many rooms as
+  // fit; the rest is left out and can come with a later push.
+  static FitPlan plan BM_EWRAM_BSS;
+  const FitPlan *fit = NULL;
+  if (r != NULL && r->hello.runtimeVersion >= 5 && size > r->hello.poolCapacity)
+  {
+    if (!fitPack(&pack, room, r->hello.poolCapacity, &plan)) return false;
+    fit = &plan;
+    stats.chunksLeftOut = plan.leftOut;
+  }
+  uint32_t sentSize = fit != NULL ? fit->size : size;
   // Too large to arrive beside the running pack: it is written over it. At its place the
   // runtime keeps the chunks that stay at the same offset; elsewhere none.
   bool atOffset = false;
-  if (r != NULL && size > r->hello.contentCapacity)
+  if (r != NULL && sentSize > r->hello.contentCapacity)
   {
-    if (size <= r->hello.inPlaceCapacity && ascending(&pack)) atOffset = true;
+    if (fit == NULL && size <= r->hello.inPlaceCapacity && ascending(&pack)) atOffset = true;
     else r = NULL;
   }
 
   // Table of contents: header and entries as one stream, split into parts.
   uint32_t count = bmPackChunkCount(&pack);
+  uint8_t header[BM_PACK_HEADER_SIZE], entry[BM_PACK_CHUNK_ENTRY_SIZE];
+  memcpy(header, pPack, BM_PACK_HEADER_SIZE);
+  if (fit != NULL)
+  {
+    bmLinkPut32(header + 16, fit->size);
+    bmLinkPut32(header + 32, fit->crc);
+  }
+  uint32_t at = BM_PACK_HEADER_SIZE + count * BM_PACK_CHUNK_ENTRY_SIZE;
   uint32_t stream = BM_PACK_HEADER_SIZE + count * BM_PACK_CHUNK_ENTRY_SIZE;
   uint32_t perPart = BM_LINK_MAX_PAYLOAD - BM_LIVE_TOC_HEADER;
   uint32_t parts = (stream + perPart - 1) / perPart;
@@ -82,13 +284,20 @@ bool bmLiveMasterPushPack(BmLinkMaster *m, const uint8_t *pPack, uint32_t size, 
   {
     uint32_t from = part * perPart, n = stream - from < perPart ? stream - from : perPart;
     bmLinkPut32(buf, id);
-    bmLinkPut32(buf + 4, size);
+    bmLinkPut32(buf + 4, sentSize);
     bmLinkPut16(buf + 8, (uint16_t)part);
     bmLinkPut16(buf + 10, (uint16_t)parts);
     for (uint32_t i = 0; i < n; i++)
     {
       uint32_t pos = from + i;
-      buf[BM_LIVE_TOC_HEADER + i] = pos < BM_PACK_HEADER_SIZE ? pPack[pos] : pPack[pack.header.tocOffset + pos - BM_PACK_HEADER_SIZE];
+      if (pos < BM_PACK_HEADER_SIZE)
+      {
+        buf[BM_LIVE_TOC_HEADER + i] = header[pos];
+        continue;
+      }
+      uint32_t within = (pos - BM_PACK_HEADER_SIZE) % BM_PACK_CHUNK_ENTRY_SIZE;
+      if (within == 0) sentEntry(&pack, fit, (pos - BM_PACK_HEADER_SIZE) / BM_PACK_CHUNK_ENTRY_SIZE, &at, entry);
+      buf[BM_LIVE_TOC_HEADER + i] = entry[within];
     }
     if (!bmLinkMasterQueue(m, BM_LINK_TOC, buf, (uint16_t)(BM_LIVE_TOC_HEADER + n))) return false;
   }
@@ -97,6 +306,8 @@ bool bmLiveMasterPushPack(BmLinkMaster *m, const uint8_t *pPack, uint32_t size, 
   {
     BmChunkEntry e;
     bmPackGetChunk(&pack, c, &e);
+    const uint8_t *data = bmPackChunkStored(&pack, c, NULL);
+    if (!kept(fit, c) || data == NULL) continue;
     if (resident(r, &e, atOffset))
     {
       stats.chunksResident++;
@@ -115,7 +326,7 @@ bool bmLiveMasterPushPack(BmLinkMaster *m, const uint8_t *pPack, uint32_t size, 
       bmLinkPut16(buf + 4, (uint16_t)c);
       bmLinkPut16(buf + 6, 0);
       bmLinkPut32(buf + 8, at);
-      memcpy(buf + BM_LIVE_CHUNK_DATA_HEADER, pPack + e.offset + at, n);
+      memcpy(buf + BM_LIVE_CHUNK_DATA_HEADER, data + at, n);
       bmLinkMasterQueue(m, BM_LINK_CHUNK_DATA, buf, (uint16_t)(BM_LIVE_CHUNK_DATA_HEADER + n));
     }
     bmLinkPut32(buf, id);

@@ -202,7 +202,7 @@ static void sendToOther(const uint8_t *pPackData, uint32_t packSize)
   BmTransferStats stats;
   bmHalLinkStop();
   uint32_t started = bmHalCycles();
-  BmTransferResult result = bmTransferSend(&images, pPackData, packSize, state, size, &stats);
+  BmTransferResult result = bmTransferSend(&images, pPackData, packSize, (int32_t)s_game.roomIndex, state, size, &stats);
   bm_game_stats.sendCycles = bmHalCycles() - started;
   bm_game_stats.sendWords = stats.words;
   bm_game_stats.sendRuntimeCycles = stats.runtimeCycles;

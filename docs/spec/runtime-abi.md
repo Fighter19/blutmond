@@ -26,6 +26,17 @@ Most of this document is the design. Built so far (`src/link/live.h`,
   and is sent whole. A transfer that breaks off leaves the game waiting for the next; restart, hot and
   module work as usual afterwards (the room's ID and what a module reload compares were taken
   from the old pack beforehand); a pushed state is refused while there is no pack.
+- **A fitted push.** A pack larger than the pool (runtime version 5 on: the HELLO's largest
+  pack at all) is fitted by the master (`bmLiveMasterPushPackFor`): it arrives with the full
+  chunk table, but only some chunks keep their bytes, the others are left out (absent,
+  [pack-format.md](pack-format.md) §0). In this order, while they fit: every chunk no room
+  names but the languages (if these do not fit, the push fails); the room asked for and
+  what it names (bmlink: the room of `restart:ID`; one GBA sending to another: the room it
+  is in); room 0; the other rooms in order, each whole where it fits; then the languages.
+  The CRC is of the pack as it arrives. The runtime marks the left-out chunks as there. The
+  game does not go to a left-out room; a later push fitted around that room brings it (and
+  leaves out others). On the test level and a pool 12 KB smaller than it, 21 of 142 chunks
+  are left out.
 - **No pack at all.** The runtime image (`game_runtime_mb.gba`) carries no pack: it starts
   with the pack let go of and waits for the first. A restart or hot push then starts the
   game.

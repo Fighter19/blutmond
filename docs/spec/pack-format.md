@@ -16,8 +16,25 @@ Everything is little endian. This is all a reader of today's packs needs, togeth
 chunk formats named in section 3.
 
 - **Header and table**: as in section 1. `format_major` 0 (another value is refused),
-  `format_minor` 1, `abi_major` 0, `abi_minor` 1, `flags` = the layout the cooker was asked
-  for (0 unless told otherwise; nothing reads it), `toc_offset` 36.
+  `format_minor` 2, `abi_major` 0, `abi_minor` 1, `flags` = the layout the cooker was asked
+  for in bits 0-3 (0 unless told otherwise; nothing reads it), bit 4 (`0x10`) an update pack
+  (below), `toc_offset` 36.
+- **Left-out chunks** (minor 2): the top two bits of an entry's `compression` byte are flags;
+  the compression itself is the low six. Bit 6 (`0x40`, absent): the chunk is not in this
+  pack; `offset` and `size` are 0, the rest of the entry (id, unpacked size, hash) is as in
+  the full pack. Reading it gives no data (`bmPackChunkData`, `bmPackChunkUnpack`). The table
+  keeps every entry, so chunk indices, room numbers and string ids are those of the full pack.
+  A room whose `ROOM` chunk is left out is not entered (`bmGameFindRoom` does not find it, a
+  door there does not open); a left-out `LANG` is not offered. `STRS` is never left out.
+  The cooker writes such a pack when told `--absent-room ID` (the room and every chunk only
+  left-out rooms name) or `--absent-kind KIND` (every chunk of that kind); the multiboot game
+  `game_mb` carries the test level without its five debug rooms and translations (78 KB
+  instead of 90 KB). The live link leaves chunks out the same way to fit a pack to a
+  runtime (a fitted push, [runtime-abi.md](runtime-abi.md) §0).
+- **Update packs** (minor 2, reader and `bmPackMakeUpdate` only; nothing sends them yet):
+  bit 7 (`0x80`, in base) of an entry: the chunk lies in a base pack, at `offset` there. Such
+  a pack is opened with `bmPackOpenSet` and its base, which must not be an update itself;
+  every in-base chunk must lie inside the base.
 - **Opening a pack** fails if: the magic is wrong; `total_size` is larger than the data or
   smaller than 36; the table does not lie inside `total_size`; a chunk does not lie inside
   `total_size`; or (when asked to check) the CRC is wrong. Bytes after `total_size` are
@@ -79,7 +96,7 @@ chunk data ...            (each chunk 4-byte aligned, zero padded)
 struct BmPackHeader {          // 36 bytes
     char magic[4];             // "BMPK"
     u16  format_major;         // 0 in this draft
-    u16  format_minor;         // 1
+    u16  format_minor;         // 2
     u16  abi_major;            // runtime API version the pack needs (runtime-abi.md)
     u16  abi_minor;
     char profile[4];           // "GBA ", "SNES", "HOST"
@@ -96,7 +113,7 @@ struct BmChunkEntry {          // 24 bytes
     u32  offset;               // from the start of the pack
     u32  size;                 // stored size
     u32  unpacked_size;        // size after decompression (= size when not compressed)
-    u8   compression;          // section 4
+    u8   compression;          // section 4 (bits 0-5); bit 6 absent, bit 7 in base (§0)
     u8   category;             // streaming.md §3: level, graphics, objects, actors, ...
     u16  group;                // load group, section 2; 0 = global
     u32  hash;                 // CRC-32 of the unpacked data; used by the live link

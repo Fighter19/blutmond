@@ -1,7 +1,7 @@
 # Content streaming
 
 Version 0.1, draft. **Planned, not built.** What exists today is simpler: a multiboot image
-carries its whole pack; over the link the PC sends a whole new pack, leaving out the chunks
+carries a pack (trimmed to fit, [pack-format.md](pack-format.md) §0); over the link the PC sends a whole new pack, leaving out the chunks
 the runtime already has (same hash and size), and the runtime switches to it
 ([link-protocol.md](link-protocol.md) §3, [runtime-abi.md](runtime-abi.md) §0). There is no
 room chain, no residency mirror, no load profile, no `DROP`, `SESSION`, `TEST` or status

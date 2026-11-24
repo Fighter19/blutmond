@@ -14,7 +14,7 @@
 #include <stdint.h>
 
 #define BM_PACK_FORMAT_MAJOR 0
-#define BM_PACK_FORMAT_MINOR 1
+#define BM_PACK_FORMAT_MINOR 2
 
 #define BM_PACK_HEADER_SIZE 36
 #define BM_PACK_CHUNK_ENTRY_SIZE 24
@@ -51,6 +51,17 @@ typedef enum BmPackLayout {
   BM_PACK_LAYOUT_ROOM_CHAIN = 1,
   BM_PACK_LAYOUT_SEQUENTIAL = 2,
 } BmPackLayout;
+
+/// Header flags: bit 4: an update, whose entries may lie in a base pack (pack sets,
+/// pack-format.md §0).
+#define BM_PACK_FLAG_UPDATE 0x10
+
+/// Chunk entry flags, in the top bits of the compression byte (format minor 2): the chunk is
+/// absent (not in this pack: an update brings it; offset and size 0), or it lies in the base
+/// pack (offset and size are the base's).
+#define BM_PACK_ENTRY_ABSENT 0x40
+#define BM_PACK_ENTRY_IN_BASE 0x80
+#define BM_PACK_ENTRY_FLAGS 0xC0
 
 typedef enum BmPackCompression {
   BM_PACK_COMPRESSION_NONE = 0,
@@ -92,10 +103,11 @@ typedef struct BmChunkEntry
   uint32_t offset;
   uint32_t size;
   uint32_t unpackedSize;
-  uint8_t compression;
+  uint8_t compression;     // the method (the entry flags taken out)
   uint8_t category;
   uint16_t group;
   uint32_t hash;
+  uint8_t flags;           // BM_PACK_ENTRY_ABSENT, BM_PACK_ENTRY_IN_BASE (from the compression byte)
 } BmChunkEntry;
 
 typedef enum BmPackError {
@@ -117,6 +129,9 @@ typedef struct BmPack
   // The string table, found once when the pack is opened (strings are looked up often).
   const uint8_t *pStrings;
   uint32_t stringsSize;
+  // An update's base pack (pack sets): entries flagged in-base lie there. NULL: none.
+  const uint8_t *pBase;
+  uint32_t baseSize;
 } BmPack;
 
 /// CRC-32 (IEEE 802.3), as used by packs, chunks and the link protocol.
@@ -126,13 +141,23 @@ uint32_t bmCrc32(uint32_t crc, const void *pData, size_t size);
 /// (slow on the GBA; the cooker and the live link check it instead).
 BmPackError bmPackOpen(BmPack *pPack, const void *pData, uint32_t size, bool verifyCrc);
 
+/// The same for a pack set: an update (header flag BM_PACK_FLAG_UPDATE) over `pBase`, a pack
+/// that is not an update itself; chunks flagged in-base are read from the base. Without a
+/// base, or with an update as the base, an update is refused (BM_PACK_ERROR_TOC); a pack that
+/// is not an update ignores the base. The CRC covers the update's own bytes.
+BmPackError bmPackOpenSet(BmPack *pPack, const void *pData, uint32_t size, bool verifyCrc, const BmPack *pBase);
+
+/// The bytes a chunk is stored as (compressed or not), wherever it lies; NULL if it is absent
+/// (or the index is bad).
+const uint8_t *bmPackChunkStored(const BmPack *pPack, uint32_t index, uint32_t *pSize);
+
 uint32_t bmPackChunkCount(const BmPack *pPack);
 bool bmPackGetChunk(const BmPack *pPack, uint32_t index, BmChunkEntry *pEntry);
 
 /// Index of the first chunk with `id` at or after `start`, or -1.
 int32_t bmPackFindChunk(const BmPack *pPack, uint32_t id, uint32_t start);
 
-/// In-place data of an uncompressed chunk, or NULL (bad index, compressed chunk).
+/// In-place data of an uncompressed chunk, or NULL (bad index, compressed chunk, absent).
 const uint8_t *bmPackChunkData(const BmPack *pPack, uint32_t index, uint32_t *pSize);
 
 /// A chunk's data, compressed or not: an uncompressed one in place, an LZ77 one unpacked into
@@ -168,7 +193,7 @@ static inline uint32_t bmRead32(const uint8_t *p)
 
 typedef struct BmPackWriterChunk
 {
-  BmChunkEntry entry;
+  BmChunkEntry entry;      // entry.flags: absent (no data), in base (entry.offset is the base's)
   uint8_t *pData;
 } BmPackWriterChunk;
 
@@ -187,6 +212,12 @@ void bmPackWriterFree(BmPackWriter *pWriter);
 uint32_t bmPackWriterAdd(BmPackWriter *pWriter, uint32_t id, BmChunkCategory category, uint16_t group,
                          const void *pData, uint32_t size);
 
+/// Adds an entry without data: `flags` BM_PACK_ENTRY_ABSENT (the chunk comes with an update;
+/// `pEntry`'s id, category, group, hash and sizes are kept, offset and size written as 0) or
+/// BM_PACK_ENTRY_IN_BASE (it lies in the base pack at `pEntry`'s offset and size; the pack
+/// becomes an update). Returns its index.
+uint32_t bmPackWriterAddEntry(BmPackWriter *pWriter, const BmChunkEntry *pEntry, uint8_t flags);
+
 /// LZ77-compresses chunk `index` (data, size, hash: of the compressed bytes) if that makes
 /// it smaller; returns whether it did.
 bool bmPackWriterCompress(BmPackWriter *pWriter, uint32_t index);
@@ -197,4 +228,11 @@ uint32_t bmLz77Pack(const uint8_t *pIn, uint32_t size, uint8_t *pOut);
 
 /// Builds the pack. Returns a malloc'ed buffer (caller frees) and its size.
 uint8_t *bmPackWriterFinish(const BmPackWriter *pWriter, uint32_t *pSize);
+
+/// An update of the full pack `pFull` over a base that holds the chunks `pBaseChunks` lists
+/// (`count` triples of hash, size, offset in the base, as the live link's HELLO reports
+/// them): the full pack's table, every chunk the base holds (same hash and size) flagged
+/// in-base at its offset there, the others' data in the update. Returns a malloc'ed pack
+/// (caller frees) and its size, or NULL if `pFull` is an update itself.
+uint8_t *bmPackMakeUpdate(const BmPack *pFull, const uint32_t *pBaseChunks, uint32_t count, uint32_t *pSize);
 #endif

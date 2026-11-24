@@ -23,6 +23,7 @@ typedef struct BmLivePushStats
 {
   uint32_t chunksSent, chunksResident;
   uint32_t bytesSent;          // chunk bytes sent (not counting the TOC)
+  uint32_t chunksLeftOut;      // a fitted push: chunks not sent (absent in the pack that arrives)
 } BmLivePushStats;
 
 bool bmLiveMasterHello(BmLinkMaster *pMaster, BmLiveRemote *pRemote);
@@ -34,6 +35,18 @@ bool bmLiveMasterHello(BmLinkMaster *pMaster, BmLiveRemote *pRemote);
 /// runtime then holds still from the first packet until a pack is applied.
 bool bmLiveMasterPushPack(BmLinkMaster *pMaster, const uint8_t *pPack, uint32_t size, uint32_t transferId,
                           const BmLiveRemote *pRemote, BmLivePushStats *pStats);
+
+/// The same; a pack larger than the runtime takes at all (its poolCapacity; runtime version 5
+/// on) is fitted: it arrives with the full table, but only these chunks keep their bytes, the
+/// rest are left out (BM_PACK_ENTRY_ABSENT, pack-format.md §0): every chunk no room names but
+/// the languages; the room `room` (its number, -1 none) and what it names; room 0; the other
+/// rooms in order, each whole where it still fits; then the languages. The game does not enter
+/// a room that is left out; a later push (fitted around another room) brings it.
+bool bmLiveMasterPushPackFor(BmLinkMaster *pMaster, const uint8_t *pPack, uint32_t size, uint32_t transferId,
+                             const BmLiveRemote *pRemote, int32_t room, BmLivePushStats *pStats);
+
+/// The number of the room with this id in the pack, or -1.
+int32_t bmLiveMasterFindRoom(const uint8_t *pPack, uint32_t size, const char *roomId);
 
 /// Applies a transfer (restart/hot) or the state sent with bmLiveMasterPutState (mode state).
 /// True if the runtime answered; check pStatus->result.

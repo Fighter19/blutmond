@@ -142,12 +142,13 @@ static void copyResidentChunks(BmLive *l)
   {
     const uint8_t *e = l->pStaging + l->tocOffset + i * BM_PACK_CHUNK_ENTRY_SIZE;
     uint32_t offset = bmRead32(e + 4), size = bmRead32(e + 8), hash = bmRead32(e + 20);
-    if (offset > l->totalSize || size > l->totalSize - offset) continue;
+    if ((e[16] & BM_PACK_ENTRY_FLAGS) != 0 || offset > l->totalSize || size > l->totalSize - offset) continue;
     for (uint32_t k = 0; k < activeCount; k++)
     {
       BmChunkEntry a;
-      if (!bmPackGetChunk(&l->active, k, &a) || a.hash != hash || a.size != size) continue;
-      memcpy(l->pStaging + offset, l->active.pData + a.offset, size);
+      const uint8_t *from = bmPackChunkStored(&l->active, k, NULL);
+      if (from == NULL || !bmPackGetChunk(&l->active, k, &a) || a.hash != hash || a.size != size) continue;
+      memcpy(l->pStaging + offset, from, size);
       l->present[i / 8] |= (uint8_t)(1u << (i % 8));
       l->chunksCopied++;
       l->bytesIn += size;
@@ -194,6 +195,14 @@ static void keepInPlace(BmLive *l)
   }
   zeroBetween(l, ascending ? at : 0, l->totalSize);
   l->inPlace = false;
+}
+
+// Chunks the pack leaves out (a fitted push, live_master.h): nothing comes for them.
+static void markAbsent(BmLive *l)
+{
+  for (uint32_t i = 0; i < l->chunkCount; i++)
+    if (l->pStaging[l->tocOffset + i * BM_PACK_CHUNK_ENTRY_SIZE + 16] & BM_PACK_ENTRY_ABSENT)
+      l->present[i / 8] |= (uint8_t)(1u << (i % 8));
 }
 
 static void receiveToc(BmLive *l, const BmLinkPacket *p)
@@ -274,7 +283,11 @@ static void receiveToc(BmLive *l, const BmLinkPacket *p)
   {
     l->tocComplete = l->tocReceived == l->tocStreamSize;
     l->transferFailed = !l->tocComplete;
-    if (l->tocComplete) l->inPlace ? keepInPlace(l) : copyResidentChunks(l);
+    if (l->tocComplete)
+    {
+      markAbsent(l);
+      l->inPlace ? keepInPlace(l) : copyResidentChunks(l);
+    }
   }
 }
 

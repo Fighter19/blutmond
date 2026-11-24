@@ -248,10 +248,10 @@ int8_t bmGameSheetBank(BmGame *g, int8_t sheet, uint8_t palette)
 static void loadSprites(BmGame *g)
 {
   // Once per pack: every sheet's data (what logic reads: frames, boxes, animations). What is
-  // in sprite memory is given out room by room (bmGameSheetBank).
+  // in sprite memory is given out as rooms need it (bmGameSheetBank) and stays across rooms
+  // until a room needs more than is left (preloadSprites).
   if (g->pSpritesFrom == g->pPack->pData && g->spritesCrc == g->pPack->header.crc32)
   {
-    forgetSprites(g);
     bindObjectSprites(g);
     return;
   }
@@ -582,14 +582,45 @@ static void enterBreakables(BmGame *g);
 // What the room shows from the start into sprite memory now, not on its first frame: its
 // objects' sprites (in their palettes), the puzzle's. Effects and objects made later load
 // when they are first drawn.
+// Whether sheet `sheet` in `palette` is in sprite memory with a bank of its own.
+static bool sheetBanked(const BmGame *g, int8_t sheet, uint8_t palette)
+{
+  for (uint8_t b = 0; b < BM_GAME_BANKS; b++)
+    if (g->bankSheet[b] == (uint8_t)sheet && g->bankPalette[b] == palette) return true;
+  return false;
+}
+
+// What the room shows from the start into sprite memory now, not on its first frame: its
+// objects' sprites (in their palettes), the puzzle's. What earlier rooms loaded stays (a room
+// change unpacks only what is new); only if the room needs more tiles or banks than are left
+// is everything but the player's forgotten first. Effects and objects made later load when
+// they are first drawn.
 static void preloadSprites(BmGame *g)
 {
-  for (uint16_t i = 0; i < g->objectCount; i++)
-    if (g->objectSheet[i] >= 0) bmGameSheetBank(g, g->objectSheet[i], 0);
+  int8_t sheets[24];
+  uint8_t palettes[24], n = 0;
   const BmActors *a = &g->actors;
-  for (uint8_t i = 0; a->hasModule && i < a->count; i++)
-    if (!a->gone[i] && a->sheet[i] >= 0) bmGameSheetBank(g, a->sheet[i], a->palette[i]);
-  bmGameSheetBank(g, g->puzzle.sheet, 0);
+  for (uint16_t i = 0; i < g->objectCount && n < 24; i++)
+    if (g->objectSheet[i] >= 0) sheets[n] = g->objectSheet[i], palettes[n++] = 0;
+  for (uint8_t i = 0; a->hasModule && i < a->count && n < 24; i++)
+    if (!a->gone[i] && a->sheet[i] >= 0) sheets[n] = a->sheet[i], palettes[n++] = a->palette[i];
+  if (g->puzzle.sheet >= 0 && n < 24) sheets[n] = g->puzzle.sheet, palettes[n++] = 0;
+  // What is new: tiles of sheets not loaded, banks for pairs without one (each counted once).
+  uint32_t tiles = 0, banks = 0;
+  for (uint8_t k = 0; k < n; k++)
+  {
+    bool seen = false;
+    for (uint8_t j = 0; j < k && !seen; j++) seen = sheets[j] == sheets[k] && palettes[j] == palettes[k];
+    if (seen || sheetBanked(g, sheets[k], palettes[k])) continue;
+    banks++;
+    bool sheetSeen = false;
+    for (uint8_t j = 0; j < k && !sheetSeen; j++) sheetSeen = sheets[j] == sheets[k];
+    if (!sheetSeen && g->sheetTile[sheets[k]] == BM_GAME_NO_TILES) tiles += g->sheets[sheets[k]].tileCount;
+  }
+  uint32_t freeBanks = 0;
+  for (uint8_t b = 0; b < BM_GAME_BANKS; b++) freeBanks += g->bankSheet[b] == 0xFF;
+  if (g->tileNext + tiles > BM_GAME_OBJ_TILES || banks > freeBanks) forgetSprites(g);
+  for (uint8_t k = 0; k < n; k++) bmGameSheetBank(g, sheets[k], palettes[k]);
 }
 
 static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)

@@ -2430,13 +2430,28 @@ static void testSheetsAndPalettesPerRoom(void)
   for (int c = 1; c < 16; c++) swapped |= ppu->palette[256 + bank * 16 + c] == (21 | 5 << 5 | 7 << 10);
   TEST_ASSERT(swapped);
   TEST_ASSERT(s_game.sheetTile[knight] == BM_GAME_NO_TILES && s_game.sheetTile[bat] != BM_GAME_NO_TILES);
-  // Into the guard room: the knight's sheet is there, the bats' banks are free.
+  // Into the guard room: the knight's sheet is loaded; the bats' stay (a room change unpacks
+  // only what is new).
   bmBodyPlace(&s_game.player, 470, 160);
   for (int f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_RIGHT);
   frames(5, 0);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
-  TEST_ASSERT(s_game.sheetTile[knight] != BM_GAME_NO_TILES && banksOf(knight, 0) == 1 && banksOf(bat, -1) == 0);
+  TEST_ASSERT(s_game.sheetTile[knight] != BM_GAME_NO_TILES && banksOf(knight, 0) == 1 && banksOf(bat, -1) == 2);
   TEST_ASSERT(s_game.spriteMisses == 0);
+  // A room that needs more than is left: everything but the player's is forgotten first. (The
+  // knight's sheet as if not loaded, sprite memory as if nearly full; to the first room and back.)
+  for (int b = 0; b < BM_GAME_BANKS; b++)
+    if (s_game.bankSheet[b] == knight) s_game.bankSheet[b] = 0xFF;
+  s_game.sheetTile[knight] = BM_GAME_NO_TILES;
+  s_game.tileNext = BM_GAME_OBJ_TILES - 8;
+  bmBodyPlace(&s_game.player, 488, 128);
+  for (int f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "test_room") != 0; f++) frames(1, BM_KEY_RIGHT);
+  frames(30, 0);
+  bmBodyPlace(&s_game.player, 24, 160);
+  for (int f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_LEFT);
+  frames(5, 0);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
+  TEST_ASSERT(s_game.sheetTile[knight] != BM_GAME_NO_TILES && banksOf(bat, -1) == 0 && s_game.tileNext < BM_GAME_OBJ_TILES - 200);
   // set_palette and flash from a script (the wind pack's Painter).
   if (s_windData != NULL)
   {

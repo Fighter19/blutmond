@@ -224,10 +224,21 @@ The same commands work on the PC game with `--tcp 7414` instead of `--xboo ...`,
 image in the emulator with `--mgba build-gba/game.gba` (there also `run N`, `check`,
 `screenshot`). The comment at the top of `tools/bmlink/bmlink.c` lists everything.
 
-A multiboot GBA has about 140 KB for pushed packs (the test level is 75 KB). A pack that fits
-beside the running one arrives while the game plays on; a larger one replaces it, the game
-standing still until it is there. Either way only the chunks that changed are sent (when it
-replaces the running one: also those that moved).
+A multiboot GBA has about 84 KB for pushed packs; the whole test level is 90 KB, so
+`game_mb` carries it without its debug rooms and translations (the cooker's `--absent-room`
+and `--absent-kind`). A pack that fits beside the running one arrives while the game plays
+on; a larger one replaces it, the game standing still until it is there. Either way only the
+chunks that changed are sent (when it replaces the running one: also those that moved). A
+pack larger than the GBA takes at all is fitted: the room named with `restart:ID` comes
+first, then room 0, then as many other rooms as fit; the rest are left out, and the game
+does not go there. To play a left-out room, push again with that room:
+
+```
+bmlink --xboo /dev/parport0 push build/test-output/test_level_gba.bmpk restart:debug_wave
+```
+
+`push` reports how many chunks were left out. A cartridge GBA sending its game to a
+multiboot one (section 8) fits the pack around the room it is in.
 
 ## 5. Changing things while the game runs
 

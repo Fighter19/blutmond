@@ -502,13 +502,13 @@ int main(int argc, char **argv)
       if (!haveRemote && !bmLiveMasterHello(&m, &remote)) { free(pack); failed = 1; break; }
       BmLivePushStats st;
       double t0 = now();
-      bool ok = bmLiveMasterPushPack(&m, pack, size, ++transferId, &remote, &st);
+      bool ok = bmLiveMasterPushPackFor(&m, pack, size, ++transferId, &remote, bmLiveMasterFindRoom(pack, size, room), &st);
       BmLiveStatus status;
       ok = ok && bmLiveMasterApply(&m, transferId, mode, room, &status);
       free(pack);
       if (!ok) { failed = 1; break; }
-      printf("push %s: %u chunks sent (%u bytes), %u already there, %.2f s; %s: %s, frame %u, room %u, player %d,%d\n", a1,
-             (unsigned)st.chunksSent, (unsigned)st.bytesSent, (unsigned)st.chunksResident, now() - t0,
+      printf("push %s: %u chunks sent (%u bytes), %u already there, %u left out, %.2f s; %s: %s, frame %u, room %u, player %d,%d\n", a1,
+             (unsigned)st.chunksSent, (unsigned)st.bytesSent, (unsigned)st.chunksResident, (unsigned)st.chunksLeftOut, now() - t0,
              mode == BM_LIVE_HOT ? "hot" : mode == BM_LIVE_MODULE ? "module" : "restart", resultName(status.result), (unsigned)status.frame,
              (unsigned)status.roomIndex, status.x, status.y);
       if (status.result != BM_LIVE_OK) failed = 1;

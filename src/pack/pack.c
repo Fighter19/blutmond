@@ -52,13 +52,19 @@ static void readEntry(const uint8_t *p, BmChunkEntry *e)
   e->offset = bmRead32(p + 4);
   e->size = bmRead32(p + 8);
   e->unpackedSize = bmRead32(p + 12);
-  e->compression = p[16];
+  e->compression = (uint8_t)(p[16] & ~BM_PACK_ENTRY_FLAGS);
+  e->flags = (uint8_t)(p[16] & BM_PACK_ENTRY_FLAGS);
   e->category = p[17];
   e->group = bmRead16(p + 18);
   e->hash = bmRead32(p + 20);
 }
 
 BmPackError bmPackOpen(BmPack *pPack, const void *pData, uint32_t size, bool verifyCrc)
+{
+  return bmPackOpenSet(pPack, pData, size, verifyCrc, NULL);
+}
+
+BmPackError bmPackOpenSet(BmPack *pPack, const void *pData, uint32_t size, bool verifyCrc, const BmPack *pBase)
 {
   memset(pPack, 0, sizeof(*pPack));
   if (pData == NULL || size < BM_PACK_HEADER_SIZE)
@@ -85,11 +91,17 @@ BmPackError bmPackOpen(BmPack *pPack, const void *pData, uint32_t size, bool ver
   {
     return BM_PACK_ERROR_TOC;
   }
+  // An update needs a base that is not an update itself; its in-base entries lie inside it.
+  bool update = (h.flags & BM_PACK_FLAG_UPDATE) != 0;
+  if (update && (pBase == NULL || pBase->pData == NULL || (pBase->header.flags & BM_PACK_FLAG_UPDATE))) return BM_PACK_ERROR_TOC;
+  uint32_t baseSize = update ? pBase->size : 0;
   for (uint32_t i = 0; i < h.chunkCount; i++)
   {
     BmChunkEntry e;
     readEntry(p + h.tocOffset + i * BM_PACK_CHUNK_ENTRY_SIZE, &e);
-    if (e.offset > h.totalSize || e.size > h.totalSize - e.offset)
+    uint32_t within = (e.flags & BM_PACK_ENTRY_IN_BASE) ? baseSize : (e.flags & BM_PACK_ENTRY_ABSENT) ? 0 : h.totalSize;
+    if ((e.flags & BM_PACK_ENTRY_IN_BASE) && !update) return BM_PACK_ERROR_TOC;
+    if (e.offset > within || e.size > within - e.offset)
     {
       return BM_PACK_ERROR_TOC;
     }
@@ -101,6 +113,8 @@ BmPackError bmPackOpen(BmPack *pPack, const void *pData, uint32_t size, bool ver
   pPack->pData = p;
   pPack->size = h.totalSize;
   pPack->header = h;
+  pPack->pBase = update ? pBase->pData : NULL;
+  pPack->baseSize = baseSize;
   pPack->pStrings = NULL;
   pPack->stringsSize = 0;
   int32_t strings = bmPackFindChunk(pPack, BM_CHUNK_STRS, 0);
@@ -138,6 +152,23 @@ int32_t bmPackFindChunk(const BmPack *pPack, uint32_t id, uint32_t start)
   return -1;
 }
 
+// Where an entry's bytes lie: in the pack, in its base, nowhere (absent).
+static const uint8_t *storedAt(const BmPack *pPack, const BmChunkEntry *e)
+{
+  if (e->flags & BM_PACK_ENTRY_ABSENT) return NULL;
+  if (e->flags & BM_PACK_ENTRY_IN_BASE) return pPack->pBase != NULL ? pPack->pBase + e->offset : NULL;
+  return pPack->pData + e->offset;
+}
+
+const uint8_t *bmPackChunkStored(const BmPack *pPack, uint32_t index, uint32_t *pSize)
+{
+  BmChunkEntry e;
+  if (!bmPackGetChunk(pPack, index, &e)) return NULL;
+  const uint8_t *p = storedAt(pPack, &e);
+  if (p != NULL && pSize != NULL) *pSize = e.size;
+  return p;
+}
+
 const uint8_t *bmPackChunkData(const BmPack *pPack, uint32_t index, uint32_t *pSize)
 {
   BmChunkEntry e;
@@ -145,11 +176,12 @@ const uint8_t *bmPackChunkData(const BmPack *pPack, uint32_t index, uint32_t *pS
   {
     return NULL;
   }
-  if (pSize != NULL)
+  const uint8_t *p = storedAt(pPack, &e);
+  if (p != NULL && pSize != NULL)
   {
     *pSize = e.size;
   }
-  return pPack->pData + e.offset;
+  return p;
 }
 
 uint32_t bmLz77Unpack(const uint8_t *pIn, uint32_t inSize, uint8_t *pOut, uint32_t outSize)
@@ -198,7 +230,8 @@ const uint8_t *bmPackChunkUnpack(const BmPack *pPack, uint32_t index, uint8_t *p
 {
   BmChunkEntry e;
   if (!bmPackGetChunk(pPack, index, &e)) return NULL;
-  const uint8_t *p = pPack->pData + e.offset;
+  const uint8_t *p = storedAt(pPack, &e);
+  if (p == NULL) return NULL;
   if (e.compression == BM_PACK_COMPRESSION_NONE)
   {
     if (pSize != NULL) *pSize = e.size;
@@ -280,6 +313,21 @@ uint32_t bmPackWriterAdd(BmPackWriter *pWriter, uint32_t id, BmChunkCategory cat
   return pWriter->chunkCount++;
 }
 
+uint32_t bmPackWriterAddEntry(BmPackWriter *pWriter, const BmChunkEntry *pEntry, uint8_t flags)
+{
+  if (pWriter->chunkCount == pWriter->chunkCapacity)
+  {
+    uint32_t capacity = pWriter->chunkCapacity ? pWriter->chunkCapacity * 2 : 16;
+    pWriter->pChunks = realloc(pWriter->pChunks, capacity * sizeof(BmPackWriterChunk));
+    pWriter->chunkCapacity = capacity;
+  }
+  BmPackWriterChunk *c = &pWriter->pChunks[pWriter->chunkCount];
+  memset(c, 0, sizeof(*c));
+  c->entry = *pEntry;
+  c->entry.flags = (uint8_t)(flags & BM_PACK_ENTRY_FLAGS);
+  return pWriter->chunkCount++;
+}
+
 uint32_t bmLz77Pack(const uint8_t *pIn, uint32_t size, uint8_t *pOut)
 {
   put32(pOut, 0x10u | (size << 8));
@@ -341,14 +389,51 @@ bool bmPackWriterCompress(BmPackWriter *pWriter, uint32_t index)
   return true;
 }
 
+uint8_t *bmPackMakeUpdate(const BmPack *pFull, const uint32_t *pBaseChunks, uint32_t count, uint32_t *pSize)
+{
+  if (pFull->header.flags & BM_PACK_FLAG_UPDATE) return NULL;
+  BmPackWriter w;
+  bmPackWriterInit(&w, pFull->header.profile, (BmPackLayout)(pFull->header.flags & 15));
+  for (uint32_t i = 0; i < bmPackChunkCount(pFull); i++)
+  {
+    BmChunkEntry e = {0};
+    bmPackGetChunk(pFull, i, &e);
+    if (e.flags & BM_PACK_ENTRY_ABSENT)
+    {
+      bmPackWriterAddEntry(&w, &e, BM_PACK_ENTRY_ABSENT);
+      continue;
+    }
+    uint32_t k = 0;
+    while (k < count && !(pBaseChunks[3 * k] == e.hash && pBaseChunks[3 * k + 1] == e.size && e.size != 0)) k++;
+    if (k < count)
+    {
+      e.offset = pBaseChunks[3 * k + 2];
+      bmPackWriterAddEntry(&w, &e, BM_PACK_ENTRY_IN_BASE);
+      continue;
+    }
+    // Its own bytes, as they are (compressed or not).
+    uint32_t n = 0;
+    const uint8_t *data = bmPackChunkStored(pFull, i, &n);
+    uint32_t at = bmPackWriterAdd(&w, e.id, (BmChunkCategory)e.category, e.group, data, n);
+    w.pChunks[at].entry.compression = e.compression;
+    w.pChunks[at].entry.unpackedSize = e.unpackedSize;
+    w.pChunks[at].entry.hash = e.hash;
+  }
+  uint8_t *out = bmPackWriterFinish(&w, pSize);
+  bmPackWriterFree(&w);
+  return out;
+}
+
 uint8_t *bmPackWriterFinish(const BmPackWriter *pWriter, uint32_t *pSize)
 {
   uint32_t tocOffset = BM_PACK_HEADER_SIZE;
   uint32_t dataOffset = tocOffset + pWriter->chunkCount * BM_PACK_CHUNK_ENTRY_SIZE;
   uint32_t total = dataOffset;
+  bool update = false;
   for (uint32_t i = 0; i < pWriter->chunkCount; i++)
   {
-    total += (pWriter->pChunks[i].entry.size + 3u) & ~3u;
+    if (pWriter->pChunks[i].entry.flags == 0) total += (pWriter->pChunks[i].entry.size + 3u) & ~3u;
+    update |= (pWriter->pChunks[i].entry.flags & BM_PACK_ENTRY_IN_BASE) != 0;
   }
 
   uint8_t *p = calloc(1, total);
@@ -357,14 +442,16 @@ uint8_t *bmPackWriterFinish(const BmPackWriter *pWriter, uint32_t *pSize)
   {
     const BmPackWriterChunk *c = &pWriter->pChunks[i];
     uint8_t *e = p + tocOffset + i * BM_PACK_CHUNK_ENTRY_SIZE;
+    bool absent = (c->entry.flags & BM_PACK_ENTRY_ABSENT) != 0, inBase = (c->entry.flags & BM_PACK_ENTRY_IN_BASE) != 0;
     put32(e + 0, c->entry.id);
-    put32(e + 4, offset);
-    put32(e + 8, c->entry.size);
+    put32(e + 4, absent ? 0 : inBase ? c->entry.offset : offset);
+    put32(e + 8, absent ? 0 : c->entry.size);
     put32(e + 12, c->entry.unpackedSize);
-    e[16] = c->entry.compression;
+    e[16] = (uint8_t)(c->entry.compression | c->entry.flags);
     e[17] = c->entry.category;
     put16(e + 18, c->entry.group);
     put32(e + 20, c->entry.hash);
+    if (absent || inBase) continue;
     memcpy(p + offset, c->pData, c->entry.size);
     offset += (c->entry.size + 3u) & ~3u;
   }
@@ -378,7 +465,7 @@ uint8_t *bmPackWriterFinish(const BmPackWriter *pWriter, uint32_t *pSize)
   put32(p + 16, total);
   put32(p + 20, pWriter->chunkCount);
   put32(p + 24, tocOffset);
-  put16(p + 28, (uint16_t)pWriter->layout);
+  put16(p + 28, (uint16_t)(pWriter->layout | (update ? BM_PACK_FLAG_UPDATE : 0)));
   put16(p + 30, 0);
   put32(p + 32, bmCrc32(0, p + BM_PACK_HEADER_SIZE, total - BM_PACK_HEADER_SIZE));
 

@@ -252,6 +252,16 @@ if(BM_PLATFORM STREQUAL "gba")
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
     COMMENT "Cooking the test level")
+  # For the multiboot images, which share 256 KB with the engine: the same level with the debug
+  # rooms and the translations left out (pack-format.md §0: their entries stay, flagged absent),
+  # so that the rest arrives later over the link as an update (a pack set, runtime-abi.md §0).
+  set(BM_TEST_LEVEL_ABSENT --absent-room debug_lobby --absent-room debug_wave --absent-room debug_spotlight
+    --absent-room debug_pulse --absent-room debug_gradient --absent-kind LANG)
+  set(BM_TEST_LEVEL_MB_PACK ${CMAKE_BINARY_DIR}/test_level_mb_gba.bmpk)
+  add_custom_command(OUTPUT ${BM_TEST_LEVEL_MB_PACK}
+    COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
+    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+    COMMENT "Cooking the test level for multiboot")
   # The same level with the scripts also compiled to native code (mondskript.md section 12).
   set(BM_TEST_LEVEL_NATIVE_PACK ${CMAKE_BINARY_DIR}/test_level_native_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_NATIVE_PACK}
@@ -262,7 +272,7 @@ if(BM_PLATFORM STREQUAL "gba")
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
       ${PROJECT_SOURCE_DIR}/tools/mondskript/aot.cpp ${PROJECT_SOURCE_DIR}/tools/cooker/native_module.cpp
     COMMENT "Cooking the test level with native scripts")
-  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
+  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
 
   # The game, played with the buttons, and the same with the autopilot (for tests and demos).
   # embed_pack.S is compiled per target with that target's BM_PACK_PATH.
@@ -315,6 +325,8 @@ if(BM_PLATFORM STREQUAL "gba")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_NATIVE_PACK}\"")
       elseif(variant STREQUAL "game_runtime")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${CMAKE_BINARY_DIR}/no_pack.bmpk\"")
+      elseif(target MATCHES "_mb$")
+        target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_MB_PACK}\"")
       else()
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
       endif()
@@ -346,7 +358,7 @@ if(BM_PLATFORM STREQUAL "gba")
   # The embedded pack is pulled in by the assembler, which the build system cannot see: every
   # image that embeds one is assembled again when either pack changes.
   set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S PROPERTIES
-    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK};${BM_TEST_LEVEL_NATIVE_PACK};${BM_SCRIPT_BENCH_PACK}")
+    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK};${BM_TEST_LEVEL_MB_PACK};${BM_TEST_LEVEL_NATIVE_PACK};${BM_SCRIPT_BENCH_PACK}")
   foreach(target ${BM_GBA_TARGETS})
     add_dependencies(${target} test_room_pack)
     target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_ROOM_PACK}\"")
@@ -954,7 +966,9 @@ if(BM_PLATFORM STREQUAL "host")
       # The autoplaying game, in the second room at frame 800, brings the other GBA to where it
       # is: a GBA running the game from a cartridge (it has the same pack already and gets only
       # the state: flags +72 = 0, one transfer applied), and a GBA that runs nothing but the
-      # bootstrap (it gets the runtime through it first, which carries that pack).
+      # bootstrap (it gets the runtime through it first). The runtime carries a trimmed pack
+      # (multiboot), so the sender pushes its own, fitted around the room it is in (flags +72 =
+      # 6, two transfers applied: the pack and the state).
       # The other side then reports the sender's room and position; the sender plays on.
       set(send ${BM_GBA_BUILD_DIR}/game_send.elf:bm_game_stats)
       # The receiving GBA also carries the sender's inventory afterwards (the coin and the Short
@@ -969,9 +983,9 @@ if(BM_PLATFORM STREQUAL "host")
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+96=2982369528)
       add_test(NAME gba_to_gba_boot
         COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/bootstrap_mb.gba --frames 1500 --until a ${send}+24=1000
-          --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=2 --check a ${send}+8=0 --check a ${send}+12=1
+          --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=6 --check a ${send}+8=0 --check a ${send}+12=1
           --check a ${send}+64 --check a ${send}+80 --check a ${send}+68
-          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+28=1
+          --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+28=2
           --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+92=2
           --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+96=2982369528)
 

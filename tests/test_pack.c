@@ -136,6 +136,60 @@ static void testCompressedChunk(void)
   free(data);
 }
 
+// Pack sets (pack-format.md §0): a base with a chunk absent, an update over it holding that
+// chunk and pointing into the base for the others; chunk indices stay what they are.
+static void testPackSets(void)
+{
+  static const char a[] = "first chunk, in both", b[] = "the second, only in the update", st[] = "strings";
+  BmPackWriter w;
+  bmPackWriterInit(&w, BM_FOURCC('G', 'B', 'A', ' '), BM_PACK_LAYOUT_ROM);
+  bmPackWriterAdd(&w, BM_CHUNK_ROOM, BM_CATEGORY_LEVEL, 256, a, sizeof(a));
+  bmPackWriterAdd(&w, BM_CHUNK_LANG, BM_CATEGORY_TEXT, 0, b, sizeof(b));
+  bmPackWriterAdd(&w, BM_CHUNK_SONG, BM_CATEGORY_MUSIC, 0, st, sizeof(st));
+  uint32_t fullSize = 0;
+  uint8_t *full = bmPackWriterFinish(&w, &fullSize);
+  // The base: the second chunk absent (its entry kept: the same index for it).
+  BmPackWriterChunk second = w.pChunks[1];
+  w.pChunks[1].entry.flags = BM_PACK_ENTRY_ABSENT;
+  uint32_t baseSize = 0;
+  uint8_t *base = bmPackWriterFinish(&w, &baseSize);
+  bmPackWriterFree(&w);
+  BmPack pf, pb, pu;
+  TEST_ASSERT(bmPackOpen(&pf, full, fullSize, true) == BM_PACK_OK && bmPackOpen(&pb, base, baseSize, true) == BM_PACK_OK);
+  TEST_ASSERT(baseSize < fullSize && bmPackChunkCount(&pb) == 3);
+  TEST_ASSERT(bmPackFindChunk(&pb, BM_CHUNK_LANG, 0) == 1 && bmPackChunkData(&pb, 1, NULL) == NULL && bmPackChunkStored(&pb, 1, NULL) == NULL);
+  uint32_t n = 0;
+  TEST_ASSERT(memcmp(bmPackChunkData(&pb, 0, &n), a, sizeof(a)) == 0 && n == sizeof(a));
+  // The base's chunks as the live link lists them: hash, size, offset (not the absent one).
+  uint32_t listed[6], count = 0;
+  for (uint32_t i = 0; i < 3; i++)
+  {
+    BmChunkEntry e;
+    bmPackGetChunk(&pb, i, &e);
+    if (e.flags & BM_PACK_ENTRY_ABSENT) continue;
+    listed[3 * count] = e.hash, listed[3 * count + 1] = e.size, listed[3 * count + 2] = e.offset;
+    count++;
+  }
+  uint32_t updateSize = 0;
+  uint8_t *update = bmPackMakeUpdate(&pf, listed, count, &updateSize);
+  TEST_ASSERT(update != NULL && updateSize < fullSize);
+  // Only with its base.
+  TEST_ASSERT(bmPackOpen(&pu, update, updateSize, true) == BM_PACK_ERROR_TOC);
+  TEST_ASSERT(bmPackOpenSet(&pu, update, updateSize, true, &pb) == BM_PACK_OK && (pu.header.flags & BM_PACK_FLAG_UPDATE));
+  const uint8_t *pa = bmPackChunkData(&pu, 0, &n);
+  TEST_ASSERT(pa >= base && pa < base + baseSize && memcmp(pa, a, sizeof(a)) == 0);   // read in the base
+  const uint8_t *pbb = bmPackChunkData(&pu, 1, &n);
+  TEST_ASSERT(pbb >= update && pbb < update + updateSize && n == sizeof(b) && memcmp(pbb, b, sizeof(b)) == 0);
+  BmChunkEntry e;
+  TEST_ASSERT(bmPackGetChunk(&pu, 1, &e) && e.hash == second.entry.hash && e.flags == 0);
+  // An update is no base.
+  BmPack pu2;
+  TEST_ASSERT(bmPackOpenSet(&pu2, update, updateSize, true, &pu) == BM_PACK_ERROR_TOC);
+  free(full);
+  free(base);
+  free(update);
+}
+
 int main(void)
 {
   RUN_TEST(testCrc32KnownValue);
@@ -143,5 +197,6 @@ int main(void)
   RUN_TEST(testRejectsDamagedPacks);
   RUN_TEST(testLz77);
   RUN_TEST(testCompressedChunk);
+  RUN_TEST(testPackSets);
   return TEST_RESULT();
 }

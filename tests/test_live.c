@@ -335,6 +335,50 @@ static void testAPackTooLargeToGoBesideReplacesTheRunningOne(void)
   bmLinkMasterFree(&m);
 }
 
+// A pack larger than the runtime takes at all (a multiboot GBA): fitted around the room asked
+// for. It arrives with the whole table; what does not fit is left out, and the game does not
+// go there. A second push, fitted around another room, brings that one.
+static void testAPackTooLargeIsFittedAroundTheRoom(void)
+{
+  BmLinkMaster m;
+  uint32_t poolSize = (s_levelSize - 12 * 1024) & ~3u;
+  startWith(&m, poolSize, false);
+  BmLiveRemote r;
+  TEST_ASSERT(bmLiveMasterHello(&m, &r));
+  TEST_ASSERT(r.hello.runtimeVersion >= 5 && r.hello.poolCapacity < s_levelSize);
+  const char *rooms[2] = { "debug_wave", "boss_hall" };
+  for (uint32_t k = 0; k < 2; k++)
+  {
+    int32_t room = bmLiveMasterFindRoom(s_level, s_levelSize, rooms[k]);
+    TEST_ASSERT(room > 0);
+    BmLivePushStats stats;
+    TEST_ASSERT(bmLiveMasterHello(&m, &r));
+    TEST_ASSERT(bmLiveMasterPushPackFor(&m, s_level, s_levelSize, 20 + k, &r, room, &stats));
+    printf("    around %s: %u chunks sent, %u already there, %u left out\n", rooms[k], (unsigned)stats.chunksSent,
+           (unsigned)stats.chunksResident, (unsigned)stats.chunksLeftOut);
+    TEST_ASSERT(stats.chunksLeftOut > 0);
+    BmLiveStatus st;
+    TEST_ASSERT(bmLiveMasterApply(&m, 20 + k, BM_LIVE_RESTART, rooms[k], &st));
+    TEST_ASSERT(st.result == BM_LIVE_OK);
+    TEST_ASSERT(s_live.active.size <= poolSize && bmPackChunkCount(&s_live.active) > 100);
+    TEST_ASSERT(strcmp(bmGameRoomId(&s_game), rooms[k]) == 0);
+    TEST_ASSERT(bmGameFindRoom(&s_live.active, "test_room") == 0);   // room 0 always comes
+    uint32_t absent = 0;
+    for (uint32_t i = 0; i < bmPackChunkCount(&s_live.active); i++)
+    {
+      BmChunkEntry e;
+      bmPackGetChunk(&s_live.active, i, &e);
+      absent += (e.flags & BM_PACK_ENTRY_ABSENT) != 0;
+    }
+    TEST_ASSERT(absent == stats.chunksLeftOut);
+    uint32_t frameBefore = s_game.frame;
+    for (int i = 0; i < 60; i++) frame();
+    TEST_ASSERT(s_game.frame > frameBefore);
+  }
+  TEST_ASSERT(bmGameFindRoom(&s_live.active, "boss_hall") >= 0);
+  bmLinkMasterFree(&m);
+}
+
 static void testFailedTransferLeavesTheGameAlone(void)
 {
   BmLinkMaster m;
@@ -531,6 +575,7 @@ int main(int argc, char **argv)
   RUN_TEST(testFailedTransferLeavesTheGameAlone);
   RUN_TEST(testPacksTakeTurnsAtTheEndsOfThePool);
   RUN_TEST(testAPackTooLargeToGoBesideReplacesTheRunningOne);
+  RUN_TEST(testAPackTooLargeIsFittedAroundTheRoom);
   RUN_TEST(testPushWithBitErrors);
   RUN_TEST(testPpuSnapshot);
   RUN_TEST(testScriptsArePushedLive);

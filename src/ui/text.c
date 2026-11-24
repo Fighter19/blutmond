@@ -18,6 +18,7 @@ static const uint8_t *languageChunk(const BmPack *pPack, uint8_t language, uint3
   uint8_t n = 0;
   for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_LANG, 0); c >= 0; c = bmPackFindChunk(pPack, BM_CHUNK_LANG, (uint32_t)c + 1))
   {
+    if (bmPackChunkData(pPack, (uint32_t)c, NULL) == NULL) continue;   // left out (an update brings it)
     if (n++ != language) continue;
     const uint8_t *p = bmPackChunkData(pPack, (uint32_t)c, pSize);
     return p != NULL && *pSize >= HEADER && *pSize >= HEADER + (uint32_t)rd16(p + 4) * ENTRY ? p : NULL;
@@ -28,7 +29,8 @@ static const uint8_t *languageChunk(const BmPack *pPack, uint8_t language, uint3
 uint8_t bmTextLanguageCount(const BmPack *pPack)
 {
   uint8_t n = 0;
-  for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_LANG, 0); c >= 0 && n < 255; c = bmPackFindChunk(pPack, BM_CHUNK_LANG, (uint32_t)c + 1)) n++;
+  for (int32_t c = bmPackFindChunk(pPack, BM_CHUNK_LANG, 0); c >= 0 && n < 255; c = bmPackFindChunk(pPack, BM_CHUNK_LANG, (uint32_t)c + 1))
+    if (bmPackChunkData(pPack, (uint32_t)c, NULL) != NULL) n++;
   return n == 0 ? 1 : n;
 }
 
