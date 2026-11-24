@@ -32,11 +32,20 @@ struct Vec3
 Vec3 normalize(Vec3 v);
 inline float dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 
+/// Where one light of a room is (room pixels).
+struct Source
+{
+  float x = 0, y = 0;
+};
+
 struct Light
 {
   Mode mode = Mode::None;
   int objectId = 0;
-  float x = 0, y = 0;
+  float x = 0, y = 0;         // the first light (the one the runtime's head of LITE names)
+  // Every light of the room, the first one included. They share the first one's properties
+  // (colour, radius, height, intensity and flicker): they flicker together.
+  std::vector<Source> sources;
   float radius = 72, height = 12;
   float intensity = 1, flicker = 0;
   int flickerSpeed = 6;
@@ -60,12 +69,15 @@ Light find(const tmx::Map &map, Report &report);
 /// `(1 - d²/r²)²` inside the radius, else 0.
 float falloff(const Light &light, float d2);
 
-/// How lit a surface at room pixel (px, py) with normal n is at intensity 1 (0 to 1), without
-/// shadows: max(0, n·L) × falloff, L from the pixel to the light raised by its height.
+/// How lit a surface at room pixel (px, py) with normal n is at intensity 1, without shadows:
+/// the sum over the lights of max(0, n·L) × falloff, L from the pixel to the light raised by
+/// its height.
 float term(const Light &light, float px, float py, Vec3 n);
+/// The same from one light.
+float termFrom(const Light &light, const Source &source, float px, float py, Vec3 n);
 
-/// The light's direction from (px, py), scaled by the falloff there (what a region bank stands
-/// for in mode `layer`).
+/// The light's direction from (px, py), scaled by the falloff there, summed over the lights
+/// (what a region bank stands for in mode `layer`).
 Vec3 scaledDirection(const Light &light, float px, float py);
 
 /// Solid cells of the collision grid (shape full, solid on all sides), for shadows.
@@ -79,7 +91,11 @@ struct Solid
   bool at(int cx, int cy) const;
   /// Whether a straight line from (px, py) to the light crosses a solid cell, but for the solid
   /// cells it starts in (the wall the pixel is on).
-  bool shadowed(float px, float py, const Light &light) const;
+  bool shadowed(float px, float py, const Light &light) const;   // from the first light
+  bool shadowedFrom(float px, float py, const Light &light, const Source &source) const;
+  /// How lit (as `term`) with each light's shadows; `pShadow` set if some light whose radius
+  /// reaches the pixel is shadowed there.
+  float lit(float px, float py, const Light &light, Vec3 n, bool *pShadow = nullptr) const;
 };
 
 /// Decodes a normal from a normal map pixel (RGB: x right, y down, z toward the viewer).

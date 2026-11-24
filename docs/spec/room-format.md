@@ -441,7 +441,7 @@ Objects live in the `objects` layer.
 | `PushBlock` | rectangle | solid, pushed by the player as long as they push, falling where nothing holds it (§3.9): `push_frames` |
 | `PressurePlate` | rectangle (on a floor) | pressed by a push block on it or the player standing on it (§3.9): `gate` (the name of the Gate it opens) |
 | `Gate` | rectangle (whole cells) | solid while closed; slides up while a plate holds it open (§3.9) |
-| `Light` | point | the room's one light (§1, "Light"): `colour` (`#ffc080`), `radius` (px, 72, at most 255), `height` (px out of the wall toward the viewer, 12), `intensity` (1.0), `flicker` (0 to 1: how far the intensity wavers, 0), `flicker_speed` (frames per step of the flicker, 6), `gain` (the light layer's strength, 0.5), `shadows` (true) |
+| `Light` | point | a light of the room (§1, "Light"; up to 4, flickering together: every one after the first takes the first's properties and only its own place): `colour` (`#ffc080`), `radius` (px, 72, at most 255), `height` (px out of the wall toward the viewer, 12), `intensity` (1.0), `flicker` (0 to 1: how far the intensity wavers, 0), `flicker_speed` (frames per step of the flicker, 6), `gain` (the light layer's strength, 0.5), `shadows` (true) |
 
 Game classes (enemies, NPCs, lanterns) are written in Mondskript and used the same way.
 
@@ -509,7 +509,9 @@ little endian; offsets are from the start of the chunk.
         u8  ambient, flicker;             // 0..255 = 0..1
         u8  flicker_speed;                // frames per step
         u8  intensity, gain;              // 64 = 1.0
-        u8  shadows; u16 0;               // 20 bytes
+        u8  shadows;
+        u8  more;                         // lights after the first: their s16 x, y at the chunk's end
+        u8  0;                            // 20 bytes
         palette: u8 level[bank_count * 16]           // per palette entry, 0 = ambient only
         layer:   { s8 x, y, z; u8 0; } normal[15]    // 127 = 1.0
                  { s16 x, y, z; u16 0; } region[bank_count]   // falloff × direction, 4096 = 1.0
@@ -562,6 +564,6 @@ room IDs and song names.
 - 0.2.1: room properties `attach` and `Class.variable`; the `@room` object in `OBJS`.
 - 0.2.2: room properties `effect`, `effect_a`, `effect_b`, `title`.
 - 0.2.3: room acoustics: `acoustics`, `echo`, `echo_feedback`, `echo_damping`, `muffle`.
-- 0.2.4: light: the `Light` object, room properties `lighting` and `ambient`, tileset property
+- 0.2.4: light: the `Light` object (up to 4, flickering together), room properties `lighting` and `ambient`, tileset property
   `normal`, `LITE` (in the place of `ROOM`'s reserved field), the light layer (role 3);
   `light_index` (shared or fitted levels of light, bit 7 of `LITE`'s count), `light_directions`.

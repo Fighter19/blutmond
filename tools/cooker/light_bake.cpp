@@ -49,13 +49,20 @@ Light find(const tmx::Map &map, Report &report)
     for (const tmx::Object &o : g.objects)
       if (o.type == "Light")
       {
+        l.sources.push_back(Source{float(o.x + o.width / 2), float(o.y + o.height / 2)});
         if (found != nullptr)
         {
-          report.error("lighting", map.path + " object " + std::to_string(o.id), "a room has one light; this is a second one");
+          if (o.properties != found->properties)
+            report.warning("lighting", map.path + " object " + std::to_string(o.id), "the lights of a room share the first one's properties (they flicker together)");
           continue;
         }
         found = &o;
       }
+  if (l.sources.size() > 4)
+  {
+    report.error("lighting", map.path, "a room has at most 4 lights");
+    l.sources.resize(4);
+  }
   std::string mode = map.property("lighting");
   if (found == nullptr)
   {
@@ -103,21 +110,37 @@ float falloff(const Light &light, float d2)
   return f * f;
 }
 
-float term(const Light &light, float px, float py, Vec3 n)
+float termFrom(const Light &light, const Source &source, float px, float py, Vec3 n)
 {
-  float dx = light.x - px, dy = light.y - py;
+  float dx = source.x - px, dy = source.y - py;
   float f = falloff(light, dx * dx + dy * dy);
   if (f <= 0) return 0;
   Vec3 l = normalize({dx, dy, light.height});
   return std::max(0.0f, dot(n, l)) * f;
 }
 
+float term(const Light &light, float px, float py, Vec3 n)
+{
+  if (light.sources.empty()) return termFrom(light, Source{light.x, light.y}, px, py, n);
+  float sum = 0;
+  for (const Source &s : light.sources) sum += termFrom(light, s, px, py, n);
+  return sum;
+}
+
 Vec3 scaledDirection(const Light &light, float px, float py)
 {
-  float dx = light.x - px, dy = light.y - py;
-  float f = falloff(light, dx * dx + dy * dy);
-  Vec3 l = normalize({dx, dy, light.height});
-  return {l.x * f, l.y * f, l.z * f};
+  Vec3 sum{0, 0, 0};
+  std::vector<Source> one{Source{light.x, light.y}};
+  for (const Source &s : light.sources.empty() ? one : light.sources)
+  {
+    float dx = s.x - px, dy = s.y - py;
+    float f = falloff(light, dx * dx + dy * dy);
+    Vec3 l = normalize({dx, dy, light.height});
+    sum.x += l.x * f;
+    sum.y += l.y * f;
+    sum.z += l.z * f;
+  }
+  return sum;
 }
 
 Solid Solid::fromChunk(const std::vector<uint8_t> &coll)
@@ -144,10 +167,33 @@ bool Solid::at(int cx, int cy) const
 
 bool Solid::shadowed(float px, float py, const Light &light) const
 {
+  return shadowedFrom(px, py, light, Source{light.x, light.y});
+}
+
+float Solid::lit(float px, float py, const Light &light, Vec3 n, bool *pShadow) const
+{
+  std::vector<Source> one{Source{light.x, light.y}};
+  float sum = 0;
+  for (const Source &s : light.sources.empty() ? one : light.sources)
+  {
+    float dx = s.x - px, dy = s.y - py;
+    if (falloff(light, dx * dx + dy * dy) <= 0) continue;
+    if (shadowedFrom(px, py, light, s))
+    {
+      if (pShadow) *pShadow = true;
+      continue;
+    }
+    sum += termFrom(light, s, px, py, n);
+  }
+  return sum;
+}
+
+bool Solid::shadowedFrom(float px, float py, const Light &light, const Source &source) const
+{
   if (!light.shadows || cells.empty()) return false;
   int sx = int(std::floor(px / float(cell))), sy = int(std::floor(py / float(cell)));
-  int lx = int(std::floor(light.x / float(cell))), ly = int(std::floor(light.y / float(cell)));
-  float dx = light.x - px, dy = light.y - py;
+  int lx = int(std::floor(source.x / float(cell))), ly = int(std::floor(source.y / float(cell)));
+  float dx = source.x - px, dy = source.y - py;
   float len = std::sqrt(dx * dx + dy * dy);
   int steps = int(len * 2) + 1;
   // The solid cells the ray starts in (the wall or floor the pixel is part of) do not shadow

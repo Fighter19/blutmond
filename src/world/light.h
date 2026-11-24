@@ -24,13 +24,16 @@ struct BmGame;
 #define BM_LIGHT_NONE 0
 #define BM_LIGHT_PALETTE 1
 #define BM_LIGHT_LAYER 2
+#define BM_LIGHT_MAX_SOURCES 4   // lights in a room (they flicker together)
 
 typedef struct BmLight
 {
   uint8_t mode;              // BM_LIGHT_*
   const uint8_t *pLite;      // the LITE chunk's data
   uint32_t liteSize;
-  int16_t x, y;              // room pixels
+  int16_t x, y;              // room pixels (the first light)
+  int16_t sx[4], sy[4];      // every light, the first one included
+  uint8_t sourceCount;
   uint8_t radius, height;
   uint8_t red, green, blue;  // 0..31
   uint8_t ambient;           // 0..255

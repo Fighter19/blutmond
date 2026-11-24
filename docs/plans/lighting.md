@@ -45,6 +45,16 @@ room's video memory, and 1 bank. The UI's tiles (char block 2) and map (screen b
 sprite memory (32 KB) are the same in every hall: the sprites' normals only regroup their
 colours, the player's and the bat's sheets keep their tiles.
 
+**Two torches** (measured in two-screen halls, torches 240 px apart, pillar between them; the
+comparison page has the pictures): up to 4 lights per room, flickering together, so every
+mode still bakes one sum. Palettes grows from 750 to 908 tiles (89 % of the 1024), shared from
+145 to 257 light tiles (39 % to 47 % of the room's video memory), fitted to 887 light tiles
+(92 %), normals stays at 30. Sprites cost about 11,500 cycles a frame per lit bank, with one
+light or two. Lights that flickered apart would need (colour, level, level) entries in mode
+`palette` (1,482 tiles: does not fit), (left, right) pairs per bank in the light layer's
+fitted and shared values (coarse where both reach), and only two vectors per region in mode
+`normals`. Not built: the lights of a room flicker together.
+
 Where it differs from the plan below:
 
 - **Regions** of the normals' light layer (and the banks of the others): at most 14 (not 8), clustered by the light's

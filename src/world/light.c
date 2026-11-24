@@ -69,6 +69,14 @@ int32_t bmLightIntensity(const BmLight *l, uint32_t frame)
 // Layer mode: per region bank and normal, how much it faces the light (4096 = 1.0).
 static int16_t s_faces[15][15] BM_EWRAM_BSS;
 
+// The last shadow rays, by where they started (in 4 pixel steps) and the light: a figure that
+// stays put (or moves within 4 pixels) does not cast its rays again.
+#define RAY_CACHE 8
+static struct { int16_t x, y; uint8_t source, shadowed, used; } s_rays[RAY_CACHE];
+static uint8_t s_rayNext;
+
+uint32_t bm_light_banks;   // sprite banks lit in the last frame (tests read it)
+
 bool bmLightOn(const BmGame *g)
 {
   return g->light.mode != BM_LIGHT_NONE;
@@ -89,6 +97,7 @@ void bmLightEnterRoom(BmGame *g)
   l->layerBg = 0xFF;
   l->wasLit = wasLit;
   bmUiSetLightLayer(-1);
+  memset(s_rays, 0, sizeof(s_rays));   // another room's collision
   uint32_t size = 0;
   const uint8_t *p = g->room.liteChunk != 0 ? bmPackChunkData(g->pPack, g->room.liteChunk, &size) : NULL;
   if (p == NULL || size < LITE_HEAD || (p[0] != BM_LIGHT_PALETTE && p[0] != BM_LIGHT_LAYER))
@@ -117,6 +126,16 @@ void bmLightEnterRoom(BmGame *g)
   l->intensity = p[15];
   l->gain = p[16];
   l->shadows = p[17];
+  // More lights (flickering with the first): their places at the chunk's end.
+  l->sourceCount = 1;
+  l->sx[0] = l->x;
+  l->sy[0] = l->y;
+  for (uint8_t k = 0; k < p[18] && l->sourceCount < BM_LIGHT_MAX_SOURCES && size >= LITE_HEAD + (uint32_t)p[18] * 4; k++)
+  {
+    const uint8_t *q = p + size - (uint32_t)(p[18] - k) * 4;
+    l->sx[l->sourceCount] = (int16_t)bmRead16(q);
+    l->sy[l->sourceCount++] = (int16_t)bmRead16(q + 2);
+  }
   if (l->mode == BM_LIGHT_PALETTE)
   {
     if (l->levels < 2 || l->levels > 16 || l->bankCount > 16 || size < LITE_HEAD + (uint32_t)l->bankCount * 16) l->mode = BM_LIGHT_NONE;
@@ -225,13 +244,19 @@ static void LIGHT_KERNEL regionBank(uint16_t *out, const int16_t *faces, int32_t
   }
 }
 
-typedef struct LitArgs
+typedef struct LitSource
 {
   int32_t dx, dy, dz, inv;       // toward the light; 65536 / its length
   int32_t strength;              // the light reaching the figure, 256 = 1.0
+  int32_t hx, hy, hz, invH;      // the half vector for shiny slots; 65536 / its length
+} LitSource;
+
+typedef struct LitArgs
+{
+  int32_t count;                 // lights reaching the figure
+  LitSource s[BM_LIGHT_MAX_SOURCES];
   int32_t lr, lg, lb;            // the light's colour, 256 = full
   int32_t ambient;
-  int32_t hx, hy, hz, invH;      // the half vector for shiny slots; 65536 / its length
   int32_t red, green, blue;      // the light's colour, 0..31
 } LitArgs;
 
@@ -256,27 +281,30 @@ static void LIGHT_KERNEL litSlots(uint16_t *out, const uint8_t *pal, const uint8
       out[i] = (uint16_t)c;
       continue;
     }
-    int32_t nl = (nx * a->dx + ny * a->dy + nz * a->dz) * a->inv >> 15;   // 256 = 1.0
-    if (nl < 0) nl = 0;
-    int32_t t = nl * a->strength >> 8;
+    int32_t t = 0;
+    for (int32_t k = 0; k < a->count; k++)
+    {
+      const LitSource *q = &a->s[k];
+      int32_t nl = (nx * q->dx + ny * q->dy + nz * q->dz) * q->inv >> 15;   // 256 = 1.0
+      if (nl > 0) t += nl * q->strength >> 8;
+    }
     int32_t fr = a->ambient + (t * a->lr >> 8), fg = a->ambient + (t * a->lg >> 8), fb = a->ambient + (t * a->lb >> 8);
     fr = fr > 256 ? 256 : fr;
     fg = fg > 256 ? 256 : fg;
     fb = fb > 256 ? 256 : fb;
     int32_t r = (int32_t)(((c & 31) * (uint32_t)fr + 128) >> 8), gr = (int32_t)((((c >> 5) & 31) * (uint32_t)fg + 128) >> 8),
             b = (int32_t)((((c >> 10) & 31) * (uint32_t)fb + 128) >> 8);
-    if ((flags & BM_SPRITE_SLOT_SHINY) && a->strength > 0)
+    for (int32_t k = 0; k < a->count && (flags & BM_SPRITE_SLOT_SHINY); k++)
     {
-      int32_t nh = (nx * a->hx + ny * a->hy + nz * a->hz) * a->invH >> 15;   // 256 = 1.0
-      if (nh > 0)
-      {
-        int32_t sp = nh;
-        for (int32_t k = 0; k < 3; k++) sp = sp * sp >> 8;     // ^8
-        sp = sp * a->strength >> 8;
-        r += a->red * sp >> 8;
-        gr += a->green * sp >> 8;
-        b += a->blue * sp >> 8;
-      }
+      const LitSource *q = &a->s[k];
+      int32_t nh = (nx * q->hx + ny * q->hy + nz * q->hz) * q->invH >> 15;   // 256 = 1.0
+      if (nh <= 0) continue;
+      int32_t sp = nh;
+      for (int32_t e = 0; e < 3; e++) sp = sp * sp >> 8;     // ^8
+      sp = sp * q->strength >> 8;
+      r += a->red * sp >> 8;
+      gr += a->green * sp >> 8;
+      b += a->blue * sp >> 8;
     }
     out[i] = (uint16_t)((r > 31 ? 31 : r) | (gr > 31 ? 31 : gr) << 5 | (b > 31 ? 31 : b) << 10);
   }
@@ -342,15 +370,15 @@ static void presentLayer(BmGame *g, bool all)
 
 // Whether a straight line from (x, y) to the light crosses a solid cell (other than the ones
 // it starts and ends in). Stepped in 16.16 fixed point, 8 pixels a step.
-static bool shadowed(const BmGame *g, int32_t x, int32_t y)
+static bool shadowed(const BmGame *g, int32_t x, int32_t y, int32_t lightX, int32_t lightY)
 {
   const BmLight *l = &g->light;
   if (!l->shadows) return false;
   int32_t shift = g->room.collisionCell == 8 ? 3 : 4;
-  int32_t dx = l->x - x, dy = l->y - y;
+  int32_t dx = lightX - x, dy = lightY - y;
   int32_t steps = ((dx < 0 ? -dx : dx) + (dy < 0 ? -dy : dy)) / 8 + 1;
   int32_t stepX = (dx << 16) / steps, stepY = (dy << 16) / steps;
-  int32_t sx = x >> shift, sy = y >> shift, lx = l->x >> shift, ly = l->y >> shift;
+  int32_t sx = x >> shift, sy = y >> shift, lx = lightX >> shift, ly = lightY >> shift;
   int32_t px = x << 16, py = y << 16;
   for (int32_t k = 1; k < steps; k++)
   {
@@ -368,38 +396,60 @@ static bool shadowed(const BmGame *g, int32_t x, int32_t y)
 
 // How much of the light reaches a figure whose middle is at (x, y): the falloff, 0 in shadow
 // (256 = 1.0).
-static int32_t reach(const BmGame *g, int32_t x, int32_t y)
+static bool shadowedCached(const BmGame *g, int32_t x, int32_t y, uint8_t source)
+{
+  int16_t kx = (int16_t)(x >> 2), ky = (int16_t)(y >> 2);
+  for (int32_t i = 0; i < RAY_CACHE; i++)
+    if (s_rays[i].used && s_rays[i].x == kx && s_rays[i].y == ky && s_rays[i].source == source) return s_rays[i].shadowed != 0;
+  const BmLight *l = &g->light;
+  bool shadow = shadowed(g, x, y, l->sx[source], l->sy[source]);
+  s_rays[s_rayNext].x = kx;
+  s_rays[s_rayNext].y = ky;
+  s_rays[s_rayNext].source = source;
+  s_rays[s_rayNext].shadowed = shadow;
+  s_rays[s_rayNext].used = 1;
+  s_rayNext = (uint8_t)((s_rayNext + 1) % RAY_CACHE);
+  return shadow;
+}
+
+static int32_t reach(const BmGame *g, int32_t x, int32_t y, uint8_t source)
 {
   const BmLight *l = &g->light;
-  int32_t dx = l->x - x, dy = l->y - y;
+  int32_t dx = l->sx[source] - x, dy = l->sy[source] - y;
   int32_t d2 = dx * dx + dy * dy, r2 = (int32_t)l->radius * l->radius;
-  if (d2 >= r2 || shadowed(g, x, y)) return 0;
+  if (d2 >= r2 || shadowedCached(g, x, y, source)) return 0;
   int32_t f = 256 - d2 * 256 / r2;
   return f * f >> 8;
 }
 
-// One sprite bank lit for a figure whose middle is at (x, y), `fall` of the light reaching it.
-static void litBank(BmGame *g, uint8_t bank, int32_t x, int32_t y, int32_t fall)
+// One sprite bank lit for a figure whose middle is at (x, y), `fall[k]` of light k reaching it.
+static void litBank(BmGame *g, uint8_t bank, int32_t x, int32_t y, const int32_t *fall)
 {
   const BmLight *l = &g->light;
   const BmSpriteSheet *s = &g->sheets[g->bankSheet[bank]];
   uint8_t palette = g->bankPalette[bank] < s->paletteCount ? g->bankPalette[bank] : 0;
   LitArgs a;
-  a.dx = l->x - x;
-  a.dy = l->y - y;
-  a.dz = l->height;
-  int32_t len = (int32_t)isqrt((uint32_t)(a.dx * a.dx + a.dy * a.dy + a.dz * a.dz));
-  a.inv = 65536 / (len == 0 ? 1 : len);
-  a.strength = fall * l->now >> 8;
+  a.count = 0;
+  for (uint8_t k = 0; k < l->sourceCount; k++)
+  {
+    if (fall[k] == 0) continue;
+    LitSource *q = &a.s[a.count++];
+    q->dx = l->sx[k] - x;
+    q->dy = l->sy[k] - y;
+    q->dz = l->height;
+    int32_t len = (int32_t)isqrt((uint32_t)(q->dx * q->dx + q->dy * q->dy + q->dz * q->dz));
+    q->inv = 65536 / (len == 0 ? 1 : len);
+    q->strength = fall[k] * l->now >> 8;
+    q->hx = q->dx * q->inv >> 8;
+    q->hy = q->dy * q->inv >> 8;
+    q->hz = (q->dz * q->inv >> 8) + 256;
+    int32_t hl = (int32_t)isqrt((uint32_t)(q->hx * q->hx + q->hy * q->hy + q->hz * q->hz));
+    q->invH = 65536 / (hl == 0 ? 1 : hl);
+  }
   a.lr = l->red * 256 / 31;
   a.lg = l->green * 256 / 31;
   a.lb = l->blue * 256 / 31;
   a.ambient = l->ambient;
-  a.hx = a.dx * a.inv >> 8;
-  a.hy = a.dy * a.inv >> 8;
-  a.hz = (a.dz * a.inv >> 8) + 256;
-  int32_t hl = (int32_t)isqrt((uint32_t)(a.hx * a.hx + a.hy * a.hy + a.hz * a.hz));
-  a.invH = 65536 / (hl == 0 ? 1 : hl);
   a.red = l->red;
   a.green = l->green;
   a.blue = l->blue;
@@ -412,14 +462,18 @@ static void presentSprites(BmGame *g)
 {
   BmLight *l = &g->light;
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y) - 14;
-  int32_t playerFall = reach(g, px, py);   // once for all the player's banks
+  int32_t playerFall[BM_LIGHT_MAX_SOURCES], fall[BM_LIGHT_MAX_SOURCES];   // the player's: once for all its banks
+  for (uint8_t k = 0; k < l->sourceCount; k++) playerFall[k] = reach(g, px, py, k);
+  uint32_t lit = 0;
   for (uint8_t b = 0; b < BM_GAME_BANKS; b++)
   {
     if (g->bankSheet[b] == 0xFF) continue;
     int8_t sheet = (int8_t)g->bankSheet[b];
     bool player = false;
     for (uint8_t i = 0; i < g->playerSheetCount; i++) player |= g->playerSheets[i] == sheet;
-    int32_t x = px, y = py, fall = playerFall;
+    int32_t x = px, y = py;
+    bool dark = true;
+    for (uint8_t k = 0; k < l->sourceCount; k++) fall[k] = playerFall[k];
     if (!player)
     {
       // The nearest actor drawn with this bank's sheet (figures sharing a bank share its light).
@@ -429,20 +483,37 @@ static void presentSprites(BmGame *g)
       {
         if (a->sheet[i] != sheet || a->hidden[i]) continue;
         int32_t ax = BM_FIX_INT(a->x[i]), ay = BM_FIX_INT(a->y[i]) - 8;
-        int32_t d = (ax - l->x) * (ax - l->x) + (ay - l->y) * (ay - l->y);
+        int32_t d = 0x7FFFFFFF;
+        for (uint8_t k = 0; k < l->sourceCount; k++)
+        {
+          int32_t e = (ax - l->sx[k]) * (ax - l->sx[k]) + (ay - l->sy[k]) * (ay - l->sy[k]);
+          if (e < d) d = e;
+        }
         if (best < 0 || d < best) best = d, x = ax, y = ay;
       }
-      fall = best < 0 ? 0 : reach(g, x, y);   // nothing shows it: ambient only
+      for (uint8_t k = 0; k < l->sourceCount; k++) fall[k] = best < 0 ? 0 : reach(g, x, y, k);   // nothing shows it: ambient only
     }
     // Out of the light a bank's colours are only darkened: written once while that lasts.
     bool same = l->objSheet[b] == (uint8_t)sheet && l->objPalette[b] == g->bankPalette[b];
-    if (fall == 0 && same && (l->objDark & (1u << b))) continue;
+    for (uint8_t k = 0; k < l->sourceCount; k++) dark &= fall[k] == 0;
+    // A sheet whose every slot is emissive (a flame) is as drawn whatever the light: like a
+    // bank out of the light, written once.
+    const BmSpriteSheet *sh = &g->sheets[sheet];
+    if (sh->pNormals != NULL)
+    {
+      bool glow = true;
+      for (uint8_t i = 1; i < 16 && glow; i++) glow = (sh->pNormals[i * 4 + 3] & BM_SPRITE_SLOT_EMISSIVE) != 0;
+      dark |= glow;
+    }
+    if (dark && same && (l->objDark & (1u << b))) continue;
     litBank(g, b, x, y, fall);
+    lit++;
     l->objSheet[b] = (uint8_t)sheet;
     l->objPalette[b] = g->bankPalette[b];
-    if (fall == 0) l->objDark |= (uint16_t)(1u << b);
+    if (dark) l->objDark |= (uint16_t)(1u << b);
     else l->objDark &= (uint16_t)~(1u << b);
   }
+  bm_light_banks = lit;
 }
 
 // Processor cycles the last frame's light took, per part (tests read them: tools/bmlink check).

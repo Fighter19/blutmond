@@ -421,6 +421,10 @@ struct AreaWork
   // Mode `palette`: how far the levels are from each pixel's true light (for the report).
   double litError = 0;
   size_t litPixels = 0;
+  // What lights that flicker apart would need (for the report): each pixel's colour and its
+  // level from every light; the tiles of those and the different entries.
+  std::set<std::vector<uint32_t>> apartTiles;
+  std::set<uint32_t> apartEntries;
 
   uint16_t litColour(uint16_t colour, int level)
   {
@@ -564,6 +568,7 @@ void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const 
             int flip = (fh ? FLIP_H : 0) | (fv ? FLIP_V : 0);
             t = flipped(t, flip);  // pixels as they appear on screen
 
+            std::vector<uint32_t> apartKey(64, 0xFFFFFFFFu);
             if (lightOf.mode != light::Mode::None)
             {
               std::shared_ptr<Image> normalMap = lit ? light::tilesetNormals(*ts, report) : nullptr;
@@ -594,13 +599,25 @@ void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const 
                     gl.normals[at] = n;
                     continue;
                   }
-                  float tv = room.solid.shadowed(fx, fy, lightOf) ? 0.0f : light::term(lightOf, fx, fy, n);
+                  float tv = room.solid.lit(fx, fy, lightOf, n);
+                  if (lightOf.sources.size() > 1)
+                  {
+                    uint32_t key = c;
+                    for (const light::Source &src : lightOf.sources)
+                    {
+                      float one = room.solid.shadowedFrom(fx, fy, lightOf, src) ? 0.0f : light::termFrom(lightOf, src, fx, fy, n);
+                      key = key * 8u + uint32_t(std::clamp(int(std::lround(one * float(light::LEVELS - 1))), 0, light::LEVELS - 1));
+                    }
+                    apartKey[size_t(py * 8 + px)] = key;
+                    area.apartEntries.insert(key);
+                  }
                   int level = std::clamp(int(std::lround(tv * float(light::LEVELS - 1))), 0, light::LEVELS - 1);
                   area.litError += std::abs(double(tv) - double(level) / double(light::LEVELS - 1));
                   area.litPixels++;
                   c = area.litColour(c, level);
                 }
               if (lightOf.mode == light::Mode::Palette) fitLitTile(t, area);
+              if (lightOf.mode == light::Mode::Palette && lightOf.sources.size() > 1) area.apartTiles.insert(apartKey);
             }
 
             TileRef ref;
@@ -980,7 +997,18 @@ void lightHead(Bytes &b, const light::Light &l, uint32_t extra, uint32_t firstBa
   b.u8(u8of(l.intensity, 64));
   b.u8(u8of(l.gain, 64));
   b.u8(l.shadows ? 1 : 0);
-  b.u16(0);
+  b.u8(l.sources.size() > 1 ? uint32_t(l.sources.size() - 1) : 0);   // more lights, at the chunk's end
+  b.u8(0);
+}
+
+// The lights after the first, at the end of LITE: s16 x, y each.
+void lightSources(Bytes &b, const light::Light &l)
+{
+  for (size_t i = 1; i < l.sources.size(); i++)
+  {
+    b.s16(int32_t(std::lround(l.sources[i].x)));
+    b.s16(int32_t(std::lround(l.sources[i].y)));
+  }
 }
 
 // Mode `palette`: the light level of every entry of the area's banks.
@@ -999,7 +1027,12 @@ Bytes paletteLightChunk(const RoomWork &room, const AreaWork &area, Report &repo
   report.info("lighting", room.map->path, "baked into the palettes: " + std::to_string(area.lit.size()) + " (colour, light level) pairs, " +
               std::to_string(area.uniqueTiles.size()) + " tiles, " + std::to_string(area.banks.size()) + " banks, mean error " +
               std::to_string(area.litPixels ? area.litError / double(area.litPixels) : 0.0));
+  if (room.light.sources.size() > 1)
+    report.info("lighting", room.map->path, "if its " + std::to_string(room.light.sources.size()) + " lights flickered apart: " +
+                std::to_string(area.apartEntries.size()) + " (colour, level, level) entries (at least " +
+                std::to_string((area.apartEntries.size() + 14) / 15) + " banks), " + std::to_string(area.apartTiles.size()) + " lit tiles (before merging flips)");
   (void)lit;
+  lightSources(b, room.light);
   return b;
 }
 
@@ -1036,18 +1069,17 @@ std::pair<Bytes, Bytes> buildSharedLayer(const RoomWork &room, AreaWork &area, R
     for (int cx = 0; cx < w8; cx++)
     {
       float mx = float(cx * 8) + 4, my = float(cy * 8) + 4;
-      float dx = l.x - mx, dy = l.y - my, f = light::falloff(l, dx * dx + dy * dy);
-      if (f <= 0) continue;
+      // Split: how lit a flat surface is here (the bank) and the light's slope across it (the
+      // pattern): N·L = Lz (nz + nx tx + ny ty) with t = (Lx, Ly) / Lz. With several lights
+      // (flickering together) the sums: s = Σ f Lz, t = Σ f (Lx, Ly) / s.
+      light::Vec3 F = light::scaledDirection(l, mx, my);
+      if (F.z <= 0) continue;
       bool any = false;
       for (int p = 0; p < 64 && !any; p++) any = state(cx * 8 + p % 8, cy * 8 + p / 8, nullptr) == 2;
       if (!any) continue;
       litCells.push_back(cy * w8 + cx);
-      // Split: how lit a flat surface is here (the bank) and the light's slope across it (the
-      // pattern): N·L = Lz (nz + nx tx + ny ty) with t = (Lx, Ly) / Lz.
-      light::Vec3 dir = light::normalize({dx, dy, l.height});
-      float lz = std::max(dir.z, 0.05f);
-      cellDir.push_back(dir);
-      cellFall.push_back(light::Vec3{f * lz, 0, 0});
+      cellDir.push_back(light::normalize({F.x / F.z, F.y / F.z, 1}));
+      cellFall.push_back(light::Vec3{F.z, 0, 0});
     }
   int firstBank = int(area.banks.size());
   int banks = std::min(light::MAX_REGIONS, 15 - firstBank);
@@ -1174,10 +1206,11 @@ std::pair<Bytes, Bytes> buildSharedLayer(const RoomWork &room, AreaWork &area, R
       int x = cx * 8 + p % 8, y = cy * 8 + p / 8;
       if (state(x, y, &n) != 2) continue;
       float fx = float(x) + 0.5f, fy = float(y) + 0.5f;
-      float truth = light::term(l, fx, fy, n);
-      bool shadow = truth > 0 && room.solid.shadowed(fx, fy, l);
-      edge |= shadow;
-      px.push_back({p, shadow ? 0.0f : truth, shadow, patternOf(i, n)});
+      bool partly = false;
+      float truth = room.solid.lit(fx, fy, l, n, &partly);
+      bool shadow = partly && truth <= 0;   // (only used for cells without a shadow's edge)
+      edge |= partly;
+      px.push_back({p, truth, shadow, patternOf(i, n)});
     }
     // The nearest step of `v` (0: nearer to no light at all).
     auto step = [&](float v) {
@@ -1208,7 +1241,9 @@ std::pair<Bytes, Bytes> buildSharedLayer(const RoomWork &room, AreaWork &area, R
       lo = std::min(lo, v);
       hi = std::max(hi, v);
     }
-    if (!px.empty() && hi - lo > l.tolerance)
+    // Cells a shadow's edge crosses need a tile of their own anyway: the same way, so a pixel
+    // in the shadow of one light keeps the light of the others.
+    if (!px.empty() && (edge || hi - lo > l.tolerance))
     {
       int bestBank = bank;
       float bestError = sharedError;
@@ -1227,7 +1262,7 @@ std::pair<Bytes, Bytes> buildSharedLayer(const RoomWork &room, AreaWork &area, R
       }
       if (bestBank != bank || bestTile != t)
       {
-        ownCells++;
+        ownCells += !edge;
         bank = bestBank;
         scale = strengths[size_t(bank)].x * strengths[size_t(bank)].x;
         t = bestTile;
@@ -1265,6 +1300,7 @@ std::pair<Bytes, Bytes> buildSharedLayer(const RoomWork &room, AreaWork &area, R
               std::to_string(dirs.size()) + " light directions, " + std::to_string(strengths.size()) +
               " banks from bank " + std::to_string(firstBank) + ", " + std::to_string(litCells.size()) + " lit cells, mean error " +
               std::to_string(measured ? error / float(measured) : 0.0f));
+  lightSources(lite, l);
   return {m, lite};
 }
 
@@ -1308,8 +1344,7 @@ std::pair<Bytes, Bytes> buildFittedLayer(const RoomWork &room, AreaWork &area, R
           if (state(px, py, &n) == 2)
           {
             float fx = float(px) + 0.5f, fy = float(py) + 0.5f;
-            v = light::term(l, fx, fy, n);
-            if (v > 0 && room.solid.shadowed(fx, fy, l)) v = 0;
+            v = room.solid.lit(fx, fy, l, n);
           }
           t[size_t(y * 8 + x)] = v;
           if (v > 0) sum += v, count++, most = std::max(most, v);
@@ -1398,6 +1433,7 @@ std::pair<Bytes, Bytes> buildFittedLayer(const RoomWork &room, AreaWork &area, R
               std::to_string(groups.size()) + " banks of 15 levels from bank " + std::to_string(firstBank) + ", " +
               std::to_string(litCells.size()) + " lit cells, mean error " +
               std::to_string(measured ? error / float(measured) : 0.0f));
+  lightSources(lite, l);
   return {m, lite};
 }
 
@@ -1437,8 +1473,8 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
     for (int cx = 0; cx < w8; cx++)
     {
       float mx = float(cx * 8 + 4), my = float(cy * 8 + 4);
-      float dx = l.x - mx, dy = l.y - my;
-      if (light::falloff(l, dx * dx + dy * dy) <= 0) continue;
+      light::Vec3 F = light::scaledDirection(l, mx, my);
+      if (F.x == 0 && F.y == 0 && F.z <= 0) continue;
       bool any = false;
       for (int y = 0; y < 8; y++)
         for (int x = 0; x < 8; x++)
@@ -1521,14 +1557,29 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
           light::Vec3 n;
           int px = cx * 8 + x, py = cy * 8 + y;
           if (state(px, py, &n) != 2) continue;
-          if (room.solid.shadowed(float(px) + 0.5f, float(py) + 0.5f, l))
+          // In the shadow of every light that reaches it: empty. (In the shadow of only some, it
+          // keeps its normal and is lit as if by all: this mode has no way to tell.)
+          bool partly = false;
+          float truth = room.solid.lit(float(px) + 0.5f, float(py) + 0.5f, l, n, &partly);
+          bool all = partly && l.sources.size() <= 1;
+          if (partly && !all)
+          {
+            // Shadowed from some lights only: lit if another one reaches it at all.
+            all = true;
+            for (const light::Source &src : l.sources)
+            {
+              float ddx = src.x - (float(px) + 0.5f), ddy = src.y - (float(py) + 0.5f);
+              if (light::falloff(l, ddx * ddx + ddy * ddy) > 0 && !room.solid.shadowedFrom(float(px) + 0.5f, float(py) + 0.5f, l, src)) all = false;
+            }
+          }
+          if (all)
           {
             shadowEdge = true;
             continue;
           }
           int k = light::nearest(normals, n);
           t[size_t(y * 8 + x)] = uint8_t(1 + k);
-          normalError += std::abs(light::term(l, float(px) + 0.5f, float(py) + 0.5f, n) -
+          normalError += std::abs(truth -
                                   std::max(0.0f, light::dot(normals[size_t(k)], centres[size_t(region)])));
           normalPixels++;
           any = true;
@@ -1572,6 +1623,7 @@ std::pair<Bytes, Bytes> buildLightLayer(const RoomWork &room, AreaWork &area, Re
               std::to_string(edgeTiles) + " cells on a shadow's edge), " + std::to_string(normals.size()) + " normals, " +
               std::to_string(centres.size()) + " region banks from bank " + std::to_string(firstBank) + ", " +
               std::to_string(litCells.size()) + " lit cells, mean error " + std::to_string(normalPixels ? normalError / double(normalPixels) : 0.0));
+  lightSources(lite, l);
   return {m, lite};
 }
 

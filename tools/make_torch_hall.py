@@ -201,7 +201,7 @@ def collision(main, first):
     return [[first + 1 if main[y][x] else 0 for x in range(W)] for y in range(H)]
 
 
-def write_room(path, room_id, title, lighting, doors, rows, extra=()):
+def write_room(path, room_id, title, lighting, doors, rows, extra=(), torches=((LIGHT_X, LIGHT_Y, TORCH_X, TORCH_Y),)):
     bg, main = layers()
     first_col = 1 + len(NAMES)
     first_mat = first_col + 30
@@ -236,12 +236,14 @@ def write_room(path, room_id, title, lighting, doors, rows, extra=()):
     og = ET.SubElement(m, "objectgroup", {"id": "5", "name": "objects"})
     ogp = ET.SubElement(og, "properties")
     rooms.prop(ogp, "role", "objects")
-    objects = [("CameraZone", "room", 0, 0, W * T, H * T, False, []),
-               ("Light", "torch_light", LIGHT_X, LIGHT_Y, 0, 0, True,
-                [("colour", "#ffb060"), ("radius", "160"), ("height", "16"), ("intensity", "1.25"),
-                 ("flicker", "0.3"), ("flicker_speed", "5"), ("gain", "0.55")]),
-               ("Torch", "torch", TORCH_X, TORCH_Y, 0, 0, True, []),
-               ("Bat", "bat", 360, 40, 0, 0, True, [])] + doors
+    light_props = [("colour", "#ffb060"), ("radius", "160"), ("height", "16"), ("intensity", "1.25"),
+                 ("flicker", "0.3"), ("flicker_speed", "5"), ("gain", "0.55")]
+    objects = [("CameraZone", "room", 0, 0, W * T, H * T, False, [])]
+    for k, (lx, ly, tx, ty) in enumerate(torches):
+        suffix = "" if k == 0 else "_%d" % (k + 1)
+        objects.append(("Light", "torch_light" + suffix, lx, ly, 0, 0, True, light_props))
+        objects.append(("Torch", "torch" + suffix, tx, ty, 0, 0, True, []))
+    objects += [("Bat", "bat", 360, 40, 0, 0, True, [])] + doors
     oid = 1
     for otype, name, x, y, ow, oh, point, props in objects:
         a = {"id": str(oid), "name": name, "type": otype, "x": str(x), "y": str(y)}

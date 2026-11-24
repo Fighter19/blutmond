@@ -878,6 +878,10 @@ if the last room was lit). Every frame after the effects:
   shown and blended (first targets the UI layer and the light layer, second the rest, EVA 16,
   EVB 16: the UI's boxes are then added at full weight too) while no screen is open, no room
   effect and no teleport; else it is hidden.
+- Several lights (up to 4) flicker together: the tiles have their sum baked in, and a
+  sprite slot sums `max(0, N·L) × reach` over the lights. A sheet whose every slot is
+  emissive is written once. Shadow rays are kept for the last 8 places (4 px steps) they
+  started from.
 - Sprites: every sprite bank (0-12) in use is lit for one figure: the player's banks for the
   player (its middle 14 px above its feet), another bank for the nearest actor drawn with its
   sheet (8 px above its anchor), none: ambient only. The light reaching it is
