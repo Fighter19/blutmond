@@ -5,8 +5,9 @@
 usage: make_engine_font.py <assets/engine>
 
 ASCII 32 to 126 in 8x8 cells, 16 to a row, then the marks of BASE_MARKS (the dialogue box's
-"more follows": a filled triangle pointing down). Each glyph is drawn in 5x7 pixels at (1, 0) of its
-cell, in white. The dark shadow below right of it is only in the picture: the cooker keeps the
+"more follows": a filled triangle pointing down, and the same a pixel lower for it to bob, at
+U+E800 of the private use area: the UI takes U+E000 to U+E7FF for map cells). Each glyph is
+drawn in 5x7 pixels at (1, 0) of its cell, in white. The dark shadow below right of it is only in the picture: the cooker keeps the
 white pixels (1 bit each) and the runtime draws the shadow the same way. Drawn by this script,
 so the engine's assets stay free of third-party art.
 """
@@ -168,6 +169,7 @@ LATIN = {
 # Marks after ASCII in the first font file (cells 95 on), each a range of one.
 BASE_MARKS = {
     0x25BC: ["     ", "#####", "#####", " ### ", " ### ", "  #  ", "     "],   # ▼ (more text follows)
+    0xE800: ["     ", "     ", "#####", "#####", " ### ", " ### ", "  #  "],   # the same a pixel lower (it bobs)
 }
 # Ranges of the second font file, in the order of its cells.
 LATIN_RANGES = [(0xA0, 96), (0x152, 2), (0x2018, 7), (0x2026, 1)]

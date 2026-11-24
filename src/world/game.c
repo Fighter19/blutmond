@@ -1363,7 +1363,10 @@ static int dialogueIndent(const BmGame *g)
 static void dialogueMarker(BmGame *g)
 {
   bool on = g->dialogueMore && g->dialogueShown >= g->dialogueLength;
-  bmUiLabel(&g->ui, 28, 18, on ? "\xE2\x96\xBC" : " ");   // U+25BC, a filled triangle pointing down
+  // U+25BC, a filled triangle pointing down; it bobs: every 16 frames a pixel lower (U+E800,
+  // the same glyph lower in the engine's font) and back.
+  bool low = (g->frame / 16) & 1;
+  bmUiLabel(&g->ui, 28, 18, !on ? " " : low ? "\xEE\xA0\x80" : "\xE2\x96\xBC");
 }
 
 void bmGameDrawDialogue(BmGame *g)
@@ -1786,6 +1789,9 @@ void bmGameFrame(BmGame *g, uint16_t keys)
     in.jumpPressed = false;
   }
   dialogueFrame(g);
+  // The marker bobs while the box waits for A.
+  if (g->dialogue != 0 && g->screens.count == 0 && g->dialogueMore && g->dialogueShown >= g->dialogueLength && g->frame % 16 == 0)
+    dialogueMarker(g);
   // The quick slots (first-items.md §1): L uses the first, Select the second (not while L or
   // R is held: L + R + Select is the debug overlay's).
   if (g->dialogue == 0)

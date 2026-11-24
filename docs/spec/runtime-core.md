@@ -307,7 +307,8 @@ start:
   `26 - indent` cells from (2 + indent, 17); a line longer than that **scrolls**: rows before
   `dialogueRow` (snapshot) are laid out but not drawn, and `dialogueLength` counts the
   characters up to the box's last row. When they are all there and more of the line follows,
-  a filled triangle (U+25BC, a glyph of the engine's font) at (28, 18) says so; A then scrolls the text up a row (`dialogueRow + 1`, the box drawn
+  a filled triangle (U+25BC, a glyph of the engine's font) at (28, 18) says so, bobbing: every
+  16 frames (`frame / 16` odd) it is the same a pixel lower (U+E800); A then scrolls the text up a row (`dialogueRow + 1`, the box drawn
   again with what was shown) and the rest goes on appearing. A pressed while the box's rows are
   not all there shows them at once (no jump); pressed when they are and nothing follows, it
   closes the box. Drawn again after the layer was cleared, as far as it had come. A pressed in a frame while `dialogue != 0` (step 3 of section 3): the rows

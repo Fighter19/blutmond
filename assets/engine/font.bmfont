@@ -2,4 +2,5 @@
 <font version="1" name="font" image="font.png" cell_w="8" cell_h="8">
  <range first="32" count="95"/>
  <range first="0x25BC" count="1"/>
+ <range first="0xE800" count="1"/>
 </font>

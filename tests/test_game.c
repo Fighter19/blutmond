@@ -2864,6 +2864,17 @@ static void testDialogueScrolls(void)
   bmGameSayLine(&s_game, keyOf("VesperStays"));
   frames(60, 0);
   TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueShown == s_game.dialogueLength && s_game.dialogueMore && s_game.dialogueRow == 0);
+  // The marker bobs: its cell shows the triangle and the one a pixel lower in turn.
+  uint8_t cells[2];
+  for (int k = 0; k < 2; k++)
+  {
+    cells[k] = s_game.ui.map[18 * 32 + 28];
+    frames(16, 0);
+  }
+  TEST_ASSERT(cells[0] != cells[1] && cells[0] != 0 && cells[1] != 0 && s_game.ui.map[18 * 32 + 28] == cells[0]);
+  uint16_t codes[2];
+  for (int k = 0; k < 2; k++) codes[k] = s_game.ui.glyphCode[cells[k] - BM_UI_GLYPH_FIRST];
+  TEST_ASSERT((codes[0] == 0x25BC && codes[1] == 0xE800) || (codes[0] == 0xE800 && codes[1] == 0x25BC));
   const BmPpuState *ppu = bmHalHostGetPpu();
   (void)ppu;
   frames(1, BM_KEY_A);
