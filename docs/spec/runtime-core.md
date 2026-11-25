@@ -912,11 +912,13 @@ if the last room was lit). Every frame after the effects:
   light's colour (H halfway between L and the viewer). The slots' normals are as the sheet is
   drawn: for a figure drawn mirrored (facing left) L's x is mirrored, for one drawn upside down
   (gravity flipped) its y. A sheet without normals faces the viewer. A bank out of the light is written once while it stays out.
-- Mode `palette`: the room's banks are shaded again only when the light's intensity has changed
-  by 3/256 or more since they were (less moves no channel by half a step), so a light that
-  does not flicker costs nothing after the first frame (the rural street's 15 banks: about 250
-  cycles a frame instead of 40,700), and a slow flicker is shaded on some frames only (its lamp,
-  flickering by 0.2: about 158 lines of a frame on average, 163 shading every frame). Pixels
+- Mode `palette`: on entering (and when the colour correction changes) the room's banks are
+  shaded for 5 intensities across the flicker's range (the light's own in the middle; one for a
+  light that does not flicker) into a cache (EWRAM, 16 banks × 5 at most: 2,560 bytes). Each
+  frame the lit banks of the step nearest the intensity are copied, when another step is
+  shown: the flicker is seen in 5 steps, and costs about 7,000 cycles in a frame that changes
+  step instead of 29,000 to 41,000 shading. In mGBA: the palette torch hall 138 lines of a
+  frame (150 shading every frame, 130 steady), the rural street with the knight 161 (179). Pixels
   black in the normal map are emissive: their entries are written as drawn.
 - The multiboot images have no light (their packs have no lit room; one pushed to them is shown
   unlit). On the GBA a torch hall's light costs about 37,000 cycles a frame (`bm_light_cycles`:
@@ -936,8 +938,8 @@ the pieces of their sprites as semi-transparent affine sprites (matrix 31 facing
 facing left; the doors use 0 to 29) at priority 2, behind the room's main layer, so only the
 puddle shows them. They are lit as the figure they mirror (the same banks). While a room effect or
 a teleport uses the line tables the mirror is hidden. The multiboot images have no puddles
-(light_off.c). On the GBA the rural street takes about 179 lines of a frame with the knight in the
-lamp's light (158 without him, 130 with the lamp steady too): three sprite banks lit, about
+(light_off.c). On the GBA the rural street takes about 161 lines of a frame with the knight in the
+lamp's light and the palette cache (179 shading every frame): three sprite banks lit, about
 35,000 cycles.
 
 **Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has

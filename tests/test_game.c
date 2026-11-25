@@ -3280,8 +3280,8 @@ static void testThePuddleMirrorsTheStreet(void)
   for (uint8_t i = 0; i < s_game.actors.count; i++)
     if (s_game.actors.sheet[i] >= 0 && s_game.sheets[s_game.actors.sheet[i]].pNormals != NULL) knightLit = true;
   TEST_ASSERT(knightLit);
-  // The banks are shaded again only when the light changed enough to show (less than 3/256).
-  TEST_ASSERT(s_game.light.shaded - s_game.light.now < 3 && s_game.light.now - s_game.light.shaded < 3);
+  // The flicker is shown in 5 steps, cached on entering: one is in palette memory.
+  TEST_ASSERT(s_game.light.cacheSteps == BM_LIGHT_CACHE_STEPS && s_game.light.shownStep >= 0 && s_game.light.shownStep < BM_LIGHT_CACHE_STEPS);
   uint16_t shot[BM_PPU_WIDTH * BM_PPU_HEIGHT];
   bmHalHostRender(shot);
   // Away from the puddle the player is not mirrored; the knight, standing over it, still is.

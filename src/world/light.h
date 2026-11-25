@@ -25,6 +25,7 @@ struct BmGame;
 #define BM_LIGHT_PALETTE 1
 #define BM_LIGHT_LAYER 2
 #define BM_LIGHT_MAX_SOURCES 4   // lights in a room (they flicker together)
+#define BM_LIGHT_CACHE_STEPS 5   // palette mode: intensities a flickering light is shown at
 
 typedef struct BmLight
 {
@@ -57,7 +58,10 @@ typedef struct BmLight
   uint16_t objDark;          // sprite banks set to ambient only (out of the light), for...
   uint8_t objSheet[13], objPalette[13];   // ... this sheet and palette
   int32_t now;               // the intensity this frame, 256 = 1.0
-  int32_t shaded;            // palette: the intensity its banks were last shaded for (-1: none)
+  // Palette: the room's banks shaded for BM_LIGHT_CACHE_STEPS intensities across the flicker
+  // (one without), on entering; each frame the nearest is copied, when it is not shown already.
+  uint8_t cacheSteps;
+  int8_t shownStep;          // the step in palette memory (-1: none)
 } BmLight;
 
 /// A room was shown: reads its light (none: the sprite banks get their own colours back).

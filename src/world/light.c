@@ -70,6 +70,9 @@ int32_t bmLightIntensity(const BmLight *l, uint32_t frame)
 // Layer mode: per region bank and normal, how much it faces the light (4096 = 1.0).
 static int16_t s_faces[15][15] BM_EWRAM_BSS;
 
+// Palette mode: the room's banks per intensity step (presentPalette).
+static uint16_t s_paletteCache[BM_LIGHT_CACHE_STEPS][16 * 16] BM_EWRAM_BSS;
+
 // The last shadow rays, by where they started (in 4 pixel steps) and the light: a figure that
 // stays put (or moves within 4 pixels) does not cast its rays again.
 #define RAY_CACHE 8
@@ -271,7 +274,7 @@ void bmLightEnterRoom(BmGame *g)
   }
   l->wasLit = true;
   l->fresh = true;
-  l->shaded = -1;
+  l->shownStep = -1;
   bmLightPresent(g);
 }
 
@@ -410,40 +413,68 @@ static void LIGHT_KERNEL litSlotsCurved(uint16_t *out, const uint8_t *pal, const
 
 // Palette mode: the banks that have lit colours every frame; with `all` (entering the room) the
 // others too, which only the ambient darkens.
-static void presentPalette(BmGame *g, bool all)
+// Palette mode: the room's banks for intensity `now` into `out` (16 entries a bank).
+static void shadePalette(BmGame *g, int32_t now, uint16_t *out)
 {
-  BmLight *l = &g->light;
-  // A light that does not flicker, or has changed too little since its banks were shaded for
-  // no colour to change by half a step (a factor of 256 moves a channel of 31 by 0.5 at 4): its
-  // banks are as they were.
-  if (!all && l->now - l->shaded < 3 && l->shaded - l->now < 3) return;
-  l->shaded = l->now;
-  uint32_t first = l->paletteFirst, banks = l->paletteBanks;
+  const BmLight *l = &g->light;
+  uint32_t banks = l->paletteBanks < l->bankCount ? l->paletteBanks : l->bankCount;
   const BmColorCorrection *cc = bmPaletteCorrection();
   const uint8_t *src = cc != NULL ? s_roomMixed : l->pPalette;
   // Per level the factor of each channel: ambient + light × level (two divisions in all).
   int16_t fac[17 * 3];
-  int32_t step = (l->now << 8) / (l->levels - 1);   // a level's light, 65536 = 1.0
+  int32_t step = (now << 8) / (l->levels - 1);   // a level's light, 65536 = 1.0
   // One past the last level: emissive entries (a lamp's glass, a lit window), as drawn.
   fac[l->levels * 3] = fac[l->levels * 3 + 1] = fac[l->levels * 3 + 2] = 256;
   int32_t lr = l->red * 256 / 31, lg = l->green * 256 / 31, lb = l->blue * 256 / 31;
   for (uint8_t k = 0; k < l->levels; k++)
   {
     // 256 = 1.0: even steps, or the room's own light per level (`light_curve`).
-    int32_t t = l->pLevelLight != NULL ? (l->now * l->pLevelLight[k] * 257) >> 16 : step * k >> 8;
+    int32_t t = l->pLevelLight != NULL ? (now * l->pLevelLight[k] * 257) >> 16 : step * k >> 8;
     fac[k * 3] = (int16_t)clamp256(l->ambient + (t * lr >> 8));
     fac[k * 3 + 1] = (int16_t)clamp256(l->ambient + (t * lg >> 8));
     fac[k * 3 + 2] = (int16_t)clamp256(l->ambient + (t * lb >> 8));
   }
   const uint8_t *levelOf = l->pLite + LITE_HEAD;
-  uint16_t out[16];
-  for (uint32_t b = 0; b < banks && b < l->bankCount; b++)
+  for (uint32_t b = 0; b < banks; b++)
   {
-    if (!all && !(l->litBanks & (1u << b))) continue;
-    if (cc != NULL) shadeLevelsCurved(out, src + b * 32, levelOf + b * 16, fac, cc->curve);
-    else shadeLevels(out, src + b * 32, levelOf + b * 16, fac);
-    bmPaletteWriteRaw((uint16_t)((first + b) * 16), out, 16);
+    if (cc != NULL) shadeLevelsCurved(out + b * 16, src + b * 32, levelOf + b * 16, fac, cc->curve);
+    else shadeLevels(out + b * 16, src + b * 32, levelOf + b * 16, fac);
   }
+}
+
+// The intensity of cache step k: the flicker's range in even steps (the middle one the light's
+// own intensity).
+static int32_t stepIntensity(const BmLight *l, uint8_t k)
+{
+  int32_t base = (int32_t)l->intensity * 4;
+  if (l->cacheSteps < 2) return base;
+  int32_t span = base * (int32_t)l->flicker / 255;   // as far as bmLightIntensity goes either way
+  return base - span + 2 * span * k / (l->cacheSteps - 1);
+}
+
+// Palette mode: with `all` (a room entered, the correction changed) the cache shaded anew and
+// every bank written; else the lit banks of the step nearest this frame's intensity, if another
+// one is shown.
+static void presentPalette(BmGame *g, bool all)
+{
+  BmLight *l = &g->light;
+  uint32_t first = l->paletteFirst, banks = l->paletteBanks < l->bankCount ? l->paletteBanks : l->bankCount;
+  if (all)
+  {
+    l->cacheSteps = l->flicker != 0 ? BM_LIGHT_CACHE_STEPS : 1;
+    for (uint8_t k = 0; k < l->cacheSteps; k++) shadePalette(g, stepIntensity(l, k), s_paletteCache[k]);
+    l->shownStep = -1;
+  }
+  int8_t k = 0;
+  for (uint8_t i = 1; i < l->cacheSteps; i++)
+  {
+    int32_t d = stepIntensity(l, i) - l->now, e = stepIntensity(l, (uint8_t)k) - l->now;
+    if ((d < 0 ? -d : d) < (e < 0 ? -e : e)) k = (int8_t)i;
+  }
+  if (k == l->shownStep) return;
+  for (uint32_t b = 0; b < banks; b++)
+    if (l->shownStep < 0 || (l->litBanks & (1u << b))) bmPaletteWriteRaw((uint16_t)((first + b) * 16), s_paletteCache[k] + b * 16, 16);
+  l->shownStep = k;
 }
 
 // Layer mode: the light layer's banks every frame; with `all` the room's own, darkened.
