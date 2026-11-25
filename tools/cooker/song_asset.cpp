@@ -330,18 +330,31 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
   }
   while (b.size() % 4) u8(0);
 
-  // Most notes sounding at once, counting each note's release.
+  // Most notes sounding at once, counting each note's release; for music with layers or modes,
+  // of the instruments heard at one intensity (the most of any: while one fades into another a
+  // few more can sound for the fade's time).
   int polyphony = 0;
   double framesPerTick = 65536.0 / double(tickRate);
-  for (const Event &e : events)
+  bool ranged = false;
+  for (const Instrument &in : s.instruments) ranged = ranged || in.layer != 0 || in.until != 15;
+  ranged = ranged && !s.effect;
+  for (int level = ranged ? 0 : 15; level <= 15; level++)
   {
-    int sounding = 0;
-    for (const Event &o : events)
+    auto heard = [&](const Event &e) {
+      const Instrument &in = s.instruments[size_t(e.instrument)];
+      return !ranged || (level >= in.layer && level <= in.until);
+    };
+    for (const Event &e : events)
     {
-      double end = o.tick + o.length + s.instruments[size_t(o.instrument)].release / framesPerTick;
-      if (o.tick <= e.tick && end > e.tick) sounding++;
+      if (!heard(e)) continue;
+      int sounding = 0;
+      for (const Event &o : events)
+      {
+        double end = o.tick + o.length + s.instruments[size_t(o.instrument)].release / framesPerTick;
+        if (heard(o) && o.tick <= e.tick && end > e.tick) sounding++;
+      }
+      polyphony = std::max(polyphony, sounding);
     }
-    polyphony = std::max(polyphony, sounding);
   }
   if (polyphony > BM_SOUND_VOICES)
     report.warning("sound-reduced", s.path,

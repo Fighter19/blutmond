@@ -67,7 +67,9 @@ time, so that any moment can fade into the other mode.
   between its `layer` and its `until`. With `until` 15 (the default) these are **layers**:
   0 always heard, n from intensity n on, each adding to the ones below. A range ending lower
   makes a **mode**: test_chamber's chamber is heard at 0 only (`layer` 0, `until` 0), its
-  escape from 1 on (`layer` 1), its pad always.
+  escape's bass and bleeps at 1 only, its kick and lament from 1 on and its pursuit from 2 on,
+  its pad always. The cooker counts the voices a song needs at each intensity and reports
+  the most; while one mode fades into another, a few more sound for the fade's time.
 - **Fading.** Each of the music's first 16 instruments has a volume of 0 to 4096 that moves
   towards 4096 (heard) or 0 by the song's step a frame, at the start of a frame: 96 (43 frames)
   without a `fade`, else `ceil(4096 / (4 * f))` with `f` the chunk's fade byte. Instruments

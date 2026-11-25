@@ -13,12 +13,13 @@ most 6 voices.
 
 test_chamber.bmsong, for a laboratory (not in the test level's pack): cold electronics after the
 character of the Portal (2007) soundtrack, B minor at 120 beats a minute, 8 bars (16 s) that
-loop, in two modes over the same chords (dynamic music, sound-format.md): the game switches
+loop, in three modes over the same chords (dynamic music, sound-format.md): the game switches
 between them with the music intensity, and the one fades into the other over two bars. The
 chamber (intensity 0, where the song starts): a slow pad and sine bleeps on the beats, walking
-through the chord in the echo, no drums. The escape (intensity 1 and up): the same pad, a
-steady kick and a bass in eighths, a sine lead lamenting over them. At most 6 voices (while
-the one fades into the other).
+through the chord in the echo, no drums. The escape (1): the same pad, a steady kick and a
+bass in eighths, a sine lead lamenting over them. The pursuit (2 and up): the kick and the
+lament go on, the bass pumps in octaves in sixteenths and a triangle arpeggio runs an octave
+over the bleeps. At most 7 voices (while one mode fades into another).
 
 infinite_corridor.bmsong, for an endless corridor (not in the test level's pack): the same
 sounds driven harder, 16 bars (32 s) looping: the bass in sixteenths rocking between B and C,
@@ -302,12 +303,12 @@ def night_street():
     return s
 
 
-def lab_piece(parts, modes=False):
+def lab_piece(parts, modes=None):
     """Cold electronics (see test_chamber at the top): `parts` per four chords of two bars each,
-    0 the chamber, 1 the escape, 2 the corridor. With `modes` the parts are not one after the
-    other but over each other, on the same eight bars: part k is the song's mode at music
-    intensity k (its instruments heard from k up to k only; the last from k on), and the pad,
-    common to them, is always heard. The song starts in the first one."""
+    0 the chamber, 1 the escape, 2 the corridor, 3 the pursuit (what it adds to the escape).
+    With `modes` ({(part, sound): (layer, until)}) the parts are not one after the other but
+    over each other, on the same eight bars, each instrument heard at the music intensities
+    given; the pad, common to them, is always heard. The song starts at intensity 0."""
     bar = 4 * BEAT                                   # 2 s at 120 beats a minute
     sections = 1 if modes else len(parts)
     attrs = {"version": "1", "bpm": "120", "length": str(8 * bar * sections), "loop": "0", "effect": "0",
@@ -322,9 +323,10 @@ def lab_piece(parts, modes=False):
                  "release": "2", "volume": "150", "pan": "0"},
         "bass": {"wave": "triangle", "attack": "0", "decay": "16", "sustain": "130", "release": "4", "volume": "150", "pan": "0"},
         "lead": {"wave": "sine", "attack": "4", "decay": "30", "sustain": "150", "release": "10", "volume": "110", "pan": "-6"},
+        "arp": {"wave": "triangle", "attack": "0", "decay": "5", "sustain": "60", "release": "2", "volume": "96", "pan": "26"},
     }
-    names = {0: "chamber", 1: "escape", 2: "corridor"}
-    used = {0: ("bleep", "bass"), 1: ("kick", "bass", "bleep", "lead"), 2: ("kick", "bass", "bleep")}
+    names = {0: "chamber", 1: "escape", 2: "corridor", 3: "pursuit"}
+    used = {0: ("bleep", "bass"), 1: ("kick", "bass", "bleep", "lead"), 2: ("kick", "bass", "bleep"), 3: ("arp", "bass")}
 
     def inst(part, sound):
         """The instrument a part plays `sound` with: its own one per mode."""
@@ -332,13 +334,15 @@ def lab_piece(parts, modes=False):
 
     instruments = [("pad", dict(sounds["pad"]))]
     order = list(dict.fromkeys(parts)) if modes else [None]
-    for k, part in enumerate(order):
+    for part in order:
         for sound in (used[part] if modes else ("bleep", "kick", "bass", "lead")):
             a = dict(sounds[sound])
             if modes:
-                a["layer"] = str(k)
-                if k < len(order) - 1:
-                    a["until"] = str(k)
+                layer, until = modes[(part, sound)]
+                if layer:
+                    a["layer"] = str(layer)
+                if until != 15:
+                    a["until"] = str(until)
             instruments.append((inst(part, sound), a))
     for name, a in instruments:
         ET.SubElement(s, "instrument", dict({"name": name}, **a))
@@ -370,6 +374,12 @@ def lab_piece(parts, modes=False):
                         notes[inst(1, "kick")].append((tb + k * BEAT, 60, 7, 104))
                     for i in (2, 6, 11, 14):
                         notes[inst(1, "bleep")].append((tb + i * 6, arp[(i + c) % 4], 3, 70))
+                elif part == 3:
+                    for x in range(16):               # the bass pumping in octaves, sixteenths
+                        notes[inst(3, "bass")].append((tb + x * 6, root + (12 if x % 2 else 0), 3, 112 if x % 4 == 0 else 88))
+                    up = (0, 1, 2, 3, 2, 1, 2, 3)     # a running arpeggio an octave over the bleeps
+                    for x in range(16):
+                        notes[inst(3, "arp")].append((tb + x * 6, arp[up[(x + b * 4) % 8]] + 12, 3, 100 if x % 4 == 0 else 78))
                 else:
                     for x in range(16):               # sixteenths rocking between the root and a semitone up
                         notes[inst(2, "bass")].append((tb + x * 6, root + (1 if x % 4 == 3 else 0), 2, 124 if x % 4 == 0 else 108))
@@ -401,8 +411,13 @@ def lab_piece(parts, modes=False):
 
 
 def test_chamber():
-    """The chamber and the escape, as two modes (see the top)."""
-    return lab_piece([0, 1], modes=True)
+    """The chamber, the escape and the pursuit, as modes (see the top): the chamber at
+    intensity 0; the escape from 1 on, its bass and bleeps giving way at 2 to the pursuit's
+    pumping bass and running arpeggio, under the same kick and lament."""
+    return lab_piece([0, 1, 3], modes={
+        (0, "bleep"): (0, 0), (0, "bass"): (0, 0),
+        (1, "kick"): (1, 15), (1, "lead"): (1, 15), (1, "bass"): (1, 1), (1, "bleep"): (1, 1),
+        (3, "arp"): (2, 15), (3, "bass"): (2, 15)})
 
 
 def infinite_corridor():
