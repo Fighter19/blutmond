@@ -67,11 +67,13 @@ time, so that any moment can fade into the other mode.
   of instruments; a layer is heard while the engine's **intensity** (`bmSoundSetIntensity`, the
   script's `music_intensity`; 15 at the start) is from its `from` to its `until`. By default
   layer n is heard from n to 15: layer 0 always, the others adding to the ones below (the moon
-  bat's song). A layer ending lower makes a **mode** that gives way to the next: test_chamber
-  has `always` (0-15, the pad), `chamber` (0-0), `escape` (1-1: its bass and bleeps), `drive`
+  bat's song). A layer ending lower makes a **mode** that gives way to the next: night_escape
+  (the rural street's) has `always` (0-15, the pad), `calm` (0-0), `escape` (1-1: its bass and bleeps), `drive`
   (1-15: the kick and the lament) and `pursuit` (2-15). The cooker counts the voices a song
   needs at each intensity and reports the most; while one mode fades into another, a few more
-  sound for the fade's time.
+  sound for the fade's time. What sets the intensity is the game's: a script's
+  `music_intensity`, such as the rural street's `Threat` (assets/test_room/scripts/threat.ms),
+  which follows how near the enemies are.
 - **Fading.** Each layer has a volume of 0 to 4096 that moves towards 4096 (heard) or 0 by the
   song's step a frame, at the start of a frame: 96 (43 frames) without a `fade`, else
   `ceil(4096 / (4 * f))` with `f` the chunk's fade byte. A song started as music begins with

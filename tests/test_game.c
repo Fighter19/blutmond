@@ -3258,6 +3258,49 @@ static int mirroredSprites(const BmPpuState *ppu)
   return n;
 }
 
+// The street's music follows the danger (scripts/threat.ms, the room's attachment Threat):
+// night_escape starts calm (intensity 0) with the knight out of sight; near it, the escape (1);
+// at a lunge's distance, the pursuit (2); away again, it calms down a step at a time.
+static const char *musicPlaying(void)
+{
+  return s_game.sound.players[0].playing ? bmPackString(&s_pack, s_game.sound.players[0].nameId) : "";
+}
+
+static void testTheStreetsMusicFollowsTheDanger(void)
+{
+  startWith(s_data, s_size, "rural_street");
+  frames(10, 0);
+  TEST_ASSERT(strcmp(musicPlaying(), "night_escape") == 0);
+  TEST_ASSERT(s_game.attachments.classKey[BM_ATTACH_ROOM_FIRST] != 0);
+  TEST_ASSERT(s_game.sound.intensity == 0);
+  TEST_ASSERT(s_game.sound.layerVolume[1] == BM_SOUND_LAYER_FULL && s_game.sound.layerVolume[2] == 0);   // calm, not escape
+  int knight = actorOfClass("Knight");
+  TEST_ASSERT(knight >= 0);
+  int32_t kx = BM_FIX_INT(s_game.actors.x[knight]);
+  // Seen: the escape, fading in.
+  bmBodyPlace(&s_game.player, kx - 80, 128);
+  frames(3, 0);
+  TEST_ASSERT(s_game.sound.intensity == 1);
+  frames(30, 0);
+  TEST_ASSERT(s_game.sound.layerVolume[2] > 0 && s_game.sound.layerVolume[1] < BM_SOUND_LAYER_FULL);
+  // Close: the pursuit.
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[knight]) - 24, 128);
+  frames(3, 0);
+  TEST_ASSERT(s_game.sound.intensity == 2);
+  // Far away: held a while, then down a step at a time.
+  bmBodyPlace(&s_game.player, 24, 128);
+  int sawEscape = -1, calm = -1;
+  for (int f = 0; f < 900 && calm < 0; f++)
+  {
+    frames(1, 0);
+    if (s_game.sound.intensity == 1 && sawEscape < 0) sawEscape = f;
+    if (s_game.sound.intensity == 0) calm = f;
+  }
+  printf("    escape after %d frames, calm after %d\n", sawEscape, calm);
+  TEST_ASSERT(sawEscape >= 170 && calm > sawEscape + 170);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 static void testThePuddleMirrorsTheStreet(void)
 {
   startWith(s_data, s_size, "rural_street");
@@ -3346,6 +3389,7 @@ int main(int argc, char **argv)
   RUN_TEST(testSpritesAreLitTheWayTheyFace);
   RUN_TEST(testTheTorchHalls);
   RUN_TEST(testThePuddleMirrorsTheStreet);
+  RUN_TEST(testTheStreetsMusicFollowsTheDanger);
   RUN_TEST(testColourCorrection);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);

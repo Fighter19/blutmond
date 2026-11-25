@@ -139,7 +139,7 @@ changes, so it can run next to Tiled.
   `music` property names its song (`none` fades the music away); an instrument's `layer` (a group
   with a range of intensities) makes dynamic music that scripts change with `music_intensity`:
   layers added one on another (the moon bat's song grows in four as the fight does) or modes
-  of a song that give way to each other (test_chamber's chamber, escape and pursuit), fading
+  of a song that give way to each other (the rural street's night_escape: calm, escape and pursuit, following how near danger is), fading
   over the song's `fade`. The track list shows each track's layer and whether it is heard
   at the intensity chosen to preview; Mute and Solo pick tracks to hear, Fade fades the song
   out as a room's `none` does, and Speak plays a text as a dialogue voice would (a sound

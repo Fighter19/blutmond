@@ -1,7 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="7">
  <properties>
-  <property name="music" value="night_street" />
+  <property name="music" value="night_escape" />
+  <property name="attach" value="Threat" />
   <property name="room_id" value="rural_street" />
   <property name="title" value="Rural street" />
   <property name="lighting" value="palette" />
@@ -74,7 +75,7 @@
    <property name="role" value="objects" />
   </properties>
   <object id="1" name="room" type="CameraZone" x="0" y="0" width="480" height="160" />
-  <object id="2" name="start" type="PlayerStart" x="276" y="128">
+  <object id="2" name="start" type="PlayerStart" x="120" y="128">
    <point />
   </object>
   <object id="3" name="knight" type="Knight" x="350" y="128">

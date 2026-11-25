@@ -67,7 +67,7 @@ set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/items.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/weapons.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/consumables.bmdata
-  ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong ${PROJECT_SOURCE_DIR}/assets/test_room/music/night_street.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/castle.bmsong ${PROJECT_SOURCE_DIR}/assets/test_room/music/night_escape.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/jump.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/music/hurt.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/world.bmworld
@@ -101,6 +101,7 @@ endif()
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/torch.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/threat.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata
@@ -301,16 +302,19 @@ if(BM_PLATFORM STREQUAL "gba")
     --absent-room debug_pulse --absent-room debug_gradient --absent-room boss_hall --absent-room ability_hall
     --absent-asset vesper --absent-asset moon_bat --absent-asset vesper_face --absent-asset voice_vesper
     --absent-asset fireball --absent-room guard_room --absent-asset knight --absent-asset bat_armour --absent-asset clang
-    --absent-asset torch --absent-asset night_street
+    --absent-asset torch --absent-asset night_escape
     --absent-kind LANG)
   # The torch halls (docs/plans/lighting.md) and the rural street are not in it at all, not even
   # as absent entries: the multiboot images have no light and no puddles (light_off.c), and these
   # rooms come last, so the other rooms keep their numbers.
   set(BM_TEST_LEVEL_MB_ROOMS ${BM_TEST_LEVEL_ROOMS})
   list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall|rural_street")
+  # Nor the street's script (the music's Threat): only that room uses it.
+  set(BM_TEST_LEVEL_MB_ASSETS ${BM_TEST_LEVEL_ASSETS})
+  list(FILTER BM_TEST_LEVEL_MB_ASSETS EXCLUDE REGEX "scripts/threat\\.ms$")
   set(BM_TEST_LEVEL_MB_PACK ${CMAKE_BINARY_DIR}/test_level_mb_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_MB_PACK}
-    COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_MB_ROOMS} ${BM_TEST_LEVEL_ASSETS}
+    COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_MB_ROOMS} ${BM_TEST_LEVEL_MB_ASSETS}
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png
     COMMENT "Cooking the test level for multiboot")
   # The same level with the scripts also compiled to native code (mondskript.md section 12).

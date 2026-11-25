@@ -62,15 +62,18 @@ whose light, wavering a little, falls on them (mode palette, dithered; the sky, 
 window give their own light: black in the normal map). A puddle on the road mirrors the lamp,
 the bench and whoever stands over it, the player and a knight on watch by the bench (a `Puddle`
 object, runtime-core.md §12). The knight has a normal map (`tools/make_knight_sprite.py` draws
-it with the knight: each part its shape) and shiny steel. Its music, "night_street", is dread with a pulse
-(`tools/make_street_music.py`, after how players describe Persona 3's "The Voice Someone
-Calls": a soft kick on every beat, a sine bass leaning onto the flat second, a slow low pad,
-and a small piano call that comes back with silence between, in a long echo; at most 5 voices,
-so the game's sounds keep three). The same script writes "test_chamber" (cold electronics
-after the character of the Portal soundtrack, in three modes of the same eight bars: the chamber
-at music intensity 0, where it starts, the escape at 1 and the pursuit (the escape with a
-pumping bass and a running arpeggio) from 2 on; `music_intensity(n)` crosses to another over
-two bars), "infinite_corridor"
+it with the knight: each part its shape) and shiny steel. Its music, "night_escape"
+(`tools/make_street_music.py`: cold electronics after the character of the Portal soundtrack),
+follows the danger: three modes of the same eight bars, crossing over two bars, chosen by the
+room's attachment `Threat` (`scripts/threat.ms`, the room's property `attach = Threat`). The
+player starts out of the knight's sight, and the music is calm (intensity 0: a pad and bleeps);
+within 96 pixels of an enemy it is the escape (1: a kick, a bass in eighths, a lament); within
+36, or for four seconds after being struck, the pursuit (2: a pumping bass and a running
+arpeggio over the kick and the lament). It rises at once and calms down a step at a time, each
+after three seconds of less danger. `Threat.Notice`, `Threat.Close`, `Threat.Hold` and
+`Threat.Shaken` as room properties change these. The same script writes "night_street"
+(the street's music before: dread with a pulse, after how players describe Persona 3's "The
+Voice Someone Calls"), "infinite_corridor"
 (the same sounds driven harder, for an endless corridor),
 "quiet_sorrow" (a melancholic piece for an emotional scene), "hollow_dread" (horror ambience for an empty stage of high suspense)
 and "dusk_pulse" (dark wave for a livelier one), none of them in the test level.

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BSD-2-Clause OR MIT
-"""Writes the test level's spare songs and the rural street's (assets/test_room/music/):
+"""Writes the rural street's song and the test level's spare ones (assets/test_room/music/):
 
-night_street.bmsong, the rural street's: dread with a pulse, after how players describe "The
+night_street.bmsong (the rural street's before night_escape; not in the pack): dread with a pulse, after how players describe "The
 Voice Someone Calls" (Persona 3): short and creepy, light piano chimes over a lot of
 ambience and long silences, a constant slow beat of the bass drum under it all. E phrygian at
 84 beats a minute, 24 bars (69 s) that loop: a soft kick on every beat that never changes, a
@@ -11,11 +11,12 @@ swelling slowly, and a small piano call of three notes that comes back, varied, 
 of silence between, ringing out in a long echo. Sines and triangles (no noise, no saw), at
 most 6 voices.
 
-test_chamber.bmsong, for a laboratory (not in the test level's pack): cold electronics after the
-character of the Portal (2007) soundtrack, B minor at 120 beats a minute, 8 bars (16 s) that
-loop, in three modes over the same chords (dynamic music, sound-format.md): the game switches
-between them with the music intensity, and the one fades into the other over two bars. The
-chamber (intensity 0, where the song starts): a slow pad and sine bleeps on the beats, walking
+night_escape.bmsong, the rural street's: a nightly escape in cold electronics (written as a
+laboratory piece after the character of the Portal (2007) soundtrack), B minor at 120 beats a
+minute, 8 bars (16 s) that loop, in three modes over the same chords (dynamic music,
+sound-format.md): the street's Threat (scripts/threat.ms) switches between them with the music
+intensity as danger nears, and the one fades into the other over two bars. The calm
+(intensity 0, where the song starts): a slow pad and sine bleeps on the beats, walking
 through the chord in the echo, no drums. The escape (1): the same pad, a steady kick and a
 bass in eighths, a sine lead lamenting over them. The pursuit (2 and up): the kick and the
 lament go on, the bass pumps in octaves in sixteenths and a triangle arpeggio runs an octave
@@ -304,8 +305,8 @@ def night_street():
 
 
 def lab_piece(parts, modes=None):
-    """Cold electronics (see test_chamber at the top): `parts` per four chords of two bars each,
-    0 the chamber, 1 the escape, 2 the corridor, 3 the pursuit (what it adds to the escape).
+    """Cold electronics (see night_escape at the top): `parts` per four chords of two bars each,
+    0 the calm (a chamber), 1 the escape, 2 the corridor, 3 the pursuit (what it adds to the escape).
     With `modes` ((layers, {(part, sound): layer id}), layers as (id, name, from, until)) the
     parts are not one after the other but over each other, on the same eight bars, each
     instrument in the layer given; the pad, common to them, is in layer 0, always heard. The
@@ -329,7 +330,7 @@ def lab_piece(parts, modes=None):
         "lead": {"wave": "sine", "attack": "4", "decay": "30", "sustain": "150", "release": "10", "volume": "110", "pan": "-6"},
         "arp": {"wave": "triangle", "attack": "0", "decay": "5", "sustain": "60", "release": "2", "volume": "62", "pan": "26"},
     }
-    names = {0: "chamber", 1: "escape", 2: "corridor", 3: "pursuit"}
+    names = {0: "calm", 1: "escape", 2: "corridor", 3: "pursuit"}
     used = {0: ("bleep", "bass"), 1: ("kick", "bass", "bleep", "lead"), 2: ("kick", "bass", "bleep"), 3: ("arp", "bass")}
 
     def inst(part, sound):
@@ -410,11 +411,11 @@ def lab_piece(parts, modes=None):
     return s
 
 
-def test_chamber():
-    """The chamber, the escape and the pursuit, as modes (see the top), in five layers: always
-    (the pad), chamber (0 only), escape (its bass and bleeps, 1 only), drive (the kick and the
+def night_escape():
+    """The calm, the escape and the pursuit, as modes (see the top), in five layers: always
+    (the pad), calm (0 only), escape (its bass and bleeps, 1 only), drive (the kick and the
     lament, from 1 on) and pursuit (the pumping bass and the arpeggio, from 2 on)."""
-    layers = [(0, "always", 0, 15), (1, "chamber", 0, 0), (2, "escape", 1, 1), (3, "drive", 1, 15), (4, "pursuit", 2, 15)]
+    layers = [(0, "always", 0, 15), (1, "calm", 0, 0), (2, "escape", 1, 1), (3, "drive", 1, 15), (4, "pursuit", 2, 15)]
     return lab_piece([0, 1, 3], modes=(layers, {
         (0, "bleep"): 1, (0, "bass"): 1,
         (1, "bass"): 2, (1, "bleep"): 2, (1, "kick"): 3, (1, "lead"): 3,
@@ -428,7 +429,7 @@ def infinite_corridor():
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "assets", "test_room")
-    for name, s in (("night_street", night_street()), ("test_chamber", test_chamber()), ("infinite_corridor", infinite_corridor()),
+    for name, s in (("night_street", night_street()), ("night_escape", night_escape()), ("infinite_corridor", infinite_corridor()),
                     ("quiet_sorrow", quiet_sorrow()),
                     ("hollow_dread", hollow_dread()), ("dusk_pulse", dusk_pulse())):
         ET.indent(s, " ")
