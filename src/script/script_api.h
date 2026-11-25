@@ -161,7 +161,8 @@ typedef enum BmScriptType {
   X(self,              HANDLE, 0, VOID, VOID, VOID,  VOID, 0) \
   X(color_correction,  BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
   X(set_color_correction, VOID, 1, BOOL, VOID, VOID,  VOID, 0) \
-  X(has_color_correction, BOOL, 0, VOID, VOID, VOID,  VOID, 0)
+  X(has_color_correction, BOOL, 0, VOID, VOID, VOID,  VOID, 0) \
+  X(save_game,         VOID, 0, VOID,  VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -291,6 +292,9 @@ typedef enum BmScriptType {
 // and `portrait` are shown) and what it `says`. say_as(speaker, text): the same with a line
 // written in the script. The portrait is a sprite of the pack, at the box's left; the
 // speaker's `voice` (a sound effect) is heard with every second letter as the line appears.
+//
+// save_game(): writes the save game as a SavePoint does, with the player's place now as the
+// place to start again from (a bench to rest on).
 //
 // fade_music(percent, frames): the music's volume goes to `percent` (0-100) in that many
 // frames; at 0 it stops. music_intensity(level): dynamic music: a layer of the song is heard while

@@ -74,7 +74,8 @@ arpeggio over the kick and the lament). The player starts out of the knight's si
 calm. It rises at once and calms down a step at a time, each after three seconds of less. The
 numbers are constants at the top of the script. The bench is for resting (the room's
 attachment `Bench`, `scripts/bench.ms`): Up while standing at it sits the player down and
-restores health and mana; Left, Right, Down, a jump or a hit gets them up. Not while an enemy is
+restores health and mana, and saves the game (the bench the place to start again from); Left,
+Right, Down, a jump or a hit gets them up. Not while an enemy is
 within 96 pixels, and the knight keeps watch by the bench. The same script writes "night_street"
 (the street's music before: dread with a pulse, after how players describe Persona 3's "The
 Voice Someone Calls"), "infinite_corridor"

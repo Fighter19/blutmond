@@ -514,6 +514,13 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_has_color_correction:
     *result = g->colorCorrectable;
     break;
+  case BM_SCRIPT_API_save_game:
+    // As a save point does, from where the player stands.
+    g->savedRoom = g->roomIndex;
+    g->savedX = BM_FIX_INT(g->player.x);
+    g->savedY = BM_FIX_INT(g->player.y);
+    bmGameWriteSaveGame(g);
+    break;
   case BM_SCRIPT_API_language_count:
     *result = bmTextLanguageCount(g->pPack);
     break;

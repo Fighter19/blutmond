@@ -3365,10 +3365,13 @@ static void testTheStreetsBenchIsForResting(void)
   s_game.actors.hidden[knight] = 1;
   bmBodyPlace(&s_game.player, 345, 128);
   frames(5, 0);
+  uint32_t savesBefore = s_game.saves;
   frames(1, BM_KEY_UP);
   frames(2, 0);
   TEST_ASSERT(bench[0] == 1 && s_game.lockTimer != 0 && s_game.playerAnim.anim == (uint8_t)sit);
   TEST_ASSERT(s_game.health == bmGameMaxHealth(&s_game) && s_game.mana == bmGameMaxMana(&s_game));
+  // Resting saves the game: the bench is the place to start again from.
+  TEST_ASSERT(s_game.saves == savesBefore + 1 && s_game.savedRoom == s_game.roomIndex && s_game.savedX == 345);
   int32_t x = s_game.player.x;
   frames(120, 0);
   if (s_outDir != NULL)
@@ -3399,6 +3402,10 @@ static void testTheStreetsBenchIsForResting(void)
   TEST_ASSERT(bench[0] == 1 && s_game.playerAnim.anim == (uint8_t)sit);
   frames(2, BM_KEY_A);
   TEST_ASSERT(bench[0] == 0 && s_game.lockTimer == 0);
+  // Up again, the player's own animations: running.
+  frames(40, 0);
+  frames(10, BM_KEY_LEFT);
+  TEST_ASSERT(s_game.animHeld == 0 && s_game.playerAnim.anim == (uint8_t)s_game.playerAnims[BM_PLAYER_ANIM_RUN]);
   // Away from the bench, Up does nothing.
   bmBodyPlace(&s_game.player, 200, 128);
   frames(5, 0);

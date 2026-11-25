@@ -548,6 +548,8 @@ value is dropped and counts as a script error.
 | 130 | `marker_show(a, #sprite)` | that sprite's first animation is drawn at `a`'s middle (at time `frame`, priority 0, before the effects: in front of everything but the portrait) until `marker_hide` or `a` is gone (`markerTarget`, `markerSprite`: snapshot state) |
 | 131 | `marker_hide()` | no marker |
 | 132 | `self()` | a handle to the calling object (0 from an attachment) |
+| 133-135 | `color_correction()`, `set_color_correction(on)`, `has_color_correction()` | the option of colours corrected for the GBA's screen ([mondskript.md](mondskript.md)) |
+| 136 | `save_game()` | as a `SavePoint` (section 3): `savedRoom`, `savedX`, `savedY` = the room and the player's place now, the save game written |
 
 Layer functions (112-122) work only from the player's attachments, on the player's figure (a
 layer named by the figure file); from an object, or for a layer the figure does not have,

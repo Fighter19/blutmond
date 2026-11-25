@@ -2,7 +2,8 @@ class Bench extends Attachment;
 
 // A bench to rest on (the rural street's, attached by its property `attach = Threat, Bench`):
 // Up while standing at it sits the player down (the player's animation `sit`, held by a lock),
-// and resting restores health and mana. Not while an enemy is within SAFE pixels: the knight
+// and resting restores health and mana and saves the game (the bench the place to start again
+// from). Not while an enemy is within SAFE pixels: the knight
 // keeps watch by the bench. Left, Right, Down or a jump gets the player up, and so does being
 // struck. The bench is drawn in the room's tiles, from LEFT to RIGHT (where the player's feet
 // may be to sit on it).
@@ -21,10 +22,11 @@ event attached() {
   Health = player_health();
 }
 
+// The lock ends: the sitting ends with it, and the player's own animations go on (walking,
+// running). (An animation played without a lock would be held until it ends: idle never does.)
 function stand() {
   Sitting = 0;
   owner_lock(0);
-  owner_play_anim(#idle);
 }
 
 event tick() {
@@ -37,6 +39,7 @@ event tick() {
       owner_play_anim(#sit);
       heal(max_health());
       restore_mana(max_mana());
+      save_game();
       play_sound(#pickup);
     }
   } else if held(#Left) || held(#Right) || held(#Down) || held(#Jump) || !on_ground() || player_health() < Health {
