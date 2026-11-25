@@ -707,7 +707,7 @@ if(BM_PLATFORM STREQUAL "host")
   # The game's built-in font (apps/game/builtin_font.h) is the engine font cooked on its own:
   # it must stay what the cooker makes of it.
   add_test(NAME cook_builtin_font
-    COMMAND bmcook --profile gba -o ${cooked}/builtin_font_gba.bmpk ${PROJECT_SOURCE_DIR}/assets/engine/font.bmfont)
+    COMMAND bmcook --profile gba --color-correction none -o ${cooked}/builtin_font_gba.bmpk ${PROJECT_SOURCE_DIR}/assets/engine/font.bmfont)
   set_tests_properties(cook_builtin_font PROPERTIES FIXTURES_SETUP builtin_font_pack)
   add_test(NAME builtin_font_header_is_current
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/embed_pack_header.py ${cooked}/builtin_font_gba.bmpk
@@ -1101,6 +1101,13 @@ if(BM_PLATFORM STREQUAL "host")
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${BM_GBA_BUILD_DIR}/test_level_cart_gba.bmpk restart:${hall} run 120
             check "${elf}:bm_light_cycles+0<=40000" check "${elf}:bm_light_cycles+4<=20000" screenshot ${out}/light_${hall}.ppm)
         set_tests_properties(light_mgba_${hall} PROPERTIES FIXTURES_REQUIRED test_level_pack FAIL_REGULAR_EXPRESSION ": [1-9][0-9]* chunks sent")
+        # The same with the colours corrected, as on a GBA's own screen (mGBA counts as an
+        # emulator: bm_hal_screen set to 0, the GBA): the correction must not cost the budget.
+        add_test(NAME light_mgba_${hall}_corrected
+          COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 poke ${elf}:bm_hal_screen=0
+            push ${BM_GBA_BUILD_DIR}/test_level_cart_gba.bmpk restart:${hall} run 120
+            check "${elf}:bm_light_cycles+0<=40000" check "${elf}:bm_light_cycles+4<=20000" screenshot ${out}/light_${hall}_corrected.ppm)
+        set_tests_properties(light_mgba_${hall}_corrected PROPERTIES FIXTURES_REQUIRED test_level_pack FAIL_REGULAR_EXPRESSION ": [1-9][0-9]* chunks sent")
       endforeach()
       # A room's light (LITE) is its own: the cartridge game's pack, fitted for a multiboot GBA,
       # leaves out the light of the rooms it leaves out (else their tables would not fit).

@@ -60,6 +60,28 @@ const char *bmHalPlatformName(void)
   return "gba";
 }
 
+// What bmHalScreen found, 0xFF until it was asked (tests set it in mGBA: bmlink poke).
+uint8_t bm_hal_screen = 0xFF;
+
+static BmHalScreen findScreen(void)
+{
+  // mGBA: its debug register answers (switched off again right away).
+  GBA_REG_MGBA_DEBUG = 0xC0DE;
+  bool mgba = GBA_REG_MGBA_DEBUG == 0x1DEA;
+  GBA_REG_MGBA_DEBUG = 0;
+  if (mgba || GBA_NOCASH_NAME == 0x67246F6Eu) return BM_HAL_SCREEN_EMULATOR;   // "no$g"
+  // The BIOS checksum (SWI 0x0D): 0xBAAE187F on a GBA and a GBA SP, 0xBAAE1880 on a DS.
+  register uint32_t sum __asm__("r0");
+  __asm__ volatile("swi 0x0D" : "=r"(sum) : : "r1", "r2", "r3", "memory");
+  return sum == 0xBAAE1880u ? BM_HAL_SCREEN_DS : BM_HAL_SCREEN_GBA;
+}
+
+BmHalScreen bmHalScreen(void)
+{
+  if (bm_hal_screen == 0xFF) bm_hal_screen = (uint8_t)findScreen();
+  return (BmHalScreen)bm_hal_screen;
+}
+
 void bmHalGetMemoryRanges(BmHalMemoryRange *pRanges, uint32_t count)
 {
   const BmHalMemoryRange ranges[3] = {

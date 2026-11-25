@@ -71,6 +71,12 @@ struct CookOptions
   /// Optional 3x3 matrix applied to colours (0..1 RGB) before converting to the profile's
   /// format, e.g. to compensate for the GBA screen. Row major.
   std::optional<std::array<float, 9>> colorMatrix;
+  /// The colour correction baked into the pack (CCOR chunk, pack-format.md): the runtime
+  /// corrects every colour for the screen with it when the player keeps it on (the system
+  /// menu). Agb001: the AGB-001's screen (gba-colors by Pokefan531); None: no chunk. Only for
+  /// the gba and host profiles.
+  enum class ColorCorrection { None, Agb001 };
+  ColorCorrection colorCorrection = ColorCorrection::Agb001;
   /// Filled when given.
   CookInfo *pInfo = nullptr;
   /// Sprite files (.bmsprite, sprite-format.md) to cook into the pack.
@@ -110,6 +116,9 @@ struct CookOptions
   /// If set: the C made from the scripts is written here.
   std::string scriptC;
 };
+
+/// The CCOR chunk's data for a correction (empty for None).
+std::vector<uint8_t> colorCorrectionChunk(CookOptions::ColorCorrection correction);
 
 /// Cooks the given rooms. Rooms with the same `area` property share tiles, palettes and the
 /// VRAM layout (pack-format.md §2). Returns the pack (empty if the report has errors).

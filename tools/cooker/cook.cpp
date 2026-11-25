@@ -111,6 +111,43 @@ uint32_t add(BmPackWriter &w, uint32_t id, BmChunkCategory category, uint16_t gr
   return bmPackWriterAdd(&w, id, category, group, b.data.data(), uint32_t(b.data.size()));
 }
 
+}  // namespace
+
+// The CCOR chunk (pack-format.md): u8 version 1, u8 screen (1: AGB-001), u16 0, s16 matrix[9]
+// (4096 = 1.0, row major), u8 curve[32]. The AGB-001's values are those of the gba-colors
+// shader by Pokefan531: its screen mixes the channels by `mix` (columns: what red, green and
+// blue add to each channel); the inverse undoes that, then the curve brightens the darker
+// shades the screen swallows.
+std::vector<uint8_t> colorCorrectionChunk(CookOptions::ColorCorrection correction)
+{
+  if (correction == CookOptions::ColorCorrection::None) return {};
+  const double mix[9] = {0.82, 0.24, -0.06, 0.125, 0.665, 0.21, 0.195, 0.075, 0.73};
+  static const uint8_t curve[32] = {0, 7, 9, 11, 12, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 22,
+                                    23, 24, 24, 25, 25, 26, 27, 27, 28, 28, 29, 29, 30, 30, 31, 31};
+  const double *m = mix;
+  double det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6]);
+  double inv[9] = {(m[4] * m[8] - m[5] * m[7]) / det, (m[2] * m[7] - m[1] * m[8]) / det, (m[1] * m[5] - m[2] * m[4]) / det,
+                   (m[5] * m[6] - m[3] * m[8]) / det, (m[0] * m[8] - m[2] * m[6]) / det, (m[2] * m[3] - m[0] * m[5]) / det,
+                   (m[3] * m[7] - m[4] * m[6]) / det, (m[1] * m[6] - m[0] * m[7]) / det, (m[0] * m[4] - m[1] * m[3]) / det};
+  Bytes b;
+  b.u8(1);
+  b.u8(1);
+  b.u16(0);
+  for (int row = 0; row < 3; row++)
+  {
+    // Each row adds up to 1.0 (as the screen's do): a grey stays the same grey before the curve.
+    int32_t a = int32_t(std::lround(inv[row * 3] * 4096)), c = int32_t(std::lround(inv[row * 3 + 1] * 4096)),
+            d = int32_t(std::lround(inv[row * 3 + 2] * 4096));
+    int32_t v[3] = {a, c, d};
+    v[row] += 4096 - (a + c + d);
+    for (int32_t x : v) b.s16(x);
+  }
+  for (uint8_t c : curve) b.u8(c);
+  return b.data;
+}
+
+namespace {
+
 // The MIGR chunk (docs/spec/state.md §7) from a schema history:
 //   schema 0x1234abcd "label"
 //    game.player.x fix 1          the fields a save game of that layout holds, in its order
@@ -2694,6 +2731,12 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     {
       report.error("does-not-fit", options.schemaHistory, e.what());
     }
+  }
+  if (profile.name == "gba" || profile.name == "host")
+  {
+    Bytes ccor;
+    ccor.data = colorCorrectionChunk(options.colorCorrection);
+    if (!ccor.data.empty()) add(writer, BM_CHUNK_CCOR, BM_CATEGORY_META, 0, ccor);
   }
   add(writer, BM_CHUNK_STRS, BM_CATEGORY_TEXT, 0, strings.chunk());
 

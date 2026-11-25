@@ -40,6 +40,7 @@
 //                         every 6 frames)
 //   run <frames>          mGBA: let the game run
 //   check <elf>:<sym>[+off][=|<=]<value>   mGBA: read the program's memory
+//   poke <elf>:<sym>[+off]=<value>   mGBA: write a byte of the program's memory
 //   screenshot <file.ppm> mGBA
 //   ppu-snapshot <file.bmps>   the video state (VRAM, palettes, OAM, registers) as a PPU
 //                         snapshot, for the editor's graphics view and bm_ppu_render
@@ -739,6 +740,10 @@ int main(int argc, char **argv)
     else if (strcmp(cmd, "check") == 0 && a1 != NULL && mgba != NULL)
     {
       if (!bmMgbaLinkCheck(mgba, argv[++i])) failed = 1;
+    }
+    else if (strcmp(cmd, "poke") == 0 && a1 != NULL && mgba != NULL)
+    {
+      if (!bmMgbaLinkPoke(mgba, argv[++i])) failed = 1;
     }
     else if (strcmp(cmd, "screenshot") == 0 && a1 != NULL && mgba != NULL)
     {

@@ -364,7 +364,9 @@ with the game frame (a map screen calls it again every few frames); `map_percent
 of it is explored; `map_reveal(#room_id)` shows a room's cells without exploring them (false if
 the room is not on the map). Texts are shown in the language chosen
 (`language()`, `set_language(i)`, `language_count()`, `language_name(i)`;
-[pack-format.md](pack-format.md) §3.2). For equipment and items: `equipped(slot)`,
+[pack-format.md](pack-format.md) §3.2). The colours corrected for the GBA's own screen are
+an option as well: `color_correction()`, `set_color_correction(on)`, `has_color_correction()`
+(the pack holds a correction, CCOR). For equipment and items: `equipped(slot)`,
 `record_text(record, #field)` and `record_int(record, #field)` (a field of a record of any
 structure), `heal(n)`, `max_health()`, `player_health()`; `equip(slot, record)` puts on what the
 player owns.
@@ -439,7 +441,7 @@ function (12 bytes): u32 first code word, u16 code words, u8 registers, u8 param
                      u8 flags (1: state code), u8 0, u16 class
 constants:           s32 each
 code:                u16 words, followed by one spare word
-line table:          per function a u32 offset to: u16 file (string id), u16 n, n × (u16 word, u16 line)
+line table:          per function a u32 offset to: u16 file (string id of its name, without the folders), u16 n, n × (u16 word, u16 line)
 ```
 
 Everything is little endian. Variable types: 0 void, 1 bool, 2 int, 3 fix, 4 name, 5 text

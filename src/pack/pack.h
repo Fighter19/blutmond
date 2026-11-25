@@ -45,6 +45,7 @@ enum {
   BM_CHUNK_MIGR = BM_FOURCC('M', 'I', 'G', 'R'),   // save layouts of earlier versions (src/world/state.h)
   BM_CHUNK_FIGR = BM_FOURCC('F', 'I', 'G', 'R'),   // a figure: sprites in layers (src/world/figure.h)
   BM_CHUNK_LITE = BM_FOURCC('L', 'I', 'T', 'E'),   // the light of a room (src/world/light.h)
+  BM_CHUNK_CCOR = BM_FOURCC('C', 'C', 'O', 'R'),   // a colour correction for a screen (src/graphics/public/color.h)
 };
 
 /// Storage layout (header flags bits 0-3), docs/spec/pack-format.md §2.6.

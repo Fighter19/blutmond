@@ -505,6 +505,15 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
       a->currentSlot = slot;
     }
     break;
+  case BM_SCRIPT_API_color_correction:
+    *result = bmGameColorCorrection(g);
+    break;
+  case BM_SCRIPT_API_set_color_correction:
+    bmGameSetColorCorrection(g, args[0] != 0);
+    break;
+  case BM_SCRIPT_API_has_color_correction:
+    *result = g->colorCorrectable;
+    break;
   case BM_SCRIPT_API_language_count:
     *result = bmTextLanguageCount(g->pPack);
     break;

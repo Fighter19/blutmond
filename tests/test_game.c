@@ -953,6 +953,67 @@ static bool uiShows(const char *text)
   return false;
 }
 
+// The colour correction (pack-format.md §3.3): the pack holds the AGB-001's; on the PC the
+// original colours are the default; switched on, every colour the game wrote is corrected in
+// palette memory, the choice is kept as an option, and switched off the colours come back as
+// they were. The System menu switches it on its last row.
+static void testColourCorrection(void)
+{
+  start();
+  int32_t chunk = bmPackFindChunk(&s_pack, BM_CHUNK_CCOR, 0);
+  uint32_t size = 0;
+  const uint8_t *p = chunk >= 0 ? bmPackChunkData(&s_pack, (uint32_t)chunk, &size) : NULL;
+  TEST_ASSERT(p != NULL && size == 4 + sizeof(BmColorCorrection) && p[0] == 1 && p[1] == 1);
+  BmColorCorrection cc;
+  memcpy(&cc, p + 4, sizeof(cc));
+  for (int row = 0; row < 3; row++) TEST_ASSERT(cc.matrix[row * 3] + cc.matrix[row * 3 + 1] + cc.matrix[row * 3 + 2] == 4096);
+  TEST_ASSERT(bmColorCorrect(&cc, 0) == 0 && bmColorCorrect(&cc, 0x7FFF) == 0x7FFF);
+  TEST_ASSERT(bmColorCorrect(&cc, bmColorRGB(16, 16, 16).color) == bmColorRGB(23, 23, 23).color);   // greys stay grey, brighter
+  TEST_ASSERT(bmColorCorrect(&cc, bmColorRGB(31, 0, 0).color) == bmColorRGB(31, 0, 0).color);
+  TEST_ASSERT(bmColorCorrect(&cc, bmColorRGB(0, 0, 31).color) == bmColorRGB(16, 0, 31).color);
+
+  TEST_ASSERT(s_game.colorCorrectable && s_game.colorChoice == 0 && !bmGameColorCorrection(&s_game));   // the PC
+  frames(2, 0);
+  static uint16_t before[BM_HAL_PALETTE_SIZE];
+  memcpy(before, bmHalHostGetPpu()->palette, sizeof(before));
+  bmGameSetColorCorrection(&s_game, true);
+  TEST_ASSERT(bmGameColorCorrection(&s_game) && s_game.colorChoice == 1);
+  const uint16_t *now = bmHalHostGetPpu()->palette;
+  uint32_t changed = 0;
+  for (int i = 1; i < 16; i++) TEST_ASSERT(now[i] == bmColorCorrect(&cc, before[i]));   // the room's first bank
+  for (int i = 1; i < 14; i++) TEST_ASSERT(now[BM_UI_PALETTE_BANK * 16 + i] == bmColorCorrect(&cc, before[BM_UI_PALETTE_BANK * 16 + i]));
+  for (int i = 0; i < BM_HAL_PALETTE_SIZE; i++) changed += now[i] != before[i];
+  printf("    %u colours corrected\n", (unsigned)changed);
+  TEST_ASSERT(changed > 50);
+  // Kept as an option.
+  bmGameStart(&s_game, &s_pack, NULL);
+  TEST_ASSERT(s_game.colorChoice == 1 && bmGameColorCorrection(&s_game));
+  bmGameSetColorCorrection(&s_game, false);
+  TEST_ASSERT(s_game.colorChoice == 2 && !bmGameColorCorrection(&s_game));
+  bmGameStart(&s_game, &s_pack, NULL);
+  TEST_ASSERT(s_game.colorChoice == 2);
+  frames(2, 0);
+  TEST_ASSERT(memcmp(before, bmHalHostGetPpu()->palette, sizeof(before)) == 0);
+
+  // The System menu (Start, down to below Map, A): below the languages the colours' row.
+  press(BM_KEY_START);
+  for (int i = 0; i < 4; i++) press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Language") && uiShows("PC colours"));
+  for (int i = 0; i < bmTextLanguageCount(&s_pack); i++) press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(bmGameColorCorrection(&s_game) && uiShows("GBA colours") && !uiShows("PC colours"));
+  TEST_ASSERT(bmHalHostGetPpu()->palette[1] == bmColorCorrect(&cc, before[1]));
+  press(BM_KEY_A);
+  TEST_ASSERT(!bmGameColorCorrection(&s_game) && uiShows("PC colours") && s_game.language == 0);
+  press(BM_KEY_B);
+  press(BM_KEY_B);
+  TEST_ASSERT(s_game.screens.count == 0);
+  // Not chosen again, for the other tests.
+  s_game.colorChoice = 0;
+  bmGameSetLanguage(&s_game, 0);
+}
+
 // ui.md steps 3 and 4, first-items.md step 3: the Start menu (a Screen script) pauses the room;
 // Equipment puts the Iron Helm on, whose script adds its defence while worn, and the damage
 // rule takes it off a hit; Items uses a potion; System switches the language and every open
@@ -3180,6 +3241,7 @@ int main(int argc, char **argv)
   RUN_TEST(testWaitingForARoom);
   RUN_TEST(testDialogueScrolls);
   RUN_TEST(testTheTorchHalls);
+  RUN_TEST(testColourCorrection);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

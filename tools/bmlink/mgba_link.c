@@ -246,6 +246,31 @@ bool bmMgbaLinkCheck(BmMgbaLink *l, const char *spec)
   return ok;
 }
 
+bool bmMgbaLinkPoke(BmMgbaLink *l, const char *spec)
+{
+  char buf[512];
+  snprintf(buf, sizeof(buf), "%s", spec);
+  char *colon = strrchr(buf, ':'), *eq = colon ? strchr(colon, '=') : NULL;
+  if (colon == NULL || eq == NULL) return false;
+  *colon = 0;
+  *eq = 0;
+  char *plus = strchr(colon + 1, '+');
+  uint32_t offset = 0;
+  if (plus)
+  {
+    *plus = 0;
+    offset = (uint32_t)strtoul(plus + 1, NULL, 0);
+  }
+  uint32_t address = elfSymbol(buf, colon + 1);
+  if (address == 0)
+  {
+    fprintf(stderr, "%s: no symbol %s\n", buf, colon + 1);
+    return false;
+  }
+  l->core->busWrite8(l->core, address + offset, (uint8_t)strtoul(eq + 1, NULL, 0));
+  return true;
+}
+
 bool bmMgbaLinkReached(BmMgbaLink *l, const char *spec)
 {
   char buf[512];

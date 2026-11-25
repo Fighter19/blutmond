@@ -2290,7 +2290,10 @@ static std::vector<uint8_t> writeModule(const std::vector<Class> &classes, const
   for (size_t i = 0; i < fns.size(); i++)
   {
     set32(b, lineOffsets + i * 4, uint32_t(b.size()));
-    put16(b, stringId(classes[classOf(*fns[i])].info.file));
+    // The file's name, not its path: the same pack wherever the sources lie, and no bytes for
+    // folders (the native code's #line keeps the whole path for GDB).
+    const std::string &file = classes[classOf(*fns[i])].info.file;
+    put16(b, stringId(file.substr(file.find_last_of("/\\") == std::string::npos ? 0 : file.find_last_of("/\\") + 1)));
     put16(b, uint32_t(fns[i]->lines.size()));
     for (const auto &[w, line] : fns[i]->lines)
     {

@@ -25,6 +25,8 @@ void bmMgbaLinkRunFrames(BmMgbaLink *pLink, uint32_t frames);
 
 /// "<elf>:<symbol>[+offset]=<value>" or "<=" or no value (print). False on a mismatch.
 bool bmMgbaLinkCheck(BmMgbaLink *pLink, const char *pSpec);
+/// Writes a byte into the program's memory: "<elf>:<symbol>[+offset]=<value>".
+bool bmMgbaLinkPoke(BmMgbaLink *pLink, const char *pSpec);
 /// "<elf>:<symbol>[+offset]=<value>": true once the value in memory is at least that.
 bool bmMgbaLinkReached(BmMgbaLink *pLink, const char *pSpec);
 bool bmMgbaLinkScreenshot(BmMgbaLink *pLink, const char *pPath);

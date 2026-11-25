@@ -33,6 +33,18 @@ const char *bmHalPlatformName(void);
 /// platform have size 0.
 void bmHalGetMemoryRanges(BmHalMemoryRange *pRanges, uint32_t count);
 
+/// The screen the game is shown on, as far as it can be told (bmHalScreen).
+typedef enum BmHalScreen {
+  BM_HAL_SCREEN_GBA = 0,        // a GBA's own screen: an AGB-001 or a GBA SP (they cannot be told apart)
+  BM_HAL_SCREEN_DS = 1,         // a Nintendo DS in GBA mode (its BIOS checksum)
+  BM_HAL_SCREEN_EMULATOR = 2,   // an emulator that makes itself known (mGBA, no$gba)
+  BM_HAL_SCREEN_PC = 3,         // the host back end: the PC, the browser, the editor
+} BmHalScreen;
+
+/// Which screen the game runs on; the default of the colour correction follows it (only a
+/// GBA's own screen gets the corrected colours unless the player chooses).
+BmHalScreen bmHalScreen(void);
+
 /// Switches the display on in a known state: mode 0, all layers off, so only the backdrop
 /// colour (BG palette entry 0) is visible.
 void bmHalVideoInit(void);

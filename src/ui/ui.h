@@ -89,6 +89,9 @@ static inline BmUiArg bmUiTextArg(uint16_t stringId)
   return a;
 }
 
+/// Loads the UI's colours into its palette bank (again: the colour correction changed).
+void bmUiLoadPalette(void);
+
 /// Finds the font named `fontName` (NULL: the first one in the pack; all its FONT chunks), puts
 /// the frame and gauge tiles into character block 2 and the UI palette into bank 15, and sets
 /// up background 3 (hidden, empty). Call after the video was set up (bmVideoInit). Without the

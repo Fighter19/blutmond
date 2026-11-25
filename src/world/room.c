@@ -282,9 +282,8 @@ bool bmRoomAddHole(BmRoom *pRoom, int32_t x, int32_t y, int32_t w, int32_t h)
   return true;
 }
 
-BmResult bmRoomShow(BmRoom *pRoom, int32_t cameraX, int32_t cameraY)
+BmResult bmRoomLoadPalette(const BmRoom *pRoom)
 {
-  // Palettes
   uint32_t size = 0;
   const uint8_t *pal = bmPackChunkData(pRoom->pPack, pRoom->paletteChunk, &size);
   if (pal == NULL || size < 4 || size < 4u + pal[2] * 32u)
@@ -295,6 +294,17 @@ BmResult bmRoomShow(BmRoom *pRoom, int32_t cameraX, int32_t cameraY)
   {
     BmColor c = { bmRead16(pal + 4 + i * 2) };
     bmPaletteLoadBg((uint16_t)(pal[1] * 16u + i), &c, 1);
+  }
+  return BM_SUCCESS;
+}
+
+BmResult bmRoomShow(BmRoom *pRoom, int32_t cameraX, int32_t cameraY)
+{
+  // Palettes
+  uint32_t size = 0;
+  if (bmRoomLoadPalette(pRoom) != BM_SUCCESS)
+  {
+    return BM_ERROR_INVALID_ARGUMENT;
   }
 
   // Tiles (4 bpp) into char block 0 and following.

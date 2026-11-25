@@ -248,6 +248,11 @@ typedef struct BmGame
   // The language texts are shown in (src/ui/text.h): an option kept in the save memory apart
   // from the save game.
   uint8_t language;
+  // The colour correction for the screen (the pack's CCOR chunk; video.h): whether the pack has
+  // one, and the player's choice, kept as an option too (0: none made, the screen decides,
+  // bmHalScreen; 1: corrected; 2: the original colours).
+  bool colorCorrectable;
+  uint8_t colorChoice;
   // Music and sound effects. Not part of the game state yet: a loaded state starts the room's
   // song from its beginning.
   BmSound sound;
@@ -388,6 +393,11 @@ int32_t bmGameMaxHealth(const BmGame *pGame);
 
 /// Shows texts in `language` from now on and keeps it as an option in the save memory.
 void bmGameSetLanguage(BmGame *pGame, uint8_t language);
+
+/// Whether the colours are corrected for the screen now, and the player's choice of it (kept
+/// as an option in the save memory; without a CCOR chunk in the pack the colours stay as drawn).
+bool bmGameColorCorrection(const BmGame *pGame);
+void bmGameSetColorCorrection(BmGame *pGame, bool on);
 
 /// Save game in the save memory: the `save` fields. Loading returns false if there is none
 /// or it was written by a different layout.
