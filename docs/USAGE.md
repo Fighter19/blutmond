@@ -62,7 +62,9 @@ whose light, wavering a little, falls on them (mode palette, dithered; the sky, 
 window give their own light: black in the normal map). A puddle on the road mirrors the lamp,
 the bench and whoever stands over it, the player and a knight on watch by the bench (a `Puddle`
 object, runtime-core.md §12). The knight has a normal map (`tools/make_knight_sprite.py` draws
-it with the knight: each part its shape) and shiny steel.
+it with the knight: each part its shape) and shiny steel. Its music, "night_street", is dark wave in A minor
+(`tools/make_street_music.py`: a saw pad and bass, a pulse arpeggio in the echo, a sine lead
+over the turn; at most 6 voices, so the game's sounds keep two).
 
 **The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): three rooms alike
 but for how their flickering torch lights the walls, side by side for comparing, each behind
