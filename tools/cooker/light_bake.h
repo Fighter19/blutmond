@@ -53,6 +53,15 @@ struct Light
   float ambient = 1;
   float gain = 0.5f;          // the light layer's strength (it adds, the baked mode multiplies)
   bool shadows = true;
+  bool dither = false;          // Palette: levels dithered between neighbours (room property `light_dither`)
+  int levels = LEVELS;          // Palette: levels of light, 2 to 16 (room property `light_levels`)
+  // Palette: the light of each level (0 to 1). Empty: even steps (k / (levels - 1)). With
+  // `light_curve = perceived` even steps of how bright a surface looks (the square root of
+  // ambient + light), so they are finer in the dark, where a step shows most.
+  std::vector<float> levelLight;
+  /// The level for light `tv` at room pixel (x, y): the nearest, or with `dither` the one below
+  /// or above by an ordered 4x4 dither; `pValue` its light.
+  int levelFor(float tv, int x, int y, float *pValue) const;
   // Mode `layer`: what the light layer's 15 values stand for (room property `light_index`):
   // shared (default) a pixel's light for one of a few light directions, scaled per bank;
   // fitted its own light, levels fitted per bank; normals one of 15 directions.

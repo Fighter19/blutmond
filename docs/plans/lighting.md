@@ -20,6 +20,17 @@ too). These three are built only with `BM_LIGHT_EXPERIMENTAL` (CMake option, off
 the runtime's code for them (and the GBA's palette stream) is left out, and so are their halls
 from the packs; the third hall's east door then stays shut.
 
+**Dithering the palettes** (the first hall, `light_dither`, `light_curve = perceived`): with 8
+levels the light steps in rings around the torch. A pixel now takes the level below or above
+its light by an ordered 4x4 dither, so the steps blend. With levels in even steps of light the
+dither shows as dots in the dark, where one step is half as bright again (ambient 0.3 to
+0.44); with levels in even steps of how bright the wall looks (square root of ambient + light,
+a table of 8 bytes in LITE) the dark steps are small and the dots faint. Cost: 850 tiles
+instead of 676 (83 % of the 1024), 67 (colour, level) pairs in 10 banks instead of 59 in 8, and
+about 4,800 more cycles a frame for the two more banks (28,500 in mGBA). More levels do not fit:
+each lit colour takes an entry per level it is used at, and 10 levels need more than 15 banks.
+Two torches would not fit with it (908 tiles without).
+
 **The light layer's values.** The flicker only scales the light, so a pixel needs one number,
 its light at full intensity (`max(0, N·L) × falloff`, with its shadow). `fitted` stores that
 per pixel (direction, distance and shadow merged): smooth, but a tile for nearly every lit

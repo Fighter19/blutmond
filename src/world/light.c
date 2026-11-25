@@ -154,7 +154,12 @@ void bmLightEnterRoom(BmGame *g)
   }
   if (l->mode == BM_LIGHT_PALETTE)
   {
-    if (l->levels < 2 || l->levels > 16 || l->bankCount > 16 || size < LITE_HEAD + (uint32_t)l->bankCount * 16) l->mode = BM_LIGHT_NONE;
+    // Bit 7 of the count: each level's light follows the levels (u8, 255 = 1.0); else even steps.
+    bool curve = (l->levels & 0x80) != 0;
+    l->levels &= 0x7F;
+    uint32_t need = LITE_HEAD + (uint32_t)l->bankCount * 16 + (curve ? l->levels : 0);
+    if (l->levels < 2 || l->levels > 16 || l->bankCount > 16 || size < need) l->mode = BM_LIGHT_NONE;
+    l->pLevelLight = curve ? p + LITE_HEAD + (uint32_t)l->bankCount * 16 : NULL;
     // The banks with lit colours (the others are set once); a level out of range: not lit.
     for (uint32_t i = 0; l->mode != BM_LIGHT_NONE && i < (uint32_t)l->bankCount * 16; i++)
     {
@@ -370,7 +375,8 @@ static void presentPalette(BmGame *g, bool all)
   int32_t lr = l->red * 256 / 31, lg = l->green * 256 / 31, lb = l->blue * 256 / 31;
   for (uint8_t k = 0; k < l->levels; k++)
   {
-    int32_t t = step * k >> 8;   // 256 = 1.0
+    // 256 = 1.0: even steps, or the room's own light per level (`light_curve`).
+    int32_t t = l->pLevelLight != NULL ? (l->now * l->pLevelLight[k] * 257) >> 16 : step * k >> 8;
     fac[k * 3] = (int16_t)clamp256(l->ambient + (t * lr >> 8));
     fac[k * 3 + 1] = (int16_t)clamp256(l->ambient + (t * lg >> 8));
     fac[k * 3 + 2] = (int16_t)clamp256(l->ambient + (t * lb >> 8));

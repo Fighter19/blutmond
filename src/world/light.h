@@ -30,6 +30,7 @@ typedef struct BmLight
 {
   uint8_t mode;              // BM_LIGHT_*
   const uint8_t *pLite;      // the LITE chunk's data
+  const uint8_t *pLevelLight; // palette: each level's light (255 = 1.0), NULL: even steps
   uint32_t liteSize;
   int16_t x, y;              // room pixels (the first light)
   int16_t sx[4], sy[4];      // every light, the first one included

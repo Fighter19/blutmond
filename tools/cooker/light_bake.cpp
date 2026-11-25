@@ -107,6 +107,19 @@ Light find(const tmx::Map &map, Report &report)
     l.streamNormals = count == 15 || (count >= 3 && count <= 7) ? count : 7;
     if (l.streamNormals != count) report.error("lighting", map.path, "light_normals is 3 to 7, or 15");
   }
+  l.dither = map.property("light_dither", "false") == "true";
+  l.levels = std::clamp(std::atoi(map.property("light_levels", "8").c_str()), 2, 16);
+  std::string curve = map.property("light_curve", "linear");
+  if (curve == "perceived")
+  {
+    float lo = std::sqrt(l.ambient), hi = std::sqrt(l.ambient + 1.0f);
+    for (int k = 0; k < l.levels; k++)
+    {
+      float s = lo + (hi - lo) * float(k) / float(l.levels - 1);
+      l.levelLight.push_back(std::clamp(s * s - l.ambient, 0.0f, 1.0f));
+    }
+  }
+  else if (curve != "linear") report.error("lighting", map.path, "unknown light_curve '" + curve + "' (linear, perceived)");
   std::string bands = map.property("light_bands", "middle");
   if (bands == "mean") l.bands = Light::Bands::Mean;
   else if (bands == "ramp") l.bands = Light::Bands::Ramp;
@@ -116,6 +129,22 @@ Light find(const tmx::Map &map, Report &report)
   l.directions = std::clamp(std::atoi(map.property("light_directions", "8").c_str()), 1, 64);
   l.tolerance = std::clamp(float(std::atof(map.property("light_tolerance", "0.1").c_str())), 0.0f, 1.0f);
   return l;
+}
+
+int Light::levelFor(float tv, int x, int y, float *pValue) const
+{
+  auto valueOf = [&](int k) { return levelLight.empty() ? float(k) / float(levels - 1) : levelLight[size_t(k)]; };
+  // The levels around tv and how far between them it is.
+  int below = 0;
+  while (below + 1 < levels && valueOf(below + 1) <= tv) below++;
+  int above = std::min(below + 1, levels - 1);
+  float span = valueOf(above) - valueOf(below);
+  float f = span > 0 ? std::clamp((tv - valueOf(below)) / span, 0.0f, 1.0f) : 0.0f;
+  static const uint8_t bayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+  float threshold = dither ? (float(bayer[(y & 3) * 4 + (x & 3)]) + 0.5f) / 16.0f : 0.5f;
+  int k = f >= threshold ? above : below;
+  if (pValue) *pValue = valueOf(k);
+  return k;
 }
 
 float falloff(const Light &light, float d2)

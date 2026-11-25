@@ -612,8 +612,11 @@ void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const 
                     apartKey[size_t(py * 8 + px)] = key;
                     area.apartEntries.insert(key);
                   }
-                  int level = std::clamp(int(std::lround(tv * float(light::LEVELS - 1))), 0, light::LEVELS - 1);
-                  area.litError += std::abs(double(tv) - double(level) / double(light::LEVELS - 1));
+                  // The level: the nearest, or with `light_dither` the one below or above by an
+                  // ordered 4x4 dither of the room pixel (so the steps between levels blend).
+                  float value = 0;
+                  int level = lightOf.levelFor(tv, wx, wy, &value);
+                  area.litError += std::abs(double(tv) - double(value));
                   area.litPixels++;
                   c = area.litColour(c, level);
                 }
@@ -1016,7 +1019,8 @@ void lightSources(Bytes &b, const light::Light &l)
 Bytes paletteLightChunk(const RoomWork &room, const AreaWork &area, Report &report)
 {
   Bytes b;
-  lightHead(b, room.light, light::LEVELS, 0, uint32_t(area.banks.size()));
+  // Bit 7 of the count: the light of each level follows the levels (u8, 255 = 1.0).
+  lightHead(b, room.light, uint32_t(room.light.levels) | (room.light.levelLight.empty() ? 0u : 0x80u), 0, uint32_t(area.banks.size()));
   size_t lit = 0;
   for (const auto &bank : area.banks)
     for (int i = 0; i < 16; i++)
@@ -1025,6 +1029,8 @@ Bytes paletteLightChunk(const RoomWork &room, const AreaWork &area, Report &repo
       lit += level != 0;
       b.u8(level);
     }
+  for (float v : room.light.levelLight) b.u8(uint32_t(std::lround(std::clamp(v, 0.0f, 1.0f) * 255)));
+  while (b.data.size() % 2) b.u8(0);
   report.info("lighting", room.map->path, "baked into the palettes: " + std::to_string(area.lit.size()) + " (colour, light level) pairs, " +
               std::to_string(area.uniqueTiles.size()) + " tiles, " + std::to_string(area.banks.size()) + " banks, mean error " +
               std::to_string(area.litPixels ? area.litError / double(area.litPixels) : 0.0));

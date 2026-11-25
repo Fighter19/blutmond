@@ -278,7 +278,8 @@ def main():
     draw_torch(out)
     write_room(os.path.join(out, "torch_hall.tmx"), "torch_hall", "Torch hall: palettes", "palette",
                [door("exit_west", 0, "debug_lobby", "to_torch_hall", "west"),
-                door("exit_east", W * T - 16, "torch_hall_layer", "exit_west", "east")], rows)
+                door("exit_east", W * T - 16, "torch_hall_layer", "exit_west", "east")], rows,
+               extra=[("light_curve", "perceived"), ("light_dither", "true")])
     write_room(os.path.join(out, "torch_hall_layer.tmx"), "torch_hall_layer", "Torch hall: light layer", "layer",
                [door("exit_west", 0, "torch_hall", "exit_east", "west"),
                 door("exit_east", W * T - 16, "torch_hall_fitted", "exit_west", "east")], rows)

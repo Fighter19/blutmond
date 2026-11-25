@@ -58,6 +58,9 @@ Map-level custom properties:
 | `muffle` | int | preset's | a low pass over everything heard: 0 none - 255 most |
 | `lighting` | string | `palette` | how the room's `Light` object lights its tiles: `palette` (baked into the room's colours) or `layer` (a light layer added over the room) (below) |
 | `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
+| `light_levels` | int | 8 | with `lighting = palette`: levels of light, 2 to 16 (each lit colour takes a palette entry per level it is used at: more than 9 hardly fit) |
+| `light_curve` | string | `linear` | with `lighting = palette`: the levels' light in even steps (`linear`) or in even steps of how bright a surface looks, the square root of ambient + light (`perceived`): finer in the dark, where a step shows most |
+| `light_dither` | bool | false | with `lighting = palette`: a pixel takes the level below or above its light by an ordered 4x4 dither (of its room position) instead of the nearest, so the steps between levels blend; lit tiles repeat less (the test level's palette hall: 850 tiles instead of 676) |
 | `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light), `normals` (directions), `stream` (directions, the light streamed line by line) or `hybrid` (as `stream`, only near the lights) (below; the last three are lit only by a runtime built with `BM_LIGHT_EXPERIMENTAL`) |
 | `light_normals` | int | 7 | with `light_index = stream` or `hybrid`: 15, or 3 to 7 directions (flat bands: 15 / normals bands a bank) |
 | `light_bands` | string | `middle` | with `light_index = stream` or `hybrid`: a band's colours are the light at its `middle` column, its `mean` across the band, or a `ramp` across it (one band a bank, samples per normal; needs 3 to 7 normals) |
@@ -542,6 +545,8 @@ little endian; offsets are from the start of the chunk.
         u8  more;                         // lights after the first: their s16 x, y at the chunk's end
         u8  0;                            // 20 bytes
         palette: u8 level[bank_count * 16]           // per palette entry, 0 = ambient only
+                 u8 light[levels], padded to 2        // count bit 7: each level's light (255 = 1.0),
+                                                      // else level / (levels - 1)
         layer:   { s8 x, y, z; u8 0; } normal[15]    // 127 = 1.0
                  { s16 x, y, z; u16 0; } region[bank_count]   // falloff × direction, 4096 = 1.0
         fitted:  u16 level[bank_count][15]           // 4096 = 1.0
@@ -604,4 +609,5 @@ room IDs and song names.
   `normal`, `LITE` (in the place of `ROOM`'s reserved field), the light layer (role 3);
   `light_index` (shared or fitted levels of light, bit 7 of `LITE`'s count), `light_directions`;
   `light_index = stream` (bit 6), `light_normals`, `light_band`; `light_index = hybrid` (bit 5),
-  `light_stream_banks`; `light_bands`, `light_normals` 3 to 7.
+  `light_stream_banks`; `light_bands`, `light_normals` 3 to 7; `light_levels`, `light_curve`
+  (bit 7 of `LITE`'s count in mode palette: a light per level), `light_dither`.
