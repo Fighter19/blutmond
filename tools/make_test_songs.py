@@ -165,6 +165,13 @@ def hits_and_fanfare(out):
     song(os.path.join(out, "hit_dummy.bmsong"), 'bpm="150" length="10" ' + effect, [
         'name="knock" wave="triangle" attack="0" decay="2" sustain="0" release="1" volume="200" pan="0"',
     ], [("knock", "knock", [(0, 67, 2, 120), (2, 60, 2, 100)])])
+    # A step in a puddle (reflect.h): a short hiss of water and a small falling plip, at most two
+    # voices and over in a sixth of a second (steps come every few frames; the game plays it
+    # only over nothing or another splash, never over a hit).
+    song(os.path.join(out, "splash.bmsong"), 'bpm="150" length="10" ' + effect, [
+        'name="water" wave="noise" attack="0" decay="5" sustain="0" release="2" volume="90" pan="0"',
+        'name="plip" wave="sine" attack="0" decay="4" sustain="0" release="1" volume="70" pan="0"',
+    ], [("water", "water", [(0, 88, 2, 110), (3, 80, 2, 70)]), ("plip", "plip", [(1, 84, 1, 100), (2, 79, 2, 80)])])
     # An item picked up: a bright rising arpeggio.
     song(os.path.join(out, "pickup.bmsong"), 'bpm="150" length="24" ' + effect, [
         'name="chime" wave="pulse25" attack="0" decay="6" sustain="40" release="4" volume="120" pan="0"',

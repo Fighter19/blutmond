@@ -939,10 +939,24 @@ puddle are drawn a second time, mirrored in the water line and squeezed by the s
 the pieces of their sprites as semi-transparent affine sprites (matrix 31 facing right, 30
 facing left; the doors use 0 to 29) at priority 2, behind the room's main layer, so only the
 puddle shows them. They are lit as the figure they mirror (the same banks). While a room effect or
-a teleport uses the line tables the mirror is hidden. The multiboot images have no puddles
-(light_off.c). On the GBA the rural street takes about 161 lines of a frame with the knight in the
-lamp's light and the palette cache (179 shading every frame): three sprite banks lit, about
-35,000 cycles.
+a teleport uses the line tables the mirror is hidden. The lines outside the puddle are written
+only when the camera moved; the puddle's every frame (the ripple).
+
+**Splashes** (`bmReflectSplashes`, after the hits): the player on the ground in the puddle (its
+x more than 2 pixels inside, its feet within a pixel above to 2 below the water line) splashes
+every 10th frame (`frame % 10 == 0`) while its speed is at least 0.5 pixels a frame, 3 pixels
+behind it, and twice on landing in it (5 pixels either side); an object that moved along this
+frame (its x before the room's attachments and objects ran, and after) every 14th (`(frame + 5 ×
+index) % 14 == 0`) at its x. A splash: the effect of the sprite `splash` at the water line, and
+the effect sound `splash` `frame × 7 % 5 - 2` semitones off (`bmSoundPlayEffectAt`), only while
+no effect sounds or another splash does: a splash never cuts off a hit, a pickup or a jump.
+
+The multiboot images have no puddles (light_off.c). Measured on the GBA (mGBA, a build with
+BM_PROFILE: game.c's `bm_frame_profile`, the cycles of each part of the frame) in the rural
+street: about 116 lines of a frame standing with the knight out of sight, 139 by the knight in a
+fight, 162 running through the puddle (sound about 47,000 to 61,000 cycles, the light 20,000 to
+38,000, the sprites 20,000 to 34,000, the room's two scripts about 16,000, the knight's 15,000,
+the mirror 10,500).
 
 **Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has
 it and the player has none (the menu does not open then). The test level's mirror teleports to

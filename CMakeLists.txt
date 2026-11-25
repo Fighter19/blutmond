@@ -103,6 +103,8 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/torch.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/threat.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bench.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/splash.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/test_room/music/splash.bmsong
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata
@@ -305,7 +307,7 @@ if(BM_PLATFORM STREQUAL "gba")
     --absent-room debug_pulse --absent-room debug_gradient --absent-room boss_hall --absent-room ability_hall
     --absent-asset vesper --absent-asset moon_bat --absent-asset vesper_face --absent-asset voice_vesper
     --absent-asset fireball --absent-room guard_room --absent-asset knight --absent-asset bat_armour --absent-asset clang
-    --absent-asset torch --absent-asset night_escape
+    --absent-asset torch --absent-asset night_escape --absent-asset splash
     --absent-kind LANG --absent-kind MIGR)
   # The torch halls (docs/plans/lighting.md) and the rural street are not in it at all, not even
   # as absent entries: the multiboot images have no light and no puddles (light_off.c), and these

@@ -3415,6 +3415,95 @@ static void testTheStreetsBenchIsForResting(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// Water underfoot (reflect.h, bmReflectSplashes): running across the street's puddle throws
+// up splashes (the sprite and the sound "splash"), standing in it does not; the knight walking
+// in it splashes too; a splash never cuts off another effect (a pickup's), and the music plays
+// on with them, within the voices.
+static int splashesShown(void)
+{
+  int n = 0;
+  for (int k = 0; k < BM_GAME_EFFECTS; k++) n += s_game.effectAge[k] != 0 && s_game.effectSheet[k] == s_game.splashSheet;
+  return n;
+}
+
+static void testPuddlesSplash(void)
+{
+  startWith(s_data, s_size, "rural_street");
+  frames(5, 0);
+  TEST_ASSERT(s_game.reflect.on && s_game.splashSheet >= 0);
+  int knight = actorOfClass("Knight");
+  TEST_ASSERT(knight >= 0);
+  s_game.actors.gone[knight] = 1;   // the player alone first
+  s_game.actors.hidden[knight] = 1;
+  // Standing in it: nothing.
+  bmBodyPlace(&s_game.player, 270, 128);
+  frames(40, 0);
+  TEST_ASSERT(splashesShown() == 0 && strcmp(effectPlaying(), "splash") != 0);
+  // Running across it: splashes, seen and heard, the music on meanwhile.
+  int seen = 0, heard = 0, musicVoices = 99;
+  bool shot = false;
+  for (int f = 0; f < 40; f++)
+  {
+    frames(1, BM_KEY_RIGHT);
+    if (!shot && splashesShown() >= 2 && s_outDir != NULL)
+    {
+      // A picture with the splashes (after the frame they reach the screen in).
+      frames(2, BM_KEY_RIGHT);
+      int8_t bank = bmGameSheetBank(&s_game, s_game.splashSheet, 0);
+      printf("    splash bank %d, colour 1 %04x\n", bank, bank >= 0 ? bmHalHostGetPpu()->palette[256 + bank * 16 + 1] : 0);
+      shot = true;
+      uint16_t pic[BM_PPU_WIDTH * BM_PPU_HEIGHT];
+      bmHalHostRender(pic);
+      char path[512];
+      snprintf(path, sizeof(path), "%s/rural_street_splash.ppm", s_outDir);
+      FILE *f2 = fopen(path, "wb");
+      if (f2 != NULL)
+      {
+        fprintf(f2, "P6\n%d %d\n255\n", BM_PPU_WIDTH, BM_PPU_HEIGHT);
+        for (int i = 0; i < BM_PPU_WIDTH * BM_PPU_HEIGHT; i++)
+          for (int k = 0; k < 3; k++)
+          {
+            uint8_t v = (uint8_t)((pic[i] >> (5 * k)) & 31);
+            fputc((v << 3) | (v >> 2), f2);
+          }
+        fclose(f2);
+      }
+    }
+    seen = splashesShown() > seen ? splashesShown() : seen;
+    heard += strcmp(effectPlaying(), "splash") == 0;
+    int m = 0;
+    for (int v = 0; v < BM_SOUND_VOICES; v++) m += s_game.sound.voices[v].active && s_game.sound.voices[v].owner == 0;
+    if (m < musicVoices) musicVoices = m;
+  }
+  printf("    running in the puddle: %d splashes at once, heard in %d frames, music on %d voices at least\n", seen, heard, musicVoices);
+  TEST_ASSERT(seen >= 2 && heard >= 10 && s_game.sound.players[0].playing && musicVoices >= 1);
+  TEST_ASSERT(s_game.sound.voicesPeak <= BM_SOUND_VOICES);
+  // Another effect sounding: the splashes leave it be.
+  bmBodyPlace(&s_game.player, 270, 128);
+  frames(20, 0);
+  TEST_ASSERT(bmSoundPlayEffect(&s_game.sound, "pickup"));
+  for (int f = 0; f < 12; f++)
+  {
+    frames(1, BM_KEY_RIGHT);
+    TEST_ASSERT(strcmp(effectPlaying(), "pickup") == 0);
+  }
+  // The knight walking in it (towards the player): its splashes.
+  startWith(s_data, s_size, "rural_street");
+  frames(5, 0);
+  knight = actorOfClass("Knight");
+  bmBodyPlace(&s_game.player, 280, 128);   // in its sight (96), out of its reach
+  int knightSplashes = 0;
+  int32_t kx = s_game.actors.x[knight];
+  for (int f = 0; f < 60; f++)
+  {
+    frames(1, 0);
+    knightSplashes += splashesShown() > 0;
+  }
+  printf("    the knight walked %d px, splashes shown in %d frames\n", (int)BM_FIX_INT(kx - s_game.actors.x[knight]), knightSplashes);
+  TEST_ASSERT(s_game.actors.x[knight] < kx && knightSplashes > 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 static void testThePuddleMirrorsTheStreet(void)
 {
   startWith(s_data, s_size, "rural_street");
@@ -3505,6 +3594,7 @@ int main(int argc, char **argv)
   RUN_TEST(testThePuddleMirrorsTheStreet);
   RUN_TEST(testTheStreetsMusicFollowsThePlayer);
   RUN_TEST(testTheStreetsBenchIsForResting);
+  RUN_TEST(testPuddlesSplash);
   RUN_TEST(testColourCorrection);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);

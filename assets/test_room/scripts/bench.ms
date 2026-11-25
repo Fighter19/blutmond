@@ -41,11 +41,14 @@ event tick() {
       restore_mana(max_mana());
       save_game();
       play_sound(#pickup);
+      Health = player_health();
     }
-  } else if held(#Left) || held(#Right) || held(#Down) || held(#Jump) || !on_ground() || player_health() < Health {
-    stand();
+  } else {
+    // (Only while sitting: what gets the player up.)
+    var int health = player_health();
+    if held(#Left) || held(#Right) || held(#Down) || held(#Jump) || !on_ground() || health < Health { stand(); }
+    Health = health;
   }
   UpBefore = 0;
   if up { UpBefore = 1; }
-  Health = player_health();
 }

@@ -33,7 +33,8 @@ Most of this document is the design. Built so far (`src/link/live.h`,
   names but the songs, the languages and the save game's history (`MIGR`, only for loading a
   save of an earlier version) (if these do not fit, the push fails); the room
   asked for and what it names (bmlink: the room of `restart:ID`; one GBA sending to another:
-  the room it is in), room 0, and the rooms a door of either leads to (an object's
+  the room it is in), the rooms the runtime has that a door of it leads from (the one it stands
+  in, going through that door: a room asked for keeps the game in its room until then), room 0, and the rooms a door of either leads to (an object's
   `target_room`); then the songs (a song left out is silence); then the other rooms nearest
   through doors first, then those no door leads to, each whole where it fits; then the
   languages and the save game's history. What a room names: its maps, collision, objects, area and layers, and its light

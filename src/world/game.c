@@ -417,6 +417,7 @@ static void loadSprites(BmGame *g)
   g->playerSheet = -1;
   g->sparkSheet = -1;
   g->debrisSheet = -1;
+  g->splashSheet = -1;
   for (uint32_t n = 0; g->sheetCount < BM_GAME_MAX_SHEETS; n++)
   {
     int32_t chunk = bmSpriteSheetChunk(g->pPack, n);
@@ -427,6 +428,7 @@ static void loadSprites(BmGame *g)
     const char *name = bmPackString(g->pPack, s->nameId);
     if (name != NULL && strcmp(name, "spark") == 0) g->sparkSheet = (int8_t)g->sheetCount;
     if (name != NULL && strcmp(name, "debris") == 0) g->debrisSheet = (int8_t)g->sheetCount;
+    if (name != NULL && strcmp(name, "splash") == 0) g->splashSheet = (int8_t)g->sheetCount;
     g->sheetCount++;
   }
   findPlayer(g);
@@ -977,8 +979,15 @@ static void preloadSprites(BmGame *g)
   for (uint8_t k = 0; k < n; k++) bmGameSheetBank(g, sheets[k], palettes[k]);
 }
 
+#ifdef BM_PROFILE
+extern uint32_t bm_frame_profile[16];
+#endif
+
 static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
 {
+#ifdef BM_PROFILE
+  memset(bm_frame_profile, 0, sizeof(bm_frame_profile));   // each room measured on its own
+#endif
   // A pack pushed over the link: the UI's font is somewhere else now.
   if (g->ui.ready && g->ui.pPackData != g->pPack->pData) bmUiRebind(&g->ui, g->pPack);
   // The room being left takes its attachments with it (they get detached() while it is
@@ -1214,6 +1223,11 @@ void bmGameSpark(BmGame *g, int32_t x, int32_t y)
 void bmGameEffect(BmGame *g, uint16_t name, int32_t x, int32_t y)
 {
   effectAt(g, sheetNamed(g, name), x, y);
+}
+
+void bmGameEffectSheet(BmGame *g, int8_t sheet, int32_t x, int32_t y)
+{
+  effectAt(g, sheet, x, y);
 }
 
 // --- Breakable walls and floors -------------------------------------------------------------
@@ -1657,8 +1671,30 @@ bool bmGameStrikePlayerWith(BmGame *g, int32_t amount, int32_t fromX, uint8_t el
   return true;
 }
 
+// Profiling (a build with BM_PROFILE only): cycles of each part of the frame, summed over
+// frames; [0] the whole frame's most. Read with the debugger or bmlink's `check`.
+#ifdef BM_PROFILE
+uint32_t bm_frame_profile[16] BM_EWRAM_BSS;
+static uint32_t s_profileAt;
+#  define PROFILE_START() (s_profileAt = bmHalCycles())
+#  define PROFILE(n)                                     \
+    do                                                   \
+    {                                                    \
+      uint32_t now_ = bmHalCycles();                     \
+      bm_frame_profile[(n)] += now_ - s_profileAt;       \
+      s_profileAt = now_;                                \
+    } while (0)
+#else
+#  define PROFILE_START() ((void)0)
+#  define PROFILE(n) ((void)0)
+#endif
+
 void bmGameFrame(BmGame *g, uint16_t keys)
 {
+#ifdef BM_PROFILE
+  uint32_t frameStart = bmHalCycles();
+#endif
+  PROFILE_START();
   g->frame++;
   uint16_t previous = g->keysPrevious;
   uint16_t pressed = (uint16_t)(keys & ~previous);
@@ -1826,7 +1862,9 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   // A command (commands.h) takes its button: the attachments do not see it pressed.
   uint16_t taken = g->dialogue == 0 ? bmCommandsFrame(g, keys, previous) : 0;
   // Attachments first: what they decide this frame moves the player this frame.
+  PROFILE(1);
   bmAttachmentsFrame(g, keys, (uint16_t)(previous | taken));
+  PROFILE(2);
   // A lock (a swing) takes walking and jumping away; set this frame, it already counts.
   bool keepFacing = false;
   int8_t facing = g->player.facing;
@@ -1952,8 +1990,14 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   }
   // The room's attachments, then its scripted objects; a door one of them opened is gone
   // through after all had their turn.
+  PROFILE(3);
+  // Where the objects were (for the splashes in a puddle).
+  int32_t before[BM_ACTORS_MAX];
+  if (g->reflect.on) memcpy(before, g->actors.x, sizeof(before));
   bmAttachmentsRoomFrame(g);
+  PROFILE(4);
   bmActorsFrame(g);
+  PROFILE(5);
   // Objects the engine moves (projectiles).
   bmActorsMove(g);
   // Objects struck earlier are pushed on (after their scripts moved them).
@@ -1991,18 +2035,32 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   animatePlayer(g);
   // Scripts and animations have had their turn: who is struck.
   bmHitsFrame(g);
+  if (g->reflect.on) bmReflectSplashes(g, before, events);
+  PROFILE(6);
   updateCamera(g);
   updateSprites(g);
+  PROFILE(7);
   bmEffectsPresent(g);
+  PROFILE(8);
   bmLightPresent(g);
+  PROFILE(9);
   bmReflectPresent(g);
+  PROFILE(10);
   hudFrame(g);
   bmUiPresent(&g->ui);
+  PROFILE(11);
 
   // This frame's sound; it plays from the next vertical blank.
   int8_t *left, *right;
   bmHalAudioBuffers(&left, &right);
   bmSoundFrame(&g->sound, left, right, BM_HAL_AUDIO_FRAME_SAMPLES);
+  PROFILE(12);
+#ifdef BM_PROFILE
+  uint32_t whole = bmHalCycles() - frameStart;
+  bm_frame_profile[13] += whole;
+  bm_frame_profile[14]++;
+  if (whole > bm_frame_profile[0]) bm_frame_profile[0] = whole;
+#endif
 }
 
 // --- State --------------------------------------------------------------------------------

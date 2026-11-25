@@ -57,3 +57,10 @@ bool bmReflectMirrors(const BmGame *g, int32_t left, int32_t right, int32_t y, i
   (void)pSquash;
   return false;
 }
+
+void bmReflectSplashes(BmGame *g, const int32_t *pBefore, uint32_t events)
+{
+  (void)g;
+  (void)pBefore;
+  (void)events;
+}

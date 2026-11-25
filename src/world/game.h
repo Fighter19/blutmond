@@ -185,6 +185,7 @@ typedef struct BmGame
   uint8_t playerPalettes[BM_FIGURE_MAX_LAYERS];
   int8_t sparkSheet;                           // the sprite "spark" (a blocked hit), or -1
   int8_t debrisSheet;                          // the sprite "debris" (a broken wall), or -1
+  int8_t splashSheet;                          // the sprite "splash" (a step in a puddle), or -1
   // Effects being shown (bmGameSpark, bmGameBreak): their sheet, where, and their age in frames
   // (0: none). Only seen, not state.
   int8_t effectSheet[BM_GAME_EFFECTS];
@@ -293,6 +294,9 @@ void bmGameSpark(BmGame *pGame, int32_t x, int32_t y);
 
 /// The same with the sprite named `name` (a string id): effect(#sprite) of scripts.
 void bmGameEffect(BmGame *pGame, uint16_t name, int32_t x, int32_t y);
+
+/// The same with a sheet (its index, -1: nothing).
+void bmGameEffectSheet(BmGame *pGame, int8_t sheet, int32_t x, int32_t y);
 
 // What breaks a Breakable (its property `by`).
 typedef enum BmBreakBy {

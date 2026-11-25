@@ -156,6 +156,9 @@ typedef struct BmGameStats
   uint32_t inventoryCrc; // CRC-32 over the inventory's keys and amounts (0: empty)
 } BmGameStats;
 BmGameStats bm_game_stats;
+#ifdef BM_PROFILE
+uint32_t bm_profile_keys[2];   // poked: a size (not 0: in use) and the keys held
+#endif
 
 static BmPack s_pack;
 static BmGame s_game BM_EWRAM_BSS;
@@ -460,6 +463,10 @@ static int run(const uint8_t *pData, uint32_t size, uint32_t frames, bool autopl
       continue;
     }
     uint16_t keys = autoplay ? bmAutopilotKeys(&s_pilot, &s_game) : bmHalInputKeys();
+#ifdef BM_PROFILE
+    // Profiling builds: keys from the link (bmlink's poke: a mailbox of a size and the keys).
+    if (bm_profile_keys[0] != 0) keys = (uint16_t)bm_profile_keys[1];
+#endif
 #ifdef BM_PLATFORM_HOST
     if (s_randomKeys != 0)
     {

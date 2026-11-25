@@ -46,6 +46,13 @@ void bmReflectEnterRoom(struct BmGame *pGame);
 /// blend on its lines (or nothing while effects use the line tables).
 void bmReflectPresent(struct BmGame *pGame);
 
+/// Splashes where figures walk in the puddle (after the scripts moved the objects): the player
+/// every 10 frames while running in it and when landing in it (`events`, body.h), an object
+/// every 14 frames while it moves along in it (`pBefore`: the objects' x before their scripts
+/// ran this frame). Each the sprite "splash" at the water line and the sound "splash" (unless
+/// another effect sounds: a splash never cuts off a hit or a pickup, only another splash).
+void bmReflectSplashes(struct BmGame *pGame, const int32_t *pBefore, uint32_t events);
+
 /// Whether something at room x from `left` to `right` and standing at room y could be mirrored;
 /// `pSurface` the water line on screen and `pSquash` the squeeze then.
 bool bmReflectMirrors(const struct BmGame *pGame, int32_t left, int32_t right, int32_t y, int32_t *pSurface, uint8_t *pSquash);

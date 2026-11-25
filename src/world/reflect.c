@@ -6,7 +6,9 @@
 
 #include <string.h>
 
+#include "body.h"
 #include "figure.h"
+#include "sound.h"
 #include "hal.h"
 #include "game.h"
 #include "ppu.h"
@@ -16,6 +18,7 @@
 // The tables (EWRAM: IWRAM is full); a line table keeps its own copy (bmVideoSetLineTable).
 static uint16_t s_scroll[BM_HAL_SCREEN_HEIGHT] BM_EWRAM_BSS;
 static uint16_t s_blend[BM_HAL_SCREEN_HEIGHT] BM_EWRAM_BSS;
+static int32_t s_scrollCamera = -1, s_scrollLayer = -1;   // what the lines outside the puddle were written for
 
 static int32_t number(const char *s, int32_t fallback)
 {
@@ -35,6 +38,7 @@ static void off(BmGame *g)
     r->shown = false;
   }
   r->builtCamera = -1;
+  s_scrollCamera = s_scrollLayer = -1;
 }
 
 void bmReflectEnterRoom(BmGame *g)
@@ -115,18 +119,21 @@ void bmReflectPresent(BmGame *g)
   int32_t ly = (int32_t)(((int64_t)camY * src->parallaxY) >> 8);
   bmBgSetScroll(r->bg, src->scrollX, (int16_t)ly);
   // Line y of the puddle (d lines under the water line) shows the row d × squash above it,
-  // wavering by `ripple` pixels.
-  for (int32_t y = 0; y < BM_HAL_SCREEN_HEIGHT; y++)
+  // wavering by `ripple` pixels. The other lines show the layer's own scroll: written again
+  // only when the camera moved; the puddle's every frame (the ripple).
+  if (camY != s_scrollCamera || ly != s_scrollLayer)
   {
-    int32_t v = ly;
-    if (y >= top && y < bottom)
-    {
-      int32_t d = y - top;
-      int32_t row = r->y - 1 - ((d * r->squash + 8) >> 4);
-      row += (bmAngleSin((uint8_t)(d * 24 + g->frame * 3)) * r->ripple + 128) >> 8;
-      v = ly + (row - camY) - y;
-    }
-    s_scroll[y] = (uint16_t)(v & 0x1FF);
+    for (int32_t y = 0; y < BM_HAL_SCREEN_HEIGHT; y++) s_scroll[y] = (uint16_t)(ly & 0x1FF);
+    s_scrollCamera = camY;
+    s_scrollLayer = ly;
+  }
+  int32_t from = top < 0 ? 0 : top, to = bottom > BM_HAL_SCREEN_HEIGHT ? BM_HAL_SCREEN_HEIGHT : bottom;
+  for (int32_t y = from; y < to; y++)
+  {
+    int32_t d = y - top;
+    int32_t row = r->y - 1 - ((d * r->squash + 8) >> 4);
+    row += (bmAngleSin((uint8_t)(d * 24 + g->frame * 3)) * r->ripple + 128) >> 8;
+    s_scroll[y] = (uint16_t)((ly + (row - camY) - y) & 0x1FF);
   }
   bmVideoSetLineTable(1, (uint16_t)BM_PPU_BGVOFS(r->bg), s_scroll);
   if (camY != r->builtCamera)
@@ -139,4 +146,44 @@ void bmReflectPresent(BmGame *g)
   bmVideoSetLineTable(0, BM_PPU_BLDALPHA, s_blend);
   bmVideoShowBg(r->bg, true);
   r->shown = true;
+}
+
+// A splash at room x on the puddle's water line: the sprite "splash", and the sound "splash"
+// (a little higher or lower each time) unless another effect sounds: a splash never cuts off a
+// hit or a pickup, only another splash.
+static void splash(BmGame *g, int32_t x)
+{
+  bmGameEffectSheet(g, g->splashSheet, x, g->reflect.y);
+  if (!g->sound.players[1].playing || bmSoundEffectIs(&g->sound, "splash"))
+    bmSoundPlayEffectAt(&g->sound, "splash", (int8_t)((int32_t)(g->frame * 7u % 5u) - 2));
+}
+
+// Whether something standing at room (x, y) stands in the puddle.
+static bool inPuddle(const BmGame *g, int32_t x, int32_t y)
+{
+  const BmReflection *r = &g->reflect;
+  return x >= r->x + 2 && x < r->x + r->w - 2 && y >= r->y - 1 && y <= r->y + 2;
+}
+
+void bmReflectSplashes(BmGame *g, const int32_t *pBefore, uint32_t events)
+{
+  if (!g->reflect.on || g->splashSheet < 0) return;
+  int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y);
+  if (g->player.onGround && !g->player.flipped && inPuddle(g, px, py))
+  {
+    int32_t vx = g->player.vx < 0 ? -g->player.vx : g->player.vx;
+    if (events & BM_BODY_LANDED)
+    {
+      splash(g, px - 5);
+      splash(g, px + 5);
+    }
+    else if (vx >= BM_FIX(1) / 2 && g->frame % 10 == 0) splash(g, px + (g->player.facing < 0 ? 3 : -3));
+  }
+  const BmActors *a = &g->actors;
+  for (uint8_t i = 0; i < a->count; i++)
+  {
+    if (a->gone[i] || a->hidden[i] || a->x[i] == pBefore[i] || (g->frame + i * 5u) % 14 != 0) continue;
+    int32_t ax = BM_FIX_INT(a->x[i]);
+    if (inPuddle(g, ax, BM_FIX_INT(a->y[i]))) splash(g, ax);
+  }
 }

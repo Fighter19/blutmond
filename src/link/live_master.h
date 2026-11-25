@@ -39,7 +39,8 @@ bool bmLiveMasterPushPack(BmLinkMaster *pMaster, const uint8_t *pPack, uint32_t 
 /// The same; a pack larger than the runtime takes at all (its poolCapacity; runtime version 5
 /// on) is fitted: it arrives with the full table, but only these chunks keep their bytes, the
 /// rest are left out (BM_PACK_ENTRY_ABSENT, pack-format.md §0): every chunk no room names but
-/// the languages; the room `room` (its number, -1 none) and what it names; room 0; the other
+/// the languages; the room `room` (its number, -1 none) and what it names; the rooms the runtime
+/// has (pRemote) with a door to it (the one it stands in); room 0; the other
 /// rooms in order, each whole where it still fits; then the languages. The game does not enter
 /// a room that is left out; a later push (fitted around another room) brings it.
 bool bmLiveMasterPushPackFor(BmLinkMaster *pMaster, const uint8_t *pPack, uint32_t size, uint32_t transferId,

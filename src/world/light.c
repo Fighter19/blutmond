@@ -623,9 +623,27 @@ static void litBank(BmGame *g, uint8_t bank, int32_t x, int32_t y, const int32_t
   bmPaletteWriteRaw((uint16_t)(BM_HAL_PALETTE_OBJ_OFFSET + bank * 16), out, 16);
 }
 
+// What each sprite bank was last lit for (its place, sheet, palette, facing and the light's
+// intensity): the same again, it is not lit again. 0xFFFFFFFF: nothing yet.
+static uint32_t s_objLitAt[BM_GAME_BANKS] BM_EWRAM_BSS, s_objLitFor[BM_GAME_BANKS] BM_EWRAM_BSS;
+
 static void presentSprites(BmGame *g)
 {
   BmLight *l = &g->light;
+  // A flickering light lights the sprites in the steps the palette mode shows the room in (in
+  // every mode, so they are lit alike): a bank is lit again only when the step changes.
+  int32_t now = l->now;
+  if (l->flicker != 0)
+  {
+    int32_t base = (int32_t)l->intensity * 4, span = base * (int32_t)l->flicker / 255, best = 0;
+    for (int32_t k = 0; k < BM_LIGHT_CACHE_STEPS; k++)
+    {
+      int32_t at = base - span + 2 * span * k / (BM_LIGHT_CACHE_STEPS - 1);
+      int32_t d = at - now, e = best - now;
+      if (k == 0 || (d < 0 ? -d : d) < (e < 0 ? -e : e)) best = at;
+    }
+    l->now = best;
+  }
   int32_t px = BM_FIX_INT(g->player.x), py = BM_FIX_INT(g->player.y) - 14;
   int32_t playerFall[BM_LIGHT_MAX_SOURCES], fall[BM_LIGHT_MAX_SOURCES];   // the player's: once for all its banks
   for (uint8_t k = 0; k < l->sourceCount; k++) playerFall[k] = reach(g, px, py, k);
@@ -657,6 +675,9 @@ static void presentSprites(BmGame *g)
         }
         if (best < 0 || d < best) best = d, x = ax, y = ay, mirrored = a->facing[i] < 0, upsideDown = false;
       }
+      // Else the nearest effect drawn with it (a splash in a puddle under a lamp).
+      for (uint8_t k = 0; k < BM_GAME_EFFECTS && best < 0; k++)
+        if (g->effectAge[k] != 0 && g->effectSheet[k] == sheet) best = 0, x = g->effectX[k], y = g->effectY[k] - 4, mirrored = false, upsideDown = false;
       for (uint8_t k = 0; k < l->sourceCount; k++) fall[k] = best < 0 ? 0 : reach(g, x, y, k);   // nothing shows it: ambient only
     }
     // Out of the light a bank's colours are only darkened: written once while that lasts.
@@ -672,6 +693,14 @@ static void presentSprites(BmGame *g)
       dark |= glow;
     }
     if (dark && same && (l->objDark & (1u << b))) continue;
+    // (The place in steps of 4 pixels: the light changes too little over fewer to be seen, and
+    // a figure running is lit again every other frame, not every one.)
+    uint32_t at = (uint32_t)(uint16_t)(x >> 2) | (uint32_t)(uint16_t)(y >> 2) << 16;
+    uint32_t forWhat = (uint32_t)(uint8_t)sheet | (uint32_t)(uint8_t)g->bankPalette[b] << 8 | (uint32_t)mirrored << 16 |
+                       (uint32_t)upsideDown << 17 | (uint32_t)(l->now & 0x3FFF) << 18;
+    if (same && !dark && s_objLitAt[b] == at && s_objLitFor[b] == forWhat) continue;
+    s_objLitAt[b] = at;
+    s_objLitFor[b] = forWhat;
     litBank(g, b, x, y, fall, mirrored, upsideDown);
     lit++;
     l->objSheet[b] = (uint8_t)sheet;
@@ -680,6 +709,7 @@ static void presentSprites(BmGame *g)
     else l->objDark &= (uint16_t)~(1u << b);
   }
   bm_light_banks = lit;
+  l->now = now;
 }
 
 // Processor cycles the last frame's light took, per part (tests read them: tools/bmlink check).
@@ -698,6 +728,8 @@ void bmLightPresent(BmGame *g)
     if (cc != NULL && l->mode == BM_LIGHT_PALETTE)
       mixColours(s_roomMixed, l->pPalette, (uint32_t)(l->paletteBanks < 16 ? l->paletteBanks : 16) * 16, cc);
     memset(s_objMixedSheet, 0xFF, sizeof(s_objMixedSheet));
+    memset(s_objLitAt, 0xFF, sizeof(s_objLitAt));
+    memset(s_objLitFor, 0xFF, sizeof(s_objLitFor));
   }
   if (l->mode == BM_LIGHT_PALETTE) presentPalette(g, l->fresh);
   else presentLayer(g, l->fresh);

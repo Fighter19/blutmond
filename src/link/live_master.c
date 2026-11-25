@@ -213,7 +213,7 @@ static uint32_t roomExits(const BmPack *pPack, int32_t room, int32_t *pOut, uint
 // languages), the room `room`, room 0 and the rooms one door from them, the songs, then the
 // other rooms nearest to them through doors first (then the ones no door leads to, in order;
 // each whole, if it fits), then the languages.
-static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan *f)
+static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan *f, const BmLiveRemote *r)
 {
   uint32_t count = bmPackChunkCount(pPack);
   if (count > BM_LIVE_MAX_CHUNKS || (pPack->header.flags & BM_PACK_FLAG_UPDATE)) return false;
@@ -246,6 +246,17 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
   uint32_t head = 0, tail = 0;
   if (rooms > FIT_MAX_ROOMS) rooms = FIT_MAX_ROOMS;
   if (room >= 0 && room < rooms) seen[room] = 1, queue[tail++] = room;
+  // The rooms the runtime has that lead to it: the one it stands in, going through a door to
+  // it (a push for a room asked for keeps the game in its room until the door is gone through).
+  for (int32_t k = 0; room >= 0 && r != NULL && k < rooms; k++)
+  {
+    int32_t chunk = roomChunk(pPack, k), exits[16];
+    BmChunkEntry e;
+    if (seen[k] || chunk < 0 || !bmPackGetChunk(pPack, (uint32_t)chunk, &e) || !resident(r, &e, false)) continue;
+    uint32_t n = roomExits(pPack, k, exits, 16);
+    for (uint32_t x = 0; x < n && !seen[k]; x++)
+      if (exits[x] == room) seen[k] = 1, queue[tail++] = k;
+  }
   if (!seen[0] && rooms > 0) seen[0] = 1, queue[tail++] = 0;
   // Every room reachable through doors, nearest first (the order to fit them in).
   uint32_t initial = tail;
@@ -353,7 +364,7 @@ bool bmLiveMasterPushPackFor(BmLinkMaster *m, const uint8_t *pPack, uint32_t siz
   const FitPlan *fit = NULL;
   if (r != NULL && r->hello.runtimeVersion >= 5 && size > r->hello.poolCapacity)
   {
-    if (!fitPack(&pack, room, r->hello.poolCapacity, &plan)) return false;
+    if (!fitPack(&pack, room, r->hello.poolCapacity, &plan, r)) return false;
     fit = &plan;
     stats.chunksLeftOut = plan.leftOut;
   }
