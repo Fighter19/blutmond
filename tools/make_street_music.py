@@ -12,12 +12,14 @@ of silence between, ringing out in a long echo. Sines and triangles (no noise, n
 most 6 voices.
 
 test_chamber.bmsong, for a laboratory (not in the test level's pack): cold electronics after the
-character of the Portal (2007) soundtrack, B minor at 120 beats a minute, 24 bars (48 s) that
-loop in three parts. The chamber: a slow pad, sine bleeps arpeggiating sparsely in the echo,
-small clicks at odd moments, no beat. The escape: a steady kick and a bass in eighths, a sine
-lead lamenting over them. The fire pit: the bass tightens to sixteenths rocking between B and C,
-the pad holds C against it, the bleeps climb in semitones. The clicks are thin pulse blips, not
-noise. At most 6 voices.
+character of the Portal (2007) soundtrack, B minor at 120 beats a minute, 16 bars (32 s) that
+loop in two parts. The chamber: a slow pad and sine bleeps arpeggiating sparsely in the echo,
+no beat. The escape: a steady kick and a bass in eighths, a sine lead lamenting over them. At
+most 5 voices.
+
+infinite_corridor.bmsong, for an endless corridor (not in the test level's pack): the same
+sounds driven harder, 16 bars (32 s) looping: the bass in sixteenths rocking between B and C,
+the pad holding C against it, the bleeps climbing in semitones over a kick on every beat.
 
 quiet_sorrow.bmsong, for an emotional scene (not in the test level's pack): a melancholic
 piece in D minor at 70 beats a minute,
@@ -297,15 +299,15 @@ def night_street():
     return s
 
 
-def test_chamber():
-    """Cold electronics in three parts (see the top)."""
+def lab_piece(parts):
+    """Cold electronics (see test_chamber at the top): `parts` per four chords of two bars each,
+    0 the chamber, 1 the escape, 2 the corridor."""
     bar = 4 * BEAT                                   # 2 s at 120 beats a minute
-    s = ET.Element("song", {"version": "1", "bpm": "120", "length": str(24 * bar), "loop": "0", "effect": "0",
+    s = ET.Element("song", {"version": "1", "bpm": "120", "length": str(8 * bar * len(parts)), "loop": "0", "effect": "0",
                             "echo": "180", "echo-feedback": "120"})
     instruments = [
         ("pad", {"wave": "triangle", "attack": "60", "decay": "0", "sustain": "160", "release": "30", "volume": "60", "pan": "-16"}),
         ("bleep", {"wave": "sine", "attack": "0", "decay": "7", "sustain": "0", "release": "3", "volume": "82", "pan": "22"}),
-        ("click", {"wave": "pulse12", "attack": "0", "decay": "1", "sustain": "0", "release": "1", "volume": "34", "pan": "-30"}),
         ("kick", {"wave": "sample", "sample": "kick.wav", "root": "60", "loop": "0", "attack": "0", "decay": "0", "sustain": "255",
                   "release": "2", "volume": "150", "pan": "0"}),
         ("bass", {"wave": "triangle", "attack": "0", "decay": "16", "sustain": "130", "release": "4", "volume": "150", "pan": "0"}),
@@ -317,15 +319,14 @@ def test_chamber():
     # B minor: (bass root, pad note, the bleeps' four notes) per chord, two bars each.
     chords = {
         "Bm": (47, 66, (71, 74, 78, 83)), "G": (43, 67, (71, 74, 79, 83)), "Em": (40, 67, (71, 76, 79, 83)),
-        "F#": (42, 70, (70, 73, 78, 82)), "C": (48, 72, (72, 76, 79, 84)),
+        "F#": (42, 70, (70, 73, 78, 82)),
     }
-    plan = ["Bm", "G", "Em", "F#"] * 3                # 12 chords of two bars
-    rnd = __import__("random").Random(31)
+    plan = ["Bm", "G", "Em", "F#"] * len(parts)
     for c, chord in enumerate(plan):
         t0 = c * 2 * bar
-        part = c // 4                                 # 0 chamber, 1 escape, 2 fire pit
+        part = parts[c // 4]
         root, pad, arp = chords[chord]
-        if part == 2:                                 # the fire pit: C held against the B below
+        if part == 2:                                 # the corridor: C held against the B below
             pad = 72 if chord in ("Bm", "F#") else pad
         notes["pad"].append((t0, pad, 2 * bar - 28, 110 if part == 2 else 80))   # faded before the next one
         for b in range(2):
@@ -349,26 +350,38 @@ def test_chamber():
                     notes["kick"].append((tb + k * BEAT, 60, 7, 124 if k % 2 == 0 else 110))
                 for i in range(8):                    # climbing in semitones, two bars a run
                     notes["bleep"].append((tb + i * 12, 78 + (b * 8 + i) // 2, 3, 96 + i * 3))
-            for _ in range(3 if part == 0 else 2):    # clicks at odd moments
-                t = tb + rnd.randrange(0, 16) * 6 + rnd.choice((0, 2, 3))
-                notes["click"].append((t, 100 + rnd.randrange(8), 1, 80))
-    # The lament over the escape (bars 8-15): (bar, tick, key, length).
-    lament = [(8, 0, 78, 36), (8, 36, 76, 12), (8, 48, 74, 48), (9, 0, 73, 72), (9, 72, 71, 24),
-              (10, 0, 74, 36), (10, 36, 76, 12), (10, 48, 79, 48), (11, 0, 78, 96),
-              (12, 0, 76, 36), (12, 36, 74, 12), (12, 48, 71, 48), (13, 0, 73, 48), (13, 48, 74, 48),
-              (14, 0, 70, 72), (14, 72, 73, 24), (15, 0, 71, 90)]
-    for b, t, key, length in lament:
-        notes["lead"].append((b * bar + t, key, length - 10, 96))   # its release ends before the next
+    # The lament over the escape: (bar from its start, tick, key, length).
+    lament = [(0, 0, 78, 36), (0, 36, 76, 12), (0, 48, 74, 48), (1, 0, 73, 72), (1, 72, 71, 24),
+              (2, 0, 74, 36), (2, 36, 76, 12), (2, 48, 79, 48), (3, 0, 78, 96),
+              (4, 0, 76, 36), (4, 36, 74, 12), (4, 48, 71, 48), (5, 0, 73, 48), (5, 48, 74, 48),
+              (6, 0, 70, 72), (6, 72, 73, 24), (7, 0, 71, 90)]
+    for p, part in enumerate(parts):
+        if part == 1:
+            for b, t, key, length in lament:
+                notes["lead"].append(((p * 8 + b) * bar + t, key, length - 10, 96))   # its release ends before the next
     for name, _ in instruments:
+        if not notes[name]:
+            continue
         tr = ET.SubElement(s, "track", {"name": name, "instrument": name})
         for t, key, length, vel in sorted(notes[name]):
             ET.SubElement(tr, "note", {"t": str(t), "key": str(key), "len": str(length), "vel": str(vel)})
     return s
 
 
+def test_chamber():
+    """The chamber, then the escape (see the top)."""
+    return lab_piece([0, 1])
+
+
+def infinite_corridor():
+    """The corridor, twice (see the top)."""
+    return lab_piece([2, 2])
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "assets", "test_room")
-    for name, s in (("night_street", night_street()), ("test_chamber", test_chamber()), ("quiet_sorrow", quiet_sorrow()),
+    for name, s in (("night_street", night_street()), ("test_chamber", test_chamber()), ("infinite_corridor", infinite_corridor()),
+                    ("quiet_sorrow", quiet_sorrow()),
                     ("hollow_dread", hollow_dread()), ("dusk_pulse", dusk_pulse())):
         ET.indent(s, " ")
         path = os.path.join(out, "music", name + ".bmsong")
