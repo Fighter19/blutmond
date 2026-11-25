@@ -323,7 +323,7 @@ def lab_piece(parts, modes=None):
                  "release": "2", "volume": "150", "pan": "0"},
         "bass": {"wave": "triangle", "attack": "0", "decay": "16", "sustain": "130", "release": "4", "volume": "150", "pan": "0"},
         "lead": {"wave": "sine", "attack": "4", "decay": "30", "sustain": "150", "release": "10", "volume": "110", "pan": "-6"},
-        "arp": {"wave": "triangle", "attack": "0", "decay": "5", "sustain": "60", "release": "2", "volume": "96", "pan": "26"},
+        "arp": {"wave": "triangle", "attack": "0", "decay": "5", "sustain": "60", "release": "2", "volume": "62", "pan": "26"},
     }
     names = {0: "chamber", 1: "escape", 2: "corridor", 3: "pursuit"}
     used = {0: ("bleep", "bass"), 1: ("kick", "bass", "bleep", "lead"), 2: ("kick", "bass", "bleep"), 3: ("arp", "bass")}

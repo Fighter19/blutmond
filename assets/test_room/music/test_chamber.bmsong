@@ -7,7 +7,7 @@
  <instrument name="bass_escape" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" layer="1" until="1" />
  <instrument name="bleep_escape" wave="sine" attack="0" decay="7" sustain="0" release="3" volume="82" pan="22" layer="1" until="1" />
  <instrument name="lead_escape" wave="sine" attack="4" decay="30" sustain="150" release="10" volume="110" pan="-6" layer="1" />
- <instrument name="arp_pursuit" wave="triangle" attack="0" decay="5" sustain="60" release="2" volume="96" pan="26" layer="2" />
+ <instrument name="arp_pursuit" wave="triangle" attack="0" decay="5" sustain="60" release="2" volume="62" pan="26" layer="2" />
  <instrument name="bass_pursuit" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" layer="2" />
  <track name="pad" instrument="pad">
   <note t="0" key="66" len="164" vel="80" />
