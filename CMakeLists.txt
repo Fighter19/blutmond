@@ -102,6 +102,7 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/torch.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/threat.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/bench.ms
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/spells.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/abilities.bmdata
   ${PROJECT_SOURCE_DIR}/assets/test_room/data/armour.bmdata
@@ -309,9 +310,9 @@ if(BM_PLATFORM STREQUAL "gba")
   # rooms come last, so the other rooms keep their numbers.
   set(BM_TEST_LEVEL_MB_ROOMS ${BM_TEST_LEVEL_ROOMS})
   list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall|rural_street")
-  # Nor the street's script (the music's Threat): only that room uses it.
+  # Nor the street's scripts (the music's Threat, the bench): only that room uses them.
   set(BM_TEST_LEVEL_MB_ASSETS ${BM_TEST_LEVEL_ASSETS})
-  list(FILTER BM_TEST_LEVEL_MB_ASSETS EXCLUDE REGEX "scripts/threat\\.ms$")
+  list(FILTER BM_TEST_LEVEL_MB_ASSETS EXCLUDE REGEX "scripts/(threat|bench)\\.ms$")
   set(BM_TEST_LEVEL_MB_PACK ${CMAKE_BINARY_DIR}/test_level_mb_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_MB_PACK}
     COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_MB_ROOMS} ${BM_TEST_LEVEL_MB_ASSETS}
