@@ -56,6 +56,12 @@ for each screen effect, the torch halls, and a teleporter back to the first room
 starts in that room (`--room debug_lobby`, `--room torch_hall`), `--debug-item` puts the mirror
 in the bag at the start.
 
+**The rural street** (west out of the debug lobby, `tools/make_street.py`; `--room rural_street`):
+a village street at night, a cottage with a lit window, a fence, a tree, a bench and a gas lamp
+whose steady light falls on them (mode palette, dithered; the sky, the lamp's glass and the
+window give their own light: black in the normal map). A puddle on the road mirrors the lamp,
+the bench and the player standing over it (a `Puddle` object, runtime-core.md §12).
+
 **The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): three rooms alike
 but for how their flickering torch lights the walls, side by side for comparing, each behind
 the east door of the one before (the third's stays shut). "Torch hall: palettes" has the light

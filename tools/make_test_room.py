@@ -505,8 +505,8 @@ TORCH_DOOR_X = 592
 
 def write_debug_lobby(path):
     """The debug lobby (the Debug Mirror takes the player there): a door into a room per
-    screen effect, each under a stone arch, one into the torch halls, and a teleporter back to
-    the start."""
+    screen effect, each under a stone arch, one into the torch halls, one west out to the rural
+    street, and a teleporter back to the start."""
     w, h = 40, 12
     main_layer = debug_floor(w, h)
     for _, _, _, x in DEBUG_ROOMS + [("torch_hall", "Torch hall", "", TORCH_DOOR_X)]:
@@ -525,6 +525,8 @@ def write_debug_lobby(path):
                ("Gift", "moon", 376, 160, 0, 0, True, [("Gives", "MoonCharm")])]
     for room, _, _, x in DEBUG_ROOMS + [("torch_hall", "Torch hall", "", TORCH_DOOR_X)]:
         objects.append(("Door", "to_" + room, x - 16, 112, 32, 48, False, [("target_room", room), ("target_door", "exit_west"), ("direction", "north"), ("panel", "door_panel")]))
+    # West, out of the lobby: the rural street (tools/make_street.py).
+    objects.append(("Door", "to_rural_street", 0, 112, 16, 48, False, [("target_room", "rural_street"), ("target_door", "exit_east"), ("direction", "west"), ("panel", "door_panel")]))
     write_small_room(path, "debug_lobby", "debug", w, h, main_layer, objects, props=[("title", "Debug lobby")])
 
 

@@ -13,6 +13,7 @@
 
 // Each layer takes two of the screen blocks 26-31 for its map.
 #define BM_ROOM_MAX_LAYERS 3
+#define BM_ROOM_FIRST_SCREEN_BLOCK 26   // layer on BG n: screen blocks 26 + 2n and the next (512 x 256)
 // Holes: parts of the main and foreground layers shown empty (a wall broken, game.h).
 #define BM_ROOM_MAX_HOLES 8
 

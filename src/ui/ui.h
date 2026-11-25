@@ -166,6 +166,10 @@ void bmUiSetLightLayer(int8_t bg);
 /// shares the weight: a streamed light flickers with it, so the UI is then not).
 void bmUiSetLightWeight(uint8_t eva, bool ui);
 
+/// A background mirrored by a puddle (reflect.h), blended over the water as the UI is over the
+/// room (a first target too; its weights come per line); -1: none.
+void bmUiSetReflectionLayer(int8_t bg);
+
 /// Where the UI shows something, as at most two screen rectangles (left, top, right, bottom in
 /// pixels, right and bottom exclusive): the bands of rows it draws in, the nearest merged until
 /// two are left. 0 while it is hidden. Computed again only when the UI changed.

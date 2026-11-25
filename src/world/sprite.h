@@ -114,6 +114,13 @@ uint8_t bmSpriteSheetDrawFlipped(const BmSpriteSheet *pSheet, uint16_t frame, in
 uint8_t bmSpriteSheetDrawSheared(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x, int32_t y, int32_t xs, int32_t ys, int32_t vs,
                                  uint8_t matrix, uint8_t priority, uint8_t firstOam, uint8_t maxOam);
 
+/// Draws frame `frame`, as `bmSpriteSheetDrawFlipped` would at (x, y), mirrored in a water line
+/// at screen row `surface` and squeezed: a point `d` rows above the line appears `d * 16 / squash`
+/// rows below it. Semi-transparent affine sprites sharing matrix `matrix` (which this sets).
+/// Returns the OAM entries used.
+uint8_t bmSpriteSheetDrawReflected(const BmSpriteSheet *pSheet, uint16_t frame, int32_t x, int32_t y, bool hflip, int32_t surface,
+                                   uint8_t squash, uint8_t matrix, uint8_t priority, uint8_t bank, uint8_t firstOam, uint8_t maxOam);
+
 /// The frame's hitbox relative to the anchor (mirrored with `hflip`).
 BmSpriteBox bmSpriteSheetHitbox(const BmSpriteSheet *pSheet, uint16_t frame, bool hflip);
 

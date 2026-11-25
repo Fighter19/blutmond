@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define POOL_SIZE (320 * 1024)   // room for the test level twice and more (a cartridge has about 200 KB)
+#define POOL_SIZE (400 * 1024)   // room for the test level twice and more (a cartridge has about 200 KB)
 #define WORDS_PER_FRAME 128   // about 30 KB/s at 60 frames per second
 
 static uint8_t *s_level, *s_variant, *s_scripts;

@@ -911,9 +911,28 @@ if the last room was lit). Every frame after the effects:
   the light raised by its height, emissive slots as drawn, shiny slots plus `(N·H)^8` of the
   light's colour (H halfway between L and the viewer). A sheet without normals faces the
   viewer. A bank out of the light is written once while it stays out.
+- Mode `palette`: the room's banks are shaded again only when the light's intensity changed
+  since the last frame, so a light that does not flicker costs nothing after the first frame
+  (the rural street's lamp: about 250 cycles a frame instead of 40,700 for its 15 banks). Pixels
+  black in the normal map are emissive: their entries are written as drawn.
 - The multiboot images have no light (their packs have no lit room; one pushed to them is shown
   unlit). On the GBA a torch hall's light costs about 37,000 cycles a frame (`bm_light_cycles`:
   the room's banks, the sprites', the blend).
+
+**Puddles** (`reflect.h`): a room's first `Puddle` object (room-format.md §5) mirrors the room's
+background layer. Where the room leaves the puddle empty in every layer, a free background (the
+one after the room's layers, so a room of at most two layers without a light layer) shows that
+layer's map and tiles, at its priority behind it (the lower background wins the tie), so nothing
+else of it is seen. Line table slot 1 sets its vertical scroll per line: line d of the puddle (d
+lines under the water line y) shows room row `y - 1 - d × squash`, wavering by `ripple` pixels
+(a sine of d and the frame). Slot 0 sets BLDALPHA per line: the puddle's lines blend the mirror
+(a first target, with the UI) over the backdrop, the water's colour, at `strength`, 16 -
+strength / 2; the other lines keep the UI's weights. The player standing over the puddle is
+drawn a second time, mirrored in the water line and squeezed by the same `squash`: the pieces
+of its figure as semi-transparent affine sprites (matrix 31; the doors use the others) at
+priority 2, behind the room's main layer, so only the puddle shows them. While a room effect or
+a teleport uses the line tables the mirror is hidden. The multiboot images have no puddles
+(light_off.c). On the GBA the rural street takes about 130 lines of a frame.
 
 **Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has
 it and the player has none (the menu does not open then). The test level's mirror teleports to

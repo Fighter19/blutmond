@@ -14,7 +14,7 @@
 #define WINDOW_COLS 32
 #define WINDOW_ROWS 22
 // Screen blocks 26-31 (the top of char block 3) hold the maps; tiles use char blocks 0-1.
-#define FIRST_SCREEN_BLOCK 26
+#define FIRST_SCREEN_BLOCK BM_ROOM_FIRST_SCREEN_BLOCK
 
 #define ROOM_HEADER_SIZE 44
 #define ROOM_LAYER_SIZE 12

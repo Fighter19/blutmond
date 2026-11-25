@@ -83,7 +83,9 @@ lit: its tiles, and the sprites in it, are shaded by the direction their surface
 normal maps. A tileset gets its normals from its own property `normal`: an image beside it of
 the tileset's size (RGB: x right, y down, z toward the viewer, as usual for normal maps), or
 `auto` (made from the drawing: a bevel at the edges of each tile and its brightness); without
-one its tiles face the viewer. A lit room is an area of its own (its `area` is not read), and
+one its tiles face the viewer. Black in a normal map (0, 0, 0, alpha not 0) marks a pixel that
+gives light itself, a lamp's glass, a lit window, the night sky: in mode `palette` it is drawn as
+it is, not shaded (one level past the last in `LITE`). A lit room is an area of its own (its `area` is not read), and
 only layers without parallax are lit. The two modes:
 
 - `palette`: per pixel the cooker works out how much light reaches it at full intensity
@@ -473,6 +475,7 @@ Objects live in the `objects` layer.
 | `PushBlock` | rectangle | solid, pushed by the player as long as they push, falling where nothing holds it (§3.9): `push_frames` |
 | `PressurePlate` | rectangle (on a floor) | pressed by a push block on it or the player standing on it (§3.9): `gate` (the name of the Gate it opens) |
 | `Gate` | rectangle (whole cells) | solid while closed; slides up while a plate holds it open (§3.9) |
+| `Puddle` | rectangle | water that mirrors the room ([runtime-core.md](runtime-core.md) §12, "Puddles"): its top edge is the water line. The room leaves the pixels of the puddle empty in every layer; the mirrored background layer shows there, `squash` rows above the water line per line of the puddle (3), wavering by `ripple` pixels (1), blended over the backdrop (the water's colour) at `strength` sixteenths (10). The player over it is mirrored too. Needs a free background: a room of at most two layers, no light layer |
 | `Light` | point | a light of the room (§1, "Light"; up to 4, flickering together: every one after the first takes the first's properties and only its own place): `colour` (`#ffc080`), `radius` (px, 72, at most 255), `height` (px out of the wall toward the viewer, 12), `intensity` (1.0), `flicker` (0 to 1: how far the intensity wavers, 0), `flicker_speed` (frames per step of the flicker, 6), `gain` (the light layer's strength, 0.5), `shadows` (true) |
 
 Game classes (enemies, NPCs, lanterns) are written in Mondskript and used the same way.
@@ -610,4 +613,5 @@ room IDs and song names.
   `light_index` (shared or fitted levels of light, bit 7 of `LITE`'s count), `light_directions`;
   `light_index = stream` (bit 6), `light_normals`, `light_band`; `light_index = hybrid` (bit 5),
   `light_stream_banks`; `light_bands`, `light_normals` 3 to 7; `light_levels`, `light_curve`
-  (bit 7 of `LITE`'s count in mode palette: a light per level), `light_dither`.
+  (bit 7 of `LITE`'s count in mode palette: a light per level), `light_dither`; emissive pixels
+  (black in the normal map); the `Puddle` object.

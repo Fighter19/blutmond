@@ -57,6 +57,7 @@ typedef struct BmLight
   uint16_t objDark;          // sprite banks set to ambient only (out of the light), for...
   uint8_t objSheet[13], objPalette[13];   // ... this sheet and palette
   int32_t now;               // the intensity this frame, 256 = 1.0
+  int32_t shaded;            // palette: the intensity its banks were last shaded for (-1: none)
 } BmLight;
 
 /// A room was shown: reads its light (none: the sprite banks get their own colours back).

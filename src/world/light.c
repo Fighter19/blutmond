@@ -180,7 +180,7 @@ void bmLightEnterRoom(BmGame *g)
     for (uint32_t i = 0; l->mode != BM_LIGHT_NONE && i < (uint32_t)l->bankCount * 16; i++)
     {
       uint8_t k = p[LITE_HEAD + i];
-      if (k >= l->levels) l->mode = BM_LIGHT_NONE;
+      if (k > l->levels) l->mode = BM_LIGHT_NONE;   // `levels` itself: emissive, as drawn
       else if (k != 0) l->litBanks |= (uint16_t)(1u << (i / 16));
     }
   }
@@ -271,6 +271,7 @@ void bmLightEnterRoom(BmGame *g)
   }
   l->wasLit = true;
   l->fresh = true;
+  l->shaded = -1;
   bmLightPresent(g);
 }
 
@@ -411,13 +412,18 @@ static void LIGHT_KERNEL litSlotsCurved(uint16_t *out, const uint8_t *pal, const
 // others too, which only the ambient darkens.
 static void presentPalette(BmGame *g, bool all)
 {
-  const BmLight *l = &g->light;
+  BmLight *l = &g->light;
+  // A light that does not flicker (or not this frame): its banks are as they were.
+  if (!all && l->now == l->shaded) return;
+  l->shaded = l->now;
   uint32_t first = l->paletteFirst, banks = l->paletteBanks;
   const BmColorCorrection *cc = bmPaletteCorrection();
   const uint8_t *src = cc != NULL ? s_roomMixed : l->pPalette;
   // Per level the factor of each channel: ambient + light × level (two divisions in all).
-  int16_t fac[16 * 3];
+  int16_t fac[17 * 3];
   int32_t step = (l->now << 8) / (l->levels - 1);   // a level's light, 65536 = 1.0
+  // One past the last level: emissive entries (a lamp's glass, a lit window), as drawn.
+  fac[l->levels * 3] = fac[l->levels * 3 + 1] = fac[l->levels * 3 + 2] = 256;
   int32_t lr = l->red * 256 / 31, lg = l->green * 256 / 31, lb = l->blue * 256 / 31;
   for (uint8_t k = 0; k < l->levels; k++)
   {

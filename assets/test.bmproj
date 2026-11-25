@@ -18,6 +18,7 @@
  <room path="test_room/torch_hall_normals.tmx"/>
  <room path="test_room/torch_hall_stream.tmx"/>
  <room path="test_room/torch_hall_hybrid.tmx"/>
+ <room path="test_room/rural_street.tmx"/>
  <assets path="test_room"/>
  <assets path="engine"/>
 </project>

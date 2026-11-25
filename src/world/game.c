@@ -31,6 +31,7 @@ static uint8_t kindOf(const char *cls)
   if (strcmp(cls, "PushBlock") == 0 || strcmp(cls, "PressurePlate") == 0 || strcmp(cls, "Gate") == 0) return BM_OBJECT_PUZZLE;
   if (strcmp(cls, "GrappleAnchor") == 0) return BM_OBJECT_GRAPPLE_ANCHOR;
   if (strcmp(cls, "Light") == 0) return BM_OBJECT_LIGHT;
+  if (strcmp(cls, "Puddle") == 0) return BM_OBJECT_PUDDLE;
   return BM_OBJECT_OTHER;
 }
 
@@ -762,6 +763,19 @@ static void updateSprites(BmGame *g)
                                                          (uint8_t)(next + used), (uint8_t)(12 - used)));
       }
       next = (uint8_t)(next + used);
+      // Over a puddle (reflect.h): mirrored in it, behind the room's main layer (priority 2), so
+      // it shows only where the room is empty, the puddle.
+      int32_t surface;
+      uint8_t squash;
+      if (!up && bmReflectMirrors(g, px - 16, px + 16, py, &surface, &squash))
+        for (uint8_t k = 0; k < pose.count && next < BM_GAME_MAX_OAM; k++)
+        {
+          uint8_t i = pose.order[k];
+          int8_t bank = bmGameSheetBank(g, layerSheet(g, i), playerLayerPaletteNow(g, i));
+          if ((g->playerLayers[i].flags & BM_LAYER_HIDDEN) || bank < 0) continue;
+          next = (uint8_t)(next + bmSpriteSheetDrawReflected(sheets[i], pose.frame[i], x + pose.x[i], y + pose.y[i], left, surface, squash,
+                                                             BM_REFLECT_MATRIX, 2, (uint8_t)bank, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
+        }
     }
   }
   else
@@ -1015,6 +1029,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   preloadSprites(g);
   BmResult shown = bmRoomShow(&g->room, 0, 0);
   if (shown == BM_SUCCESS) bmLightEnterRoom(g);
+  if (shown == BM_SUCCESS) bmReflectEnterRoom(g);
   return shown;
 }
 
@@ -1064,6 +1079,7 @@ BmResult bmGameStart(BmGame *g, const BmPack *pPack, const char *roomId)
   updateSprites(g);
   bmEffectsPresent(g);
   bmLightPresent(g);
+  bmReflectPresent(g);
   return BM_SUCCESS;
 }
 
@@ -1982,6 +1998,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   updateSprites(g);
   bmEffectsPresent(g);
   bmLightPresent(g);
+  bmReflectPresent(g);
   hudFrame(g);
   bmUiPresent(&g->ui);
 
@@ -2271,6 +2288,7 @@ static BmResult afterLoad(BmGame *g, bool fresh)
   g->fxApplied = 7;   // the video state was rebuilt: every slot is set again or switched off
   bmEffectsPresent(g);
   bmLightPresent(g);
+  bmReflectPresent(g);
   return BM_SUCCESS;
 }
 
@@ -2344,6 +2362,7 @@ static void reloadPalettes(BmGame *g)
   g->light.fresh = true;
   g->light.objDark = 0;   // the banks out of the light were written once: again
   bmLightPresent(g);
+  bmReflectPresent(g);
 }
 
 void bmGameSetColorCorrection(BmGame *g, bool on)

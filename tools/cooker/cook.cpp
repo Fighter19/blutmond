@@ -627,7 +627,20 @@ void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const 
                   int sxp = (flip & FLIP_H) ? 7 - px : px, syp = (flip & FLIP_V) ? 7 - py : py;
                   int ix = tx + srcX * 8 + sxp, iy = ty + srcY * 8 + syp;
                   light::Vec3 n;
-                  if (normalMap && ix < normalMap->width && iy < normalMap->height) n = light::decodeNormal(normalMap->pixel(ix, iy));
+                  bool emissive = false;
+                  if (normalMap && ix < normalMap->width && iy < normalMap->height)
+                  {
+                    const uint8_t *np = normalMap->pixel(ix, iy);
+                    // Black in the normal map: the pixel gives light (a lamp's glass, a lit
+                    // window) and is drawn as it is (mode palette: one level past the last).
+                    emissive = np[0] == 0 && np[1] == 0 && np[2] == 0 && np[3] != 0;
+                    n = light::decodeNormal(np);
+                  }
+                  if (emissive && lightOf.mode == light::Mode::Palette)
+                  {
+                    c = area.litColour(c, lightOf.levels);
+                    continue;
+                  }
                   if (flip & FLIP_H) n.x = -n.x;
                   if (flip & FLIP_V) n.y = -n.y;
                   float fx = float(wx) + 0.5f, fy = float(wy) + 0.5f;

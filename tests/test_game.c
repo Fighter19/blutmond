@@ -3206,6 +3206,65 @@ static void testTheTorchHalls(void)
   fclose(f);
 }
 
+// The rural street: a steady gas lamp lights it (mode palette), and the puddle on the road
+// mirrors the room (background 2 on background 0's map, its scroll set line by line) and the
+// player standing over it (semi-transparent affine sprites, squeezed).
+static int mirroredSprites(const BmPpuState *ppu)
+{
+  int n = 0;
+  for (int i = 0; i < 128; i++)
+  {
+    uint16_t a0 = ppu->oam[i * 4];
+    if ((a0 & 0x100) && ((a0 >> 10) & 3) == 1) n++;
+  }
+  return n;
+}
+
+static void testThePuddleMirrorsTheStreet(void)
+{
+  startWith(s_data, s_size, "rural_street");
+  TEST_ASSERT(s_game.light.mode == BM_LIGHT_PALETTE && s_game.light.flicker == 0);
+  TEST_ASSERT(s_game.reflect.on && s_game.reflect.bg == 2 && s_game.reflect.layer == 0);
+  bmBodyPlace(&s_game.player, 300, 128);
+  frames(30, 0);
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  TEST_ASSERT((bmPpuReg(ppu, BM_PPU_DISPCNT) & BM_PPU_DISPCNT_BG(2)) != 0);
+  bool scroll = false, blend = false;
+  for (int t = 0; t < BM_PPU_LINE_TABLES; t++)
+  {
+    scroll |= ppu->lineTables[t].reg == BM_PPU_BGVOFS(2);
+    blend |= ppu->lineTables[t].reg == BM_PPU_BLDALPHA;
+  }
+  TEST_ASSERT(scroll && blend && (bmPpuReg(ppu, BM_PPU_BLDCNT) & (1u << 2)) != 0);
+  TEST_ASSERT(mirroredSprites(ppu) >= 2);
+  // The lamp burns steady: after the first frame its banks are not shaded again.
+  TEST_ASSERT(s_game.light.shaded == s_game.light.now);
+  uint16_t shot[BM_PPU_WIDTH * BM_PPU_HEIGHT];
+  bmHalHostRender(shot);
+  // Away from the puddle the player is not mirrored.
+  bmBodyPlace(&s_game.player, 440, 128);
+  frames(30, 0);
+  TEST_ASSERT(mirroredSprites(bmHalHostGetPpu()) == 0);
+  // Out of the room the mirror is gone.
+  TEST_ASSERT(bmEffectsTeleport(&s_game, (uint32_t)bmGameFindRoom(&s_pack, "debug_lobby"), 40, 160));
+  frames(BM_TELEPORT_FRAMES + 2, 0);
+  TEST_ASSERT(!s_game.reflect.on && (bmPpuReg(bmHalHostGetPpu(), BM_PPU_DISPCNT) & BM_PPU_DISPCNT_BG(2)) == 0);
+  if (s_outDir == NULL) return;
+  char path[512];
+  snprintf(path, sizeof(path), "%s/rural_street.ppm", s_outDir);
+  FILE *f = fopen(path, "wb");
+  TEST_ASSERT(f != NULL);
+  if (f == NULL) return;
+  fprintf(f, "P6\n%d %d\n255\n", BM_PPU_WIDTH, BM_PPU_HEIGHT);
+  for (int i = 0; i < BM_PPU_WIDTH * BM_PPU_HEIGHT; i++)
+    for (int k = 0; k < 3; k++)
+    {
+      uint8_t v = (uint8_t)((shot[i] >> (5 * k)) & 31);
+      fputc((v << 3) | (v >> 2), f);
+    }
+  fclose(f);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -3241,6 +3300,7 @@ int main(int argc, char **argv)
   RUN_TEST(testWaitingForARoom);
   RUN_TEST(testDialogueScrolls);
   RUN_TEST(testTheTorchHalls);
+  RUN_TEST(testThePuddleMirrorsTheStreet);
   RUN_TEST(testColourCorrection);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);

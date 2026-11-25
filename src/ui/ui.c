@@ -691,6 +691,13 @@ void bmUiSetLightWeight(uint8_t eva, bool ui)
   s_lightUi = ui;
 }
 
+static int8_t s_reflectBg = -1;
+
+void bmUiSetReflectionLayer(int8_t bg)
+{
+  s_reflectBg = bg;
+}
+
 void bmUiBlend(void)
 {
   if (s_lightBg >= 0)
@@ -702,6 +709,7 @@ void bmUiBlend(void)
     bmBlendSet(BM_BLEND_ALPHA, first, (uint8_t)(room | BM_LAYER_OBJ | BM_LAYER_BACKDROP), s_lightEva, 16, 0);
     return;
   }
-  bmBlendSet(BM_BLEND_ALPHA, BM_LAYER_BG(BM_UI_BG), BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2) | BM_LAYER_OBJ | BM_LAYER_BACKDROP,
+  uint8_t first = (uint8_t)(BM_LAYER_BG(BM_UI_BG) | (s_reflectBg >= 0 ? BM_LAYER_BG(s_reflectBg) : 0));
+  bmBlendSet(BM_BLEND_ALPHA, first, BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2) | BM_LAYER_OBJ | BM_LAYER_BACKDROP,
              BM_UI_BLEND_UI, BM_UI_BLEND_BEHIND, 0);
 }

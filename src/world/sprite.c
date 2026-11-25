@@ -390,6 +390,41 @@ uint8_t bmSpriteSheetDrawSheared(const BmSpriteSheet *s, uint16_t frame, int32_t
   return used;
 }
 
+uint8_t bmSpriteSheetDrawReflected(const BmSpriteSheet *s, uint16_t frame, int32_t x, int32_t y, bool hflip, int32_t surface,
+                                   uint8_t squash, uint8_t matrix, uint8_t priority, uint8_t bank, uint8_t firstOam, uint8_t maxOam)
+{
+  if (frame >= s->frameCount || matrix >= 32 || squash == 0) return 0;
+  // Screen to texture: x as it is (or mirrored), y upside down and stretched by the squeeze.
+  bmSpriteSetMatrix(matrix, (int16_t)(hflip ? -256 : 256), 0, 0, (int16_t)(-(int32_t)squash * 16));
+  static const uint8_t widths[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
+  static const uint8_t heights[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
+  const uint8_t *fr = s->pFrames + frame * FRAME_SIZE;
+  uint16_t first = bmRead16(fr);
+  uint8_t used = 0;
+  for (uint8_t i = 0; i < fr[2] && used < maxOam; i++)
+  {
+    const uint8_t *pc = s->pPieces + (first + i) * PIECE_SIZE;
+    uint8_t shape = pc[2] & 3, size = (pc[2] >> 2) & 3;
+    if (shape > 2) continue;
+    int32_t w = widths[shape][size], h = heights[shape][size];
+    int32_t dx = (int8_t)pc[0], dy = (int8_t)pc[1];
+    // The piece's middle where it is drawn, then mirrored in the line (rounded: 1/2 pixel).
+    int32_t cx = (hflip ? x - dx - w : x + dx) + w / 2, cy2 = 2 * (y + dy) + h;   // twice the middle row
+    int32_t below = ((2 * surface - cy2) * 16 / squash + 1) / 2;                 // rows under the line
+    int32_t cy = surface + below;
+    int32_t sx = cx - w, sy = cy - h;
+    if (sx <= -2 * w || sx >= BM_HAL_SCREEN_WIDTH || sy <= -2 * h || sy >= BM_HAL_SCREEN_HEIGHT) continue;
+    BmSprite sprite = {
+      .x = (int16_t)sx, .y = (int16_t)sy, .shape = (BmSpriteShape)shape, .size = size,
+      .tile = (uint16_t)(s->tileBase + bmRead16(pc + 4)), .paletteBank = bank, .priority = priority,
+      .visible = true, .affine = (uint8_t)(matrix + 1), .mode = BM_SPRITE_SEMI_TRANSPARENT,
+    };
+    bmSpriteSet((uint8_t)(firstOam + used), &sprite);
+    used++;
+  }
+  return used;
+}
+
 BmSpriteBox bmSpriteSheetHitbox(const BmSpriteSheet *s, uint16_t frame, bool hflip)
 {
   BmSpriteBox box = { 0, 0, 0, 0 };
