@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BSD-2-Clause OR MIT
-"""Writes two songs (assets/test_room/music/):
+"""Writes three songs (assets/test_room/music/):
 
-night_street.bmsong, the rural street's: horror ambience at 60 beats a minute, 16 bars (64 s)
-that loop. Two low drones a semitone apart (A and B flat, later A and E flat, a tritone) beat
+night_street.bmsong, the rural street's: a melancholic piece in D minor at 70 beats a minute,
+16 bars (55 s) that loop. A piano-like melody (a triangle that decays to a soft hold) sings
+over a left hand breaking each chord in eighths (root, fifth, octave, tenth), a sine bass on
+the root, and in the second half a soft sine pad on the chord's third, all in a gentle echo:
+Dm Bb Gm A twice, then F C Dm Bb, Gm Dm Bb A. Sines and triangles only (no saw, no noise),
+at most 6 voices.
+
+hollow_dread.bmsong, for an empty stage of high suspense (not in the test level's pack):
+horror ambience at 60 beats a minute, 16 bars (64 s) that loop. Two low drones a semitone apart (A and B flat, later A and E flat, a tritone) beat
 against each other; wind swells and falls (noise, slow in and out); a broken music box rings
 high and sparse around the tritone, its notes trailing in a long echo; halfway through a
 heartbeat starts, quickening in the last bars; now and then something groans (a saw sliding
@@ -114,7 +121,7 @@ def dusk_pulse():
     return s
 
 
-def night_street():
+def hollow_dread():
     """The horror ambience (see the top)."""
     bar = 4 * BEAT                                   # 4 s at 60 beats a minute
     bars = 16
@@ -170,9 +177,66 @@ def night_street():
     return s
 
 
+def night_street():
+    """The melancholic piece (see the top)."""
+    bar = 4 * BEAT                                   # 3.4 s at 70 beats a minute
+    s = ET.Element("song", {"version": "1", "bpm": "70", "length": str(16 * bar), "loop": "0", "effect": "0",
+                            "echo": "200", "echo-feedback": "100"})
+    instruments = [
+        ("melody", {"wave": "triangle", "attack": "0", "decay": "50", "sustain": "90", "release": "18", "volume": "130", "pan": "-8"}),
+        ("hands", {"wave": "triangle", "attack": "0", "decay": "20", "sustain": "50", "release": "10", "volume": "72", "pan": "10"}),
+        ("bass", {"wave": "sine", "attack": "2", "decay": "60", "sustain": "120", "release": "20", "volume": "150", "pan": "0"}),
+        ("pad", {"wave": "sine", "attack": "40", "decay": "0", "sustain": "200", "release": "30", "volume": "46", "pan": "-14"}),
+    ]
+    for name, attrs in instruments:
+        ET.SubElement(s, "instrument", dict({"name": name}, **attrs))
+    # Chords: (bass root, three chord tones for the left hand: root, third, fifth).
+    chords = {
+        "Dm": (50, (50, 53, 57)), "Bb": (46, (46, 50, 53)), "Gm": (43, (43, 46, 50)), "A": (45, (45, 49, 52)),
+        "F": (41, (41, 45, 48)), "C": (48, (48, 52, 55)),
+    }
+    progression = ["Dm", "Bb", "Gm", "A"] * 2 + ["F", "C", "Dm", "Bb", "Gm", "Dm", "Bb", "A"]
+    # The melody, bar by bar: (tick in the bar, key, length).
+    melody = [
+        [(0, 69, 36), (36, 74, 12), (48, 72, 24), (72, 70, 24)],
+        [(0, 69, 48), (48, 65, 24), (72, 67, 24)],
+        [(0, 70, 36), (36, 69, 12), (48, 67, 24), (72, 65, 24)],
+        [(0, 64, 48), (48, 61, 48)],
+        [(0, 69, 36), (36, 74, 12), (48, 77, 36), (84, 76, 12)],
+        [(0, 74, 48), (48, 70, 24), (72, 72, 24)],
+        [(0, 74, 24), (24, 72, 24), (48, 70, 24), (72, 67, 24)],
+        [(0, 69, 72), (72, 73, 24)],
+        [(0, 72, 36), (36, 69, 12), (48, 72, 24), (72, 77, 24)],
+        [(0, 76, 48), (48, 72, 48)],
+        [(0, 74, 36), (36, 72, 12), (48, 74, 24), (72, 77, 24)],
+        [(0, 74, 72), (72, 70, 24)],
+        [(0, 70, 36), (36, 72, 12), (48, 74, 24), (72, 70, 24)],
+        [(0, 69, 48), (48, 65, 24), (72, 69, 24)],
+        [(0, 65, 48), (48, 62, 48)],
+        [(0, 64, 72), (72, 61, 24)],
+    ]
+    notes = {name: [] for name, _ in instruments}
+    for b, chord in enumerate(progression):
+        t0 = b * bar
+        root, (r, third, fifth) = chords[chord]
+        notes["bass"].append((t0, root - 12 if root >= 48 else root, bar - 12, 100))
+        # The left hand: root, fifth, octave, tenth, octave, fifth, third, fifth (in eighths).
+        for i, key in enumerate((r, fifth, r + 12, third + 12, r + 12, fifth, third, fifth)):
+            notes["hands"].append((t0 + i * 12, key, 9, 84 if i == 0 else 66))
+        for t, key, length in melody[b]:
+            notes["melody"].append((t0 + t, key, length - 5, 100 if t == 0 else 88))
+        if b >= 8:
+            notes["pad"].append((t0, third + 24, bar - 16, 80))
+    for name, _ in instruments:
+        tr = ET.SubElement(s, "track", {"name": name, "instrument": name})
+        for t, key, length, vel in sorted(notes[name]):
+            ET.SubElement(tr, "note", {"t": str(t), "key": str(key), "len": str(length), "vel": str(vel)})
+    return s
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "assets", "test_room")
-    for name, s in (("night_street", night_street()), ("dusk_pulse", dusk_pulse())):
+    for name, s in (("night_street", night_street()), ("hollow_dread", hollow_dread()), ("dusk_pulse", dusk_pulse())):
         ET.indent(s, " ")
         path = os.path.join(out, "music", name + ".bmsong")
         ET.ElementTree(s).write(path, encoding="UTF-8", xml_declaration=True)
