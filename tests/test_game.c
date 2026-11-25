@@ -3258,15 +3258,38 @@ static int mirroredSprites(const BmPpuState *ppu)
   return n;
 }
 
-// The street's music follows the danger (scripts/threat.ms, the room's attachment Threat):
-// night_escape starts calm (intensity 0) with the knight out of sight; near it, the escape (1);
-// at a lunge's distance, the pursuit (2); away again, it calms down a step at a time.
+// The street's music follows what the player does (scripts/threat.ms, the room's attachment
+// Threat): a step for moving (on average over the last 3 seconds), one for an enemy in sight,
+// one for combat; it calms down a step at a time.
 static const char *musicPlaying(void)
 {
   return s_game.sound.players[0].playing ? bmPackString(&s_pack, s_game.sound.players[0].nameId) : "";
 }
 
-static void testTheStreetsMusicFollowsTheDanger(void)
+// Walks left and right in turn, `frames` in all, `each` frames a way; the highest intensity.
+static int pace(int frames_, int each)
+{
+  int most = 0;
+  for (int f = 0; f < frames_; f++)
+  {
+    frames(1, (f / each) % 2 ? BM_KEY_LEFT : BM_KEY_RIGHT);
+    if (s_game.sound.intensity > most) most = s_game.sound.intensity;
+  }
+  return most;
+}
+
+// Frames until the intensity is `level` (standing still), or -1.
+static int waitFor(int level, int limit)
+{
+  for (int f = 0; f < limit; f++)
+  {
+    if (s_game.sound.intensity == level) return f;
+    frames(1, 0);
+  }
+  return -1;
+}
+
+static void testTheStreetsMusicFollowsThePlayer(void)
 {
   startWith(s_data, s_size, "rural_street");
   frames(10, 0);
@@ -3274,30 +3297,32 @@ static void testTheStreetsMusicFollowsTheDanger(void)
   TEST_ASSERT(s_game.attachments.classKey[BM_ATTACH_ROOM_FIRST] != 0);
   TEST_ASSERT(s_game.sound.intensity == 0);
   TEST_ASSERT(s_game.sound.layerVolume[1] == BM_SOUND_LAYER_FULL && s_game.sound.layerVolume[2] == 0);   // calm, not escape
+  // Standing about: calm. A few steps are not enough.
+  frames(200, 0);
+  TEST_ASSERT(s_game.sound.intensity == 0);
+  TEST_ASSERT(pace(30, 30) == 0);
+  // Moving about for a while, far from the knight: one step up.
+  bmBodyPlace(&s_game.player, 40, 128);   // well away from the knight (the jump there is no run)
+  int moved = pace(240, 40);
+  TEST_ASSERT(moved == 1);
+  TEST_ASSERT(s_game.sound.intensity == 1 && s_game.sound.layerVolume[2] > 0);
+  // Still again: the three seconds run out, then the step is held, then calm.
+  int calm = waitFor(0, 600);
+  printf("    calm %d frames after stopping\n", calm);
+  TEST_ASSERT(calm >= 180 + 60 && calm < 600);   // the average falls below within the 3 s, then the hold
+  // Standing in the knight's sight: one step; at a lunge's distance, one more.
   int knight = actorOfClass("Knight");
   TEST_ASSERT(knight >= 0);
-  int32_t kx = BM_FIX_INT(s_game.actors.x[knight]);
-  // Seen: the escape, fading in.
-  bmBodyPlace(&s_game.player, kx - 80, 128);
+  bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[knight]) - 80, 128);
   frames(3, 0);
-  TEST_ASSERT(s_game.sound.intensity == 1);
-  frames(30, 0);
-  TEST_ASSERT(s_game.sound.layerVolume[2] > 0 && s_game.sound.layerVolume[1] < BM_SOUND_LAYER_FULL);
-  // Close: the pursuit.
+  TEST_ASSERT(s_game.sound.intensity == 1);   // the jump there is no run
   bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[knight]) - 24, 128);
   frames(3, 0);
   TEST_ASSERT(s_game.sound.intensity == 2);
-  // Far away: held a while, then down a step at a time.
-  bmBodyPlace(&s_game.player, 24, 128);
-  int sawEscape = -1, calm = -1;
-  for (int f = 0; f < 900 && calm < 0; f++)
-  {
-    frames(1, 0);
-    if (s_game.sound.intensity == 1 && sawEscape < 0) sawEscape = f;
-    if (s_game.sound.intensity == 0) calm = f;
-  }
-  printf("    escape after %d frames, calm after %d\n", sawEscape, calm);
-  TEST_ASSERT(sawEscape >= 170 && calm > sawEscape + 170);
+  // Moving about in the fight as well: all three.
+  int most = pace(300, 20);
+  printf("    fighting on the move: intensity %d\n", most);
+  TEST_ASSERT(most == 3);
   TEST_ASSERT(bm_script_errors == 0);
 }
 
@@ -3389,7 +3414,7 @@ int main(int argc, char **argv)
   RUN_TEST(testSpritesAreLitTheWayTheyFace);
   RUN_TEST(testTheTorchHalls);
   RUN_TEST(testThePuddleMirrorsTheStreet);
-  RUN_TEST(testTheStreetsMusicFollowsTheDanger);
+  RUN_TEST(testTheStreetsMusicFollowsThePlayer);
   RUN_TEST(testColourCorrection);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);

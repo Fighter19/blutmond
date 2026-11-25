@@ -64,14 +64,15 @@ the bench and whoever stands over it, the player and a knight on watch by the be
 object, runtime-core.md §12). The knight has a normal map (`tools/make_knight_sprite.py` draws
 it with the knight: each part its shape) and shiny steel. Its music, "night_escape"
 (`tools/make_street_music.py`: cold electronics after the character of the Portal soundtrack),
-follows the danger: three modes of the same eight bars, crossing over two bars, chosen by the
-room's attachment `Threat` (`scripts/threat.ms`, the room's property `attach = Threat`). The
-player starts out of the knight's sight, and the music is calm (intensity 0: a pad and bleeps);
-within 96 pixels of an enemy it is the escape (1: a kick, a bass in eighths, a lament); within
-36, or for four seconds after being struck, the pursuit (2: a pumping bass and a running
-arpeggio over the kick and the lament). It rises at once and calms down a step at a time, each
-after three seconds of less danger. `Threat.Notice`, `Threat.Close`, `Threat.Hold` and
-`Threat.Shaken` as room properties change these. The same script writes "night_street"
+follows what the player does: three modes of the same eight bars, crossing over two bars,
+chosen by the room's attachment `Threat` (`scripts/threat.ms`, the room's property
+`attach = Threat`). It counts one step for each of: moving (on average at least 0.75 pixels a
+frame over the last three seconds; running is 2), an enemy in sight (within 96 pixels) and
+combat (within 36, or for four seconds after being struck). 0 is calm (a pad and bleeps), 1 the
+escape (a kick, a bass in eighths, a lament), 2 and 3 the pursuit (a pumping bass and a running
+arpeggio over the kick and the lament). The player starts out of the knight's sight, standing:
+calm. It rises at once and calms down a step at a time, each after three seconds of less. The
+numbers are constants at the top of the script. The same script writes "night_street"
 (the street's music before: dread with a pulse, after how players describe Persona 3's "The
 Voice Someone Calls"), "infinite_corridor"
 (the same sounds driven harder, for an endless corridor),
