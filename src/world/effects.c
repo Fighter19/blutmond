@@ -136,7 +136,7 @@ int32_t bmEffectsDoorOpening(const BmGame *g, uint16_t object)
 uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
 {
   uint8_t used = 0, matrix = 0;
-  for (uint16_t i = 0; i < g->objectCount && used < maxOam && matrix < 31; i++)   // 31: the puddle's (reflect.h)
+  for (uint16_t i = 0; i < g->objectCount && used < maxOam && matrix < 30; i++)   // 30, 31: the puddle's (reflect.h)
   {
     const BmObjectView *o = &g->objects[i];
     if (o->kind != BM_OBJECT_DOOR || bmGameSheetBank(g, g->objectSheet[i], 0) < 0) continue;
@@ -178,7 +178,7 @@ uint8_t bmEffectsDrawDoors(BmGame *g, uint8_t firstOam, uint8_t maxOam)
     used = (uint8_t)(used + n);
     // Behind a door in the back wall, the dark of the opening (the panel's frame 1): after the
     // panel in OAM, so behind it.
-    if (side != 1 && side != 2 && s->frameCount > 1 && matrix < 31 && used < maxOam)
+    if (side != 1 && side != 2 && s->frameCount > 1 && matrix < 30 && used < maxOam)
     {
       n = bmSpriteSheetDrawSheared(s, 1, sx, sy, scale, 0, scale, matrix, 1, (uint8_t)(firstOam + used), (uint8_t)(maxOam - used));
       if (n != 0) matrix++;

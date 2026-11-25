@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: BSD-2-Clause OR MIT
 """Draws the rural street of the test level and writes its room: a village street at night, a
 cottage with a lit window, a picket fence, a tree, a bench and a gas lamp whose light falls on
-all of it (lighting = palette, dithered), and a puddle on the road that mirrors the lamp, the
-bench and the sky (a `Puddle` object, src/world/reflect.h). West of the debug lobby.
+all of it (lighting = palette, dithered), a puddle on the road that mirrors the lamp, the bench,
+the sky and whoever stands over it (a `Puddle` object, src/world/reflect.h), and a knight on
+watch by the bench. West of the debug lobby.
 
 usage: make_street.py <assets/test_room>
 
@@ -349,6 +350,7 @@ def write_room(path, tiles, maps, cols, rows):
     objects = [
         ("CameraZone", "room", 0, 0, W, H, False, []),
         ("PlayerStart", "start", 276, GROUND, 0, 0, True, []),
+        ("Knight", "knight", 350, GROUND, 0, 0, True, []),
         ("Light", "lamp", LAMP_LIGHT[0], LAMP_LIGHT[1], 0, 0, True,
          [("colour", "#ffd890"), ("radius", "140"), ("height", "24"), ("intensity", "1.6"), ("flicker", "0.2"),
           ("flicker_speed", "4")]),

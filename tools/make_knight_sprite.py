@@ -10,8 +10,12 @@ Every frame is put together from the same parts (legs, armour, helm, shield, swo
 the walk and the attack stay one figure. The frames carry their own boxes: the hurt box on
 the body, the guard box `shield` while the shield is ahead (not while the sword strikes:
 that is when it can be struck from the front), the hit box `sword` on the strike.
-Everything here is drawn by this script.
+Everything here is drawn by this script, the normal map too (knight_n.png, for the light of
+lit rooms): each part has a shape (the legs, the arms and the body round across, the helm and
+the shoulders domes, the shield curved gently, the blade a ridge), and a pixel's normal is
+that shape's where it lies in its part. The steel is shiny.
 """
+import math
 import os
 import sys
 
@@ -38,23 +42,48 @@ PALETTE = {
 }
 
 
+# The shapes of the parts: a normal (x right, y down, z toward the viewer) from where a pixel
+# lies in its part, u across and v down, both -1 to 1.
+def _norm(x, y, z):
+    l = math.sqrt(x * x + y * y + z * z) or 1.0
+    return (x / l, y / l, z / l)
+
+
+SHAPES = {
+    'flat': lambda u, v: (0.0, 0.0, 1.0),
+    'cylinder': lambda u, v: _norm(0.85 * u, 0.15 * v, 1.0),        # round across
+    'body': lambda u, v: _norm(0.75 * u, 0.35 * v, 1.0),            # a chest: round, a little down
+    'dome': lambda u, v: _norm(0.8 * u, 0.8 * v, 1.0),
+    'shield': lambda u, v: _norm(0.45 * u, 0.2 * v, 1.0),           # a kite shield, gently curved
+    'blade': lambda u, v: _norm(0.0, -0.55, 1.0),                   # its flat tipped up to the light
+}
+
+
 class Canvas:
     def __init__(self):
         self.px = [['.'] * W for _ in range(H)]
+        self.nm = [[(0.0, 0.0, 1.0)] * W for _ in range(H)]
+        self.shape = 'flat'
 
-    def put(self, x, y, c):
+    def put(self, x, y, c, normal=None):
         if 0 <= x < W and 0 <= y < H and c != '.':
             self.px[y][x] = c
+            self.nm[y][x] = normal if normal is not None else SHAPES[self.shape](0.0, 0.0)
 
     def hline(self, x0, x1, y, c):
         for x in range(x0, x1 + 1):
             self.put(x, y, c)
 
-    def rows(self, x, y, art):
-        """Puts rows of palette letters with the top left at (x, y)."""
+    def rows(self, x, y, art, shape=None):
+        """Puts rows of palette letters with the top left at (x, y); their normals from `shape`
+        (or the canvas's) over the rows' box."""
+        shape = SHAPES[shape or self.shape]
+        w, h = max(len(r) for r in art), len(art)
         for j, row in enumerate(art):
             for i, c in enumerate(row):
-                self.put(x + i, y + j, c)
+                u = (i + 0.5) / w * 2 - 1
+                v = (j + 0.5) / h * 2 - 1
+                self.put(x + i, y + j, c, shape(u, v))
 
     def line(self, x0, y0, x1, y1, c):
         dx, dy = abs(x1 - x0), -abs(y1 - y0)
@@ -93,13 +122,14 @@ def legs(c, rear, front):
     """rear, front: (x shift, lift) of each leg; the leg tops at y 23."""
     for (shift, lift), art, x in ((rear, LEG_BACK, 8), (front, LEG, 12)):
         top = 23 - lift
-        c.rows(x + shift, top, art[:len(art) - lift] if lift else art)
+        c.rows(x + shift, top, art[:len(art) - lift] if lift else art, 'cylinder')
         if lift:   # the lifted boot
-            c.rows(x + shift, 31 - lift - 2, ["okhko", "ooooo"])
+            c.rows(x + shift, 31 - lift - 2, ["okhko", "ooooo"], 'cylinder')
 
 
 def torso(c, dx, dy):
     x, y = 6 + dx, 12 + dy
+    c.shape = 'body'
     c.rows(x, y, [
         "..oooooooo",
         ".oDMMMLLMo.",
@@ -118,6 +148,7 @@ def torso(c, dx, dy):
 
 def pauldron(c, dx, dy):
     """The rear shoulder, over the arm that holds the sword."""
+    c.shape = 'dome'
     c.rows(5 + dx, 12 + dy, [
         ".ooo.",
         "oMLMo",
@@ -129,6 +160,7 @@ def pauldron(c, dx, dy):
 def helm(c, dx, dy):
     x, y = 7 + dx, 2 + dy
     # The plume first, streaming back over the crest.
+    c.shape = 'cylinder'
     c.rows(x - 4, y - 1, [
         "....oooo",
         "..oorrrro",
@@ -138,6 +170,7 @@ def helm(c, dx, dy):
         "oRo......",
         ".o.......",
     ])
+    c.shape = 'dome'
     c.rows(x, y + 1, [
         "..ooooo.",
         ".oMLLWLo",
@@ -176,11 +209,12 @@ SHIELD = [
 
 def shield_front(c, dx, dy):
     """Ahead of the body: x 16 to 23, y 9 to 26 (with dx, dy 0)."""
-    c.rows(16 + dx, 9 + dy, SHIELD)
+    c.rows(16 + dx, 9 + dy, SHIELD, 'shield')
 
 
 def shield_back(c, dx, dy):
     """Swung behind while the sword strikes: seen edge on, over the back."""
+    c.shape = 'cylinder'
     c.rows(3 + dx, 12 + dy, [
         "ooo.",
         "ogGo",
@@ -198,11 +232,12 @@ def shield_back(c, dx, dy):
 
 
 def gauntlet(c, x, y):
-    c.rows(x, y, ["oMo", "oLo", "ooo"])
+    c.rows(x, y, ["oMo", "oLo", "ooo"], 'dome')
 
 
 def sword_idle(c, dx, dy):
     """Held upright in the rear hand, along the back."""
+    c.shape = 'blade'
     x = 4 + dx
     c.put(x + 1, 3 + dy, 'W')
     for y in range(4, 16):
@@ -234,6 +269,7 @@ def diagonal(c, x, y, n, sx, sy):
 
 def sword_raised(c, dx, dy):
     """The wind-up: up and back over the shoulder."""
+    c.shape = 'blade'
     hx, hy = 9 + dx, 9 + dy
     diagonal(c, hx - 2, hy - 2, 7, -1, -1)
     c.rows(hx - 3, hy - 3, ["o.o", ".G.", "o.g"])   # crossguard, across the blade
@@ -243,7 +279,8 @@ def sword_raised(c, dx, dy):
 def sword_thrust(c, dx, dy):
     """The strike: straight ahead at chest height, the arm out."""
     y = 15 + dy
-    c.rows(15 + dx, y - 1, ["oooo", "MLLo", "DMMo", "oooo"])   # the arm
+    c.rows(15 + dx, y - 1, ["oooo", "MLLo", "DMMo", "oooo"], 'cylinder')   # the arm
+    c.shape = 'blade'
     c.rows(19 + dx, y - 2, ["o", "g", "G", "g", "g", "o"])     # crossguard
     for x in range(20 + dx, 31):
         c.put(x, y, 'W')
@@ -257,6 +294,7 @@ def sword_thrust(c, dx, dy):
 
 def sword_low(c, dx, dy):
     """Recovering: the blade down and ahead."""
+    c.shape = 'blade'
     hx, hy = 17 + dx, 19 + dy
     diagonal(c, hx + 2, hy + 2, 8, 1, 1)
     c.rows(hx, hy, ["o.o", ".G.", "o.o"])
@@ -291,7 +329,7 @@ def figure(rear=(0, 0), front=(0, 0), dx=0, dy=0, shield='front', sword='idle', 
             sword_low(c, dx, dy)
         if shield == 'front':
             shield_front(c, dx, dy)
-    return c.px
+    return c.px if parts != 'all' else c
 
 
 def bounds(px):
@@ -317,7 +355,7 @@ def frame(hit=None, **pose):
     boxes.insert(0, ('hurt', '', hx, hy, hw, hh))
     if hit is not None:
         boxes.append(('hit', 'sword') + hit)
-    return (figure(**pose), boxes)
+    return (figure(**pose), boxes)   # (the canvas: pixels and normals, boxes)
 
 
 # (pixels, boxes)
@@ -348,12 +386,20 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "assets/test_room"
     rows = (len(FRAMES) + COLUMNS - 1) // COLUMNS
     img = Image.new("RGBA", (COLUMNS * W, rows * H), (0, 0, 0, 0))
-    for i, (px, _) in enumerate(FRAMES):
+    nimg = Image.new("RGBA", (COLUMNS * W, rows * H), (128, 128, 255, 0))
+    for i, (canvas, _) in enumerate(FRAMES):
         for y in range(H):
             for x in range(W):
-                img.putpixel(((i % COLUMNS) * W + x, (i // COLUMNS) * H + y), PALETTE[px[y][x]])
+                at = ((i % COLUMNS) * W + x, (i // COLUMNS) * H + y)
+                img.putpixel(at, PALETTE[canvas.px[y][x]])
+                if canvas.px[y][x] != '.':
+                    n = canvas.nm[y][x]
+                    nimg.putpixel(at, tuple(max(0, min(255, int(round((v + 1.0) * 127.5)))) for v in n) + (255,))
     img.save(os.path.join(out, "knight.png"))
-    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<sprite version="1" image="knight.png">',
+    nimg.save(os.path.join(out, "knight_n.png"))
+    steel = ",".join("#%02x%02x%02x" % PALETTE[k][:3] for k in "LW")
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<sprite version="1" image="knight.png" normal="knight_n.png" shiny="%s">' % steel,
              ' <hitbox x="-5" y="-28" w="10" h="28"/>']
     for i, (_, boxes) in enumerate(FRAMES):
         lines.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d">'

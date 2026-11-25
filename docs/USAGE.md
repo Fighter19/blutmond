@@ -60,7 +60,9 @@ in the bag at the start.
 a village street at night, a cottage with a lit window, a fence, a tree, a bench and a gas lamp
 whose light, wavering a little, falls on them (mode palette, dithered; the sky, the lamp's glass and the
 window give their own light: black in the normal map). A puddle on the road mirrors the lamp,
-the bench and the player standing over it (a `Puddle` object, runtime-core.md §12).
+the bench and whoever stands over it, the player and a knight on watch by the bench (a `Puddle`
+object, runtime-core.md §12). The knight has a normal map (`tools/make_knight_sprite.py` draws
+it with the knight: each part its shape) and shiny steel.
 
 **The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): three rooms alike
 but for how their flickering torch lights the walls, side by side for comparing, each behind

@@ -3208,7 +3208,8 @@ static void testTheTorchHalls(void)
 
 // The rural street: a flickering gas lamp lights it (mode palette), and the puddle on the road
 // mirrors the room (background 2 on background 0's map, its scroll set line by line) and the
-// player standing over it (semi-transparent affine sprites, squeezed).
+// player and the knight standing over it (semi-transparent affine sprites, squeezed). The
+// knight has a normal map.
 static int mirroredSprites(const BmPpuState *ppu)
 {
   int n = 0;
@@ -3236,15 +3237,21 @@ static void testThePuddleMirrorsTheStreet(void)
     blend |= ppu->lineTables[t].reg == BM_PPU_BLDALPHA;
   }
   TEST_ASSERT(scroll && blend && (bmPpuReg(ppu, BM_PPU_BLDCNT) & (1u << 2)) != 0);
-  TEST_ASSERT(mirroredSprites(ppu) >= 2);
+  int both = mirroredSprites(ppu);
+  TEST_ASSERT(both >= 3);
+  bool knightLit = false;
+  for (uint8_t i = 0; i < s_game.actors.count; i++)
+    if (s_game.actors.sheet[i] >= 0 && s_game.sheets[s_game.actors.sheet[i]].pNormals != NULL) knightLit = true;
+  TEST_ASSERT(knightLit);
   // The banks are shaded again only when the light changed enough to show (less than 3/256).
   TEST_ASSERT(s_game.light.shaded - s_game.light.now < 3 && s_game.light.now - s_game.light.shaded < 3);
   uint16_t shot[BM_PPU_WIDTH * BM_PPU_HEIGHT];
   bmHalHostRender(shot);
-  // Away from the puddle the player is not mirrored.
+  // Away from the puddle the player is not mirrored; the knight, standing over it, still is.
   bmBodyPlace(&s_game.player, 440, 128);
   frames(30, 0);
-  TEST_ASSERT(mirroredSprites(bmHalHostGetPpu()) == 0);
+  int knight = mirroredSprites(bmHalHostGetPpu());
+  TEST_ASSERT(knight > 0 && knight < both);
   // Out of the room the mirror is gone.
   TEST_ASSERT(bmEffectsTeleport(&s_game, (uint32_t)bmGameFindRoom(&s_pack, "debug_lobby"), 40, 160));
   frames(BM_TELEPORT_FRAMES + 2, 0);

@@ -1531,6 +1531,14 @@ uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
     used = (uint8_t)(used + bmSpriteSheetDrawBank(s, frame, BM_FIX_INT(a->x[i]) - g->room.cameraX, BM_FIX_INT(a->y[i]) - g->room.cameraY,
                                                   a->facing[i] < 0, 1, flash ? BM_HITS_FLASH_BANK : (uint8_t)bank, (uint8_t)(firstOam + used),
                                                   (uint8_t)(maxOam - used)));
+    // Over a puddle (reflect.h): mirrored in it as the player is, behind the room's main layer.
+    int32_t ax = BM_FIX_INT(a->x[i]), surface;
+    uint8_t squash;
+    bool left = a->facing[i] < 0;
+    if (used < maxOam && bmReflectMirrors(g, ax - 16, ax + 16, BM_FIX_INT(a->y[i]), &surface, &squash))
+      used = (uint8_t)(used + bmSpriteSheetDrawReflected(s, frame, ax - g->room.cameraX, BM_FIX_INT(a->y[i]) - g->room.cameraY, left, surface,
+                                                         squash, BM_REFLECT_MATRIX(left), 2, flash ? BM_HITS_FLASH_BANK : (uint8_t)bank,
+                                                         (uint8_t)(firstOam + used), (uint8_t)(maxOam - used)));
   }
   return used;
 }

@@ -929,12 +929,15 @@ else of it is seen. Line table slot 1 sets its vertical scroll per line: line d 
 lines under the water line y) shows room row `y - 1 - d × squash`, wavering by `ripple` pixels
 (a sine of d and the frame). Slot 0 sets BLDALPHA per line: the puddle's lines blend the mirror
 (a first target, with the UI) over the backdrop, the water's colour, at `strength`, 16 -
-strength / 2; the other lines keep the UI's weights. The player standing over the puddle is
-drawn a second time, mirrored in the water line and squeezed by the same `squash`: the pieces
-of its figure as semi-transparent affine sprites (matrix 31; the doors use the others) at
-priority 2, behind the room's main layer, so only the puddle shows them. While a room effect or
+strength / 2; the other lines keep the UI's weights. The player and the actors standing over the
+puddle are drawn a second time, mirrored in the water line and squeezed by the same `squash`:
+the pieces of their sprites as semi-transparent affine sprites (matrix 31 facing right, 30
+facing left; the doors use 0 to 29) at priority 2, behind the room's main layer, so only the
+puddle shows them. They are lit as the figure they mirror (the same banks). While a room effect or
 a teleport uses the line tables the mirror is hidden. The multiboot images have no puddles
-(light_off.c). On the GBA the rural street takes about 158 lines of a frame (130 with its lamp steady).
+(light_off.c). On the GBA the rural street takes about 179 lines of a frame with the knight in the
+lamp's light (158 without him, 130 with the lamp steady too): three sprite banks lit, about
+35,000 cycles.
 
 **Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has
 it and the player has none (the menu does not open then). The test level's mirror teleports to

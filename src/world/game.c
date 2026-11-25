@@ -774,7 +774,7 @@ static void updateSprites(BmGame *g)
           int8_t bank = bmGameSheetBank(g, layerSheet(g, i), playerLayerPaletteNow(g, i));
           if ((g->playerLayers[i].flags & BM_LAYER_HIDDEN) || bank < 0) continue;
           next = (uint8_t)(next + bmSpriteSheetDrawReflected(sheets[i], pose.frame[i], x + pose.x[i], y + pose.y[i], left, surface, squash,
-                                                             BM_REFLECT_MATRIX, 2, (uint8_t)bank, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
+                                                             BM_REFLECT_MATRIX(left), 2, (uint8_t)bank, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
         }
     }
   }

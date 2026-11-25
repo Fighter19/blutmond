@@ -12,7 +12,8 @@
 // line, `squash` rows up per line (a puddle seen from the side is thin: what it mirrors is
 // squeezed). It lies behind the room's layers, so it shows only where they are empty, and is
 // blended over the backdrop (the water's colour) on the puddle's lines (a second line table,
-// BLDALPHA). The player is mirrored by affine sprites, squeezed the same way.
+// BLDALPHA). The player and the actors over it are mirrored by affine sprites, squeezed the
+// same way (game.c, actors.c).
 //
 // Needs a free background (a room of at most two layers, without a light layer) and line table
 // slots 0 and 1, so it is off while a room effect or a teleport uses them.
@@ -21,7 +22,9 @@
 
 struct BmGame;
 
-#define BM_REFLECT_MATRIX 31   // the affine matrix of the mirrored player (the doors use the others)
+// The affine matrices of what is mirrored: one facing right, one facing left (the doors use
+// the others, 0 to 29).
+#define BM_REFLECT_MATRIX(hflip) ((uint8_t)((hflip) ? 30 : 31))
 
 typedef struct BmReflection
 {

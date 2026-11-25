@@ -1111,10 +1111,11 @@ if(BM_PLATFORM STREQUAL "host")
         set_tests_properties(light_mgba_${hall}_corrected PROPERTIES FIXTURES_REQUIRED test_level_pack FAIL_REGULAR_EXPRESSION ": [1-9][0-9]* chunks sent")
       endforeach()
       # The rural street: its lamp flickers a little (the room's 15 banks shaded again only when
-      # that shows); the player stands by the puddle (lit: two banks) and is mirrored in it.
+      # that shows); the player and the knight stand by the puddle (lit: three banks) and are
+      # mirrored in it.
       add_test(NAME light_mgba_rural_street
         COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${BM_GBA_BUILD_DIR}/test_level_cart_gba.bmpk restart:rural_street run 120
-          check "${elf}:bm_light_cycles+0<=45000" check "${elf}:bm_light_cycles+4<=30000" screenshot ${out}/light_rural_street.ppm)
+          check "${elf}:bm_light_cycles+0<=45000" check "${elf}:bm_light_cycles+4<=40000" screenshot ${out}/light_rural_street.ppm)
       set_tests_properties(light_mgba_rural_street PROPERTIES FIXTURES_REQUIRED test_level_pack FAIL_REGULAR_EXPRESSION ": [1-9][0-9]* chunks sent")
       # A room's light (LITE) is its own: the cartridge game's pack, fitted for a multiboot GBA,
       # leaves out the light of the rooms it leaves out (else their tables would not fit).

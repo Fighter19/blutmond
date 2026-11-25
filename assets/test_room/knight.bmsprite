@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<sprite version="1" image="knight.png">
+<sprite version="1" image="knight.png" normal="knight_n.png" shiny="#bec8da,#ecf0f8">
  <hitbox x="-5" y="-28" w="10" h="28"/>
  <frame x="0" y="0" w="32" h="32" ax="12" ay="32">
   <box kind="hurt" x="-10" y="-31" w="14" h="31"/>
