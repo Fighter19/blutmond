@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: BSD-2-Clause OR MIT
-"""Writes the rural street's music (assets/test_room/music/night_street.bmsong): dark wave at
-104 beats a minute in A minor, 16 bars that loop after a four-bar intro.
+"""Writes two songs (assets/test_room/music/):
+
+night_street.bmsong, the rural street's: horror ambience at 60 beats a minute, 16 bars (64 s)
+that loop. Two low drones a semitone apart (A and B flat, later A and E flat, a tritone) beat
+against each other; wind swells and falls (noise, slow in and out); a broken music box rings
+high and sparse around the tritone, its notes trailing in a long echo; halfway through a
+heartbeat starts, quickening in the last bars; now and then something groans (a saw sliding
+down in semitones) or scrapes (a thin pulse, two notes a semitone apart). At most 6 voices.
+
+dusk_pulse.bmsong, for a livelier stage (not in the test level's pack): dark wave at 104 beats
+a minute in A minor, 16 bars that loop after a four-bar intro.
 
 usage: make_street_music.py <assets/test_room>
 
@@ -47,7 +56,7 @@ LEAD = [
 ]
 
 
-def song():
+def dusk_pulse():
     s = ET.Element("song", {"version": "1", "bpm": "104", "length": str(BARS * BAR), "loop": str(LOOP_BAR * BAR),
                             "effect": "0", "echo": "216", "echo-feedback": "120"})
     instruments = [
@@ -105,13 +114,69 @@ def song():
     return s
 
 
+def night_street():
+    """The horror ambience (see the top)."""
+    bar = 4 * BEAT                                   # 4 s at 60 beats a minute
+    bars = 16
+    s = ET.Element("song", {"version": "1", "bpm": "60", "length": str(bars * bar), "loop": "0", "effect": "0",
+                            "echo": "225", "echo-feedback": "170"})
+    instruments = [
+        ("drone", {"wave": "triangle", "attack": "120", "decay": "0", "sustain": "230", "release": "90", "volume": "120", "pan": "-12"}),
+        ("drone2", {"wave": "saw", "attack": "150", "decay": "0", "sustain": "200", "release": "90", "volume": "38", "pan": "14"}),
+        ("wind", {"wave": "noise", "attack": "180", "decay": "0", "sustain": "150", "release": "150", "volume": "46", "pan": "-20"}),
+        ("bell", {"wave": "sine", "attack": "0", "decay": "40", "sustain": "0", "release": "20", "volume": "92", "pan": "26"}),
+        ("heart", {"wave": "sample", "sample": "kick.wav", "root": "60", "loop": "0", "attack": "0", "decay": "0", "sustain": "255",
+                   "release": "2", "volume": "150", "pan": "0"}),
+        ("groan", {"wave": "saw", "attack": "12", "decay": "30", "sustain": "110", "release": "20", "volume": "64", "pan": "-6"}),
+        ("scrape", {"wave": "pulse12", "attack": "2", "decay": "10", "sustain": "60", "release": "6", "volume": "40", "pan": "40"}),
+    ]
+    for name, attrs in instruments:
+        ET.SubElement(s, "instrument", dict({"name": name}, **attrs))
+    notes = {name: [] for name, _ in instruments}
+    # The drones, a section of 4 bars each: the low one stays on A, the other moves: a semitone
+    # above, then the tritone, then a semitone below, then a semitone above again.
+    for k, (lo, hi) in enumerate(((33, 34), (33, 39), (32, 33), (33, 34))):
+        t = k * 4 * bar
+        notes["drone"].append((t, lo, 4 * bar - 40, 100))
+        notes["drone2"].append((t, hi, 4 * bar - 40, 90))
+    # The wind, a swell every 4 bars, each at its own pitch (lower is darker).
+    for k, key in enumerate((44, 50, 40, 47)):
+        notes["wind"].append((k * 4 * bar + 24, key, 250, 90))
+    # The music box: sparse, high, around A and its tritone E flat; never two at once.
+    box = [(1, 48, 81), (2, 0, 84), (2, 72, 87), (3, 36, 86),
+           (5, 24, 81), (5, 60, 80), (6, 48, 87), (7, 12, 84), (7, 72, 81),
+           (9, 0, 93), (9, 48, 87), (10, 24, 86), (11, 60, 80),
+           (13, 12, 81), (13, 48, 84), (14, 0, 87), (14, 36, 88), (15, 24, 81)]
+    for b, t, key in box:
+        notes["bell"].append((b * bar + t, key, 20, 96 if key < 90 else 70))
+    # The heartbeat from bar 8 (lub dub), once a bar, then every two beats in the last four.
+    for b in range(8, bars):
+        for beat in ((0,) if b < 12 else (0, 2)):
+            t = b * bar + beat * BEAT
+            notes["heart"].append((t, 48, 5, 70 + (b - 8) * 3))
+            notes["heart"].append((t + 8, 46, 5, 54 + (b - 8) * 3))
+    # Groans: a saw sliding down in semitones.
+    for b in (5, 13):
+        for i, key in enumerate((41, 40, 39, 38)):
+            notes["groan"].append((b * bar + 60 + i * 9, key, 8, 80))
+    # Scrapes: two thin notes a semitone apart, quick.
+    for b in (3, 10):
+        for i, key in enumerate((90, 91, 90, 91)):
+            notes["scrape"].append((b * bar + 84 + i * 2, key, 2, 70))
+    for name, _ in instruments:
+        tr = ET.SubElement(s, "track", {"name": name, "instrument": name})
+        for t, key, length, vel in sorted(notes[name]):
+            ET.SubElement(tr, "note", {"t": str(t), "key": str(key), "len": str(length), "vel": str(vel)})
+    return s
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "assets", "test_room")
-    s = song()
-    ET.indent(s, " ")
-    path = os.path.join(out, "music", "night_street.bmsong")
-    ET.ElementTree(s).write(path, encoding="UTF-8", xml_declaration=True)
-    print("wrote", path)
+    for name, s in (("night_street", night_street()), ("dusk_pulse", dusk_pulse())):
+        ET.indent(s, " ")
+        path = os.path.join(out, "music", name + ".bmsong")
+        ET.ElementTree(s).write(path, encoding="UTF-8", xml_declaration=True)
+        print("wrote", path)
 
 
 if __name__ == "__main__":
