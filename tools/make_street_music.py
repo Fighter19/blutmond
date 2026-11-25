@@ -13,8 +13,8 @@ most 6 voices.
 
 test_chamber.bmsong, for a laboratory (not in the test level's pack): cold electronics after the
 character of the Portal (2007) soundtrack, B minor at 120 beats a minute, 16 bars (32 s) that
-loop in two parts. The chamber: a slow pad and sine bleeps arpeggiating sparsely in the echo,
-no beat. The escape: a steady kick and a bass in eighths, a sine lead lamenting over them. At
+loop in two parts. The chamber: a slow pad and sine bleeps on the beats, walking through the
+chord in the echo, no drums. The escape: a steady kick and a bass in eighths, a sine lead lamenting over them. At
 most 5 voices.
 
 infinite_corridor.bmsong, for an endless corridor (not in the test level's pack): the same
@@ -333,9 +333,8 @@ def lab_piece(parts):
             tb = t0 + b * bar
             if part == 0:
                 notes["bass"].append((tb, root, bar - 8, 90))
-                for i in range(16):                   # sparse bleeps: some sixteenths only
-                    if (i * 7 + c * 3 + b) % 5 in (0, 3):
-                        notes["bleep"].append((tb + i * 6, arp[i % 4], 3, 90 if i % 4 == 0 else 70))
+                for k in range(4):                    # bleeps on the beats only, walking through the chord
+                    notes["bleep"].append((tb + k * BEAT, arp[(k + b * 2) % 4], 3, 90 if k == 0 else 74))
             elif part == 1:
                 for e in range(8):
                     notes["bass"].append((tb + e * 12, root + (12 if e % 4 == 3 else 0), 8, 100 if e % 2 == 0 else 80))
