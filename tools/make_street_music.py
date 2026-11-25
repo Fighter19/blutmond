@@ -2,7 +2,17 @@
 # SPDX-License-Identifier: BSD-2-Clause OR MIT
 """Writes three songs (assets/test_room/music/):
 
-night_street.bmsong, the rural street's: a melancholic piece in D minor at 70 beats a minute,
+night_street.bmsong, the rural street's: dread with a pulse, after how players describe "The
+Voice Someone Calls" (Persona 3): short and creepy, light piano chimes over a lot of
+ambience and long silences, a constant slow beat of the bass drum under it all. E phrygian at
+84 beats a minute, 24 bars (69 s) that loop: a soft kick on every beat that never changes, a
+sine bass on the half notes leaning onto the flat second (F against E), a low triangle pad
+swelling slowly, and a small piano call of three notes that comes back, varied, with whole bars
+of silence between, ringing out in a long echo. Sines and triangles (no noise, no saw), at
+most 6 voices.
+
+quiet_sorrow.bmsong, for an emotional scene (not in the test level's pack): a melancholic
+piece in D minor at 70 beats a minute,
 16 bars (55 s) that loop. A piano-like melody (a triangle that decays to a soft hold) sings
 over a left hand breaking each chord in eighths (root, fifth, octave, tenth), a sine bass on
 the root, and in the second half a soft sine pad on the chord's third, all in a gentle echo:
@@ -177,7 +187,7 @@ def hollow_dread():
     return s
 
 
-def night_street():
+def quiet_sorrow():
     """The melancholic piece (see the top)."""
     bar = 4 * BEAT                                   # 3.4 s at 70 beats a minute
     s = ET.Element("song", {"version": "1", "bpm": "70", "length": str(16 * bar), "loop": "0", "effect": "0",
@@ -234,9 +244,55 @@ def night_street():
     return s
 
 
+def night_street():
+    """Dread with a pulse (see the top)."""
+    bar = 4 * BEAT                                   # 2.9 s at 84 beats a minute
+    bars = 24
+    s = ET.Element("song", {"version": "1", "bpm": "84", "length": str(bars * bar), "loop": "0", "effect": "0",
+                            "echo": "225", "echo-feedback": "150"})
+    instruments = [
+        ("kick", {"wave": "sample", "sample": "kick.wav", "root": "60", "loop": "0", "attack": "0", "decay": "0", "sustain": "255",
+                  "release": "2", "volume": "130", "pan": "0"}),
+        ("bass", {"wave": "sine", "attack": "3", "decay": "40", "sustain": "110", "release": "16", "volume": "150", "pan": "0"}),
+        ("pad", {"wave": "triangle", "attack": "90", "decay": "0", "sustain": "180", "release": "40", "volume": "54", "pan": "-14"}),
+        ("chime", {"wave": "triangle", "attack": "0", "decay": "24", "sustain": "0", "release": "10", "volume": "110", "pan": "18"}),
+    ]
+    for name, attrs in instruments:
+        ET.SubElement(s, "instrument", dict({"name": name}, **attrs))
+    notes = {name: [] for name, _ in instruments}
+    E1, F1 = 40, 41                                  # E2, F2: the sine's low register
+    # Per bar: the bass root (E, or F leaning on it) and the pad's note (low, held).
+    plan = [(E1, 55), (E1, 55), (F1, 57), (E1, 55),  (E1, 59), (E1, 59), (F1, 60), (E1, 59),
+            (E1, 55), (E1, 55), (F1, 57), (F1, 56),  (E1, 52), (E1, 52), (F1, 53), (E1, 52),
+            (E1, 55), (E1, 55), (F1, 57), (E1, 55),  (E1, 59), (F1, 60), (F1, 57), (E1, 55)]
+    # The piano's call: three notes, and where it comes (bar, tick, which variant); bars
+    # without it are silence for the chime.
+    calls = {0: (83, 79, 81), 1: (83, 79, 77), 2: (88, 84, 83), 3: (76, 77, 79)}
+    when = [(1, 24, 0), (3, 48, 1), (6, 12, 0), (7, 60, 3), (9, 24, 2), (11, 48, 1), (14, 36, 0), (15, 72, 3),
+            (17, 24, 0), (19, 48, 2), (21, 12, 1), (22, 60, 3)]
+    for b in range(bars):
+        t0 = b * bar
+        root, pad = plan[b]
+        for beat in range(4):                        # the pulse, never changing
+            notes["kick"].append((t0 + beat * BEAT, 48, 6, 76 if beat == 0 else 64))
+        for half in (0, 2):
+            notes["bass"].append((t0 + half * BEAT, root, 2 * BEAT - 10, 100 if half == 0 else 84))
+        if b % 2 == 0:                               # the pad, two bars a note
+            notes["pad"].append((t0, pad, 2 * bar - 24, 80))
+    for b, t, v in when:
+        for i, key in enumerate(calls[v]):
+            notes["chime"].append((b * bar + t + i * 12, key, 8, 96 - i * 10))
+    for name, _ in instruments:
+        tr = ET.SubElement(s, "track", {"name": name, "instrument": name})
+        for t, key, length, vel in sorted(notes[name]):
+            ET.SubElement(tr, "note", {"t": str(t), "key": str(key), "len": str(length), "vel": str(vel)})
+    return s
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "assets", "test_room")
-    for name, s in (("night_street", night_street()), ("hollow_dread", hollow_dread()), ("dusk_pulse", dusk_pulse())):
+    for name, s in (("night_street", night_street()), ("quiet_sorrow", quiet_sorrow()), ("hollow_dread", hollow_dread()),
+                    ("dusk_pulse", dusk_pulse())):
         ET.indent(s, " ")
         path = os.path.join(out, "music", name + ".bmsong")
         ET.ElementTree(s).write(path, encoding="UTF-8", xml_declaration=True)

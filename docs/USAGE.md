@@ -62,12 +62,13 @@ whose light, wavering a little, falls on them (mode palette, dithered; the sky, 
 window give their own light: black in the normal map). A puddle on the road mirrors the lamp,
 the bench and whoever stands over it, the player and a knight on watch by the bench (a `Puddle`
 object, runtime-core.md §12). The knight has a normal map (`tools/make_knight_sprite.py` draws
-it with the knight: each part its shape) and shiny steel. Its music, "night_street", is a melancholic piece in D
-minor (`tools/make_street_music.py`: a piano-like melody over a left hand breaking the chords
-in eighths, a sine bass, a soft pad in the second half; sines and triangles only, at most 6
-voices, so the game's sounds keep two). The same script writes "hollow_dread", horror
-ambience for an empty stage of high suspense, and "dusk_pulse", dark wave for a livelier one
-(neither in the test level).
+it with the knight: each part its shape) and shiny steel. Its music, "night_street", is dread with a pulse
+(`tools/make_street_music.py`, after how players describe Persona 3's "The Voice Someone
+Calls": a soft kick on every beat, a sine bass leaning onto the flat second, a slow low pad,
+and a small piano call that comes back with silence between, in a long echo; at most 5 voices,
+so the game's sounds keep three). The same script writes "quiet_sorrow" (a melancholic piece
+for an emotional scene), "hollow_dread" (horror ambience for an empty stage of high suspense)
+and "dusk_pulse" (dark wave for a livelier one), none of them in the test level.
 
 **The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): three rooms alike
 but for how their flickering torch lights the walls, side by side for comparing, each behind
