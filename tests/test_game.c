@@ -3326,6 +3326,75 @@ static void testTheStreetsMusicFollowsThePlayer(void)
   TEST_ASSERT(bm_script_errors == 0);
 }
 
+// The street's bench (scripts/bench.ms, a room attachment): not while the knight keeps watch;
+// with it gone, Up at the bench sits the player down (the animation `sit`, held by a lock) and
+// restores health and mana; a direction or a jump gets them up.
+static void testTheStreetsBenchIsForResting(void)
+{
+  startWith(s_data, s_size, "rural_street");
+  frames(5, 0);
+  const uint8_t slot = BM_ATTACH_ROOM_FIRST + 1;
+  const int32_t *bench = &s_game.attachments.fields[slot * BM_SCRIPT_MAX_FIELDS];   // Sitting, UpBefore, Health
+  TEST_ASSERT(s_game.attachments.classKey[slot] != 0);
+  int sit = bmSpriteSheetAnim(&s_game.sheets[s_game.playerSheet], &s_pack, "sit");
+  TEST_ASSERT(sit >= 0);
+  s_game.health = 2;
+  s_game.mana = 0;
+  bmBodyPlace(&s_game.player, 345, 128);
+  frames(5, 0);
+  frames(1, BM_KEY_UP);
+  frames(2, 0);
+  TEST_ASSERT(bench[0] == 0 && s_game.lockTimer == 0);   // the knight is there
+  // The knight gone: rest.
+  int knight = actorOfClass("Knight");
+  TEST_ASSERT(knight >= 0);
+  s_game.actors.gone[knight] = 1;
+  s_game.actors.hidden[knight] = 1;
+  bmBodyPlace(&s_game.player, 345, 128);
+  frames(5, 0);
+  frames(1, BM_KEY_UP);
+  frames(2, 0);
+  TEST_ASSERT(bench[0] == 1 && s_game.lockTimer != 0 && s_game.playerAnim.anim == (uint8_t)sit);
+  TEST_ASSERT(s_game.health == bmGameMaxHealth(&s_game) && s_game.mana == bmGameMaxMana(&s_game));
+  int32_t x = s_game.player.x;
+  frames(120, 0);
+  if (s_outDir != NULL)
+  {
+    uint16_t shot[BM_PPU_WIDTH * BM_PPU_HEIGHT];
+    bmHalHostRender(shot);
+    char path[512];
+    snprintf(path, sizeof(path), "%s/rural_street_bench.ppm", s_outDir);
+    FILE *f = fopen(path, "wb");
+    if (f != NULL)
+    {
+      fprintf(f, "P6\n%d %d\n255\n", BM_PPU_WIDTH, BM_PPU_HEIGHT);
+      for (int i = 0; i < BM_PPU_WIDTH * BM_PPU_HEIGHT; i++)
+        for (int k = 0; k < 3; k++)
+        {
+          uint8_t v = (uint8_t)((shot[i] >> (5 * k)) & 31);
+          fputc((v << 3) | (v >> 2), f);
+        }
+      fclose(f);
+    }
+  }
+  TEST_ASSERT(bench[0] == 1 && s_game.player.x == x && s_game.playerAnim.anim == (uint8_t)sit);   // sits still
+  // Right: back on their feet. Up again: down again (once, however long it is held); a jump:
+  // up again.
+  frames(2, BM_KEY_RIGHT);
+  TEST_ASSERT(bench[0] == 0 && s_game.lockTimer == 0);
+  frames(30, BM_KEY_UP);
+  TEST_ASSERT(bench[0] == 1 && s_game.playerAnim.anim == (uint8_t)sit);
+  frames(2, BM_KEY_A);
+  TEST_ASSERT(bench[0] == 0 && s_game.lockTimer == 0);
+  // Away from the bench, Up does nothing.
+  bmBodyPlace(&s_game.player, 200, 128);
+  frames(5, 0);
+  frames(1, BM_KEY_UP);
+  frames(2, 0);
+  TEST_ASSERT(bench[0] == 0 && s_game.lockTimer == 0);
+  TEST_ASSERT(bm_script_errors == 0);
+}
+
 static void testThePuddleMirrorsTheStreet(void)
 {
   startWith(s_data, s_size, "rural_street");
@@ -3415,6 +3484,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheTorchHalls);
   RUN_TEST(testThePuddleMirrorsTheStreet);
   RUN_TEST(testTheStreetsMusicFollowsThePlayer);
+  RUN_TEST(testTheStreetsBenchIsForResting);
   RUN_TEST(testColourCorrection);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);

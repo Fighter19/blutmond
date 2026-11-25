@@ -393,8 +393,8 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_owner_lock:
   case BM_SCRIPT_API_owner_play_anim:
   case BM_SCRIPT_API_owner_busy:
-    // Only the player's attachments act on their owner.
-    if (i != BM_ACTORS_OWNER) break;
+    // Only attachments act on their owner: the player's, and the room's (a bench to sit on).
+    if (i != BM_ACTORS_OWNER && i != BM_ACTORS_ROOM) break;
     if (api == BM_SCRIPT_API_owner_busy) *result = g->lockTimer != 0;
     else if (api == BM_SCRIPT_API_owner_lock)
     {

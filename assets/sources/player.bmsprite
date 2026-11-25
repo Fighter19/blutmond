@@ -72,6 +72,8 @@
  <frame x="192" y="160" w="24" h="32" ax="8" ay="32">
   <point name="hand" x="3" y="-17" angle="64"/>
  </frame>
+ <frame x="128" y="32" w="16" h="32" ax="8" ay="32"/>
+ <frame x="144" y="32" w="16" h="32" ax="8" ay="32"/>
  <palette name="steel">
   <swap from="#b51021" to="#8c94a5"/>
   <swap from="#820a18" to="#5a6270"/>
@@ -145,5 +147,9 @@
   <step frame="38" duration="1"/>
   <step frame="39" duration="1"/>
   <step frame="40" duration="1"/>
+ </animation>
+ <animation name="sit" loop="1">
+  <step frame="41" duration="60"/>
+  <step frame="42" duration="60"/>
  </animation>
 </sprite>

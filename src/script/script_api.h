@@ -203,8 +203,8 @@ typedef enum BmScriptType {
 // equip(slot, record): puts a record the player owns into equipment slot 0 to 7 (0: empties
 // it); the script its first `attach` field names is attached in the player's attachment slot of
 // the same number, its first record<S> variable set to the record. False if the player has none.
-// owner_lock(frames), owner_play_anim(#anim), owner_busy(): an attachment's actions on the
-// player (attachable-scripts.md §3): no walking or jumping for that many frames; an animation
+// owner_lock(frames), owner_play_anim(#anim), owner_busy(): an attachment's (the player's or
+// the room's: a bench to sit on) actions on the player (attachable-scripts.md §3): no walking or jumping for that many frames; an animation
 // of the player's sprite that the engine does not replace until the lock is over (or, without a
 // lock, until it ends); whether a lock is on. Nothing from an object.
 //

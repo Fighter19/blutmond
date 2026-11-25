@@ -323,7 +323,7 @@ def write_room(path, tiles, maps, cols, rows):
         "nextlayerid": "5", "nextobjectid": "1",
     })
     mp = ET.SubElement(m, "properties")
-    for k, v in (("music", "night_escape"), ("attach", "Threat"), ("room_id", "rural_street"), ("title", "Rural street"), ("lighting", "palette"),
+    for k, v in (("music", "night_escape"), ("attach", "Threat, Bench"), ("room_id", "rural_street"), ("title", "Rural street"), ("lighting", "palette"),
                  ("ambient", "0.3"), ("light_levels", "6"), ("light_curve", "perceived"), ("light_dither", "true"),
                  ("backdrop", "#101a2a")):
         rooms.prop(mp, k, v)

@@ -478,9 +478,9 @@ value is dropped and counts as a script error.
 | 37 | `disarm(box)` | ends this figure's hits with that box name |
 | 38 | `hit_box(reach, frames, damage, element)` | starts a hit of this figure with a rectangle `reach` (0..255) pixels ahead for `frames` (1..65535) frames, of that element (1 to 3; others 0); a negative `reach` (to -255): that far on both sides |
 | 39 | `equip(slot, record)` | slot 0 to 7, record 0 empties it: false if the player has none of the record, or if its structure has roles and `slot` is not the one its role `equip` gives (data-format.md §6; nothing changes). Else `equipped[slot] = record`; the class its first field of type `attach` names (its table found by the key among all `DTAB` chunks) is attached in the player's slot of the same number, its first variable of type record set to the record before `attached()`; without such a class the slot is emptied |
-| 40 | `owner_lock(frames)` | from a player's attachment: `lockTimer = frames` (0..65535) |
-| 41 | `owner_play_anim(name)` | from a player's attachment: the player's sheet's animation of that name from its start; `animHeld = 2` if `lockTimer != 0`, else 1. Unknown: nothing |
-| 42 | `owner_busy()` | from a player's attachment: `lockTimer != 0` |
+| 40 | `owner_lock(frames)` | from a player's or the room's attachment: `lockTimer = frames` (0..65535) |
+| 41 | `owner_play_anim(name)` | from a player's or the room's attachment: the player's sheet's animation of that name from its start; `animHeld = 2` if `lockTimer != 0`, else 1. Unknown: nothing |
+| 42 | `owner_busy()` | from a player's or the room's attachment: `lockTimer != 0` |
 | 43-49 | `ui_frame(x, y, w, h)`, `ui_label(x, y, text)`, `ui_number(x, y, value, digits)`, `ui_text(x, y, w, text)`, `ui_gauge(x, y, w, percent)`, `ui_clear(x, y, w, h)`, `ui_show(on)` | the UI layer (section 11): a frame, a text in the language shown, a right-aligned number, a text wrapped down to the last row, a gauge, empty cells, the layer on or off |
 | 50, 51 | `open_screen(class)`, `close_screen()` | section 11 |
 | 52-55 | `language()`, `set_language(i)`, `language_count()`, `language_name(i)` | the language texts are shown in (an option, section 6); setting it redraws every open screen; a name is a string id |

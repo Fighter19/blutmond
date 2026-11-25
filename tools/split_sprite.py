@@ -12,8 +12,11 @@ frames' rectangles, anchors, hitboxes and boxes, and gets a point (`waist` unles
 otherwise) on every frame N pixels above the anchor; the upper layer has the same rectangles
 with the anchor moved to the cut, so drawn at that point it lands where it was. Both keep the
 animations. With --mask the point is at the anchor's height minus N as well (--waist is still
-needed for where the point goes). Writes <name>.png and <name>.bmsprite for both.
+needed for where the point goes). Frames of a layer that are alike (the same picture, size,
+anchor, points and boxes: the torso of a run step and of standing, say) become one, the
+animations' steps pointing at the first; those of direction sets stay as they are. Writes <name>.png and <name>.bmsprite for both.
 """
+import copy
 import os
 import sys
 import xml.etree.ElementTree as ET
@@ -105,9 +108,29 @@ def main(argv):
                     if child.tag == "hitbox":
                         ET.SubElement(r, "hitbox", {"x": "0", "y": "0", "w": "0", "h": "0"})
                 else:
-                    r.append(child)
+                    r.append(copy.deepcopy(child))
             else:
-                r.append(child)
+                r.append(copy.deepcopy(child))   # each layer its own (the steps change)
+        # Alike frames become one: a frame is its picture in this layer and all but its place.
+        # (Not the frames of direction sets: their steps are frames in a row.)
+        img = high if upper_layer else low
+        own = {int(st.get("frame")) for a in r.findall("animation") if a.get("directions") for st in a.iter("step")}
+        first, keep, kept = {}, [], {}
+        for i, f in enumerate(r.findall("frame")):
+            x, y, w, h = (int(f.get(k)) for k in ("x", "y", "w", "h"))
+            attrs = tuple(sorted((k, v) for k, v in f.attrib.items() if k not in ("x", "y")))
+            key = (img.crop((x, y, x + w, y + h)).tobytes(), attrs, tuple(ET.tostring(c) for c in f))
+            if i in own:
+                key = ("own", i)
+            if key not in first:
+                first[key] = len(keep)
+                keep.append(f)
+            kept[i] = first[key]
+        for i, f in enumerate(r.findall("frame")):
+            if f not in keep:
+                r.remove(f)
+        for step in r.iter("step"):
+            step.set("frame", str(kept[int(step.get("frame"))]))
         ET.indent(r, space=" ")
         path = os.path.join(out, name + ".bmsprite")
         with open(path, "w", encoding="utf-8") as fh:

@@ -111,6 +111,28 @@ PLAYER_FRAMES = [
     player_frame(TORSO_ARMS_UP_R, legs(0, 0, lift_l=3)),             # 9 climb
 ]
 
+def sitting_legs():
+    """15 rows (17..31): sitting on a seat at hip height (a bench, 15 pixels up), facing right:
+    the thighs along the seat, the shins down to the ground, the boots forward."""
+    rows = [["."] * 16 for _ in range(15)]
+    for y in (1, 2):
+        for x in range(5, 13):
+            rows[y][x] = '6'
+    for y in range(3, 15):
+        for x in (11, 12):
+            rows[y][x] = '1' if y >= 12 else '6'
+    for y in (13, 14):
+        rows[y][13] = '1'
+    rows[0] = list(".....666666.....")
+    return ["".join(r) for r in rows]
+
+
+# Sitting (a bench to rest on, assets/test_room/scripts/bench.ms): still and breathing.
+SIT_FRAMES = [
+    player_frame(TORSO, sitting_legs()),
+    player_frame(TORSO, sitting_legs(), bob=1),
+]
+
 # Pushing (a push block, src/world/puzzle.h): leaning into it, both arms straight ahead, the
 # back leg braced far behind.
 TORSO_PUSH = [
@@ -519,6 +541,11 @@ def main():
         for y in range(32):
             for x in range(16):
                 img.putpixel((160 + i * 16 + x, 64 + y), PALETTE[frame[y][x]])
+    # Sitting, in the second row after the swing.
+    for i, frame in enumerate(SIT_FRAMES):
+        for y in range(32):
+            for x in range(16):
+                img.putpixel((128 + i * 16 + x, 32 + y), PALETTE[frame[y][x]])
     # A fifth row: aiming (24 x 32 each).
     tallest = Image.new("RGBA", (256, 192), (0, 0, 0, 0))
     tallest.paste(img, (0, 0))
@@ -540,6 +567,7 @@ def main():
     extra += [(160 + i * 16, 64, 16, 32, 8, 32) for i in range(4)]    # 28-31: pushing
     extra += [(i * 24, 160, 24, 32, 8, 32, [], [("hand", hx - 8, hy - 32, AIM_ANGLES[i])])
               for i, (_, (hx, hy)) in enumerate(AIM_FRAMES)]                # 32-40: aiming
+    extra += [(128 + i * 16, 32, 16, 32, 8, 32) for i in range(len(SIT_FRAMES))]   # 41, 42: sitting
     sprite_file(os.path.join(sources, "player.bmsprite"), "player.png", len(PLAYER_FRAMES), 8, 16, 32, (8, 32), (-5, -30, 10, 30), [
         ("idle", True, [(0, 40), (1, 40)]),
         ("run", True, [(2, 6), (3, 6), (4, 6), (5, 6)]),
@@ -555,6 +583,7 @@ def main():
         ("thrust", False, [(17, 4), (27, 10)]),
         ("push", True, [(28, 10), (29, 10), (30, 10), (31, 10)]),
         ("aim", False, [(32 + i, 1) for i in range(9)], (9, 192, 64)),
+        ("sit", True, [(41, 60), (42, 60)]),
     ], extra=extra, palettes=[
         # Wearing the chain mail (layered-sprites.md §5): the coat in steel.
         ("steel", [("#b51021", "#8c94a5"), ("#820a18", "#5a6270")]),

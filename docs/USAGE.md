@@ -72,7 +72,10 @@ combat (within 36, or for four seconds after being struck). 0 is calm (a pad and
 escape (a kick, a bass in eighths, a lament), 2 and 3 the pursuit (a pumping bass and a running
 arpeggio over the kick and the lament). The player starts out of the knight's sight, standing:
 calm. It rises at once and calms down a step at a time, each after three seconds of less. The
-numbers are constants at the top of the script. The same script writes "night_street"
+numbers are constants at the top of the script. The bench is for resting (the room's
+attachment `Bench`, `scripts/bench.ms`): Up while standing at it sits the player down and
+restores health and mana; Left, Right, Down, a jump or a hit gets them up. Not while an enemy is
+within 96 pixels, and the knight keeps watch by the bench. The same script writes "night_street"
 (the street's music before: dread with a pulse, after how players describe Persona 3's "The
 Voice Someone Calls"), "infinite_corridor"
 (the same sounds driven harder, for an endless corridor),
