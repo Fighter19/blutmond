@@ -1,13 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<song version="1" bpm="150" length="10" loop="-1" effect="1" echo="0" echo-feedback="0">
- <instrument name="water" wave="noise" attack="0" decay="5" sustain="0" release="2" volume="90" pan="0"/>
- <instrument name="plip" wave="sine" attack="0" decay="4" sustain="0" release="1" volume="70" pan="0"/>
+<song version="1" bpm="150" length="26" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="water" wave="sample" sample="splash.wav" root="60" loop="0" attack="0" decay="0" sustain="255" release="2" volume="120" pan="0"/>
  <track name="water" instrument="water">
-  <note t="0" key="88" len="2" vel="110"/>
-  <note t="3" key="80" len="2" vel="70"/>
- </track>
- <track name="plip" instrument="plip">
-  <note t="1" key="84" len="1" vel="100"/>
-  <note t="2" key="79" len="2" vel="80"/>
+  <note t="0" key="60" len="25" vel="110"/>
  </track>
 </song>

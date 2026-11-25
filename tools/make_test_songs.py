@@ -38,6 +38,123 @@ def kick(path):
         w.writeframes(bytes(data))
 
 
+def splash(path):
+    """A step in a puddle: water thrown up as many small bubbles and droplets, each ringing
+    briefly with a rising pitch (as a bubble does: a sine rising by about a third while it
+    fades), about 40 of them from 500 to 2500 Hz in the first tenth of a second, densest at
+    first; a fizz of fine spray (noise above about 1.5 kHz) wobbling with them; under it, soft,
+    the step's thud (noise shaped like a recorded splash's low part: a rumble at 55 Hz, a body
+    at about 420 Hz); then two drops falling back at 0.20 and 0.26 s, a few bubbles and a
+    little spray each. No click: everything swells in over a few ms. 8-bit mono at the engine's
+    rate (18157 Hz), 0.4 s. The same every time (its own random numbers)."""
+    rate = 18157
+    n = int(0.4 * rate)
+
+    def biquad(xs, b0, b1, b2, a0, a1, a2):
+        out, x1, x2, y1, y2 = [], 0.0, 0.0, 0.0, 0.0
+        for x in xs:
+            y = (b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0
+            x2, x1, y2, y1 = x1, x, y1, y
+            out.append(y)
+        return out
+
+    def highpass(xs, f, q):
+        w = 2 * math.pi * f / rate
+        al = math.sin(w) / (2 * q)
+        c = math.cos(w)
+        return biquad(xs, (1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + al, -2 * c, 1 - al)
+
+    def lowpass(xs, f, q):
+        w = 2 * math.pi * f / rate
+        al = math.sin(w) / (2 * q)
+        c = math.cos(w)
+        return biquad(xs, (1 - c) / 2, 1 - c, (1 - c) / 2, 1 + al, -2 * c, 1 - al)
+
+    def peak(xs, f, q, gain_db):
+        w = 2 * math.pi * f / rate
+        a = 10 ** (gain_db / 40)
+        al = math.sin(w) / (2 * q)
+        c = math.cos(w)
+        return biquad(xs, 1 + al * a, -2 * c, 1 - al * a, 1 + al / a, -2 * c, 1 - al / a)
+
+    def high_shelf(xs, f, gain_db):
+        w = 2 * math.pi * f / rate
+        a = 10 ** (gain_db / 40)
+        c, sn = math.cos(w), math.sin(w)
+        al = sn / 2 * math.sqrt(2)
+        sq = 2 * math.sqrt(a) * al
+        return biquad(xs, a * ((a + 1) + (a - 1) * c + sq), -2 * a * ((a - 1) + (a + 1) * c), a * ((a + 1) + (a - 1) * c - sq),
+                      (a + 1) - (a - 1) * c + sq, 2 * ((a - 1) - (a + 1) * c), (a + 1) - (a - 1) * c - sq)
+
+    seed = [12345]
+
+    def noise():
+        seed[0] = (seed[0] * 1103515245 + 12345) & 0x7FFFFFFF
+        return seed[0] / 0x3FFFFFFF - 1.0
+
+    def env(t, start, rise, fall):
+        if t < start:
+            return 0.0
+        u = t - start
+        return (1 - math.exp(-u / rise)) * math.exp(-u / fall)
+
+    def uniform(lo, hi):
+        return lo + (hi - lo) * (noise() + 1) / 2
+
+    # The spray's and thud's level wobbling: a new random level every 2 to 7 ms, eased.
+    wobble, level, goal, left = [], 1.0, 1.0, 0
+    for i in range(n):
+        if left <= 0:
+            goal = uniform(0.25, 1.0)
+            left = int(rate * uniform(0.002, 0.007))
+        left -= 1
+        level += (goal - level) * 0.02
+        wobble.append(level)
+    # The bubbles: (start, pitch, loudness), many at first, fewer later; a few in each drop.
+    bubbles = []
+    for k in range(40):
+        start = 0.004 + 0.095 * (k / 40) ** 1.6 + uniform(0, 0.004)
+        bubbles.append((start, math.exp(uniform(math.log(500), math.log(2500))), uniform(0.25, 1.0) * (1 - 0.6 * k / 40)))
+    for at, count in ((0.200, 4), (0.260, 3)):
+        for k in range(count):
+            bubbles.append((at + uniform(0, 0.025), math.exp(uniform(math.log(700), math.log(1800))), uniform(0.3, 0.6)))
+    tone = [0.0] * n
+    for start, f0, amp in bubbles:
+        # Rings for about 4 to 12 ms (bigger bubbles longer), its pitch rising by a third.
+        fall = 0.012 * math.sqrt(700 / f0)
+        phase = 0.0
+        i0 = int(start * rate)
+        for i in range(i0, min(n, i0 + int(fall * 6 * rate))):
+            u = (i - i0) / rate
+            phase += 2 * math.pi * f0 * (1 + 0.33 * min(1.0, u / (3 * fall))) / rate
+            tone[i] += amp * math.sin(phase) * (1 - math.exp(-u / 0.0008)) * math.exp(-u / fall)
+    raw_spray, raw_thud = [], []
+    for i in range(n):
+        t = i / rate
+        burst = env(t, 0.003, 0.004, 0.035) * wobble[i]
+        drops = 0.5 * env(t, 0.200, 0.002, 0.020) + 0.35 * env(t, 0.260, 0.002, 0.018)
+        raw_spray.append(noise() * (burst + drops))
+        raw_thud.append(noise() * env(t, 0.003, 0.008, 0.030))
+    spray = lowpass(highpass(raw_spray, 1500, 0.7), 7800, 0.7)
+    thud = highpass(raw_thud, 35, 0.7)
+    for f, q, g in ((55, 1.0, 4), (110, 1.2, -12), (420, 1.2, 9)):
+        thud = peak(thud, f, q, g)
+    thud = lowpass(thud, 1500, 0.7)
+    top_tone = max(abs(v) for v in tone) or 1.0
+    top_spray = max(abs(v) for v in spray) or 1.0
+    top_thud = max(abs(v) for v in thud) or 1.0
+    shaped = [0.45 * a / top_spray + 0.55 * b / top_thud for a, b in zip(spray, thud)]
+    tone = [v / top_tone for v in tone]
+    mix = [a + b for a, b in zip(shaped, tone)]
+    top = max(abs(v) for v in mix) or 1.0
+    data = bytes(max(0, min(255, int(round(128 + 120 * v / top)))) for v in mix)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(1)
+        w.setframerate(rate)
+        w.writeframes(data)
+
+
 def song(path, attrs, instruments, tracks):
     out = ['<?xml version="1.0" encoding="UTF-8"?>', "<song version=\"1\" %s>" % attrs]
     for inst in instruments:
@@ -165,13 +282,13 @@ def hits_and_fanfare(out):
     song(os.path.join(out, "hit_dummy.bmsong"), 'bpm="150" length="10" ' + effect, [
         'name="knock" wave="triangle" attack="0" decay="2" sustain="0" release="1" volume="200" pan="0"',
     ], [("knock", "knock", [(0, 67, 2, 120), (2, 60, 2, 100)])])
-    # A step in a puddle (reflect.h): a short hiss of water and a small falling plip, at most two
-    # voices and over in a sixth of a second (steps come every few frames; the game plays it
-    # only over nothing or another splash, never over a hit).
-    song(os.path.join(out, "splash.bmsong"), 'bpm="150" length="10" ' + effect, [
-        'name="water" wave="noise" attack="0" decay="5" sustain="0" release="2" volume="90" pan="0"',
-        'name="plip" wave="sine" attack="0" decay="4" sustain="0" release="1" volume="70" pan="0"',
-    ], [("water", "water", [(0, 88, 2, 110), (3, 80, 2, 70)]), ("plip", "plip", [(1, 84, 1, 100), (2, 79, 2, 80)])])
+    # A step in a puddle (reflect.h): the sample splash.wav (splash() above: a burst of water, a
+    # bubble's bloop and two drops falling back, 0.3 s), one voice; the game plays it a little
+    # higher or lower each time, only over nothing or another splash, never over a hit.
+    splash(os.path.join(out, "splash.wav"))
+    song(os.path.join(out, "splash.bmsong"), 'bpm="150" length="26" ' + effect, [
+        'name="water" wave="sample" sample="splash.wav" root="60" loop="0" attack="0" decay="0" sustain="255" release="2" volume="120" pan="0"',
+    ], [("water", "water", [(0, 60, 25, 110)])])
     # An item picked up: a bright rising arpeggio.
     song(os.path.join(out, "pickup.bmsong"), 'bpm="150" length="24" ' + effect, [
         'name="chime" wave="pulse25" attack="0" decay="6" sustain="40" release="4" volume="120" pan="0"',
