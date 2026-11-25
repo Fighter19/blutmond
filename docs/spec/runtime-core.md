@@ -909,8 +909,9 @@ if the last room was lit). Every frame after the effects:
   `(1 - d²/r²)²`, 0 beyond the radius or when a line from it to the light crosses a solid
   collision cell; each slot is `colour × min(1, ambient + light × max(0, N·L))` with L toward
   the light raised by its height, emissive slots as drawn, shiny slots plus `(N·H)^8` of the
-  light's colour (H halfway between L and the viewer). A sheet without normals faces the
-  viewer. A bank out of the light is written once while it stays out.
+  light's colour (H halfway between L and the viewer). The slots' normals are as the sheet is
+  drawn: for a figure drawn mirrored (facing left) L's x is mirrored, for one drawn upside down
+  (gravity flipped) its y. A sheet without normals faces the viewer. A bank out of the light is written once while it stays out.
 - Mode `palette`: the room's banks are shaded again only when the light's intensity has changed
   by 3/256 or more since they were (less moves no channel by half a step), so a light that
   does not flicker costs nothing after the first frame (the rural street's 15 banks: about 250

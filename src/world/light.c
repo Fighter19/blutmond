@@ -542,7 +542,9 @@ static int32_t reach(const BmGame *g, int32_t x, int32_t y, uint8_t source)
 }
 
 // One sprite bank lit for a figure whose middle is at (x, y), `fall[k]` of light k reaching it.
-static void litBank(BmGame *g, uint8_t bank, int32_t x, int32_t y, const int32_t *fall)
+// `mirrored`, `upsideDown`: how the figure it is lit for is drawn. Its slots' normals are as
+// the sheet is drawn, so the light's direction is taken into the drawing's own: mirrored with it.
+static void litBank(BmGame *g, uint8_t bank, int32_t x, int32_t y, const int32_t *fall, bool mirrored, bool upsideDown)
 {
   const BmLight *l = &g->light;
   const BmSpriteSheet *s = &g->sheets[g->bankSheet[bank]];
@@ -553,8 +555,8 @@ static void litBank(BmGame *g, uint8_t bank, int32_t x, int32_t y, const int32_t
   {
     if (fall[k] == 0) continue;
     LitSource *q = &a.s[a.count++];
-    q->dx = l->sx[k] - x;
-    q->dy = l->sy[k] - y;
+    q->dx = mirrored ? x - l->sx[k] : l->sx[k] - x;
+    q->dy = upsideDown ? y - l->sy[k] : l->sy[k] - y;
     q->dz = l->height;
     int32_t len = (int32_t)isqrt((uint32_t)(q->dx * q->dx + q->dy * q->dy + q->dz * q->dz));
     q->inv = 65536 / (len == 0 ? 1 : len);
@@ -604,6 +606,7 @@ static void presentSprites(BmGame *g)
     bool player = false;
     for (uint8_t i = 0; i < g->playerSheetCount; i++) player |= g->playerSheets[i] == sheet;
     int32_t x = px, y = py;
+    bool mirrored = g->player.facing < 0, upsideDown = g->player.flipped;
     bool dark = true;
     for (uint8_t k = 0; k < l->sourceCount; k++) fall[k] = playerFall[k];
     if (!player)
@@ -621,7 +624,7 @@ static void presentSprites(BmGame *g)
           int32_t e = (ax - l->sx[k]) * (ax - l->sx[k]) + (ay - l->sy[k]) * (ay - l->sy[k]);
           if (e < d) d = e;
         }
-        if (best < 0 || d < best) best = d, x = ax, y = ay;
+        if (best < 0 || d < best) best = d, x = ax, y = ay, mirrored = a->facing[i] < 0, upsideDown = false;
       }
       for (uint8_t k = 0; k < l->sourceCount; k++) fall[k] = best < 0 ? 0 : reach(g, x, y, k);   // nothing shows it: ambient only
     }
@@ -638,7 +641,7 @@ static void presentSprites(BmGame *g)
       dark |= glow;
     }
     if (dark && same && (l->objDark & (1u << b))) continue;
-    litBank(g, b, x, y, fall);
+    litBank(g, b, x, y, fall, mirrored, upsideDown);
     lit++;
     l->objSheet[b] = (uint8_t)sheet;
     l->objPalette[b] = g->bankPalette[b];

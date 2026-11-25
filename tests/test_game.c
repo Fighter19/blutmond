@@ -3098,6 +3098,43 @@ static int32_t bankBrightness(uint8_t bank)
   return sum;
 }
 
+// A lit sprite is lit as it is seen: its slots' normals are as drawn (facing right), so a figure
+// drawn mirrored (facing left) or upside down has them mirrored too. With the torch to the
+// player's right, the slot that faces right most is lit facing right and dark facing left.
+static void testSpritesAreLitTheWayTheyFace(void)
+{
+  startWith(s_data, s_size, "torch_hall");
+  bmBodyPlace(&s_game.player, 120, 160);   // the torch at x 184: to the right, above
+  frames(10, 0);
+  int8_t sheet = s_game.playerSheets[0];
+  const BmSpriteSheet *sh = &s_game.sheets[sheet];
+  TEST_ASSERT(sh->pNormals != NULL);
+  int bank = -1;
+  for (int b = 0; b < BM_GAME_BANKS; b++)
+    if (s_game.bankSheet[b] == (uint8_t)sheet) bank = b;
+  TEST_ASSERT(bank >= 0);
+  // The slots facing right (as drawn) count for, those facing left against.
+  int32_t lean[2];
+  for (int f = 0; f < 2; f++)
+  {
+    s_game.player.facing = (int8_t)(f == 0 ? 1 : -1);
+    s_game.frame = 1000;   // the same flicker both times
+    frames(1, 0);
+    TEST_ASSERT(s_game.player.facing == (f == 0 ? 1 : -1));
+    lean[f] = 0;
+    for (int i = 1; i < 16; i++)
+    {
+      int nx = (int8_t)sh->pNormals[i * 4];
+      if (nx > -20 && nx < 20) continue;
+      uint16_t c = bmHalHostGetPpu()->palette[256 + bank * 16 + i];
+      int32_t v = (c & 31) + ((c >> 5) & 31) + ((c >> 10) & 31);
+      lean[f] += nx > 0 ? v : -v;
+    }
+  }
+  printf("    slots facing right minus left, as drawn: %d facing right, %d facing left\n", (int)lean[0], (int)lean[1]);
+  TEST_ASSERT(lean[0] > lean[1]);
+}
+
 static void testTheTorchHalls(void)
 {
   static const char *const halls[6] = {"torch_hall", "torch_hall_layer", "torch_hall_fitted", "torch_hall_normals", "torch_hall_stream", "torch_hall_hybrid"};
@@ -3306,6 +3343,7 @@ int main(int argc, char **argv)
   RUN_TEST(testSpritesAcrossRooms);
   RUN_TEST(testWaitingForARoom);
   RUN_TEST(testDialogueScrolls);
+  RUN_TEST(testSpritesAreLitTheWayTheyFace);
   RUN_TEST(testTheTorchHalls);
   RUN_TEST(testThePuddleMirrorsTheStreet);
   RUN_TEST(testColourCorrection);
