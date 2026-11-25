@@ -14,8 +14,9 @@ most 6 voices.
 test_chamber.bmsong, for a laboratory (not in the test level's pack): cold electronics after the
 character of the Portal (2007) soundtrack, B minor at 120 beats a minute, 16 bars (32 s) that
 loop in two parts. The chamber: a slow pad and sine bleeps on the beats, walking through the
-chord in the echo, no drums. The escape: a steady kick and a bass in eighths, a sine lead lamenting over them. At
-most 5 voices.
+chord in the echo, no drums. The escape: a steady kick and a bass in eighths, a sine lead lamenting
+over them. Each part fades into the other over its last four bars (the escape back into the
+chamber, where the song loops), so the drums come in and leave gradually. At most 6 voices.
 
 infinite_corridor.bmsong, for an endless corridor (not in the test level's pack): the same
 sounds driven harder, 16 bars (32 s) looping: the bass in sixteenths rocking between B and C,
@@ -322,6 +323,25 @@ def lab_piece(parts):
         "F#": (42, 70, (70, 73, 78, 82)),
     }
     plan = ["Bm", "G", "Em", "F#"] * len(parts)
+    section = 8 * bar
+    fade = 4 * bar                                    # each section fades into the next over its last four bars
+
+    def gains(tb):
+        """(part, gain) for the bar at tick tb: its own part, and towards the end of a section the
+        next one (the first again at the end: the song loops) rising while it falls."""
+        p = tb // section
+        here, after = parts[p], parts[(p + 1) % len(parts)]
+        x = (tb - ((p + 1) * section - fade)) / fade
+        if after == here or x < 0:
+            return [(here, 1.0)]
+        x += 0.5 * bar / fade                         # the middle of the bar
+        return [(here, 1.0 - x), (after, x)]
+
+    def note(name, t, key, length, vel, g):
+        v = int(round(vel * g))
+        if v >= 14:
+            notes[name].append((t, key, length, v))
+
     for c, chord in enumerate(plan):
         t0 = c * 2 * bar
         part = parts[c // 4]
@@ -331,24 +351,25 @@ def lab_piece(parts):
         notes["pad"].append((t0, pad, 2 * bar - 28, 110 if part == 2 else 80))   # faded before the next one
         for b in range(2):
             tb = t0 + b * bar
-            if part == 0:
-                notes["bass"].append((tb, root, bar - 8, 90))
-                for k in range(4):                    # bleeps on the beats only, walking through the chord
-                    notes["bleep"].append((tb + k * BEAT, arp[(k + b * 2) % 4], 3, 90 if k == 0 else 74))
-            elif part == 1:
-                for e in range(8):
-                    notes["bass"].append((tb + e * 12, root + (12 if e % 4 == 3 else 0), 8, 100 if e % 2 == 0 else 80))
-                for k in range(4):
-                    notes["kick"].append((tb + k * BEAT, 60, 7, 104))
-                for i in (2, 6, 11, 14):
-                    notes["bleep"].append((tb + i * 6, arp[(i + c) % 4], 3, 70))
-            else:
-                for x in range(16):                   # sixteenths rocking between the root and a semitone up
-                    notes["bass"].append((tb + x * 6, root + (1 if x % 4 == 3 else 0), 2, 124 if x % 4 == 0 else 108))
-                for k in (0, 1, 2, 3):
-                    notes["kick"].append((tb + k * BEAT, 60, 7, 124 if k % 2 == 0 else 110))
-                for i in range(8):                    # climbing in semitones, two bars a run
-                    notes["bleep"].append((tb + i * 12, 78 + (b * 8 + i) // 2, 3, 96 + i * 3))
+            for kind, g in gains(tb):
+                if kind == 0:
+                    note("bass", tb, root, bar - 8, 90, g)
+                    for k in range(4):                # bleeps on the beats only, walking through the chord
+                        note("bleep", tb + k * BEAT, arp[(k + b * 2) % 4], 3, 90 if k == 0 else 74, g)
+                elif kind == 1:
+                    for e in range(8):
+                        note("bass", tb + e * 12, root + (12 if e % 4 == 3 else 0), 8, 100 if e % 2 == 0 else 80, g)
+                    for k in range(4):
+                        note("kick", tb + k * BEAT, 60, 7, 104, g)
+                    for i in (2, 6, 11, 14):
+                        note("bleep", tb + i * 6, arp[(i + c) % 4], 3, 70, g)
+                else:
+                    for x in range(16):               # sixteenths rocking between the root and a semitone up
+                        note("bass", tb + x * 6, root + (1 if x % 4 == 3 else 0), 2, 124 if x % 4 == 0 else 108, g)
+                    for k in (0, 1, 2, 3):
+                        note("kick", tb + k * BEAT, 60, 7, 124 if k % 2 == 0 else 110, g)
+                    for i in range(8):                # climbing in semitones, two bars a run
+                        note("bleep", tb + i * 12, 78 + (b * 8 + i) // 2, 3, 96 + i * 3, g)
     # The lament over the escape: (bar from its start, tick, key, length).
     lament = [(0, 0, 78, 36), (0, 36, 76, 12), (0, 48, 74, 48), (1, 0, 73, 72), (1, 72, 71, 24),
               (2, 0, 74, 36), (2, 36, 76, 12), (2, 48, 79, 48), (3, 0, 78, 96),
@@ -357,7 +378,8 @@ def lab_piece(parts):
     for p, part in enumerate(parts):
         if part == 1:
             for b, t, key, length in lament:
-                notes["lead"].append(((p * 8 + b) * bar + t, key, length - 10, 96))   # its release ends before the next
+                vel = 96 - max(0, b - 4) * 14             # softening as the chamber comes back
+                notes["lead"].append(((p * 8 + b) * bar + t, key, length - 10, vel))   # its release ends before the next
     for name, _ in instruments:
         if not notes[name]:
             continue
