@@ -23,7 +23,8 @@ named `jump` and `hurt` when the player jumps and is hurt.
 | Element | Attributes | Meaning |
 |---|---|---|
 | `song` | `bpm` (20-400); `length` and `loop` in ticks, 24 per beat (`loop`: where the song repeats from, -1: it plays once); `effect` (1: a sound effect); `echo` in ms (0: none, at most 225) and `echo-feedback` (0-255); `intensity` (0-15, default 15: the intensity a room starts the song at, its first mode) and `fade` (0-1020 frames an instrument takes to come in or go out, default 0: 43); dynamic music, below | |
-| `instrument` | `name`; `wave`: `pulse12`, `pulse25`, `pulse50`, `saw`, `triangle`, `sine`, `noise` or `sample`; for samples `sample` (a WAV file next to the song: uncompressed, 8 or 16 bit; converted to 8 bit mono), `root` (the key at which it plays at its own rate) and `loop` (1: it repeats); envelope `attack`, `decay`, `release` in frames (1/60 s) and `sustain` (0-255); `volume` (0-255); `pan` (-64 left to 63 right); `layer` (0-15, default 0) and `until` (`layer`-15, default 15): the music intensities it is heard at (dynamic music, below) | |
+| `instrument` | `name`; `wave`: `pulse12`, `pulse25`, `pulse50`, `saw`, `triangle`, `sine`, `noise` or `sample`; for samples `sample` (a WAV file next to the song: uncompressed, 8 or 16 bit; converted to 8 bit mono), `root` (the key at which it plays at its own rate) and `loop` (1: it repeats); envelope `attack`, `decay`, `release` in frames (1/60 s) and `sustain` (0-255); `volume` (0-255); `pan` (-64 left to 63 right); `layer` (0-15, default 0): the layer it belongs to (dynamic music, below) | |
+| `layer` | `id` (0-15), `name` (for people), `from` and `until` (0-15): the music intensities the layer's instruments are heard at; a layer without an entry is heard from its id to 15 | a group of instruments |
 | `track` | `name`, `instrument` | notes for one instrument |
 | `note` | `t` (tick), `key` (MIDI number, 60 = middle C), `len` (ticks), `vel` (1-127) | |
 
@@ -62,20 +63,19 @@ re-sequencing** jumps between sections of it. This engine does the first, which 
 **modes**: versions of one piece over the same chords and length, of which one is heard at a
 time, so that any moment can fade into the other mode.
 
-- **Ranges.** An instrument of a song played as music is heard while the engine's
-  **intensity** (`bmSoundSetIntensity`, the script's `music_intensity`; 15 at the start) lies
-  between its `layer` and its `until`. With `until` 15 (the default) these are **layers**:
-  0 always heard, n from intensity n on, each adding to the ones below. A range ending lower
-  makes a **mode**: test_chamber's chamber is heard at 0 only (`layer` 0, `until` 0), its
-  escape's bass and bleeps at 1 only, its kick and lament from 1 on and its pursuit from 2 on,
-  its pad always. The cooker counts the voices a song needs at each intensity and reports
-  the most; while one mode fades into another, a few more sound for the fade's time.
-- **Fading.** Each of the music's first 16 instruments has a volume of 0 to 4096 that moves
-  towards 4096 (heard) or 0 by the song's step a frame, at the start of a frame: 96 (43 frames)
-  without a `fade`, else `ceil(4096 / (4 * f))` with `f` the chunk's fade byte. Instruments
-  past the 16th are always at 4096 (the cooker refuses a range on them). A song started as
-  music begins with each at its target (no fade). A note of an instrument that is not heard
-  and whose volume is 0 takes no voice.
+- **Layers.** Each instrument of a song played as music belongs to a **layer** (0-15), a group
+  of instruments; a layer is heard while the engine's **intensity** (`bmSoundSetIntensity`, the
+  script's `music_intensity`; 15 at the start) is from its `from` to its `until`. By default
+  layer n is heard from n to 15: layer 0 always, the others adding to the ones below (the moon
+  bat's song). A layer ending lower makes a **mode** that gives way to the next: test_chamber
+  has `always` (0-15, the pad), `chamber` (0-0), `escape` (1-1: its bass and bleeps), `drive`
+  (1-15: the kick and the lament) and `pursuit` (2-15). The cooker counts the voices a song
+  needs at each intensity and reports the most; while one mode fades into another, a few more
+  sound for the fade's time.
+- **Fading.** Each layer has a volume of 0 to 4096 that moves towards 4096 (heard) or 0 by the
+  song's step a frame, at the start of a frame: 96 (43 frames) without a `fade`, else
+  `ceil(4096 / (4 * f))` with `f` the chunk's fade byte. A song started as music begins with
+  each layer at its target (no fade). A note of a layer whose volume is 0 takes no voice.
 - **A room's song** (`bmSoundPlayRoomMusic`) starts at the song's own intensity, so in its
   first mode; the song already playing goes on in the mode it is in, from room to room. A
   script's `play_music` keeps the intensity the script set.
@@ -83,8 +83,8 @@ time, so that any moment can fade into the other mode.
   `step = ceil(|target - volume| / frames)`, at least 1; `frames` 0: at once). With `stop`, the
   music stops when it reaches 0. Starting a song as music sets it to 256; asking for the song
   already playing fades it back to 256 in 30 frames.
-- A music voice's volume is multiplied by `(music volume * (instrument volume >> 4)) >> 8`,
-  then `>> 8`; at 256 and 4096 nothing changes, so songs without layers sound as before.
+- A music voice's volume is multiplied by `(music volume * (layer volume >> 4)) >> 8`, then
+  `>> 8`; at 256 and 4096 nothing changes, so songs without layers sound as before.
 - **Pitched effects**: `bmSoundPlayEffectAt(name, semitones)` adds `semitones` to every note of
   the effect (keys kept in 0..127): the dialogue's voices.
 
@@ -213,16 +213,18 @@ from its beginning.
 ## The `SONG` chunk
 
 ```
-0   u16 name (string id)        u16 flags (1: effect; bits 8-11: 15 - the song's intensity)
+0   u16 name (string id)        u16 flags (1: effect; 2: layer table; bits 8-11: 15 - the song's intensity)
 4   u16 instruments             u16 tracks (for information)
 8   u32 events                  u32 length in ticks
 16  u32 loop tick (0xFFFFFFFF: plays once)
 20  u32 ticks per frame, 16.16
 24  u16 echo delay in samples (0: none)   u8 echo feedback   u8 fade (in 4 frames: round(fade / 4), at least 1; 0: none)
 28  u32 offset of: instruments, events, sample data
+40  with flag 2: 16 × u8, layer 0 to 15's range: from in bits 0-3, until in bits 4-7
+    (without it, layer n is n to 15; the cooker writes the table only if a range differs)
 
 instrument (28 bytes): u8 wave (0-6 as listed above, 255: sample), u8 volume, s8 pan, u8 sustain,
-                       u16 attack, decay, release (level change per frame; the level is 0-65535; 0: at once), u16 range (bits 0-3 layer, bits 8-11 15 - until),
+                       u16 attack, decay, release (level change per frame; the level is 0-65535; 0: at once), u16 layer (0-15),
                        u32 sample offset, u32 sample length, u32 loop start (0xFFFFFFFF: none),
                        u32 step at key 60 (20.12)
 event (12 bytes):      u32 tick, u16 length in ticks, u8 instrument, u8 key, u8 velocity, 3 × u8 0
@@ -237,5 +239,6 @@ chunk and that every event names an instrument that exists, before playing (`bmS
 - 1: first version.
 - 1.1: the arithmetic written out.
 - 1.2: layers and intensity, the music's volume and fades, pitched effects.
-- 1.3: ranges (`until`): modes of a song; a song's own fade time and start intensity; fading
-  per instrument. Songs of 1.2 cook and sound the same.
+- 1.3: layers as groups with ranges of their own (`<layer>`, the chunk's layer table): modes
+  of a song; a song's own fade time and start intensity. Songs of 1.2 cook to the same bytes
+  and sound the same.

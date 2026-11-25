@@ -22,8 +22,16 @@ struct Instrument
   int sustain = 255;              // level after the decay, 0-255
   int volume = 200;               // 0-255
   int pan = 0;                    // -64 (left) .. 63 (right)
-  int layer = 0;                  // 0: always heard; 1-15: heard from that music intensity on
-  int until = 15;                 // ... up to this intensity: lower, a mode that gives way to another
+  int layer = 0;                  // the layer it belongs to (0-15; Song::layers says when it is heard)
+};
+
+/// A layer of dynamic music: a group of instruments heard while the music intensity is from
+/// `from` to `until`. Without an entry, layer n is heard from n to 15 (layers adding up).
+struct Layer
+{
+  int id = 0;                     // 0-15, what instruments name in `layer`
+  std::string name;               // for people: "escape", "pursuit"
+  int from = 0, until = 15;
 };
 
 struct Note
@@ -51,10 +59,14 @@ struct Song
   int echoMs = 0;                 // delay of the echo, 0: none (at most 225 ms)
   int echoFeedback = 80;          // 0-255
   int intensity = 15;             // the music intensity a room starts the song at (its first mode)
-  int fade = 0;                   // frames an instrument takes to come in or go out; 0: 43
+  int fade = 0;                   // frames a layer takes to come in or go out; 0: 43
+  std::vector<Layer> layers;      // those with a name or a range of their own
   std::vector<Instrument> instruments;
   std::vector<Track> tracks;
 };
+
+/// Layer `id`'s range: its entry's, else from `id` to 15.
+std::pair<int, int> layerRange(const Song &song, int id);
 
 Song load(const std::string &path);
 bool save(const Song &song, std::string *pError = nullptr);

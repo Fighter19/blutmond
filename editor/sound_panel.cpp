@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <tuple>
 #include <filesystem>
 #include <fstream>
 
@@ -337,12 +338,28 @@ void SoundPanel::bind(Control &root, Context &ui)
   pan_ = number("snd_pan", -64, 63, [this](int v) { if (auto *i = instrument()) i->pan = v; });
   root_ = number("snd_root", 0, 127, [this](int v) { if (auto *i = instrument()) i->root = v; });
   layer_ = number("snd_layer", 0, 15, [this](int v) {
-    if (auto *i = instrument()) i->layer = v, i->until = std::max(i->until, v);
+    if (auto *i = instrument()) i->layer = v;
     showInstrument();
+    fill();
+  });
+  // The layer's range: an entry of the song's, made when first changed (it applies to every
+  // instrument of the layer).
+  from_ = number("snd_layer_from", 0, 15, [this](int v) {
+    if (song::Layer *l = layerOf(true)) l->from = v, l->until = std::max(l->until, v);
+    showInstrument();
+    fill();
   });
   until_ = number("snd_until", 0, 15, [this](int v) {
-    if (auto *i = instrument()) i->until = v, i->layer = std::min(i->layer, v);
+    if (song::Layer *l = layerOf(true)) l->until = v, l->from = std::min(l->from, v);
     showInstrument();
+    fill();
+  });
+  layerName_ = root.findAs<LineEdit>("snd_layer_name");
+  layerName_->submitted.connect([this](const std::string &name) {
+    if (updating_ || !loaded_) return;
+    if (song::Layer *l = layerOf(true)) l->name = name;
+    edited();
+    fill();
   });
   // The preview's intensity: which layers are heard, fading as in the game.
   intensity_ = root.findAs<SpinBox>("snd_intensity");
@@ -555,15 +572,35 @@ song::Song SoundPanel::previewSong() const
   return s;
 }
 
+song::Layer *SoundPanel::layerOf(bool create)
+{
+  song::Instrument *in = instrument();
+  if (!in) return nullptr;
+  for (song::Layer &l : song_.layers)
+    if (l.id == in->layer) return &l;
+  if (!create) return nullptr;
+  song::Layer l;
+  l.id = in->layer;
+  std::tie(l.from, l.until) = song::layerRange(song_, in->layer);
+  song_.layers.push_back(l);
+  return &song_.layers.back();
+}
+
 std::string SoundPanel::trackLabel(size_t i) const
 {
   const song::Track &t = song_.tracks[i];
   const song::Instrument *in = t.instrument >= 0 && size_t(t.instrument) < song_.instruments.size() ? &song_.instruments[size_t(t.instrument)] : nullptr;
   std::string label = t.name + "  (" + (in ? in->wave : std::string("?")) + ", " + std::to_string(t.notes.size()) + " notes";
-  if (in && in->until != 15) label += ", intensity " + std::to_string(in->layer) + "-" + std::to_string(in->until);
-  else if (in && in->layer != 0) label += ", layer " + std::to_string(in->layer);
+  std::pair<int, int> range = in ? song::layerRange(song_, in->layer) : std::pair<int, int>(0, 15);
+  if (in && (in->layer != 0 || range != std::pair<int, int>(0, 15)))
+  {
+    std::string name;
+    for (const song::Layer &l : song_.layers)
+      if (l.id == in->layer) name = l.name;
+    label += ", " + (name.empty() ? "layer " + std::to_string(in->layer) : name) + " " + std::to_string(range.first) + "-" + std::to_string(range.second);
+  }
   label += ")";
-  if (in && (in->layer > previewIntensity_ || in->until < previewIntensity_)) label += "  not heard at intensity " + std::to_string(previewIntensity_);
+  if (in && (range.first > previewIntensity_ || range.second < previewIntensity_)) label += "  not heard at intensity " + std::to_string(previewIntensity_);
   if (soloTrack_ == int(i)) label += "  SOLO";
   else if (soloTrack_ < 0 && i < muted_.size() && muted_[i]) label += "  muted";
   return label;
@@ -670,7 +707,8 @@ void SoundPanel::showInstrument()
   updating_ = true;
   song::Instrument *in = instrument();
   bool have = in != nullptr;
-  for (SpinBox *s : {attack_, decay_, sustain_, release_, volume_, pan_, root_, layer_, until_}) s->disabled = !have;
+  for (SpinBox *s : {attack_, decay_, sustain_, release_, volume_, pan_, root_, layer_, from_, until_}) s->disabled = !have;
+  layerName_->disabled = !have;
   if (have)
   {
     trackName_->setText(in->name);
@@ -687,7 +725,11 @@ void SoundPanel::showInstrument()
     pan_->setValue(in->pan, false);
     root_->setValue(in->root, false);
     layer_->setValue(in->layer, false);
-    until_->setValue(in->until, false);
+    std::pair<int, int> range = song::layerRange(song_, in->layer);
+    from_->setValue(range.first, false);
+    until_->setValue(range.second, false);
+    const song::Layer *l = layerOf(false);
+    layerName_->setText(l ? l->name : std::string());
     sampleLoop_->setPressed(in->loop);
     bool isSample = in->wave == "sample";
     sample_->disabled = root_->disabled = sampleLoop_->disabled = !isSample;

@@ -103,6 +103,7 @@ private:
   /// The song as the preview plays it: without the muted tracks (or only the solo one).
   song::Song previewSong() const;
   void showTrackFlags();
+  song::Layer *layerOf(bool create);             // the selected instrument's layer entry
   std::string trackLabel(size_t track) const;   // name, wave, notes, layer, muted/solo
   void refreshTrackList();
   void mixAhead(float dt);
@@ -123,12 +124,12 @@ private:
   PianoRoll *roll_ = nullptr;
   ose::ui::OptionButton *chooser_ = nullptr, *wave_ = nullptr, *sample_ = nullptr, *noteLength_ = nullptr;
   ose::ui::ItemList *tracks_ = nullptr;
-  ose::ui::LineEdit *trackName_ = nullptr;
+  ose::ui::LineEdit *trackName_ = nullptr, *layerName_ = nullptr;
   ose::ui::SpinBox *bpm_ = nullptr, *bars_ = nullptr, *echo_ms_ = nullptr, *feedback_ = nullptr;
   ose::ui::SpinBox *attack_ = nullptr, *decay_ = nullptr, *sustain_ = nullptr, *release_ = nullptr, *volume_ = nullptr, *pan_ = nullptr, *root_ = nullptr;
   ose::ui::SpinBox *velocity_ = nullptr, *length_ = nullptr;
   ose::ui::CheckBox *loop_ = nullptr, *effect_ = nullptr, *sampleLoop_ = nullptr, *mute_ = nullptr, *solo_ = nullptr;
-  ose::ui::SpinBox *layer_ = nullptr, *until_ = nullptr, *intensity_ = nullptr, *startIntensity_ = nullptr, *fade_ = nullptr;
+  ose::ui::SpinBox *layer_ = nullptr, *from_ = nullptr, *until_ = nullptr, *intensity_ = nullptr, *startIntensity_ = nullptr, *fade_ = nullptr;
   ose::ui::LineEdit *speakText_ = nullptr;
   int previewIntensity_ = 15;
   std::vector<bool> muted_;         // per track, for the preview

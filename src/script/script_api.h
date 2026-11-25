@@ -293,9 +293,9 @@ typedef enum BmScriptType {
 // speaker's `voice` (a sound effect) is heard with every second letter as the line appears.
 //
 // fade_music(percent, frames): the music's volume goes to `percent` (0-100) in that many
-// frames; at 0 it stops. music_intensity(level): dynamic music: the song's instruments are heard
-// while level lies in their range (layer to until), fading in and out over the song's fade
-// time; ranges that end below 15 make modes of a song that give way to each other (set it
+// frames; at 0 it stops. music_intensity(level): dynamic music: a layer of the song is heard while
+// level lies in its range (from to until), fading in and out over the song's fade time;
+// layers whose range ends below 15 make modes of a song that give way to each other (set it
 // before play_music for a song to begin that way; a room starts its song at the song's own
 // intensity).
 //

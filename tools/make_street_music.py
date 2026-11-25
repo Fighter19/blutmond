@@ -306,9 +306,10 @@ def night_street():
 def lab_piece(parts, modes=None):
     """Cold electronics (see test_chamber at the top): `parts` per four chords of two bars each,
     0 the chamber, 1 the escape, 2 the corridor, 3 the pursuit (what it adds to the escape).
-    With `modes` ({(part, sound): (layer, until)}) the parts are not one after the other but
-    over each other, on the same eight bars, each instrument heard at the music intensities
-    given; the pad, common to them, is always heard. The song starts at intensity 0."""
+    With `modes` ((layers, {(part, sound): layer id}), layers as (id, name, from, until)) the
+    parts are not one after the other but over each other, on the same eight bars, each
+    instrument in the layer given; the pad, common to them, is in layer 0, always heard. The
+    song starts at intensity 0."""
     bar = 4 * BEAT                                   # 2 s at 120 beats a minute
     sections = 1 if modes else len(parts)
     attrs = {"version": "1", "bpm": "120", "length": str(8 * bar * sections), "loop": "0", "effect": "0",
@@ -316,6 +317,9 @@ def lab_piece(parts, modes=None):
     if modes:
         attrs.update({"intensity": "0", "fade": str(2 * 60 * 2)})   # a change of mode fades over two bars
     s = ET.Element("song", attrs)
+    if modes:
+        for lid, name, lo, hi in modes[0]:
+            ET.SubElement(s, "layer", {"id": str(lid), "name": name, "from": str(lo), "until": str(hi)})
     sounds = {
         "pad": {"wave": "triangle", "attack": "60", "decay": "0", "sustain": "160", "release": "30", "volume": "60", "pan": "-16"},
         "bleep": {"wave": "sine", "attack": "0", "decay": "7", "sustain": "0", "release": "3", "volume": "82", "pan": "22"},
@@ -338,11 +342,7 @@ def lab_piece(parts, modes=None):
         for sound in (used[part] if modes else ("bleep", "kick", "bass", "lead")):
             a = dict(sounds[sound])
             if modes:
-                layer, until = modes[(part, sound)]
-                if layer:
-                    a["layer"] = str(layer)
-                if until != 15:
-                    a["until"] = str(until)
+                a["layer"] = str(modes[1][(part, sound)])
             instruments.append((inst(part, sound), a))
     for name, a in instruments:
         ET.SubElement(s, "instrument", dict({"name": name}, **a))
@@ -411,13 +411,14 @@ def lab_piece(parts, modes=None):
 
 
 def test_chamber():
-    """The chamber, the escape and the pursuit, as modes (see the top): the chamber at
-    intensity 0; the escape from 1 on, its bass and bleeps giving way at 2 to the pursuit's
-    pumping bass and running arpeggio, under the same kick and lament."""
-    return lab_piece([0, 1, 3], modes={
-        (0, "bleep"): (0, 0), (0, "bass"): (0, 0),
-        (1, "kick"): (1, 15), (1, "lead"): (1, 15), (1, "bass"): (1, 1), (1, "bleep"): (1, 1),
-        (3, "arp"): (2, 15), (3, "bass"): (2, 15)})
+    """The chamber, the escape and the pursuit, as modes (see the top), in five layers: always
+    (the pad), chamber (0 only), escape (its bass and bleeps, 1 only), drive (the kick and the
+    lament, from 1 on) and pursuit (the pumping bass and the arpeggio, from 2 on)."""
+    layers = [(0, "always", 0, 15), (1, "chamber", 0, 0), (2, "escape", 1, 1), (3, "drive", 1, 15), (4, "pursuit", 2, 15)]
+    return lab_piece([0, 1, 3], modes=(layers, {
+        (0, "bleep"): 1, (0, "bass"): 1,
+        (1, "bass"): 2, (1, "bleep"): 2, (1, "kick"): 3, (1, "lead"): 3,
+        (3, "arp"): 4, (3, "bass"): 4}))
 
 
 def infinite_corridor():

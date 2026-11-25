@@ -89,6 +89,13 @@ const std::vector<std::string> &waveNames()
   return names;
 }
 
+std::pair<int, int> layerRange(const Song &s, int id)
+{
+  for (const Layer &l : s.layers)
+    if (l.id == id) return {l.from, l.until};
+  return {id, 15};
+}
+
 Song load(const std::string &path)
 {
   Song s;
@@ -120,8 +127,16 @@ Song load(const std::string &path)
     in.volume = toInt(e, "volume", 200);
     in.pan = toInt(e, "pan", 0);
     in.layer = toInt(e, "layer", 0);
-    in.until = toInt(e, "until", 15);
     s.instruments.push_back(in);
+  }
+  for (const xml::Element *e : root->childrenNamed("layer"))
+  {
+    Layer l;
+    l.id = toInt(e, "id", 0);
+    l.name = e->attr("name");
+    l.from = toInt(e, "from", l.id);
+    l.until = toInt(e, "until", 15);
+    s.layers.push_back(l);
   }
   for (const xml::Element *t : root->childrenNamed("track"))
   {
@@ -151,6 +166,12 @@ bool save(const Song &s, std::string *pError)
   if (s.intensity != 15) out << " intensity=\"" << s.intensity << "\"";
   if (s.fade != 0) out << " fade=\"" << s.fade << "\"";
   out << ">\n";
+  for (const Layer &l : s.layers)
+  {
+    out << " <layer id=\"" << l.id << "\"";
+    if (!l.name.empty()) out << " name=\"" << l.name << "\"";
+    out << " from=\"" << l.from << "\" until=\"" << l.until << "\"/>\n";
+  }
   for (const Instrument &in : s.instruments)
   {
     out << " <instrument name=\"" << in.name << "\" wave=\"" << in.wave << "\"";
@@ -158,7 +179,6 @@ bool save(const Song &s, std::string *pError)
     out << " attack=\"" << in.attack << "\" decay=\"" << in.decay << "\" sustain=\"" << in.sustain << "\" release=\"" << in.release
         << "\" volume=\"" << in.volume << "\" pan=\"" << in.pan << "\"";
     if (in.layer != 0) out << " layer=\"" << in.layer << "\"";
-    if (in.until != 15) out << " until=\"" << in.until << "\"";
     out << "/>\n";
   }
   for (const Track &t : s.tracks)
@@ -190,15 +210,20 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
   if (s.instruments.size() > 255) return fail("more than 255 instruments");
   if (s.intensity < 0 || s.intensity > 15) return fail("the song's intensity must be between 0 and 15");
   if (s.fade < 0 || s.fade > 1020) return fail("the song's fade must be between 0 and 1020 frames");
-  for (size_t i = 0; i < s.instruments.size(); i++)
+  for (const Instrument &in : s.instruments)
+    if (in.layer < 0 || in.layer > 15) return fail("instrument '" + in.name + "': its layer must be 0 to 15");
+  // The layers' ranges: a table only if one differs from the default (n to 15).
+  bool table = false;
+  for (size_t i = 0; i < s.layers.size(); i++)
   {
-    const Instrument &in = s.instruments[i];
-    bool ranged = in.layer != 0 || in.until != 15;
-    if (in.layer < 0 || in.layer > 15 || in.until < in.layer || in.until > 15)
-      return fail("instrument '" + in.name + "': its layer and until must be 0 to 15, until not below the layer");
-    if (ranged && i >= BM_SOUND_PARTS && !s.effect)
-      return fail("instrument '" + in.name + "': only the first " + std::to_string(BM_SOUND_PARTS) + " instruments can have a layer");
+    const Layer &l = s.layers[i];
+    if (l.id < 0 || l.id > 15) return fail("a layer's id must be 0 to 15");
+    for (size_t k = 0; k < i; k++)
+      if (s.layers[k].id == l.id) return fail("layer " + std::to_string(l.id) + " is there twice");
+    if (l.from < 0 || l.until > 15 || l.from > l.until) return fail("layer " + std::to_string(l.id) + ": from and until must be 0 to 15, from not above until");
+    table = table || l.from != l.id || l.until != 15;
   }
+  table = table && !s.effect;
 
   // Events of all tracks in time order.
   struct Event
@@ -250,7 +275,7 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
     if (samples.back().wav.samples.size() >= (1u << 20)) return fail(file + " is too long (at most 1 048 575 samples)");
   }
 
-  const uint32_t header = BM_SOUND_SONG_HEADER;
+  const uint32_t header = BM_SOUND_SONG_HEADER + (table ? BM_SOUND_LAYERS : 0);
   uint32_t instrumentsAt = header, eventsAt = instrumentsAt + uint32_t(s.instruments.size()) * BM_SOUND_INSTRUMENT_SIZE;
   uint32_t samplesAt = eventsAt + uint32_t(events.size()) * BM_SOUND_EVENT_SIZE;
   uint32_t at = samplesAt;
@@ -263,7 +288,8 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
   // Frames per minute on the GBA: 59.7275 * 60.
   uint32_t tickRate = uint32_t(std::lround(double(s.bpm) * BM_SOUND_TICKS_PER_BEAT * 65536.0 / 3583.65));
   u16(nameId);
-  u16((s.effect ? BM_SOUND_SONG_SFX : 0) | uint32_t(15 - s.intensity) << 8);   // flags; the start intensity, from 15
+  // Flags; the start intensity, from 15.
+  u16((s.effect ? BM_SOUND_SONG_SFX : 0) | (table ? BM_SOUND_SONG_LAYERS : 0) | uint32_t(15 - s.intensity) << 8);
   u16(uint32_t(s.instruments.size()));
   u16(uint32_t(s.tracks.size()));
   u32(uint32_t(events.size()));
@@ -276,6 +302,11 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
   u32(instrumentsAt);
   u32(eventsAt);
   u32(samplesAt);
+  for (int l = 0; table && l < BM_SOUND_LAYERS; l++)
+  {
+    std::pair<int, int> r = layerRange(s, l);
+    u8(r.first | r.second << 4);                // each layer's range: from, until
+  }
 
   for (size_t i = 0; i < s.instruments.size(); i++)
   {
@@ -292,8 +323,7 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
     u16(in.attack <= 0 ? 0 : uint32_t(std::max(1, 65535 / in.attack)));
     u16(in.decay <= 0 ? 0 : uint32_t(std::max(1, (65535 - sustain * 256) / in.decay)));
     u16(in.release <= 0 ? 0 : uint32_t(std::max(1, 65535 / in.release)));
-    // The range (sound-format.md, dynamic music): the layer, and 15 minus until above it.
-    u16(uint32_t(std::clamp(in.layer, 0, 15)) | uint32_t(15 - std::clamp(in.until, 0, 15)) << 8);
+    u16(uint32_t(std::clamp(in.layer, 0, 15)));   // the layer (sound-format.md, dynamic music)
     if (sampleOf[i] >= 0)
     {
       const Sample &sm = samples[size_t(sampleOf[i])];
@@ -336,13 +366,13 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
   int polyphony = 0;
   double framesPerTick = 65536.0 / double(tickRate);
   bool ranged = false;
-  for (const Instrument &in : s.instruments) ranged = ranged || in.layer != 0 || in.until != 15;
+  for (const Instrument &in : s.instruments) ranged = ranged || in.layer != 0;
   ranged = ranged && !s.effect;
   for (int level = ranged ? 0 : 15; level <= 15; level++)
   {
     auto heard = [&](const Event &e) {
-      const Instrument &in = s.instruments[size_t(e.instrument)];
-      return !ranged || (level >= in.layer && level <= in.until);
+      std::pair<int, int> r = layerRange(s, s.instruments[size_t(e.instrument)].layer);
+      return !ranged || (level >= r.first && level <= r.second);
     };
     for (const Event &e : events)
     {

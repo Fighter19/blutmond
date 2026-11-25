@@ -1,14 +1,19 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <song version="1" bpm="120" length="768" loop="0" effect="0" echo="180" echo-feedback="120" intensity="0" fade="240">
+ <layer id="0" name="always" from="0" until="15" />
+ <layer id="1" name="chamber" from="0" until="0" />
+ <layer id="2" name="escape" from="1" until="1" />
+ <layer id="3" name="drive" from="1" until="15" />
+ <layer id="4" name="pursuit" from="2" until="15" />
  <instrument name="pad" wave="triangle" attack="60" decay="0" sustain="160" release="30" volume="60" pan="-16" />
- <instrument name="bleep_chamber" wave="sine" attack="0" decay="7" sustain="0" release="3" volume="82" pan="22" until="0" />
- <instrument name="bass_chamber" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" until="0" />
- <instrument name="kick_escape" wave="sample" sample="kick.wav" root="60" loop="0" attack="0" decay="0" sustain="255" release="2" volume="150" pan="0" layer="1" />
- <instrument name="bass_escape" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" layer="1" until="1" />
- <instrument name="bleep_escape" wave="sine" attack="0" decay="7" sustain="0" release="3" volume="82" pan="22" layer="1" until="1" />
- <instrument name="lead_escape" wave="sine" attack="4" decay="30" sustain="150" release="10" volume="110" pan="-6" layer="1" />
- <instrument name="arp_pursuit" wave="triangle" attack="0" decay="5" sustain="60" release="2" volume="62" pan="26" layer="2" />
- <instrument name="bass_pursuit" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" layer="2" />
+ <instrument name="bleep_chamber" wave="sine" attack="0" decay="7" sustain="0" release="3" volume="82" pan="22" layer="1" />
+ <instrument name="bass_chamber" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" layer="1" />
+ <instrument name="kick_escape" wave="sample" sample="kick.wav" root="60" loop="0" attack="0" decay="0" sustain="255" release="2" volume="150" pan="0" layer="3" />
+ <instrument name="bass_escape" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" layer="2" />
+ <instrument name="bleep_escape" wave="sine" attack="0" decay="7" sustain="0" release="3" volume="82" pan="22" layer="2" />
+ <instrument name="lead_escape" wave="sine" attack="4" decay="30" sustain="150" release="10" volume="110" pan="-6" layer="3" />
+ <instrument name="arp_pursuit" wave="triangle" attack="0" decay="5" sustain="60" release="2" volume="62" pan="26" layer="4" />
+ <instrument name="bass_pursuit" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" layer="4" />
  <track name="pad" instrument="pad">
   <note t="0" key="66" len="164" vel="80" />
   <note t="192" key="67" len="164" vel="80" />

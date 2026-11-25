@@ -334,17 +334,18 @@ static void testSampleAndDeterminism()
 
 static void testModes()
 {
-  // Two modes of one song: instrument 0 heard at intensity 0 only, instrument 1 from 1 on; a
+  // Two modes of one song as layers: layer 1 heard at intensity 0 only, layer 2 from 1 on; a
   // note on each every beat. Starts at 0 and fades over 60 frames.
   song::Song s = oneNote("sine", 60, 20);
   s.loopStart = 0;
   s.intensity = 0;
   s.fade = 60;
-  s.instruments[0].until = 0;
+  s.layers.push_back({1, "calm", 0, 0});
+  s.layers.push_back({2, "chase", 1, 15});
+  s.instruments[0].layer = 1;
   song::Instrument b = s.instruments[0];
   b.name = "b";
-  b.layer = 1;
-  b.until = 15;
+  b.layer = 2;
   s.instruments.push_back(b);
   s.tracks[0].notes.clear();
   song::Track tb;
@@ -357,44 +358,52 @@ static void testModes()
   s.tracks.push_back(tb);
   std::vector<uint8_t> data = cook(s);
   TEST_ASSERT(!data.empty());
-  TEST_ASSERT(BM_SOUND_SONG_INTENSITY(uint16_t(data[2] | data[3] << 8)) == 0);
+  uint16_t flags = uint16_t(data[2] | data[3] << 8);
+  TEST_ASSERT(BM_SOUND_SONG_INTENSITY(flags) == 0 && (flags & BM_SOUND_SONG_LAYERS));
   BmSound sound;
   bmSoundInit(&sound, nullptr, nullptr);
-  bmSoundSetIntensity(&sound, BM_SOUND_SONG_INTENSITY(uint16_t(data[2] | data[3] << 8)));
+  bmSoundSetIntensity(&sound, BM_SOUND_SONG_INTENSITY(flags));
   TEST_ASSERT(bmSoundPlayData(&sound, data.data(), uint32_t(data.size()), false));
-  TEST_ASSERT(sound.partVolume[0] == BM_SOUND_PART_FULL && sound.partVolume[1] == 0);   // no fade at the start
+  TEST_ASSERT(sound.layerVolume[1] == BM_SOUND_LAYER_FULL && sound.layerVolume[2] == 0);   // no fade at the start
+  TEST_ASSERT(sound.layerVolume[0] == BM_SOUND_LAYER_FULL && sound.layerVolume[3] == 0);   // the others as by default
   play(sound, 40);
   TEST_ASSERT(sound.voicesPeak == 1);                         // the other mode's notes take no voice
   // The other mode: the one fades out while the other fades in, over the song's 60 frames.
   bmSoundSetIntensity(&sound, 1);
   play(sound, 30);
-  TEST_ASSERT(sound.partVolume[0] > 1500 && sound.partVolume[0] < 2600);
-  TEST_ASSERT(sound.partVolume[1] > 1500 && sound.partVolume[1] < 2600);
+  TEST_ASSERT(sound.layerVolume[1] > 1500 && sound.layerVolume[1] < 2600);
+  TEST_ASSERT(sound.layerVolume[2] > 1500 && sound.layerVolume[2] < 2600);
   TEST_ASSERT(sound.voicesPeak == 2);                         // both while they cross
   play(sound, 31);
-  TEST_ASSERT(sound.partVolume[0] == 0 && sound.partVolume[1] == BM_SOUND_PART_FULL);
-  // Without a range and fade the layers work as before: heard from their layer on, 43 frames.
+  TEST_ASSERT(sound.layerVolume[1] == 0 && sound.layerVolume[2] == BM_SOUND_LAYER_FULL);
+  // Without a table and a fade the layers work as before: n heard from n on, in 43 frames.
   song::Song old = s;
   old.fade = 0;
-  old.instruments[0].until = 15;
+  old.layers.clear();
   data = cook(old);
+  TEST_ASSERT(!(uint16_t(data[2] | data[3] << 8) & BM_SOUND_SONG_LAYERS));
   bmSoundInit(&sound, nullptr, nullptr);
   bmSoundSetIntensity(&sound, 0);
   TEST_ASSERT(bmSoundPlayData(&sound, data.data(), uint32_t(data.size()), false));
+  TEST_ASSERT(sound.layerVolume[0] == BM_SOUND_LAYER_FULL && sound.layerVolume[1] == 0);
   bmSoundSetIntensity(&sound, 1);
   play(sound, 42);
-  TEST_ASSERT(sound.partVolume[0] == BM_SOUND_PART_FULL && sound.partVolume[1] == 42 * BM_SOUND_PART_STEP);
+  TEST_ASSERT(sound.layerVolume[1] == 42 * BM_SOUND_LAYER_STEP && sound.layerVolume[2] == 0);
   play(sound, 1);
-  TEST_ASSERT(sound.partVolume[1] == BM_SOUND_PART_FULL);
-  // A range ending below its start is refused; the file keeps what it says.
-  song::Song bad = s;
-  bad.instruments[1].until = 0;
+  TEST_ASSERT(sound.layerVolume[1] == BM_SOUND_LAYER_FULL);
+  // A range that ends below its start, or a layer twice, is refused; the file keeps the layers.
   Report report;
+  song::Song bad = s;
+  bad.layers[1].until = 0;
+  TEST_ASSERT(song::chunk(bad, 0, report).empty());
+  bad = s;
+  bad.layers[1].id = 1;
   TEST_ASSERT(song::chunk(bad, 0, report).empty());
   s.path = "/tmp/blutmond-test-modes.bmsong";
   TEST_ASSERT(song::save(s));
   song::Song t = song::load(s.path);
-  TEST_ASSERT(t.intensity == 0 && t.fade == 60 && t.instruments[0].until == 0 && t.instruments[1].layer == 1 && t.instruments[1].until == 15);
+  TEST_ASSERT(t.intensity == 0 && t.fade == 60 && t.layers.size() == 2 && t.layers[0].name == "calm" && t.layers[1].from == 1);
+  TEST_ASSERT(t.instruments[0].layer == 1 && t.instruments[1].layer == 2 && cook(t) == cook(s));
   std::remove(s.path.c_str());
 }
 

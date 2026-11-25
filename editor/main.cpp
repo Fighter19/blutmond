@@ -401,9 +401,9 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
             <Label text="Feedback"/><SpinBox id="snd_feedback" min-size="48 0"/>
             <Label text="Starts at" tooltip="Dynamic music: the intensity a room starts this song at (its first mode)"/>
             <SpinBox id="snd_start_intensity" min-size="40 0" tooltip="Dynamic music: the intensity a room starts this song at (its first mode)"/>
-            <Label text="Fade" tooltip="Frames an instrument takes to come in or go out when the intensity changes; 0: 43"/>
-            <SpinBox id="snd_layer_fade" min-size="48 0" tooltip="Frames an instrument takes to come in or go out when the intensity changes; 0: 43"/>
-            <Label text="Intensity" tooltip="Dynamic music: an instrument is heard while the intensity lies in its range, layer to until (music_intensity in scripts)"/>
+            <Label text="Fade" tooltip="Frames a layer takes to come in or go out when the intensity changes; 0: 43"/>
+            <SpinBox id="snd_layer_fade" min-size="48 0" tooltip="Frames a layer takes to come in or go out when the intensity changes; 0: 43"/>
+            <Label text="Intensity" tooltip="Dynamic music: a layer is heard while the intensity is from its From to its Until (music_intensity in scripts)"/>
             <SpinBox id="snd_intensity" min-size="40 0" tooltip="Preview: which layers are heard (they fade in and out as in the game)"/>
             <Button id="snd_fade" text="Fade out" tooltip="Preview: the music fades away as in fade_music(0, 120) or a room with music none"/>
             <Label id="snd_info" text="" clip-text="1"/>
@@ -426,10 +426,15 @@ const char *kLayout = R"XML(<Panel theme-type="Background" anchors="full"><VBox 
                 <Label text="Release"/><SpinBox id="snd_release" expand="1"/>
                 <Label text="Volume"/><SpinBox id="snd_volume" expand="1"/>
                 <Label text="Pan"/><SpinBox id="snd_pan" expand="1"/>
-                <Label text="Layer" tooltip="The lowest music intensity it is heard at (0: always, unless until is lower than 15)"/><SpinBox id="snd_layer" expand="1"/>
-                <Label text="Until" tooltip="The highest music intensity it is heard at: below 15, a mode of the song that gives way to another"/><SpinBox id="snd_until" expand="1"/>
+                <Label text="Layer" tooltip="The layer (group of instruments) it belongs to, 0-15; the layer says at which music intensities it is heard"/><SpinBox id="snd_layer" expand="1"/>
               </Grid>
-              <Label text="Times in frames (1/60 s); sustain and volume 0-255; pan -64 to 63; heard while the intensity is from layer to until" wrap="1" dim="1"/>
+              <Label text="Times in frames (1/60 s); sustain and volume 0-255; pan -64 to 63" wrap="1" dim="1"/>
+              <Label text="Its layer (for all the layer's instruments)" bold="1" tooltip="Dynamic music: a layer is heard while the music intensity is from its From to its Until"/>
+              <HBox><Label text="Name"/><LineEdit id="snd_layer_name" expand="1" tooltip="A name for people: the mode or part it is, such as escape"/></HBox>
+              <Grid columns="4">
+                <Label text="From" tooltip="The lowest music intensity the layer is heard at"/><SpinBox id="snd_layer_from" expand="1"/>
+                <Label text="Until" tooltip="The highest music intensity the layer is heard at: 15 adds it to what is under it; lower makes a mode that gives way to the next"/><SpinBox id="snd_until" expand="1"/>
+              </Grid>
               <Label text="A voice (a sound effect): try it on a line" bold="1"/>
               <HBox><LineEdit id="snd_speak_text" expand="1"/><Button id="snd_speak" text="Speak" tooltip="Plays the effect with every second letter, pitched by the letter, a letter a frame: as a speaker's voice in a dialogue"/></HBox>
               <Label text="What it costs" bold="1"/>

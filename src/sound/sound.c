@@ -79,6 +79,7 @@ static uint16_t rd16(const uint8_t *p)
 bool bmSoundSongValid(const uint8_t *p, uint32_t size)
 {
   if (p == NULL || size < BM_SOUND_SONG_HEADER) return false;
+  if ((rd16(p + 2) & BM_SOUND_SONG_LAYERS) && size < BM_SOUND_SONG_HEADER + BM_SOUND_LAYERS) return false;
   uint32_t instruments = rd16(p + 4), events = rd32(p + 8);
   uint32_t instrumentsAt = rd32(p + 28), eventsAt = rd32(p + 32);
   if (instrumentsAt > size || instruments > (size - instrumentsAt) / BM_SOUND_INSTRUMENT_SIZE) return false;
@@ -135,25 +136,16 @@ void bmSoundInit(BmSound *s, const BmPack *pPack, int8_t *pEcho)
   }
 }
 
-// Whether an instrument of the music is heard at the intensity: its range is its layer (the low
-// nibble of the record's u16 at 10) to 15 minus the high byte's low nibble.
-static bool heard(const uint8_t *pInstrument, uint8_t intensity)
+// The music's layers towards being heard or not (the intensity in their range), by the fade's
+// step; `atOnce` sets them there (a song starting).
+static void moveLayers(BmSound *s, bool atOnce)
 {
-  return intensity >= (pInstrument[10] & 15) && intensity <= 15 - (pInstrument[11] & 15);
-}
-
-// The music's instruments (the first BM_SOUND_PARTS) towards being heard or not, by the fade's
-// step; `at once` sets them there (a song starting).
-static void moveParts(BmSound *s, bool atOnce)
-{
-  const uint8_t *pSong = s->players[0].pSong;
-  if (pSong == NULL) return;
-  uint32_t n = rd16(pSong + 4);
-  const uint8_t *in = pSong + rd32(pSong + 28);
-  for (uint32_t i = 0; i < n && i < BM_SOUND_PARTS; i++, in += BM_SOUND_INSTRUMENT_SIZE)
+  int32_t step = atOnce ? BM_SOUND_LAYER_FULL : s->layerStep;
+  for (int l = 0; l < BM_SOUND_LAYERS; l++)
   {
-    int32_t target = heard(in, s->intensity) ? BM_SOUND_PART_FULL : 0, v = s->partVolume[i], step = atOnce ? BM_SOUND_PART_FULL : s->partStep;
-    s->partVolume[i] = (uint16_t)(v < target ? (target - v <= step ? target : v + step) : (v - target <= step ? target : v - step));
+    uint8_t r = s->layerRange[l];
+    int32_t target = s->intensity >= (r & 15) && s->intensity <= (r >> 4) ? BM_SOUND_LAYER_FULL : 0, v = s->layerVolume[l];
+    s->layerVolume[l] = (uint16_t)(v < target ? (target - v <= step ? target : v + step) : (v - target <= step ? target : v - step));
   }
 }
 
@@ -174,13 +166,17 @@ static void startPlayer(BmSound *s, int which, const uint8_t *pSong, uint32_t si
   p->transpose = 0;
   if (which == 0)
   {
-    // New music: full volume, its instruments as the intensity says; its fade time (byte 27,
-    // in 4 frames; 0: the default).
+    // New music: full volume; its layers' ranges (the table after the header, else layer n from
+    // n to 15) and fade time (byte 27, in 4 frames; 0: the default); its layers as the
+    // intensity says.
     s->musicVolume = s->musicTarget = 256;
     s->stopAtSilence = 0;
     uint32_t fade = pSong != NULL ? pSong[27] * 4u : 0;
-    s->partStep = (uint16_t)(fade == 0 ? BM_SOUND_PART_STEP : (BM_SOUND_PART_FULL + fade - 1) / fade);
-    moveParts(s, true);
+    s->layerStep = (uint16_t)(fade == 0 ? BM_SOUND_LAYER_STEP : (BM_SOUND_LAYER_FULL + fade - 1) / fade);
+    bool table = pSong != NULL && (rd16(pSong + 2) & BM_SOUND_SONG_LAYERS);
+    for (int l = 0; l < BM_SOUND_LAYERS; l++)
+      s->layerRange[l] = table ? pSong[BM_SOUND_SONG_HEADER + l] : (uint8_t)(l | 0xF0);
+    moveLayers(s, true);
     uint16_t delay = pSong != NULL ? rd16(pSong + 24) : 0;
     s->songEchoDelay = delay > BM_SOUND_ECHO_MAX ? BM_SOUND_ECHO_MAX : delay;
     s->songEchoFeedback = pSong != NULL ? pSong[26] : 0;
@@ -300,7 +296,7 @@ static void runVolumes(BmSound *s)
     s->musicVolume = 0;   // startPlayer set it back; silence until the next song
     s->musicTarget = 0;
   }
-  moveParts(s, false);
+  moveLayers(s, false);
 }
 
 bool bmSoundPlayData(BmSound *s, const uint8_t *pSong, uint32_t size, bool effect)
@@ -315,9 +311,9 @@ bool bmSoundPlayData(BmSound *s, const uint8_t *pSong, uint32_t size, bool effec
 static void noteOn(BmSound *s, int owner, const uint8_t *pSong, uint8_t instrument, uint8_t key, uint8_t velocity, uint16_t frames)
 {
   const uint8_t *in = pSong + rd32(pSong + 28) + (uint32_t)instrument * BM_SOUND_INSTRUMENT_SIZE;
-  // An instrument of the music that is not heard (and not fading) takes no voice.
-  uint8_t part = owner == 0 && instrument < BM_SOUND_PARTS ? instrument : 0xFF;
-  if (part != 0xFF && !heard(in, s->intensity) && s->partVolume[part] == 0) return;
+  // A layer of the music that is silent (not heard, and faded out) takes no voice.
+  uint8_t layer = owner == 0 ? (uint8_t)(in[10] & (BM_SOUND_LAYERS - 1)) : 0;
+  if (owner == 0 && s->layerVolume[layer] == 0) return;
   int32_t shifted = (int32_t)key + (owner == 1 ? s->players[1].transpose : 0);
   key = (uint8_t)(shifted < 0 ? 0 : shifted > 127 ? 127 : shifted);
   // A free voice; else the quietest one fading out; else, for an effect, the oldest note of
@@ -373,7 +369,7 @@ static void noteOn(BmSound *s, int owner, const uint8_t *pSong, uint8_t instrume
   v->velocity = velocity > 127 ? 127 : velocity;
   v->framesLeft = frames == 0 ? 1 : frames;
   v->owner = (uint8_t)owner;
-  v->part = part;
+  v->layer = layer;
   v->age = s->frame;
   v->active = 1;
 }
@@ -624,8 +620,7 @@ void bmSoundFrame(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count)
   {
     BmSoundVoice *v = &s->voices[i];
     if (!v->active) continue;
-    uint32_t part = v->owner == 0 && v->part != 0xFF ? s->partVolume[v->part] >> 4 : 256u;
-    runEnvelope(v, v->owner == 0 ? ((uint32_t)s->musicVolume * part) >> 8 : 256);
+    runEnvelope(v, v->owner == 0 ? ((uint32_t)s->musicVolume * (s->layerVolume[v->layer] >> 4)) >> 8 : 256);
     if (!v->active) continue;
     used++;
     if (v->volumeLeft != 0 || v->volumeRight != 0) mixVoice(v, s_sum, count);
