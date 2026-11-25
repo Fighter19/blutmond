@@ -295,6 +295,10 @@ void bmGameSpark(BmGame *pGame, int32_t x, int32_t y);
 /// The same with the sprite named `name` (a string id): effect(#sprite) of scripts.
 void bmGameEffect(BmGame *pGame, uint16_t name, int32_t x, int32_t y);
 
+/// Memory for the effects' echo (sound.h, bmSoundSetEffectEcho): 2 * BM_SOUND_ECHO_MAX bytes, or
+/// NULL in an image that has no room for it (the multiboot ones).
+int8_t *bmGameEffectEchoMemory(void);
+
 /// The same with a sheet (its index, -1: nothing).
 void bmGameEffectSheet(BmGame *pGame, int8_t sheet, int32_t x, int32_t y);
 

@@ -2062,18 +2062,20 @@ static void testDoorsOpenAsThePlayerWalksThrough(void)
 }
 
 // A room's acoustics (`acoustics`, `echo`, ... : room-format.md §1) go to the sound engine as
-// the room is entered, and go again when a room without them is.
+// the room is entered, and go again when a room without them is. They are the sound effects'
+// (their own echo memory): the music keeps its song's echo (no `echo_music` here).
 static void testRoomAcoustics(void)
 {
   TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_spotlight") == BM_SUCCESS);
   frames(2, 0);
   // The cave preset, its echo made 180 ms.
-  TEST_ASSERT(s_game.sound.room.on && s_game.sound.room.echoDelay == 180 * BM_SOUND_RATE / 1000);
+  TEST_ASSERT(s_game.sound.room.on && s_game.sound.room.echoDelay == 180 * BM_SOUND_RATE / 1000 && !s_game.sound.room.music);
   TEST_ASSERT(s_game.sound.room.feedback == 120 && s_game.sound.room.damping == 150 && s_game.sound.room.muffle == 0);
-  TEST_ASSERT(s_game.sound.echoDelay == s_game.sound.room.echoDelay && s_game.sound.echoDamping == 150);
+  TEST_ASSERT(s_game.sound.pFxEcho != NULL);
+  TEST_ASSERT(s_game.sound.echoDelay == s_game.sound.songEchoDelay && s_game.sound.echoDamping == 0);
   TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_wave") == BM_SUCCESS);
   frames(2, 0);
-  TEST_ASSERT(s_game.sound.room.on && s_game.sound.room.muffle == 200 && s_game.sound.muffle == 200);
+  TEST_ASSERT(s_game.sound.room.on && s_game.sound.room.muffle == 200 && s_game.sound.muffle == 0);
   // The lobby has none: the castle tune's own echo again.
   TEST_ASSERT(bmGameStart(&s_game, &s_pack, "debug_lobby") == BM_SUCCESS);
   frames(2, 0);

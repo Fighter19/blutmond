@@ -55,7 +55,8 @@ Map-level custom properties:
 | `echo` | int | preset's | ms until the echo comes back, at most 225 (0: none) |
 | `echo_feedback` | int | preset's | how loud each repeat comes back: 0-255 (256 would be as loud) |
 | `echo_damping` | int | preset's | how much treble each repeat loses: 0 none - 255 most |
-| `muffle` | int | preset's | a low pass over everything heard: 0 none - 255 most |
+| `muffle` | int | preset's | a low pass over what the acoustics take: 0 none - 255 most |
+| `echo_music` | bool | false | the acoustics take the music too, in place of its song's echo (else the sound effects only) |
 | `lighting` | string | `palette` | how the room's `Light` object lights its tiles: `palette` (baked into the room's colours) or `layer` (a light layer added over the room) (below) |
 | `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
 | `light_levels` | int | 8 | with `lighting = palette`: levels of light, 2 to 16 (each lit colour takes a palette entry per level it is used at: more than 9 hardly fit) |
@@ -69,11 +70,11 @@ Map-level custom properties:
 | `light_directions` | int | 8 | with `light_index = shared`: how many light directions its tiles are made for |
 | `light_tolerance` | float | 0.1 | with `light_index = shared`: a cell across which a flat surface's light changes by more than this (of full light) gets a tile of its own (near the light) |
 
-**Acoustics.** While the player is in a room with any of the last five properties, the
-room's echo is heard instead of the one the playing song brings (sound-format.md), over the
-music and the sound effects alike; a room without them hears the song's echo again. The
-presets (echo, feedback, damping, muffle): `dry` 0, 0, 0, 0 (no echo at all, not even the
-song's); `hall` 120, 150, 60, 0; `cave` 200, 120, 150, 0 (a far, dull echo); `water` 70, 70,
+**Acoustics.** While the player is in a room with any of these properties, the sound effects
+(a hit, a splash) are heard in the room's echo (sound-format.md, "A room's acoustics"); the
+music keeps the echo its song brings, unless `echo_music` gives it the room's too. A room
+without them: the effects dry, the music in its song's echo. The presets (echo, feedback,
+damping, muffle): `dry` 0, 0, 0, 0 (no echo at all; with `echo_music` not even the song's); `hall` 120, 150, 60, 0; `cave` 200, 120, 150, 0 (a far, dull echo); `water` 70, 70,
 200, 200 (everything muffled). The numbers change a preset's values or, without `acoustics`,
 make the room's own (the rest 0). On the GBA damping or muffle cost about a twentieth of a
 frame (`echo` alone costs what a song's echo does).

@@ -551,50 +551,6 @@ BM_IWRAM_CODE static uint32_t finishEcho(BmSound *s, const int32_t *pSum, int8_t
   return (a & 0xFFFF) | (b << 16);
 }
 
-// The room's acoustics: the echo with each repeat low-passed (damping), then the whole output
-// (muffle): one-pole filters, y += (x - y) * (256 - k) / 256, kept in 8.8. (At k = 0 they pass
-// the samples unchanged; the song's echo has its own loop without them, as it plays most of
-// the time.)
-BM_IWRAM_CODE static uint32_t finishRoom(BmSound *s, const int32_t *pSum, int8_t *pLeft, int8_t *pRight, uint32_t count, uint32_t check)
-{
-  uint32_t a = check & 0xFFFF, b = check >> 16;
-  int8_t *echoLeft = s->pEchoLeft, *echoRight = s->pEchoRight;
-  uint32_t position = s->echoPosition, delay = s->echoDelay;
-  int32_t feedback = s->echoFeedback;
-  int32_t keepEcho = 256 - s->echoDamping, keepMix = 256 - s->muffle;
-  int32_t echoL = s->echoLow[0], echoR = s->echoLow[1], mixL = s->mixLow[0], mixR = s->mixLow[1];
-  for (uint32_t i = 0; i < count; i++)
-  {
-    // The echo low-passed, then rounded towards zero (finishEcho).
-    echoL += (((int32_t)echoLeft[position] << 8) - echoL) * keepEcho >> 8;
-    echoR += (((int32_t)echoRight[position] << 8) - echoR) * keepEcho >> 8;
-    int32_t el = (echoL >> 8) * feedback, er = (echoR >> 8) * feedback;
-    el = (el + ((el >> 31) & 255)) >> 8;
-    er = (er + ((er >> 31) & 255)) >> 8;
-    int32_t l = clip((pSum[0] >> 8) + el);
-    int32_t r = clip((pSum[1] >> 8) + er);
-    pSum += 2;
-    echoLeft[position] = (int8_t)l;
-    echoRight[position] = (int8_t)r;
-    if (++position >= delay) position = 0;
-    mixL += ((l << 8) - mixL) * keepMix >> 8;
-    mixR += ((r << 8) - mixR) * keepMix >> 8;
-    l = mixL >> 8;
-    r = mixR >> 8;
-    pLeft[i] = (int8_t)l;
-    pRight[i] = (int8_t)r;
-    a += (uint8_t)l;
-    b += a;
-    a += (uint8_t)r;
-    b += a;
-  }
-  s->echoPosition = (uint16_t)position;
-  s->echoLow[0] = (int16_t)echoL;
-  s->echoLow[1] = (int16_t)echoR;
-  s->mixLow[0] = (int16_t)mixL;
-  s->mixLow[1] = (int16_t)mixR;
-  return (a & 0xFFFF) | (b << 16);
-}
 
 BM_IWRAM_CODE static void clearSums(int32_t *pSum, uint32_t count)
 {
@@ -606,6 +562,57 @@ BM_IWRAM_CODE static void clearSums(int32_t *pSum, uint32_t count)
   }
 }
 
+void bmSoundSetEffectEcho(BmSound *s, int8_t *pEcho)
+{
+  s->pFxEcho = pEcho;
+}
+
+// The effects added to the music's output (dry: the sums >> 8; else the room's output for them,
+// left then right after BM_SOUND_FRAME_SAMPLES), kept to 8 bits; the checksum over what is heard.
+BM_IWRAM_CODE static uint32_t addEffects(const int32_t *pSum, const int8_t *pFx, int8_t *pLeft, int8_t *pRight, uint32_t count,
+                                         uint32_t check)
+{
+  uint32_t a = check & 0xFFFF, b = check >> 16;
+  for (uint32_t i = 0; i < count; i++)
+  {
+    int32_t l, r;
+    if (pFx == NULL)
+    {
+      l = clip(pLeft[i] + (pSum[0] >> 8));
+      r = clip(pRight[i] + (pSum[1] >> 8));
+      pSum += 2;
+    }
+    else
+    {
+      l = clip(pLeft[i] + pFx[i]);
+      r = clip(pRight[i] + pFx[BM_SOUND_FRAME_SAMPLES + i]);
+    }
+    pLeft[i] = (int8_t)l;
+    pRight[i] = (int8_t)r;
+    a += (uint8_t)l;
+    b += a;
+    a += (uint8_t)r;
+    b += a;
+  }
+  return (a & 0xFFFF) | (b << 16);
+}
+
+// The effects' part of a frame (they are not in the song's echo): mixed on their own, through
+// the room's acoustics with their own lines, or dry, and added to what the music put out;
+// returns the frame's checksum over what is heard.
+static uint32_t mixEffects(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count, uint32_t check)
+{
+  clearSums(s_sum, count);
+  for (int i = 0; i < BM_SOUND_VOICES; i++)
+  {
+    BmSoundVoice *v = &s->voices[i];
+    if (v->active && v->owner == 1 && (v->volumeLeft != 0 || v->volumeRight != 0)) mixVoice(v, s_sum, count);
+  }
+  // Through the room's acoustics (sound_room.c; the multiboot images have none), or dry.
+  const int8_t *fx = s->room.on && s->pFxEcho != NULL ? bmSoundEffectsRoom(s, s_sum, count) : NULL;
+  return addEffects(s_sum, fx, pLeft, pRight, count, check);
+}
+
 void bmSoundFrame(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count)
 {
   if (count > BM_SOUND_FRAME_SAMPLES) count = BM_SOUND_FRAME_SAMPLES;
@@ -614,6 +621,12 @@ void bmSoundFrame(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count)
   runPlayer(s, 0);
   runPlayer(s, 1);
 
+  // The effects apart from the music (not in the song's echo; the room's acoustics are theirs),
+  // unless the room's acoustics take the music too: then all as one.
+  // (Rooms' acoustics need the memory for the effects' echo: without it, in the multiboot
+  // images, the music keeps its song's echo and the effects are dry, whatever the room says.)
+  bool apart = !(s->room.on && s->room.music && s->pFxEcho != NULL);
+  bool effects = false;
   clearSums(s_sum, count);
   uint8_t used = 0;
   for (int i = 0; i < BM_SOUND_VOICES; i++)
@@ -623,7 +636,8 @@ void bmSoundFrame(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count)
     runEnvelope(v, v->owner == 0 ? ((uint32_t)s->musicVolume * (s->layerVolume[v->layer] >> 4)) >> 8 : 256);
     if (!v->active) continue;
     used++;
-    if (v->volumeLeft != 0 || v->volumeRight != 0) mixVoice(v, s_sum, count);
+    if (apart && v->owner == 1) effects = true;   // mixed after the music's
+    else if (v->volumeLeft != 0 || v->volumeRight != 0) mixVoice(v, s_sum, count);
     else
     {
       // Silent, but time passes for it.
@@ -639,9 +653,10 @@ void bmSoundFrame(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count)
   s->voicesUsed = used;
   if (used > s->voicesPeak) s->voicesPeak = used;
 
-  // What is heard: the room's acoustics, or the song's echo. (A room with only a muffle runs
-  // the echo with nothing coming back: one sample of delay, no feedback.)
-  if (s->room.on)
+  // The music's echo: the room's acoustics if they take the music, else the song's. (A room
+  // with only a muffle runs the echo with nothing coming back: one sample of delay, no
+  // feedback.)
+  if (!apart)
   {
     s->echoDelay = s->room.echoDelay != 0 ? s->room.echoDelay : 1;
     s->echoFeedback = s->room.echoDelay != 0 ? s->room.feedback : 0;
@@ -656,10 +671,14 @@ void bmSoundFrame(BmSound *s, int8_t *pLeft, int8_t *pRight, uint32_t count)
     s->muffle = 0;
   }
   if (s->echoPosition >= s->echoDelay) s->echoPosition = 0;
+  uint32_t before = s->outputCrc;
   if (s->echoDelay != 0 && s->pEchoLeft != NULL)
   {
-    if (s->echoDamping != 0 || s->muffle != 0) s->outputCrc = finishRoom(s, s_sum, pLeft, pRight, count, s->outputCrc);
+    if (s->echoDamping != 0 || s->muffle != 0) s->outputCrc = bmSoundFinishRoom(s, s_sum, pLeft, pRight, count, s->outputCrc);
     else s->outputCrc = finishEcho(s, s_sum, pLeft, pRight, count, s->outputCrc);
   }
   else s->outputCrc = finishPlain(s_sum, pLeft, pRight, count, s->outputCrc);
+  // The effects: while one sounds, and in a room with acoustics always (their echo rings on).
+  // (The frame's checksum then again, over what is heard with them.)
+  if (apart && (effects || (s->room.on && s->pFxEcho != NULL))) s->outputCrc = mixEffects(s, pLeft, pRight, count, before);
 }

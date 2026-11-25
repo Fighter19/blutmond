@@ -253,8 +253,10 @@ static void testRoomAcoustics()
   std::vector<uint8_t> data = cook(s);
   static int8_t echo[2 * BM_SOUND_ECHO_MAX];
   BmSound sound;
+  static int8_t fxEcho[2 * BM_SOUND_ECHO_MAX + 2 * BM_SOUND_FRAME_SAMPLES];
   auto run = [&](const BmSoundRoom *pRoom, int frames) {
     bmSoundInit(&sound, nullptr, echo);
+    bmSoundSetEffectEcho(&sound, fxEcho);
     bmSoundSetRoom(&sound, pRoom);
     bmSoundPlayData(&sound, data.data(), uint32_t(data.size()), false);
     return play(sound, frames);
@@ -267,12 +269,12 @@ static void testRoomAcoustics()
     return sum;
   };
   // Dry: the song's echo is gone.
-  BmSoundRoom dry = {1, 0, 0, 0, 0};
+  BmSoundRoom dry = {1, 0, 0, 0, 0, 1};   // (the music through the room: echo_music)
   Output out = run(&dry, 20);
   TEST_ASSERT(peak(out.left, range(0, 1).first, range(0, 1).second) > 80);
   TEST_ASSERT(peak(out.left, range(5, 9).first, range(5, 9).second) == 0);
   // An echo of the room's own (50 ms: after about 3 frames), plain and damped.
-  BmSoundRoom plain = {1, uint16_t(50 * BM_SOUND_RATE / 1000), 128, 0, 0};
+  BmSoundRoom plain = {1, uint16_t(50 * BM_SOUND_RATE / 1000), 128, 0, 0, 1};
   BmSoundRoom cave = plain;
   cave.damping = 200;
   Output a = run(&plain, 20), b = run(&cave, 20);
@@ -282,7 +284,7 @@ static void testRoomAcoustics()
   TEST_ASSERT(edges(b.left, echoFrames) * 3 < edges(a.left, echoFrames));   // duller
   TEST_ASSERT(edges(a.left, range(0, 1)) == edges(b.left, range(0, 1)));     // the note itself as it was
   // Muffled: the note itself loses its edges, but is there.
-  BmSoundRoom water = {1, 0, 0, 0, 200};
+  BmSoundRoom water = {1, 0, 0, 0, 200, 1};
   Output m = run(&water, 20), d = run(&dry, 20);
   TEST_ASSERT(peak(m.left, range(0, 1).first, range(0, 1).second) > 20);
   TEST_ASSERT(edges(m.left, range(0, 1)) * 3 < edges(d.left, range(0, 1)));
@@ -295,6 +297,49 @@ static void testRoomAcoustics()
   // Off again: the song's echo (100 ms, after about 6 frames) as before.
   out = run(nullptr, 20);
   TEST_ASSERT(peak(out.left, range(7, 8).first, range(7, 8).second) > 30);
+}
+
+// The effects apart from the music: the song's echo is the music's only, a room's acoustics
+// the effects' (unless they take the music too, above); without memory for the effects' echo
+// (the multiboot images) they are dry.
+static void testEffectsApart()
+{
+  song::Song quiet = oneNote("pulse50", 60, 3);   // the music: a song with an echo, and silence
+  quiet.echoMs = 100;
+  quiet.echoFeedback = 128;
+  quiet.loopStart = 0;
+  quiet.tracks[0].notes.clear();
+  song::Song tune = quiet;                       // the music with a note
+  tune.tracks[0].notes.push_back({0, 60, 3, 127});
+  song::Song fx = oneNote("pulse50", 72, 3);
+  fx.effect = true;
+  std::vector<uint8_t> quietData = cook(quiet), tuneData = cook(tune), fxData = cook(fx);
+  static int8_t echo[2 * BM_SOUND_ECHO_MAX], fxEcho[2 * BM_SOUND_ECHO_MAX + 2 * BM_SOUND_FRAME_SAMPLES];
+  auto range = [](int f0, int f1) { return std::make_pair(size_t(f0) * BM_SOUND_FRAME_SAMPLES, size_t(f1) * BM_SOUND_FRAME_SAMPLES); };
+  auto run = [&](const std::vector<uint8_t> &music, bool effect, const BmSoundRoom *pRoom, int8_t *pFxEcho) {
+    BmSound sound;
+    bmSoundInit(&sound, nullptr, echo);
+    bmSoundSetEffectEcho(&sound, pFxEcho);
+    bmSoundSetRoom(&sound, pRoom);
+    bmSoundPlayData(&sound, music.data(), uint32_t(music.size()), false);
+    if (effect) bmSoundPlayData(&sound, fxData.data(), uint32_t(fxData.size()), true);
+    return play(sound, 20);
+  };
+  auto loud = [&](const Output &o, int f0, int f1) { return peak(o.left, range(f0, f1).first, range(f0, f1).second); };
+  // No room acoustics: the effect is dry (nothing after it), the music's note echoes (100 ms).
+  Output e = run(quietData, true, nullptr, fxEcho), m = run(tuneData, false, nullptr, fxEcho);
+  TEST_ASSERT(loud(e, 0, 1) > 60 && loud(e, 5, 20) == 0);
+  TEST_ASSERT(loud(m, 0, 1) > 60 && loud(m, 7, 8) > 30);
+  // A room with an echo (50 ms) for the effects: the effect rings in it, the music keeps its
+  // song's echo (its note's echo after 100 ms, none after 50).
+  BmSoundRoom hall = {1, uint16_t(50 * BM_SOUND_RATE / 1000), 128, 0, 0, 0};
+  e = run(quietData, true, &hall, fxEcho);
+  m = run(tuneData, false, &hall, fxEcho);
+  TEST_ASSERT(loud(e, 4, 6) > 30);
+  TEST_ASSERT(loud(m, 4, 5) == 0 && loud(m, 7, 8) > 30);
+  // Without memory for the effects' echo: dry there too.
+  e = run(quietData, true, &hall, nullptr);
+  TEST_ASSERT(loud(e, 0, 1) > 60 && loud(e, 5, 20) == 0);
 }
 
 static void testSampleAndDeterminism()
@@ -449,6 +494,7 @@ int main(int argc, char **argv)
   RUN_TEST(testVoicesAndEffects);
   RUN_TEST(testEcho);
   RUN_TEST(testRoomAcoustics);
+  RUN_TEST(testEffectsApart);
   RUN_TEST(testSampleAndDeterminism);
   RUN_TEST(testModes);
   RUN_TEST(testBrokenSongsAreRefused);

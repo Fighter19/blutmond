@@ -93,6 +93,7 @@ typedef struct BmSoundRoom
   uint8_t on;
   uint16_t echoDelay;
   uint8_t feedback, damping, muffle;
+  uint8_t music;          // 1: the music too (in place of its song's echo); 0: the effects only
 } BmSoundRoom;
 
 typedef struct BmSound
@@ -122,6 +123,11 @@ typedef struct BmSound
   uint16_t echoPosition;
   int16_t echoLow[2], mixLow[2];       // the low passes' last values (left, right; 8.8)
   int8_t *pEchoLeft, *pEchoRight;      // BM_SOUND_ECHO_MAX samples each, or NULL: no echo
+  // The effects' own echo (the room's acoustics, when they leave the music to its song): its
+  // lines (NULL: the effects dry), place and filters.
+  int8_t *pFxEcho;                     // left, then right after BM_SOUND_ECHO_MAX
+  uint16_t fxEchoPosition;
+  int16_t fxEchoLow[2], fxMixLow[2];
   // For tests and the budget display.
   uint32_t outputCrc;                  // over everything mixed so far
   uint8_t voicesUsed, voicesPeak;
@@ -129,6 +135,11 @@ typedef struct BmSound
 
 /// `pEcho` is memory for the echo (2 * BM_SOUND_ECHO_MAX bytes), or NULL for none.
 void bmSoundInit(BmSound *pSound, const BmPack *pPack, int8_t *pEcho);
+
+/// Memory for the effects' echo in a room with acoustics (2 * BM_SOUND_ECHO_MAX bytes for its
+/// lines, then 2 * BM_SOUND_FRAME_SAMPLES for a frame of their output; zeroed), or NULL: the
+/// effects are then dry there too.
+void bmSoundSetEffectEcho(BmSound *pSound, int8_t *pEcho);
 
 /// Number of songs in the pack, and the chunk of the `index`-th one (or -1).
 uint32_t bmSoundSongCount(const BmPack *pPack);
@@ -178,6 +189,12 @@ void bmSoundNote(BmSound *pSound, const uint8_t *pSong, uint32_t size, uint8_t i
 /// One frame: runs the sequencers and the envelopes, then mixes `count` samples
 /// (BM_SOUND_FRAME_SAMPLES on the device) into the two buffers.
 void bmSoundFrame(BmSound *pSound, int8_t *pLeft, int8_t *pRight, uint32_t count);
+
+// Inside the engine: the room's acoustics over summed samples (sound.c), and the effects through
+// them with their own lines and filters, their frame of output returned (sound_room.c: left,
+// then right after BM_SOUND_FRAME_SAMPLES; the multiboot images link a stub without it).
+uint32_t bmSoundFinishRoom(BmSound *pSound, const int32_t *pSum, int8_t *pLeft, int8_t *pRight, uint32_t count, uint32_t check);
+const int8_t *bmSoundEffectsRoom(BmSound *pSound, const int32_t *pSum, uint32_t count);
 
 /// True if the data is a song the engine can play (every offset inside the chunk).
 bool bmSoundSongValid(const uint8_t *pSong, uint32_t size);

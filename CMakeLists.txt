@@ -177,7 +177,7 @@ set(BM_PACK_SOURCES src/pack/pack.c)
 file(GLOB BM_WORLD_SOURCES CONFIGURE_DEPENDS src/world/*.c src/ui/*.c)
 set(BM_LINK_SOURCES src/link/link.c src/link/live.c src/link/multiboot.c src/link/transfer.c src/link/link_master.c src/link/live_master.c src/ppu/ppu_snapshot_part.c)
 set(BM_SCRIPT_SOURCES src/script/vm.c src/script/native.c)
-set(BM_SOUND_SOURCES src/sound/sound.c)
+set(BM_SOUND_SOURCES src/sound/sound.c src/sound/sound_room.c)
 set(BM_DATA_SOURCES src/data/data.c)
 
 if(BM_PLATFORM STREQUAL "gba")
@@ -460,7 +460,7 @@ if(BM_PLATFORM STREQUAL "host")
   target_compile_options(bm_script PRIVATE ${BM_WARNINGS})
 
   add_library(bm_cooker STATIC
-    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp tools/cooker/font_asset.cpp tools/cooker/lang_asset.cpp tools/cooker/world_asset.cpp tools/cooker/figure_asset.cpp tools/cooker/light_bake.cpp src/sound/sound.c src/pack/pack.c src/data/data.c)
+    tools/cooker/cook.cpp tools/cooker/tmx.cpp tools/cooker/xml.cpp tools/cooker/image.cpp tools/cooker/overrides.cpp tools/cooker/sprite_asset.cpp tools/cooker/song_asset.cpp tools/cooker/native_module.cpp tools/cooker/data_asset.cpp tools/cooker/font_asset.cpp tools/cooker/lang_asset.cpp tools/cooker/world_asset.cpp tools/cooker/figure_asset.cpp tools/cooker/light_bake.cpp src/sound/sound.c src/sound/sound_room.c src/pack/pack.c src/data/data.c)
   target_include_directories(bm_cooker PUBLIC tools/cooker src/pack src/sound src/data src/core/public PRIVATE third_party/stb)
   target_link_libraries(bm_cooker PUBLIC bm_script)
   target_compile_definitions(bm_cooker PUBLIC BM_PLATFORM_HOST PRIVATE "BM_NATIVE_INCLUDE_DIR=\"${PROJECT_SOURCE_DIR}/src/script\"")

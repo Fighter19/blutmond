@@ -902,6 +902,10 @@ static void roomAcoustics(BmGame *g)
     if (numberProperty(bmGameObjectProperty(g, o, "echo_feedback"), &v)) { room.on = 1; room.feedback = byteOf(v); }
     if (numberProperty(bmGameObjectProperty(g, o, "echo_damping"), &v)) { room.on = 1; room.damping = byteOf(v); }
     if (numberProperty(bmGameObjectProperty(g, o, "muffle"), &v)) { room.on = 1; room.muffle = byteOf(v); }
+    // By default the acoustics are the effects' (a hit ringing in a hall), the music keeping its
+    // song's echo; echo_music = true gives them the music too.
+    const char *music = bmGameObjectProperty(g, o, "echo_music");
+    room.music = music != NULL && (*music == 't' || *music == '1');   // true, 1
     int32_t samples = echoMs * BM_SOUND_RATE / 1000;
     room.echoDelay = (uint16_t)(samples > BM_SOUND_ECHO_MAX ? BM_SOUND_ECHO_MAX : samples);
     break;
@@ -916,6 +920,7 @@ static void enterRoomSound(BmGame *g)
   if (g->pSoundFrom != g->pPack->pData || g->sound.pPack != g->pPack)
   {
     bmSoundInit(&g->sound, g->pPack, s_echo);
+    bmSoundSetEffectEcho(&g->sound, bmGameEffectEchoMemory());
     g->pSoundFrom = g->pPack->pData;
     bmHalAudioStart();
   }

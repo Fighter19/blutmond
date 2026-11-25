@@ -1,6 +1,6 @@
 # Sound format
 
-Version 1.3, draft. The reasons and the full feature target are in [../PLAN.md](../PLAN.md),
+Version 1.4, draft. The reasons and the full feature target are in [../PLAN.md](../PLAN.md),
 section 13; this document describes what version 1 of the engine (`src/sound/sound.h`) plays.
 
 A **song** is a source asset ([asset-model.md](asset-model.md)): a `.bmsong` file (XML) with
@@ -47,8 +47,9 @@ named `jump` and `hurt` when the player jumps and is hurt.
   GBA shows 59.7275 frames per second); notes whose tick has come start. At `length` the song
   goes back to `loop` or ends.
 - **Echo**: one delay line per side; the output of `echo` ms ago comes back multiplied by
-  `echo-feedback / 256`. Only the music's song sets it, and a room's acoustics replace it
-  while the player is in that room ([room-format.md](room-format.md) §1).
+  `echo-feedback / 256`. Only the music's song sets it, and it is the music's only: the
+  effects are not in it. A room's acoustics are the effects' (lines of their own), or with
+  `music` the music's too in place of the song's echo ([room-format.md](room-format.md) §1).
 - Everything is integer arithmetic and identical on every target: a test compares a
   checksum over every sample mixed while the test level is played for 1000 game frames,
   between the PC and the GBA. The next section has the arithmetic.
@@ -163,8 +164,21 @@ came back for ever) and `line` is the delay line of that side; the result is wri
 `line[p]`, and `p` goes on, wrapping at the delay. The echo is on while the music's song has a
 delay other than 0; delay at most 4096 samples.
 
-**A room's acoustics** (`room`: on, delay, feedback, damping, muffle) replace the song's
-delay and feedback while on (a delay of 0 is run as 1 with feedback 0). With damping or
+**The effects apart** (unless a room's acoustics with `music` are on): an effect's voices are
+not mixed with the music's. The music's voices are mixed and put out as below (the song's
+echo); then, while an effect voice is active or a room's acoustics are on and the engine has
+memory for the effects' echo (`bmSoundSetEffectEcho`, 2 × 4096 bytes; none: the effects dry),
+the sums are cleared, the effect's voices mixed, put out on their own (through the room's
+acoustics with the effects' own delay lines, position and filters, else not at all) and
+added to the music's output samples: `clamp(music + effect, -128, 127)`, the effect's sample
+being the room's output or, dry, `sum >> 8`; the checksum of the frame is
+then taken over those samples.
+
+**A room's acoustics** (`room`: on, delay, feedback, damping, muffle, music) are the
+effects', or with `music` replace the song's delay and feedback for everything (all voices
+mixed as one, as before 1.4) while on (a delay of 0 is run as 1 with feedback 0). Without memory
+for the effects' echo (the multiboot images) a room's acoustics are not used at all: the music
+in its song's echo, the effects dry. With damping or
 muffle, two one-pole low passes per side, kept in 8.8: `d += ((line[p] << 8) - d) * (256 -
 damping) >> 8` and `e` from `d >> 8` instead of `line[p]`; and after writing the line, `m +=
 ((out << 8) - m) * (256 - muffle) >> 8`, the sample put out being `m >> 8`. The delay lines
@@ -244,3 +258,5 @@ chunk and that every event names an instrument that exists, before playing (`bmS
 - 1.3: layers as groups with ranges of their own (`<layer>`, the chunk's layer table): modes
   of a song; a song's own fade time and start intensity. Songs of 1.2 cook to the same bytes
   and sound the same.
+- 1.4: the effects apart from the music: the song's echo is the music's only, a room's
+  acoustics the effects' (`music`: everything's, as before).

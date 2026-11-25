@@ -64,3 +64,26 @@ void bmReflectSplashes(BmGame *g, const int32_t *pBefore, uint32_t events)
   (void)pBefore;
   (void)events;
 }
+
+int8_t *bmGameEffectEchoMemory(void)
+{
+  return NULL;   // no room for the effects' echo: they are dry
+}
+
+const int8_t *bmSoundEffectsRoom(BmSound *s, const int32_t *pSum, uint32_t count)
+{
+  (void)s;
+  (void)pSum;
+  (void)count;
+  return NULL;   // never asked for: without effect echo memory the effects are dry
+}
+
+uint32_t bmSoundFinishRoom(BmSound *s, const int32_t *pSum, int8_t *pLeft, int8_t *pRight, uint32_t count, uint32_t check)
+{
+  (void)s;
+  (void)pSum;
+  (void)pLeft;
+  (void)pRight;
+  (void)count;
+  return check;   // never asked for: no room here has acoustics
+}
