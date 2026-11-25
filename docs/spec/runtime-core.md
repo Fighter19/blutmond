@@ -877,7 +877,13 @@ if the last room was lit). Every frame after the effects:
   with normals, `max(0, N·F)` (worked out once on entering). The light layer is
   shown and blended (first targets the UI layer and the light layer, second the rest, EVA 16,
   EVB 16: the UI's boxes are then added at full weight too) while no screen is open, no room
-  effect and no teleport; else it is hidden.
+  effect and no teleport; else it is hidden. Behind the UI's boxes it is left out: windows 0
+  and 1 cover them (`bmUiBoxes`: the bands of rows the UI draws in, merged to two), and inside
+  them every layer shows but the light layer. Else a box is blended with the room where the
+  light layer is empty and not at all where it is not, and the light shows through in patches.
+- Only with `BM_LIGHT_EXPERIMENTAL` (CMake option, off): the light layer of normals and the
+  streamed and hybrid ones below; without it a room lit so is not lit, and the GBA has no
+  palette stream.
 - `layer` with the light streamed: each frame the palette stream (`bmVideoSetPaletteStream`)
   is pointed at the row of the camera's top line, so line y of the screen is drawn with the
   light layer's banks of room row `cameraY + y`. The flicker is the light layer's blend weight:

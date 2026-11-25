@@ -76,8 +76,11 @@ static int16_t s_faces[15][15] BM_EWRAM_BSS;
 static struct { int16_t x, y; uint8_t source, shadowed, used; } s_rays[RAY_CACHE] BM_EWRAM_BSS;
 static uint8_t s_rayNext BM_EWRAM_BSS;
 static bool s_weightTable BM_EWRAM_BSS;   // line table slot 0 holds a hybrid light's weights
+static bool s_uiWindows BM_EWRAM_BSS;     // windows 0 and 1 keep the light layer from behind the UI
+#if BM_LIGHT_EXPERIMENTAL
 static uint16_t s_weights[BM_HAL_SCREEN_HEIGHT] BM_EWRAM_BSS;   // that table
 static int32_t s_builtRow BM_EWRAM_BSS, s_builtScale BM_EWRAM_BSS;   // what it was built for (-1: nothing)
+#endif
 
 uint32_t bm_light_banks BM_EWRAM_BSS;   // sprite banks lit in the last frame (tests read it)
 
@@ -104,8 +107,12 @@ void bmLightEnterRoom(BmGame *g)
   bmUiSetLightWeight(16, true);
   bmVideoSetPaletteStream(0, 0, NULL);
   if (s_weightTable) bmVideoSetLineTable(0, 0, NULL);   // the last room's weights per line
+  if (s_uiWindows) bmWindowEnable(0);
+  s_uiWindows = false;
   s_weightTable = false;
+#if BM_LIGHT_EXPERIMENTAL
   s_builtRow = -1;
+#endif
   memset(s_rays, 0, sizeof(s_rays));   // another room's collision
   uint32_t size = 0;
   const uint8_t *p = g->room.liteChunk != 0 ? bmPackChunkData(g->pPack, g->room.liteChunk, &size) : NULL;
@@ -164,7 +171,13 @@ void bmLightEnterRoom(BmGame *g)
     l->hybrid = (l->levels & 0x20) != 0;   // bit 5: some banks streamed, the others fixed
     l->stream = (l->levels & 0x60) != 0;
     l->normalCount = l->levels & 0x1F;
+#if !BM_LIGHT_EXPERIMENTAL
+    // Normals, streamed and hybrid light layers are not built in (BM_LIGHT_EXPERIMENTAL): such a
+    // room is not lit.
+    if (l->stream || !l->fitted) l->mode = BM_LIGHT_NONE;
+#endif
     uint32_t need = l->fitted ? LITE_HEAD + (uint32_t)l->bankCount * 30 : LITE_HEAD + 60 + (uint32_t)l->bankCount * 8;
+#if BM_LIGHT_EXPERIMENTAL
     if (l->stream && size >= LITE_HEAD + 8)
     {
       l->streamRows = bmRead16(p + LITE_HEAD);
@@ -178,6 +191,7 @@ void bmLightEnterRoom(BmGame *g)
           ((uintptr_t)l->pStream & 1))
         need = 0xFFFFFFFFu;
     }
+#endif
     if (l->normalCount > 15 || l->bankCount == 0 || l->firstBank + l->bankCount > 15 || size < need) l->mode = BM_LIGHT_NONE;
     for (uint8_t i = 0; i < g->room.layerCount; i++)
       if (g->room.layers[i].role == BM_ROOM_ROLE_LIGHT) l->layerBg = g->room.layers[i].bg;
@@ -210,6 +224,7 @@ void bmLightEnterRoom(BmGame *g)
     for (uint8_t r = 0; r < l->bankCount; r++)
       for (uint8_t n = 0; n < 15; n++) s_faces[r][n] = (int16_t)bmRead16(p + LITE_HEAD + (r * 15 + n) * 2);
   }
+#if BM_LIGHT_EXPERIMENTAL
   else if (l->mode == BM_LIGHT_LAYER)
   {
     // Per region and normal how much it faces the light (constant: only the strength changes).
@@ -226,6 +241,7 @@ void bmLightEnterRoom(BmGame *g)
       }
     }
   }
+#endif
   if (l->mode == BM_LIGHT_NONE)
   {
     if (wasLit) restoreSprites(g);
@@ -386,6 +402,7 @@ static void presentLayer(BmGame *g, bool all)
       bmHalPaletteWriteBlock((uint16_t)((first + b) * 16), out, 16);
     }
   }
+#if BM_LIGHT_EXPERIMENTAL
   if (l->stream)
   {
     // Streamed (bmLightPresent); hybrid: the fixed banks after the streamed ones, once.
@@ -397,6 +414,7 @@ static void presentLayer(BmGame *g, bool all)
       }
     return;
   }
+#endif
   int32_t strength = l->now * l->gain >> 6;   // 256 = 1.0
   int32_t cr = l->red * strength, cg = l->green * strength, cb = l->blue * strength;
   for (uint8_t r = 0; r < l->bankCount; r++)
@@ -578,6 +596,7 @@ void bmLightPresent(BmGame *g)
     // The light layer is added over the room while nothing else uses the colour effect; with a
     // screen open or a room effect it is hidden (its colours alone are not a picture).
     bool free = g->screens.count == 0 && g->fxKind == 0 && g->teleTimer == 0;
+#if BM_LIGHT_EXPERIMENTAL
     if (l->stream)
     {
       // The rows from the camera's on, a line each; the flicker is the light layer's blend
@@ -620,9 +639,29 @@ void bmLightPresent(BmGame *g)
         s_weightTable = free;
       }
     }
+#endif
     bmUiSetLightLayer(free ? (int8_t)l->layerBg : -1);
     if (free) bmUiBlend();
     bmVideoShowBg(l->layerBg, free);
+    // Behind the UI's boxes the light layer is left out (a window each), so they are blended
+    // with the room alone and look the same all over: else the light shines through where its
+    // layer is empty and is covered where it is not.
+    uint8_t boxes[2][4];
+    uint8_t count = free ? bmUiBoxes(&g->ui, boxes) : 0;
+    if (count > 0)
+    {
+      uint8_t all = (uint8_t)(BM_LAYER_BG(0) | BM_LAYER_BG(1) | BM_LAYER_BG(2) | BM_LAYER_BG(3) | BM_LAYER_OBJ | BM_LAYER_EFFECTS);
+      uint8_t inside = (uint8_t)(all & ~BM_LAYER_BG(l->layerBg));
+      for (uint8_t i = 0; i < count; i++) bmWindowSet(i, boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3]);
+      bmWindowLayers(inside, inside, all, all);
+      bmWindowEnable(count == 2 ? 3 : 1);
+      s_uiWindows = true;
+    }
+    else if (s_uiWindows)
+    {
+      bmWindowEnable(0);
+      s_uiWindows = false;
+    }
   }
   bm_light_cycles[2] = bmHalCycles() - t2;
 }

@@ -101,6 +101,14 @@ void bmHalSaveWrite(uint32_t offset, const void *pData, uint32_t size);
 /// `pValues == NULL` switches the line table off.
 void bmHalLineTableSet(uint32_t slot, uint16_t reg, const uint16_t *pValues);
 
+/// The light modes that were tried and are not kept (lighting.md: the light layer of normals,
+/// the streamed and the hybrid one): built only with BM_LIGHT_EXPERIMENTAL=1 (CMake option
+/// BM_LIGHT_EXPERIMENTAL). Without them rooms lit so are not lit, and the GBA has no palette
+/// stream (bmHalPaletteStream does nothing).
+#ifndef BM_LIGHT_EXPERIMENTAL
+#  define BM_LIGHT_EXPERIMENTAL 0
+#endif
+
 /// A palette stream (lighting.md, the streamed light layer): from the next frame on, line y is
 /// drawn with palette entries [first, first + count) taken from `pRows + y * count` (BG
 /// entries 0-255). On the GBA, row 0 is copied in the vertical blank and DMA channel 3 copies

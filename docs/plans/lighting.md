@@ -10,8 +10,15 @@ this plan) or `layer` (the light layer of section 3), whose values are, by `ligh
 `Light` object are lit; every other room is as before. The test level's debug lobby has a
 fifth door into the torch halls, one behind the other: "palettes", "light layer" (shared),
 "fitted", "normals", and in the game's pack (PC, browser and the cartridge `game.gba`) "streamed" and "hybrid"
-(`tools/make_torch_hall.py`; `test_game` writes all six side by side into
+(`tools/make_torch_hall.py`; `test_game` writes them side by side into
 `test-output/torch_halls.ppm`).
+
+**Kept: palettes, shared and fitted** (tried on the hardware). The streamed and the hybrid hall
+cost frame time (the DMA) without a gain to match, and the light layer of normals steps
+visibly in rings (on an AGB-001 hardly seen, but the game is for other devices and emulators
+too). These three are built only with `BM_LIGHT_EXPERIMENTAL` (CMake option, off by default):
+the runtime's code for them (and the GBA's palette stream) is left out, and so are their halls
+from the packs; the third hall's east door then stays shut.
 
 **The light layer's values.** The flicker only scales the light, so a pixel needs one number,
 its light at full intensity (`max(0, N·L) × falloff`, with its shadow). `fitted` stores that

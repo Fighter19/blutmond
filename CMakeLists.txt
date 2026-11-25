@@ -6,6 +6,14 @@ set(BM_PLATFORM host CACHE STRING "Target platform: host or gba")
 set_property(CACHE BM_PLATFORM PROPERTY STRINGS host gba)
 
 option(USE_SANITIZER "Enable AddressSanitizer and UBSan (host only)" OFF)
+# The light modes that were tried and are not kept (docs/plans/lighting.md): the light layer of
+# normals, the streamed and the hybrid one, and their torch halls (4 to 6).
+option(BM_LIGHT_EXPERIMENTAL "Build the tried light modes (normals, streamed, hybrid) and their torch halls" OFF)
+if(BM_LIGHT_EXPERIMENTAL)
+  add_compile_definitions(BM_LIGHT_EXPERIMENTAL=1)
+else()
+  add_compile_definitions(BM_LIGHT_EXPERIMENTAL=0)
+endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -74,12 +82,21 @@ set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_spotlight.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/debug_pulse.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_layer.tmx
-  ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_fitted.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
-# The game's pack (PC, browser and the cartridge game.gba) adds the streamed and the hybrid torch
-# hall (their rows of light are 55 KB): the packs the tests compare and push between devices,
-# what a GBA sends to another and the multiboot pack leave them out.
-set(BM_TEST_LEVEL_CART_ROOMS ${BM_TEST_LEVEL_ROOMS} ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_stream.tmx
-  ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_hybrid.tmx)
+  ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_fitted.tmx)
+set(BM_TORCH_HALLS torch_hall torch_hall_layer torch_hall_fitted)
+if(BM_LIGHT_EXPERIMENTAL)
+  list(APPEND BM_TEST_LEVEL_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
+endif()
+# The game's pack (PC, browser and the cartridge game.gba): with BM_LIGHT_EXPERIMENTAL it adds
+# the streamed and the hybrid torch hall (their rows of light are 55 KB), which the packs the
+# tests compare and push between devices leave out; without, it is the test level, and the torch
+# halls end with the third (its east door leads to a room the pack does not have: it stays shut).
+set(BM_TEST_LEVEL_CART_ROOMS ${BM_TEST_LEVEL_ROOMS})
+if(BM_LIGHT_EXPERIMENTAL)
+  list(APPEND BM_TEST_LEVEL_CART_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_stream.tmx
+    ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_hybrid.tmx)
+  list(APPEND BM_TORCH_HALLS torch_hall_normals torch_hall_stream torch_hall_hybrid)
+endif()
 set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/torch.ms
@@ -1079,7 +1096,7 @@ if(BM_PLATFORM STREQUAL "host")
       # frame's light stays within its budget in processor cycles (the room's banks, the sprites'
       # banks), from ROM. Its own pack pushed only restarts it in the hall: no chunk is sent, so
       # every hall is in the cartridge.
-      foreach(hall torch_hall torch_hall_layer torch_hall_fitted torch_hall_normals torch_hall_stream torch_hall_hybrid)
+      foreach(hall ${BM_TORCH_HALLS})
         add_test(NAME light_mgba_${hall}
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game.gba run 60 push ${BM_GBA_BUILD_DIR}/test_level_cart_gba.bmpk restart:${hall} run 120
             check "${elf}:bm_light_cycles+0<=40000" check "${elf}:bm_light_cycles+4<=20000" screenshot ${out}/light_${hall}.ppm)

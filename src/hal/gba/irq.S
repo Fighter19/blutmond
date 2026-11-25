@@ -54,12 +54,14 @@ bm_irq_handler:
     restart_line_table 0, 0xB0      @ DMA 0
     restart_line_table 1, 0xD4      @ DMA 3
     restart_line_table 2, 0         @ the H-blank interrupt below
+#if BM_LIGHT_EXPERIMENTAL
     @ The palette stream (bm_hal_stream, hal_gba.c), from ROM: once a frame, and IWRAM is full.
     stmfd   sp!, {lr}               @ the BIOS's return address
     ldr     r2, =bm_hal_stream_vblank
     mov     lr, pc
     bx      r2
     ldmfd   sp!, {lr}
+#endif
     @ Sound: DMA 1 and 2 start again on the pair handed over, or on silence if none was.
     ldr     r2, =bm_hal_audio_next
     ldr     r3, [r2, #8]            @ on?
@@ -120,6 +122,7 @@ bm_irq_handler:
 bm_vblank_count:
     .word   0
 
+#if BM_LIGHT_EXPERIMENTAL
 @ The palette stream at the vertical blank (bm_hal_stream, hal_gba.c): next becomes shown; row 0
 @ into palette memory now, DMA channel 3 (off since line table 1 restarted) the next rows at
 @ every H-blank. r0: the I/O base, kept; r1 kept.
@@ -153,3 +156,4 @@ bm_hal_stream_vblank:
     ldmfd   sp!, {r1, r4, r5, r6, lr}
     bx      lr
     .ltorg
+#endif

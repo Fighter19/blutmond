@@ -58,7 +58,7 @@ Map-level custom properties:
 | `muffle` | int | preset's | a low pass over everything heard: 0 none - 255 most |
 | `lighting` | string | `palette` | how the room's `Light` object lights its tiles: `palette` (baked into the room's colours) or `layer` (a light layer added over the room) (below) |
 | `ambient` | float | 1.0 | a lit room's darkness: 0 black to 1 as drawn |
-| `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light), `normals` (directions), `stream` (directions, the light streamed line by line) or `hybrid` (as `stream`, only near the lights) (below) |
+| `light_index` | string | `shared` | with `lighting = layer`, what the light layer's values stand for: `shared`, `fitted` (levels of light), `normals` (directions), `stream` (directions, the light streamed line by line) or `hybrid` (as `stream`, only near the lights) (below; the last three are lit only by a runtime built with `BM_LIGHT_EXPERIMENTAL`) |
 | `light_normals` | int | 7 | with `light_index = stream` or `hybrid`: 15, or 3 to 7 directions (flat bands: 15 / normals bands a bank) |
 | `light_bands` | string | `middle` | with `light_index = stream` or `hybrid`: a band's colours are the light at its `middle` column, its `mean` across the band, or a `ramp` across it (one band a bank, samples per normal; needs 3 to 7 normals) |
 | `light_band` | int | 24 | with `light_index = stream` or `hybrid`: the bands' mean width in pixels (widened when the banks would not do) |

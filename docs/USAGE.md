@@ -56,17 +56,18 @@ for each screen effect, the torch halls, and a teleporter back to the first room
 starts in that room (`--room debug_lobby`, `--room torch_hall`), `--debug-item` puts the mirror
 in the bag at the start.
 
-**The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): six rooms alike
+**The torch halls** (the fifth door, [plans/lighting.md](plans/lighting.md)): three rooms alike
 but for how their flickering torch lights the walls, side by side for comparing, each behind
-the east door of the one before. "Torch hall: palettes" has the light baked into its colours;
-the others add a light layer over the room: "Torch hall: light layer" one whose tiles repeat
-(a brick's pattern for one of 8 light directions, the strength in the palette bank), "Torch
-hall: fitted" one fitted to each pixel's light, "Torch hall: normals" one of normals,
-"Torch hall: streamed" one whose light is streamed into its palette line by line (H-blank DMA)
-and "Torch hall: hybrid" one streamed only near the torch. The last two are in the game's pack
-(PC, browser, cartridge), not in the multiboot one. The player and the
+the east door of the one before (the third's stays shut). "Torch hall: palettes" has the light
+baked into its colours; the others add a light layer over the room: "Torch hall: light layer"
+one whose tiles repeat (a brick's pattern for one of 8 light directions, the strength in the
+palette bank), "Torch hall: fitted" one fitted to each pixel's light. Built with
+`-DBM_LIGHT_EXPERIMENTAL=ON`, the modes that were tried and not kept follow behind the third:
+"Torch hall: normals" (a light layer of normals), "Torch hall: streamed" (its light streamed
+into the palette line by line by H-blank DMA) and "Torch hall: hybrid" (streamed only near the
+torch); the last two only in the game's pack (PC, browser, cartridge). The player and the
 bat are lit the same way in both; behind the pillar they are in its shadow.
-`tools/make_torch_hall.py` draws them. `test_game` writes the six pictures it compares into
+`tools/make_torch_hall.py` draws them. `test_game` writes the pictures it compares (three per hall) into
 `build/test-output/torch_halls.ppm` (the halls left to right).
 
 Sounds: each enemy struck sounds its own (an `Enemy` record's `hit_sound`: the bats squeak; the

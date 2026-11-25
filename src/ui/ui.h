@@ -63,6 +63,8 @@ typedef struct BmUi
   uint32_t glyphOnFill[BM_UI_GLYPH_SLOTS / 32];   // a bit per tile drawn on a frame's inside
   uint8_t glyphHint[256];                 // by (code & 127) and ground: the slot it was in last + 1
   uint8_t map[32 * BM_UI_ROWS];           // the visible rows of screen block 25: tile numbers
+  bool boxesStale;                        // the map changed since bmUiBoxes
+  uint8_t boxCount, box[2][4];            // what bmUiBoxes found
 } BmUi;
 
 /// A value for a placeholder: a number, or a string id of the pack.
@@ -160,6 +162,11 @@ void bmUiSetLightLayer(int8_t bg);
 /// The light layer's weight in that blend (16 full) and whether the UI is blended too (it
 /// shares the weight: a streamed light flickers with it, so the UI is then not).
 void bmUiSetLightWeight(uint8_t eva, bool ui);
+
+/// Where the UI shows something, as at most two screen rectangles (left, top, right, bottom in
+/// pixels, right and bottom exclusive): the bands of rows it draws in, the nearest merged until
+/// two are left. 0 while it is hidden. Computed again only when the UI changed.
+uint8_t bmUiBoxes(BmUi *pUi, uint8_t rects[2][4]);
 
 /// Once a frame, in the vertical blank: background 3 on or off, the rows of the map that
 /// changed.

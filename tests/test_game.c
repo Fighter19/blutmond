@@ -3040,10 +3040,13 @@ static int32_t bankBrightness(uint8_t bank)
 static void testTheTorchHalls(void)
 {
   static const char *const halls[6] = {"torch_hall", "torch_hall_layer", "torch_hall_fitted", "torch_hall_normals", "torch_hall_stream", "torch_hall_hybrid"};
+  // The last three only with the light modes that are not kept (BM_LIGHT_EXPERIMENTAL).
+  enum { HALLS = BM_LIGHT_EXPERIMENTAL ? 6 : 3 };
   static const int32_t xs[3] = {96, 184, 272};   // left of the torch, under it, behind the pillar
   static uint16_t shots[6][3][BM_PPU_WIDTH * BM_PPU_HEIGHT];
   int32_t bright[6][3];
-  for (int h = 0; h < 6; h++)
+  TEST_ASSERT(BM_LIGHT_EXPERIMENTAL || bmGameFindRoom(&s_pack, "torch_hall_normals") < 0);
+  for (int h = 0; h < HALLS; h++)
   {
     startWith(s_data, s_size, halls[h]);
     TEST_ASSERT(s_game.light.mode == (h == 0 ? BM_LIGHT_PALETTE : BM_LIGHT_LAYER));
@@ -3077,6 +3080,11 @@ static void testTheTorchHalls(void)
       uint8_t bg = s_game.light.layerBg;
       TEST_ASSERT(bg < 3 && (bmPpuReg(ppu, BM_PPU_DISPCNT) & BM_PPU_DISPCNT_BG(bg)) != 0);
       TEST_ASSERT((bmPpuReg(ppu, BM_PPU_BLDCNT) & (1u << bg)) != 0 && bmPpuReg(ppu, BM_PPU_BLDALPHA) == (16 | 16 << 8));
+      // Behind the UI's boxes (the HUD at the top, the room's title at the bottom) it is left
+      // out: a window each, without it.
+      uint16_t dispcnt = bmPpuReg(ppu, BM_PPU_DISPCNT), winin = bmPpuReg(ppu, BM_PPU_WININ);
+      TEST_ASSERT((dispcnt & BM_PPU_DISPCNT_WIN0) != 0 && (winin & (1u << bg)) == 0 && (winin & 8u) != 0);
+      TEST_ASSERT((dispcnt & BM_PPU_DISPCNT_WIN1) == 0 || (winin & (0x100u << bg)) == 0);
     }
     if (h == 5)
     {
@@ -3101,8 +3109,7 @@ static void testTheTorchHalls(void)
   }
   // The halls light the player alike: the sprites are lit the same way in all six.
   for (int p = 0; p < 3; p++)
-    TEST_ASSERT(bright[0][p] == bright[1][p] && bright[0][p] == bright[2][p] && bright[0][p] == bright[3][p] && bright[0][p] == bright[4][p] &&
-                bright[0][p] == bright[5][p]);
+    for (int h = 1; h < HALLS; h++) TEST_ASSERT(bright[0][p] == bright[h][p]);
   // Out of the halls the player's colours are its own again.
   startWith(s_data, s_size, "torch_hall");
   int32_t lit = bankBrightness(0);
@@ -3116,7 +3123,7 @@ static void testTheTorchHalls(void)
   FILE *f = fopen(path, "wb");
   TEST_ASSERT(f != NULL);
   if (f == NULL) return;
-  const int gap = 4, w = BM_PPU_WIDTH * 6 + gap * 5, hgt = BM_PPU_HEIGHT * 3 + gap * 2;
+  const int gap = 4, w = BM_PPU_WIDTH * HALLS + gap * (HALLS - 1), hgt = BM_PPU_HEIGHT * 3 + gap * 2;
   fprintf(f, "P6\n%d %d\n255\n", w, hgt);
   for (int y = 0; y < hgt; y++)
     for (int x = 0; x < w; x++)

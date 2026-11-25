@@ -127,6 +127,7 @@ BmResult bmUiInit(BmUi *ui, const BmPack *pPack, const char *fontName)
   for (int y = BM_UI_ROWS; y < 32; y++) bmMapLoad(BM_UI_SCREEN_BLOCK, (uint16_t)(y * 32), empty, 32);
   ui->ready = true;
   ui->dirtyRows = (1u << BM_UI_ROWS) - 1;
+  ui->boxesStale = true;
   bmVideoShowBg(BM_UI_BG, false);
   return BM_SUCCESS;
 }
@@ -270,6 +271,7 @@ static void setCell(BmUi *ui, int x, int y, uint8_t tile)
   if (x < 0 || x >= 32 || y < 0 || y >= BM_UI_ROWS || ui->map[y * 32 + x] == tile) return;
   ui->map[y * 32 + x] = tile;
   ui->dirtyRows |= 1u << y;
+  ui->boxesStale = true;
 }
 
 void bmUiClearRect(BmUi *ui, int col, int row, int w, int h)
@@ -295,6 +297,73 @@ void bmUiMapCell(BmUi *ui, int col, int row, uint16_t look)
   if (!ui->ready || col < 0 || col >= 32 || row < 0 || row >= BM_UI_ROWS) return;
   uint8_t tile = glyphTileFor(ui, MAP_CODE + (look & 0x7FF), false);
   if (tile != 0) setCell(ui, col, row, tile);
+}
+
+uint8_t bmUiBoxes(BmUi *ui, uint8_t rects[2][4])
+{
+  if (!ui->ready || !ui->shown) return 0;
+  if (ui->boxesStale)
+  {
+    // Bands of rows with something drawn, each as wide as its widest row.
+    uint8_t band[BM_UI_ROWS][4];
+    int n = 0;
+    bool open = false;
+    for (int y = 0; y < BM_UI_ROWS; y++)
+    {
+      int lo = 32, hi = -1;
+      for (int x = 0; x < 32; x++)
+        if (ui->map[y * 32 + x] != 0)
+        {
+          if (x < lo) lo = x;
+          hi = x;
+        }
+      if (hi < 0)
+      {
+        open = false;
+        continue;
+      }
+      if (!open)
+      {
+        band[n][0] = (uint8_t)lo, band[n][1] = (uint8_t)y, band[n][2] = (uint8_t)hi, band[n][3] = (uint8_t)y;
+        n++;
+        open = true;
+      }
+      else
+      {
+        uint8_t *b = band[n - 1];
+        if (lo < b[0]) b[0] = (uint8_t)lo;
+        if (hi > b[2]) b[2] = (uint8_t)hi;
+        b[3] = (uint8_t)y;
+      }
+    }
+    // More than two: the two bands nearest each other become one, until two are left.
+    while (n > 2)
+    {
+      int best = 0;
+      for (int i = 1; i + 1 < n; i++)
+        if (band[i + 1][1] - band[i][3] < band[best + 1][1] - band[best][3]) best = i;
+      uint8_t *a = band[best], *b = band[best + 1];
+      if (b[0] < a[0]) a[0] = b[0];
+      if (b[2] > a[2]) a[2] = b[2];
+      a[3] = b[3];
+      for (int i = best + 1; i + 1 < n; i++)
+        for (int k = 0; k < 4; k++) band[i][k] = band[i + 1][k];
+      n--;
+    }
+    ui->boxCount = (uint8_t)n;
+    for (int i = 0; i < n; i++)
+    {
+      int right = (band[i][2] + 1) * 8, bottom = (band[i][3] + 1) * 8;
+      ui->box[i][0] = (uint8_t)(band[i][0] * 8);
+      ui->box[i][1] = (uint8_t)(band[i][1] * 8);
+      ui->box[i][2] = (uint8_t)(right > 240 ? 240 : right);
+      ui->box[i][3] = (uint8_t)(bottom > 160 ? 160 : bottom);
+    }
+    ui->boxesStale = false;
+  }
+  for (int i = 0; i < ui->boxCount; i++)
+    for (int k = 0; k < 4; k++) rects[i][k] = ui->box[i][k];
+  return ui->boxCount;
 }
 
 void bmUiFrame(BmUi *ui, int col, int row, int w, int h)
@@ -581,6 +650,7 @@ void bmUiRestore(BmUi *ui)
     bmTilesLoadBg(BM_UI_CHAR_BLOCK, (uint16_t)(BM_UI_GLYPH_FIRST + s), tile, TILE_BYTES);
   }
   ui->dirtyRows = (1u << BM_UI_ROWS) - 1;
+  ui->boxesStale = true;
 }
 
 void bmUiRebind(BmUi *ui, const BmPack *pPack)
