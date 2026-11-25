@@ -3206,7 +3206,7 @@ static void testTheTorchHalls(void)
   fclose(f);
 }
 
-// The rural street: a steady gas lamp lights it (mode palette), and the puddle on the road
+// The rural street: a flickering gas lamp lights it (mode palette), and the puddle on the road
 // mirrors the room (background 2 on background 0's map, its scroll set line by line) and the
 // player standing over it (semi-transparent affine sprites, squeezed).
 static int mirroredSprites(const BmPpuState *ppu)
@@ -3223,7 +3223,7 @@ static int mirroredSprites(const BmPpuState *ppu)
 static void testThePuddleMirrorsTheStreet(void)
 {
   startWith(s_data, s_size, "rural_street");
-  TEST_ASSERT(s_game.light.mode == BM_LIGHT_PALETTE && s_game.light.flicker == 0);
+  TEST_ASSERT(s_game.light.mode == BM_LIGHT_PALETTE && s_game.light.flicker != 0);
   TEST_ASSERT(s_game.reflect.on && s_game.reflect.bg == 2 && s_game.reflect.layer == 0);
   bmBodyPlace(&s_game.player, 300, 128);
   frames(30, 0);
@@ -3237,8 +3237,8 @@ static void testThePuddleMirrorsTheStreet(void)
   }
   TEST_ASSERT(scroll && blend && (bmPpuReg(ppu, BM_PPU_BLDCNT) & (1u << 2)) != 0);
   TEST_ASSERT(mirroredSprites(ppu) >= 2);
-  // The lamp burns steady: after the first frame its banks are not shaded again.
-  TEST_ASSERT(s_game.light.shaded == s_game.light.now);
+  // The banks are shaded again only when the light changed enough to show (less than 3/256).
+  TEST_ASSERT(s_game.light.shaded - s_game.light.now < 3 && s_game.light.now - s_game.light.shaded < 3);
   uint16_t shot[BM_PPU_WIDTH * BM_PPU_HEIGHT];
   bmHalHostRender(shot);
   // Away from the puddle the player is not mirrored.

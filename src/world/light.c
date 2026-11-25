@@ -413,8 +413,10 @@ static void LIGHT_KERNEL litSlotsCurved(uint16_t *out, const uint8_t *pal, const
 static void presentPalette(BmGame *g, bool all)
 {
   BmLight *l = &g->light;
-  // A light that does not flicker (or not this frame): its banks are as they were.
-  if (!all && l->now == l->shaded) return;
+  // A light that does not flicker, or has changed too little since its banks were shaded for
+  // no colour to change by half a step (a factor of 256 moves a channel of 31 by 0.5 at 4): its
+  // banks are as they were.
+  if (!all && l->now - l->shaded < 3 && l->shaded - l->now < 3) return;
   l->shaded = l->now;
   uint32_t first = l->paletteFirst, banks = l->paletteBanks;
   const BmColorCorrection *cc = bmPaletteCorrection();

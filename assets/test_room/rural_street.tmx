@@ -84,8 +84,8 @@
     <property name="radius" value="140" />
     <property name="height" value="24" />
     <property name="intensity" value="1.6" />
-    <property name="flicker" value="0" />
-    <property name="flicker_speed" value="3" />
+    <property name="flicker" value="0.2" />
+    <property name="flicker_speed" value="4" />
    </properties>
   </object>
   <object id="4" name="puddle" type="Puddle" x="254" y="128" width="116" height="20">

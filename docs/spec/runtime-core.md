@@ -911,9 +911,11 @@ if the last room was lit). Every frame after the effects:
   the light raised by its height, emissive slots as drawn, shiny slots plus `(N·H)^8` of the
   light's colour (H halfway between L and the viewer). A sheet without normals faces the
   viewer. A bank out of the light is written once while it stays out.
-- Mode `palette`: the room's banks are shaded again only when the light's intensity changed
-  since the last frame, so a light that does not flicker costs nothing after the first frame
-  (the rural street's lamp: about 250 cycles a frame instead of 40,700 for its 15 banks). Pixels
+- Mode `palette`: the room's banks are shaded again only when the light's intensity has changed
+  by 3/256 or more since they were (less moves no channel by half a step), so a light that
+  does not flicker costs nothing after the first frame (the rural street's 15 banks: about 250
+  cycles a frame instead of 40,700), and a slow flicker is shaded on some frames only (its lamp,
+  flickering by 0.2: about 158 lines of a frame on average, 163 shading every frame). Pixels
   black in the normal map are emissive: their entries are written as drawn.
 - The multiboot images have no light (their packs have no lit room; one pushed to them is shown
   unlit). On the GBA a torch hall's light costs about 37,000 cycles a frame (`bm_light_cycles`:
@@ -932,7 +934,7 @@ drawn a second time, mirrored in the water line and squeezed by the same `squash
 of its figure as semi-transparent affine sprites (matrix 31; the doors use the others) at
 priority 2, behind the room's main layer, so only the puddle shows them. While a room effect or
 a teleport uses the line tables the mirror is hidden. The multiboot images have no puddles
-(light_off.c). On the GBA the rural street takes about 130 lines of a frame.
+(light_off.c). On the GBA the rural street takes about 158 lines of a frame (130 with its lamp steady).
 
 **Debug**: holding L and R and pressing Start gives the record `DebugMirror` if the pack has
 it and the player has none (the menu does not open then). The test level's mirror teleports to
