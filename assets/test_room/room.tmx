@@ -122,7 +122,7 @@
     <property name="respawn" value="last_ground" />
    </properties>
   </object>
-  <object id="4" name="exit_east" type="Door" x="1008" y="48" width="16" height="32">
+  <object id="4" name="exit_east" type="Door" x="1008" y="32" width="16" height="48">
    <properties>
     <property name="target_room" value="test_room_2" />
     <property name="target_door" value="exit_west" />

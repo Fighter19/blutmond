@@ -297,14 +297,16 @@ if(BM_PLATFORM STREQUAL "gba")
   # For the multiboot images, which share 256 KB with the engine: the same level with the debug
   # rooms, the boss hall (with the boss's sprites, music and voice), the Hall of Abilities behind it,
   # the Guard Room (with its knight and the Iron Bat's armour)
-  # and the translations left out (pack-format.md §0: their entries stay, flagged absent); a
+  # and the translations and the save game's history (MIGR: for loading a save of an earlier
+  # version, and a multiboot image has no save memory) left out (pack-format.md §0: their entries
+  # stay, flagged absent); a
   # fitted push brings them later (runtime-abi.md §0).
   set(BM_TEST_LEVEL_ABSENT --absent-room debug_lobby --absent-room debug_wave --absent-room debug_spotlight
     --absent-room debug_pulse --absent-room debug_gradient --absent-room boss_hall --absent-room ability_hall
     --absent-asset vesper --absent-asset moon_bat --absent-asset vesper_face --absent-asset voice_vesper
     --absent-asset fireball --absent-room guard_room --absent-asset knight --absent-asset bat_armour --absent-asset clang
     --absent-asset torch --absent-asset night_escape
-    --absent-kind LANG)
+    --absent-kind LANG --absent-kind MIGR)
   # The torch halls (docs/plans/lighting.md) and the rural street are not in it at all, not even
   # as absent entries: the multiboot images have no light and no puddles (light_off.c), and these
   # rooms come last, so the other rooms keep their numbers.

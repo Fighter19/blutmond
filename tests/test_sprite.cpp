@@ -33,7 +33,7 @@ static void testLoadSaveRoundTrip()
   TEST_ASSERT(s.frames.size() == 43);   // 10 of 16x32, 3 of 32x32 (slash), 4 of 16x48 (lance up, down), 2 of 32x32 (low), 8 of 32x48 (arcs), 1 of 32x32 (lance), 4 of 16x32 (push), 9 of 24x32 (aim), 2 of 16x32 (sit)
   TEST_ASSERT(s.animations.size() == 15);
   TEST_ASSERT(s.animations[1].name == "run" && s.animations[1].steps.size() == 4);
-  TEST_ASSERT(s.frames[0].ax == 8 && s.frames[0].ay == 32);
+  TEST_ASSERT(s.frames[0].ax == 8 && s.frames[0].ay == 30);
 
   fs::create_directories(s_work);
   fs::copy_file(s_assets + "/sources/player.png", s_work + "/player.png", fs::copy_options::overwrite_existing);
@@ -60,7 +60,7 @@ static void testCook()
   // A 16x32 frame is one tall hardware sprite of 8 tiles.
   TEST_ASSERT(c.frames[0].pieces.size() == 1);
   TEST_ASSERT(c.frames[0].pieces[0].w == 16 && c.frames[0].pieces[0].h == 32);
-  TEST_ASSERT(c.frames[0].pieces[0].dx == -8 && c.frames[0].pieces[0].dy == -32);
+  TEST_ASSERT(c.frames[0].pieces[0].dx == -8 && c.frames[0].pieces[0].dy == -30);
   TEST_ASSERT(c.maxPieces == 2);   // a 16x48 frame (the swing up or down): 16x32 and 16x16
   TEST_ASSERT(c.maxLineCost == 32);   // the 32-wide slash frames
   TEST_ASSERT(c.tiles.size() >= 10 * 8);
@@ -140,7 +140,7 @@ static void testRuntime()
   TEST_ASSERT(bmSpriteSheetDraw(&sheet, 0, 100, 100, false, 1, 5, 4) == 1);
   bmVideoWaitFrame();
   const BmPpuState *ppu = bmHalHostGetPpu();
-  TEST_ASSERT((ppu->oam[5 * 4] & 0xFF) == 68);
+  TEST_ASSERT((ppu->oam[5 * 4] & 0xFF) == 70);   // 100 - 30: the anchor 2 above the feet (the player stands a little in the ground)
   TEST_ASSERT((ppu->oam[5 * 4 + 1] & 0x1FF) == 92);
   TEST_ASSERT((ppu->oam[5 * 4 + 2] & 0x3FF) == 40);
   TEST_ASSERT((ppu->oam[5 * 4 + 2] >> 12) == 3);
@@ -188,8 +188,8 @@ static void testFigureDrawsTheWholePlayer()
   TEST_ASSERT(fig.layerCount == 2 && fig.layers[1].parent == 0 && fig.layers[1].mode == BM_FIGURE_SYNC);
   TEST_ASSERT(bmFigureFind(&fig, &pack, "nobody") == BM_ERROR_NOT_FOUND);
   BmSpritePoint pt;
-  TEST_ASSERT(bmSpriteSheetPoint(&legs, 0, fig.layers[1].point, false, false, &pt) && pt.x == 0 && pt.y == -15);
-  TEST_ASSERT(bmSpriteSheetPoint(&legs, 0, fig.layers[1].point, true, true, &pt) && pt.y == 15);
+  TEST_ASSERT(bmSpriteSheetPoint(&legs, 0, fig.layers[1].point, false, false, &pt) && pt.x == 0 && pt.y == -13);
+  TEST_ASSERT(bmSpriteSheetPoint(&legs, 0, fig.layers[1].point, true, true, &pt) && pt.y == 13);
   TEST_ASSERT(!bmSpriteSheetPoint(&torso, 0, fig.layers[1].point, false, false, &pt));
   TEST_ASSERT(legs.animCount == whole.animCount && torso.animCount == whole.animCount);
 
@@ -294,7 +294,7 @@ static void testFigureDrawsTheWholePlayer()
   TEST_ASSERT(pose.count == 3 && pose.order[0] == 1 && pose.order[1] == 0 && pose.order[2] == 2);   // torso, legs, cape
   BmAnimState torsoRun = {uint8_t(bmFigureLayerAnim(&legs, uint8_t(run), &torso)), 0, 2, 0};   // in step: its own run, at the legs' step
   TEST_ASSERT(pose.frame[1] == bmAnimFrame(&torso, &states3[1]) && pose.frame[2] == bmAnimFrame(&torso, &torsoRun));
-  TEST_ASSERT(pose.y[1] == -15 && pose.y[2] == -15 && pose.x[1] == 0);
+  TEST_ASSERT(pose.y[1] == -13 && pose.y[2] == -13 && pose.x[1] == 0);
   // A layer without a sheet is not drawn; what hangs on it is placed at its place.
   sheets3[1] = nullptr;
   bmFigurePose(&three, sheets3, states3, nullptr, false, false, &pose);

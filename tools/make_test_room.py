@@ -348,7 +348,8 @@ def write_tmx(path):
         ("PlayerStart", "start", 40, 160, 0, 0, True, [("facing", "right")]),
         ("CameraZone", "room", 0, 0, W * T, H * T, False, []),
         ("KillZone", "pits", 0, H * T, W * T, 16, False, [("respawn", "last_ground")]),
-        ("Door", "exit_east", W * T - 16, 48, 16, 32, False, [("target_room", "test_room_2"), ("target_door", "exit_west"), ("direction", "east"), ("panel", "door_panel")]),
+        ("Door", "exit_east", W * T - 16, 32, 16, 48, False,   # as tall as the panel (scaled down, it loses its outline)
+         [("target_room", "test_room_2"), ("target_door", "exit_west"), ("direction", "east"), ("panel", "door_panel")]),
         ("SavePoint", "save", 400, 160, 0, 0, True, []),
         ("Pickup", "heart", 250, 112, 0, 0, True, [("item", "heart_max_up"), ("persistent", "true")]),
         ("WeaponStand", "sword", 80, 160, 0, 0, True, []),

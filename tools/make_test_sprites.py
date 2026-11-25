@@ -98,6 +98,10 @@ def player_frame(torso, leg_rows, bob=0):
     return rows
 
 
+# The player stands a little in the ground (2 pixels): standing exactly on the floor's edge,
+# the boots seem to float above it.
+PLAYER_SINK = 2
+
 PLAYER_FRAMES = [
     player_frame(TORSO, legs(0, 0)),                    # 0 idle
     player_frame(TORSO, legs(0, 0), bob=1),             # 1 idle, breathing
@@ -366,30 +370,35 @@ BAT_ARMOUR = [
 ]
 
 
-def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=(), palettes=(), points=(), normal=None):
+def sprite_file(path, image, frames, columns, w, h, anchor, hitbox, animations, boxes=(), extra=(), palettes=(), points=(), normal=None,
+                sink=0):
     """`boxes`: sprite-wide boxes (kind, name, x, y, w, h); `extra`: frames of other sizes
     after the regular ones, as (x, y, w, h, ax, ay); `palettes`: other palettes of the same
     pixels, as (name, [(from, to), ...]) colour swaps (#rrggbb); `normal`: its normals for the
-    light (lighting.md), "auto" or a normal map."""
+    light (lighting.md), "auto" or a normal map. `sink`: the pictures drawn that many pixels
+    lower than the anchors say (into the ground they stand on): every anchor that much higher,
+    the points (where things hang) with the pictures; the hitbox and the boxes stay where they
+    were for the body, so what strikes and is struck is as before."""
     head = '<sprite version="1" image="%s"%s>' % (image, ' normal="%s"' % normal if normal else "")
     out = ['<?xml version="1.0" encoding="UTF-8"?>', head]
     out.append(' <hitbox x="%d" y="%d" w="%d" h="%d"/>' % hitbox)
     for kind, name, bx, by, bw, bh in boxes:
         out.append(' <box kind="%s" name="%s" x="%d" y="%d" w="%d" h="%d"/>' % (kind, name, bx, by, bw, bh))
     for name, px, py, angle in points:
-        out.append(' <point name="%s" x="%d" y="%d" angle="%d"/>' % (name, px, py, angle))
+        out.append(' <point name="%s" x="%d" y="%d" angle="%d"/>' % (name, px, py + sink, angle))
     for i in range(frames):
         out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>'
-                   % ((i % columns) * w, (i // columns) * h, w, h, anchor[0], anchor[1]))
+                   % ((i % columns) * w, (i // columns) * h, w, h, anchor[0], anchor[1] - sink))
     for f in extra:
         # (x, y, w, h, ax, ay) or with its own boxes: (..., [(kind, name, x, y, w, h), ...]) and
         # points (..., boxes, [(name, x, y, angle), ...])
+        f = tuple(f[:5]) + (f[5] - sink,) + tuple(f[6:])
         if (len(f) > 6 and f[6]) or (len(f) > 7 and f[7]):
             out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d">' % f[:6])
             for kind, name, bx, by, bw, bh in f[6]:
                 out.append('  <box kind="%s" name="%s" x="%d" y="%d" w="%d" h="%d"/>' % (kind, name, bx, by, bw, bh))
             for name, px, py, angle in (f[7] if len(f) > 7 else []):
-                out.append('  <point name="%s" x="%d" y="%d" angle="%d"/>' % (name, px, py, angle))
+                out.append('  <point name="%s" x="%d" y="%d" angle="%d"/>' % (name, px, py + sink, angle))
             out.append(' </frame>')
         else:
             out.append(' <frame x="%d" y="%d" w="%d" h="%d" ax="%d" ay="%d"/>' % f[:6])
@@ -587,7 +596,7 @@ def main():
     ], extra=extra, palettes=[
         # Wearing the chain mail (layered-sprites.md §5): the coat in steel.
         ("steel", [("#b51021", "#8c94a5"), ("#820a18", "#5a6270")]),
-    ], normal="auto")
+    ], normal="auto", sink=PLAYER_SINK)
     sheet(BAT_FRAMES, 2, 16, 16).save(os.path.join(out, "bat.png"))
     sprite_file(os.path.join(out, "bat.bmsprite"), "bat.png", len(BAT_FRAMES), 2, 16, 16, (8, 12), (-6, -8, 12, 8), [
         ("idle", True, [(0, 8), (1, 8)]),

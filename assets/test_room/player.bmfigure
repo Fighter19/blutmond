@@ -1,4 +1,5 @@
 # The player (layered-sprites.md §4): legs and torso, drawn from player.png in
-# assets/sources and split at the waist by tools/split_sprite.py (--waist 15).
+# assets/sources and split at the waist by tools/split_sprite.py (--waist 13: the anchors are 2 pixels up, the
+# player standing a little in the ground).
 layer legs   sprite=player_legs
 layer torso  sprite=player_torso  at=legs.waist  mode=sync

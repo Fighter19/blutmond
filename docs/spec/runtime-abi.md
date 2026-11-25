@@ -30,12 +30,13 @@ Most of this document is the design. Built so far (`src/link/live.h`,
   pack at all) is fitted by the master (`bmLiveMasterPushPackFor`): it arrives with the full
   chunk table, but only some chunks keep their bytes, the others are left out (absent,
   [pack-format.md](pack-format.md) §0). In this order, while they fit: every chunk no room
-  names but the songs and the languages (if these do not fit, the push fails); the room
+  names but the songs, the languages and the save game's history (`MIGR`, only for loading a
+  save of an earlier version) (if these do not fit, the push fails); the room
   asked for and what it names (bmlink: the room of `restart:ID`; one GBA sending to another:
   the room it is in), room 0, and the rooms a door of either leads to (an object's
   `target_room`); then the songs (a song left out is silence); then the other rooms nearest
   through doors first, then those no door leads to, each whole where it fits; then the
-  languages. What a room names: its maps, collision, objects, area and layers, and its light
+  languages and the save game's history. What a room names: its maps, collision, objects, area and layers, and its light
   (`LITE`, room-format.md §7).
   The CRC is of the pack as it arrives. The runtime marks the left-out chunks as there. The
   game does not go to a left-out room; a later push fitted around that room brings it (and

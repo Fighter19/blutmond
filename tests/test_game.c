@@ -2357,6 +2357,9 @@ static void testThePushBlockPuzzle(void)
 {
   startWith(s_data, s_size, "puzzle_room");
   frames(5, 0);
+  // Late in a game: much kept already (every item of the test level taken, its crates and
+  // walls broken: 20 values), and the block's place must still be kept.
+  for (uint32_t k = 0; k < 20; k++) TEST_ASSERT(bmActorsStorePut(&s_game, 0x7F000000u | (k << 8), 1));
   const BmPuzzle *p = &s_game.puzzle;
   const BmCollision *c = &s_game.collision;
   TEST_ASSERT(p->blockCount == 1 && p->gateCount == 1 && p->plateCount == 1 && p->plateGate[0] == 0 && p->sheet >= 0);
@@ -2445,6 +2448,16 @@ static void testThePushBlockPuzzle(void)
   for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_RIGHT);
   frames(30, 0);
   for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "puzzle_room") != 0; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "puzzle_room") == 0 && p->blockX[0] == leftX && p->blockY[0] == leftY);
+  TEST_ASSERT(p->gateLift[0] == 48 && p->pressed == 1);
+  // And through the west door into the chasm (the grapple's room) and back: still there.
+  bmBodyPlace(&s_game.player, 40, 160);
+  for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "chasm_room") != 0; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "chasm_room") == 0);
+  frames(30, 0);
+  for (f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "puzzle_room") != 0; f++) frames(1, BM_KEY_RIGHT);
+  frames(5, 0);
+  printf("    back from the chasm: block at %d,%d (left at %d,%d), gate %d\n", p->blockX[0], p->blockY[0], leftX, leftY, p->gateLift[0]);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "puzzle_room") == 0 && p->blockX[0] == leftX && p->blockY[0] == leftY);
   TEST_ASSERT(p->gateLift[0] == 48 && p->pressed == 1);
   // A save game keeps it too (the store is saved): a new game from the save has it there.

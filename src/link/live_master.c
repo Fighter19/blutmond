@@ -234,7 +234,10 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
   {
     BmChunkEntry e;
     bmPackGetChunk(pPack, i, &e);
-    if (e.id != BM_CHUNK_ROOM && e.id != BM_CHUNK_LANG && e.id != BM_CHUNK_SONG && !(named[i / 8] & (1u << (i % 8)))) fitKeep(pPack, f, i);
+    // (Not the save game's history either, MIGR: it serves only loading a save of an earlier
+    // version, so it comes last, with the translations.)
+    if (e.id != BM_CHUNK_ROOM && e.id != BM_CHUNK_LANG && e.id != BM_CHUNK_SONG && e.id != BM_CHUNK_MIGR && !(named[i / 8] & (1u << (i % 8))))
+      fitKeep(pPack, f, i);
   }
   if (f->size > budget) return false;
   // Breadth first from the room asked for and room 0.
@@ -271,7 +274,7 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
   {
     BmChunkEntry e;
     bmPackGetChunk(pPack, i, &e);
-    if (e.id == BM_CHUNK_LANG && f->size + fitCost(pPack, f, i) <= budget) fitKeep(pPack, f, i);
+    if ((e.id == BM_CHUNK_LANG || e.id == BM_CHUNK_MIGR) && f->size + fitCost(pPack, f, i) <= budget) fitKeep(pPack, f, i);
   }
 
   // The checksum of what results: the table, then the kept chunks with their padding.

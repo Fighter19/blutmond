@@ -1,131 +1,131 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sprite version="1" image="player_legs.png" normal="auto">
  <hitbox x="-5" y="-30" w="10" h="30" />
- <frame x="0" y="0" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="0" y="0" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="32" y="0" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="32" y="0" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="48" y="0" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="48" y="0" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="64" y="0" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="64" y="0" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="80" y="0" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="80" y="0" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="96" y="0" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="96" y="0" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="112" y="0" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="112" y="0" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="0" y="32" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="0" y="32" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="16" y="32" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="16" y="32" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="32" y="32" w="32" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="32" y="32" w="32" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="96" y="32" w="32" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="96" y="32" w="32" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="0" y="64" w="16" h="48" ax="8" ay="48">
-  <point name="waist" x="0" y="-15" />
+ <frame x="0" y="64" w="16" h="48" ax="8" ay="46">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="16" y="64" w="16" h="48" ax="8" ay="48">
-  <point name="waist" x="0" y="-15" />
+ <frame x="16" y="64" w="16" h="48" ax="8" ay="46">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="32" y="64" w="16" h="48" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="32" y="64" w="16" h="48" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="48" y="64" w="16" h="48" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="48" y="64" w="16" h="48" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="64" y="64" w="32" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="64" y="64" w="32" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="96" y="64" w="32" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="96" y="64" w="32" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="0" y="112" w="32" h="48" ax="16" ay="48">
-  <point name="waist" x="0" y="-15" />
+ <frame x="0" y="112" w="32" h="48" ax="16" ay="46">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="32" y="112" w="32" h="48" ax="16" ay="48">
+ <frame x="32" y="112" w="32" h="48" ax="16" ay="46">
   <box kind="hit" name="blade" x="4" y="-35" w="14" h="12" />
-  <point name="waist" x="0" y="-15" />
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="64" y="112" w="32" h="48" ax="16" ay="48">
+ <frame x="64" y="112" w="32" h="48" ax="16" ay="46">
   <box kind="hit" name="blade" x="2" y="-42" w="5" h="18" />
-  <point name="waist" x="0" y="-15" />
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="96" y="112" w="32" h="48" ax="16" ay="48">
+ <frame x="96" y="112" w="32" h="48" ax="16" ay="46">
   <box kind="hit" name="blade" x="-10" y="-36" w="15" h="13" />
-  <point name="waist" x="0" y="-15" />
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="128" y="112" w="32" h="48" ax="16" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="128" y="112" w="32" h="48" ax="16" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="160" y="112" w="32" h="48" ax="16" ay="32">
+ <frame x="160" y="112" w="32" h="48" ax="16" ay="30">
   <box kind="hit" name="blade" x="3" y="-11" w="15" h="13" />
-  <point name="waist" x="0" y="-15" />
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="192" y="112" w="32" h="48" ax="16" ay="32">
+ <frame x="192" y="112" w="32" h="48" ax="16" ay="30">
   <box kind="hit" name="blade" x="1" y="-10" w="5" h="21" />
-  <point name="waist" x="0" y="-15" />
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="224" y="112" w="32" h="48" ax="16" ay="32">
+ <frame x="224" y="112" w="32" h="48" ax="16" ay="30">
   <box kind="hit" name="blade" x="-14" y="-11" w="18" h="14" />
-  <point name="waist" x="0" y="-15" />
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="128" y="64" w="32" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="128" y="64" w="32" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="160" y="64" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="160" y="64" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="176" y="64" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="176" y="64" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="192" y="64" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="192" y="64" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="208" y="64" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="208" y="64" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="0" y="160" w="24" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="0" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="24" y="160" w="24" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="24" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="48" y="160" w="24" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="48" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="72" y="160" w="24" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="72" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="96" y="160" w="24" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="96" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="120" y="160" w="24" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="120" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="144" y="160" w="24" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="144" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="168" y="160" w="24" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="168" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="192" y="160" w="24" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="192" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
- <frame x="128" y="32" w="16" h="32" ax="8" ay="32">
-  <point name="waist" x="0" y="-15" />
+ <frame x="128" y="32" w="16" h="32" ax="8" ay="30">
+  <point name="waist" x="0" y="-13" />
  </frame>
  <animation name="idle" loop="1">
   <step frame="0" duration="40" />

@@ -72,3 +72,31 @@ schema 0x42eb793c "d80f1cd"
  game.inventory.quick u32 4
  game.inventory.statBase s16 16
 end
+schema 0x72afbc92 "before-store-32"
+ game.roomIndex u32 1
+ game.player.x fix 1
+ game.player.y fix 1
+ game.player.facing s8 1
+ game.player.safeX s32 1
+ game.player.safeY s32 1
+ game.health s16 1
+ game.mana s16 1
+ game.mapExplored u8 64
+ game.mapRevealed u8 8
+ game.savedRoom u32 1
+ game.savedX s32 1
+ game.savedY s32 1
+ game.deaths u32 1
+ game.roomChanges u32 1
+ game.hurts u32 1
+ game.saves u32 1
+ game.actors.storeCount u8 1
+ game.actors.storeKey u32 16
+ game.actors.storeValue s32 16
+ game.inventory.count u8 1
+ game.inventory.key u32 64
+ game.inventory.amount u8 64
+ game.inventory.equipped u32 8
+ game.inventory.quick u32 4
+ game.inventory.statBase s16 16
+end
