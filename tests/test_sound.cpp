@@ -332,6 +332,72 @@ static void testSampleAndDeterminism()
   std::remove(s.path.c_str());
 }
 
+static void testModes()
+{
+  // Two modes of one song: instrument 0 heard at intensity 0 only, instrument 1 from 1 on; a
+  // note on each every beat. Starts at 0 and fades over 60 frames.
+  song::Song s = oneNote("sine", 60, 20);
+  s.loopStart = 0;
+  s.intensity = 0;
+  s.fade = 60;
+  s.instruments[0].until = 0;
+  song::Instrument b = s.instruments[0];
+  b.name = "b";
+  b.layer = 1;
+  b.until = 15;
+  s.instruments.push_back(b);
+  s.tracks[0].notes.clear();
+  song::Track tb;
+  tb.instrument = 1;
+  for (int t = 0; t < s.length; t += 24)
+  {
+    s.tracks[0].notes.push_back({t, 60, 20, 127});
+    tb.notes.push_back({t, 72, 20, 127});
+  }
+  s.tracks.push_back(tb);
+  std::vector<uint8_t> data = cook(s);
+  TEST_ASSERT(!data.empty());
+  TEST_ASSERT(BM_SOUND_SONG_INTENSITY(uint16_t(data[2] | data[3] << 8)) == 0);
+  BmSound sound;
+  bmSoundInit(&sound, nullptr, nullptr);
+  bmSoundSetIntensity(&sound, BM_SOUND_SONG_INTENSITY(uint16_t(data[2] | data[3] << 8)));
+  TEST_ASSERT(bmSoundPlayData(&sound, data.data(), uint32_t(data.size()), false));
+  TEST_ASSERT(sound.partVolume[0] == BM_SOUND_PART_FULL && sound.partVolume[1] == 0);   // no fade at the start
+  play(sound, 40);
+  TEST_ASSERT(sound.voicesPeak == 1);                         // the other mode's notes take no voice
+  // The other mode: the one fades out while the other fades in, over the song's 60 frames.
+  bmSoundSetIntensity(&sound, 1);
+  play(sound, 30);
+  TEST_ASSERT(sound.partVolume[0] > 1500 && sound.partVolume[0] < 2600);
+  TEST_ASSERT(sound.partVolume[1] > 1500 && sound.partVolume[1] < 2600);
+  TEST_ASSERT(sound.voicesPeak == 2);                         // both while they cross
+  play(sound, 31);
+  TEST_ASSERT(sound.partVolume[0] == 0 && sound.partVolume[1] == BM_SOUND_PART_FULL);
+  // Without a range and fade the layers work as before: heard from their layer on, 43 frames.
+  song::Song old = s;
+  old.fade = 0;
+  old.instruments[0].until = 15;
+  data = cook(old);
+  bmSoundInit(&sound, nullptr, nullptr);
+  bmSoundSetIntensity(&sound, 0);
+  TEST_ASSERT(bmSoundPlayData(&sound, data.data(), uint32_t(data.size()), false));
+  bmSoundSetIntensity(&sound, 1);
+  play(sound, 42);
+  TEST_ASSERT(sound.partVolume[0] == BM_SOUND_PART_FULL && sound.partVolume[1] == 42 * BM_SOUND_PART_STEP);
+  play(sound, 1);
+  TEST_ASSERT(sound.partVolume[1] == BM_SOUND_PART_FULL);
+  // A range ending below its start is refused; the file keeps what it says.
+  song::Song bad = s;
+  bad.instruments[1].until = 0;
+  Report report;
+  TEST_ASSERT(song::chunk(bad, 0, report).empty());
+  s.path = "/tmp/blutmond-test-modes.bmsong";
+  TEST_ASSERT(song::save(s));
+  song::Song t = song::load(s.path);
+  TEST_ASSERT(t.intensity == 0 && t.fade == 60 && t.instruments[0].until == 0 && t.instruments[1].layer == 1 && t.instruments[1].until == 15);
+  std::remove(s.path.c_str());
+}
+
 static void testBrokenSongsAreRefused()
 {
   std::vector<uint8_t> data = cook(oneNote("sine", 69, 100));
@@ -375,6 +441,7 @@ int main(int argc, char **argv)
   RUN_TEST(testEcho);
   RUN_TEST(testRoomAcoustics);
   RUN_TEST(testSampleAndDeterminism);
+  RUN_TEST(testModes);
   RUN_TEST(testBrokenSongsAreRefused);
   return TEST_RESULT();
 }

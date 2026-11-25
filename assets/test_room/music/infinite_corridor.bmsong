@@ -4,7 +4,6 @@
  <instrument name="bleep" wave="sine" attack="0" decay="7" sustain="0" release="3" volume="82" pan="22" />
  <instrument name="kick" wave="sample" sample="kick.wav" root="60" loop="0" attack="0" decay="0" sustain="255" release="2" volume="150" pan="0" />
  <instrument name="bass" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" />
- <instrument name="lead" wave="sine" attack="4" decay="30" sustain="150" release="10" volume="110" pan="-6" />
  <track name="pad" instrument="pad">
   <note t="0" key="72" len="164" vel="110" />
   <note t="192" key="67" len="164" vel="110" />

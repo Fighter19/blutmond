@@ -136,9 +136,10 @@ changes, so it can run next to Tiled.
   toolbar sets tempo, length, loop and echo. Play previews through the engine's own mixer, so
   it is what the device plays. "What it costs" shows voices, an estimate of the GBA's processor
   time and the size. Edits are saved and, with Live on, pushed into the running game. A room's
-  `music` property names its song (`none` fades the music away); an instrument's `layer` makes
-  dynamic music that scripts bring in with `music_intensity` (the moon bat's song grows in four
-  layers as the fight does). The track list shows each track's layer and whether it is heard
+  `music` property names its song (`none` fades the music away); an instrument's `layer` (and
+  `until`) makes dynamic music that scripts change with `music_intensity`: layers added one on
+  another (the moon bat's song grows in four as the fight does) or modes of a song that give
+  way to each other (test_chamber's chamber and escape), fading over the song's `fade`. The track list shows each track's layer and whether it is heard
   at the intensity chosen to preview; Mute and Solo pick tracks to hear, Fade fades the song
   out as a room's `none` does, and Speak plays a text as a dialogue voice would (a sound
   effect per letter). Effects called `jump` and `hurt` play by themselves, others

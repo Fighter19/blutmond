@@ -293,9 +293,11 @@ typedef enum BmScriptType {
 // speaker's `voice` (a sound effect) is heard with every second letter as the line appears.
 //
 // fade_music(percent, frames): the music's volume goes to `percent` (0-100) in that many
-// frames; at 0 it stops. music_intensity(level): dynamic music: the song's instruments of layer
-// 1 to 15 are heard while level is at least their layer, fading in and out (set it before
-// play_music for a song to begin that way).
+// frames; at 0 it stops. music_intensity(level): dynamic music: the song's instruments are heard
+// while level lies in their range (layer to until), fading in and out over the song's fade
+// time; ranges that end below 15 make modes of a song that give way to each other (set it
+// before play_music for a song to begin that way; a room starts its song at the song's own
+// intensity).
 //
 // teleport(#room_id, x, y): the player to (x, y) of that room (#here or the room's own id:
 // within it), with the wave (effects.h): false while one is under way or if there is no such

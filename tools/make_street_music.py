@@ -12,11 +12,13 @@ of silence between, ringing out in a long echo. Sines and triangles (no noise, n
 most 6 voices.
 
 test_chamber.bmsong, for a laboratory (not in the test level's pack): cold electronics after the
-character of the Portal (2007) soundtrack, B minor at 120 beats a minute, 16 bars (32 s) that
-loop in two parts. The chamber: a slow pad and sine bleeps on the beats, walking through the
-chord in the echo, no drums. The escape: a steady kick and a bass in eighths, a sine lead lamenting
-over them. Each part fades into the other over its last four bars (the escape back into the
-chamber, where the song loops), so the drums come in and leave gradually. At most 6 voices.
+character of the Portal (2007) soundtrack, B minor at 120 beats a minute, 8 bars (16 s) that
+loop, in two modes over the same chords (dynamic music, sound-format.md): the game switches
+between them with the music intensity, and the one fades into the other over two bars. The
+chamber (intensity 0, where the song starts): a slow pad and sine bleeps on the beats, walking
+through the chord in the echo, no drums. The escape (intensity 1 and up): the same pad, a
+steady kick and a bass in eighths, a sine lead lamenting over them. At most 6 voices (while
+the one fades into the other).
 
 infinite_corridor.bmsong, for an endless corridor (not in the test level's pack): the same
 sounds driven harder, 16 bars (32 s) looping: the bass in sixteenths rocking between B and C,
@@ -300,98 +302,107 @@ def night_street():
     return s
 
 
-def lab_piece(parts):
+def lab_piece(parts, modes=False):
     """Cold electronics (see test_chamber at the top): `parts` per four chords of two bars each,
-    0 the chamber, 1 the escape, 2 the corridor."""
+    0 the chamber, 1 the escape, 2 the corridor. With `modes` the parts are not one after the
+    other but over each other, on the same eight bars: part k is the song's mode at music
+    intensity k (its instruments heard from k up to k only; the last from k on), and the pad,
+    common to them, is always heard. The song starts in the first one."""
     bar = 4 * BEAT                                   # 2 s at 120 beats a minute
-    s = ET.Element("song", {"version": "1", "bpm": "120", "length": str(8 * bar * len(parts)), "loop": "0", "effect": "0",
-                            "echo": "180", "echo-feedback": "120"})
-    instruments = [
-        ("pad", {"wave": "triangle", "attack": "60", "decay": "0", "sustain": "160", "release": "30", "volume": "60", "pan": "-16"}),
-        ("bleep", {"wave": "sine", "attack": "0", "decay": "7", "sustain": "0", "release": "3", "volume": "82", "pan": "22"}),
-        ("kick", {"wave": "sample", "sample": "kick.wav", "root": "60", "loop": "0", "attack": "0", "decay": "0", "sustain": "255",
-                  "release": "2", "volume": "150", "pan": "0"}),
-        ("bass", {"wave": "triangle", "attack": "0", "decay": "16", "sustain": "130", "release": "4", "volume": "150", "pan": "0"}),
-        ("lead", {"wave": "sine", "attack": "4", "decay": "30", "sustain": "150", "release": "10", "volume": "110", "pan": "-6"}),
-    ]
-    for name, attrs in instruments:
-        ET.SubElement(s, "instrument", dict({"name": name}, **attrs))
+    sections = 1 if modes else len(parts)
+    attrs = {"version": "1", "bpm": "120", "length": str(8 * bar * sections), "loop": "0", "effect": "0",
+             "echo": "180", "echo-feedback": "120"}
+    if modes:
+        attrs.update({"intensity": "0", "fade": str(2 * 60 * 2)})   # a change of mode fades over two bars
+    s = ET.Element("song", attrs)
+    sounds = {
+        "pad": {"wave": "triangle", "attack": "60", "decay": "0", "sustain": "160", "release": "30", "volume": "60", "pan": "-16"},
+        "bleep": {"wave": "sine", "attack": "0", "decay": "7", "sustain": "0", "release": "3", "volume": "82", "pan": "22"},
+        "kick": {"wave": "sample", "sample": "kick.wav", "root": "60", "loop": "0", "attack": "0", "decay": "0", "sustain": "255",
+                 "release": "2", "volume": "150", "pan": "0"},
+        "bass": {"wave": "triangle", "attack": "0", "decay": "16", "sustain": "130", "release": "4", "volume": "150", "pan": "0"},
+        "lead": {"wave": "sine", "attack": "4", "decay": "30", "sustain": "150", "release": "10", "volume": "110", "pan": "-6"},
+    }
+    names = {0: "chamber", 1: "escape", 2: "corridor"}
+    used = {0: ("bleep", "bass"), 1: ("kick", "bass", "bleep", "lead"), 2: ("kick", "bass", "bleep")}
+
+    def inst(part, sound):
+        """The instrument a part plays `sound` with: its own one per mode."""
+        return sound + "_" + names[part] if modes else sound
+
+    instruments = [("pad", dict(sounds["pad"]))]
+    order = list(dict.fromkeys(parts)) if modes else [None]
+    for k, part in enumerate(order):
+        for sound in (used[part] if modes else ("bleep", "kick", "bass", "lead")):
+            a = dict(sounds[sound])
+            if modes:
+                a["layer"] = str(k)
+                if k < len(order) - 1:
+                    a["until"] = str(k)
+            instruments.append((inst(part, sound), a))
+    for name, a in instruments:
+        ET.SubElement(s, "instrument", dict({"name": name}, **a))
     notes = {name: [] for name, _ in instruments}
     # B minor: (bass root, pad note, the bleeps' four notes) per chord, two bars each.
     chords = {
         "Bm": (47, 66, (71, 74, 78, 83)), "G": (43, 67, (71, 74, 79, 83)), "Em": (40, 67, (71, 76, 79, 83)),
         "F#": (42, 70, (70, 73, 78, 82)),
     }
-    plan = ["Bm", "G", "Em", "F#"] * len(parts)
-    section = 8 * bar
-    fade = 4 * bar                                    # each section fades into the next over its last four bars
-
-    def gains(tb):
-        """(part, gain) for the bar at tick tb: its own part, and towards the end of a section the
-        next one (the first again at the end: the song loops) rising while it falls."""
-        p = tb // section
-        here, after = parts[p], parts[(p + 1) % len(parts)]
-        x = (tb - ((p + 1) * section - fade)) / fade
-        if after == here or x < 0:
-            return [(here, 1.0)]
-        x += 0.5 * bar / fade                         # the middle of the bar
-        return [(here, 1.0 - x), (after, x)]
-
-    def note(name, t, key, length, vel, g):
-        v = int(round(vel * g))
-        if v >= 14:
-            notes[name].append((t, key, length, v))
-
+    plan = ["Bm", "G", "Em", "F#"] * sections
     for c, chord in enumerate(plan):
         t0 = c * 2 * bar
-        part = parts[c // 4]
+        playing = order if modes else [parts[c // 4]]
         root, pad, arp = chords[chord]
-        if part == 2:                                 # the corridor: C held against the B below
+        if playing[0] == 2:                           # the corridor: C held against the B below
             pad = 72 if chord in ("Bm", "F#") else pad
-        notes["pad"].append((t0, pad, 2 * bar - 28, 110 if part == 2 else 80))   # faded before the next one
-        for b in range(2):
-            tb = t0 + b * bar
-            for kind, g in gains(tb):
-                if kind == 0:
-                    note("bass", tb, root, bar - 8, 90, g)
+        notes["pad"].append((t0, pad, 2 * bar - 28, 110 if playing[0] == 2 else 80))   # faded before the next one
+        for part in playing:
+            for b in range(2):
+                tb = t0 + b * bar
+                if part == 0:
+                    notes[inst(0, "bass")].append((tb, root, bar - 8, 90))
                     for k in range(4):                # bleeps on the beats only, walking through the chord
-                        note("bleep", tb + k * BEAT, arp[(k + b * 2) % 4], 3, 90 if k == 0 else 74, g)
-                elif kind == 1:
+                        notes[inst(0, "bleep")].append((tb + k * BEAT, arp[(k + b * 2) % 4], 3, 90 if k == 0 else 74))
+                elif part == 1:
                     for e in range(8):
-                        note("bass", tb + e * 12, root + (12 if e % 4 == 3 else 0), 8, 100 if e % 2 == 0 else 80, g)
+                        notes[inst(1, "bass")].append((tb + e * 12, root + (12 if e % 4 == 3 else 0), 8, 100 if e % 2 == 0 else 80))
                     for k in range(4):
-                        note("kick", tb + k * BEAT, 60, 7, 104, g)
+                        notes[inst(1, "kick")].append((tb + k * BEAT, 60, 7, 104))
                     for i in (2, 6, 11, 14):
-                        note("bleep", tb + i * 6, arp[(i + c) % 4], 3, 70, g)
+                        notes[inst(1, "bleep")].append((tb + i * 6, arp[(i + c) % 4], 3, 70))
                 else:
                     for x in range(16):               # sixteenths rocking between the root and a semitone up
-                        note("bass", tb + x * 6, root + (1 if x % 4 == 3 else 0), 2, 124 if x % 4 == 0 else 108, g)
+                        notes[inst(2, "bass")].append((tb + x * 6, root + (1 if x % 4 == 3 else 0), 2, 124 if x % 4 == 0 else 108))
                     for k in (0, 1, 2, 3):
-                        note("kick", tb + k * BEAT, 60, 7, 124 if k % 2 == 0 else 110, g)
+                        notes[inst(2, "kick")].append((tb + k * BEAT, 60, 7, 124 if k % 2 == 0 else 110))
                     for i in range(8):                # climbing in semitones, two bars a run
-                        note("bleep", tb + i * 12, 78 + (b * 8 + i) // 2, 3, 96 + i * 3, g)
+                        notes[inst(2, "bleep")].append((tb + i * 12, 78 + (b * 8 + i) // 2, 3, 96 + i * 3))
     # The lament over the escape: (bar from its start, tick, key, length).
     lament = [(0, 0, 78, 36), (0, 36, 76, 12), (0, 48, 74, 48), (1, 0, 73, 72), (1, 72, 71, 24),
               (2, 0, 74, 36), (2, 36, 76, 12), (2, 48, 79, 48), (3, 0, 78, 96),
               (4, 0, 76, 36), (4, 36, 74, 12), (4, 48, 71, 48), (5, 0, 73, 48), (5, 48, 74, 48),
               (6, 0, 70, 72), (6, 72, 73, 24), (7, 0, 71, 90)]
-    for p, part in enumerate(parts):
+    for p, part in enumerate(order if modes else parts):
         if part == 1:
+            at = 0 if modes else p * 8
             for b, t, key, length in lament:
-                vel = 96 - max(0, b - 4) * 14             # softening as the chamber comes back
-                notes["lead"].append(((p * 8 + b) * bar + t, key, length - 10, vel))   # its release ends before the next
+                notes[inst(1, "lead")].append(((at + b) * bar + t, key, length - 10, 96))   # its release ends before the next
     for name, _ in instruments:
         if not notes[name]:
             continue
         tr = ET.SubElement(s, "track", {"name": name, "instrument": name})
         for t, key, length, vel in sorted(notes[name]):
             ET.SubElement(tr, "note", {"t": str(t), "key": str(key), "len": str(length), "vel": str(vel)})
+    # Instruments without notes (the corridor does without a lead) are left out.
+    for e in list(s.findall("instrument")):
+        if not notes[e.get("name")]:
+            s.remove(e)
     return s
 
 
 def test_chamber():
-    """The chamber, then the escape (see the top)."""
-    return lab_piece([0, 1])
+    """The chamber and the escape, as two modes (see the top)."""
+    return lab_piece([0, 1], modes=True)
 
 
 def infinite_corridor():

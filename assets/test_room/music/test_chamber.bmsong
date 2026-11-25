@@ -1,21 +1,19 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<song version="1" bpm="120" length="1536" loop="0" effect="0" echo="180" echo-feedback="120">
+<song version="1" bpm="120" length="768" loop="0" effect="0" echo="180" echo-feedback="120" intensity="0" fade="240">
  <instrument name="pad" wave="triangle" attack="60" decay="0" sustain="160" release="30" volume="60" pan="-16" />
- <instrument name="bleep" wave="sine" attack="0" decay="7" sustain="0" release="3" volume="82" pan="22" />
- <instrument name="kick" wave="sample" sample="kick.wav" root="60" loop="0" attack="0" decay="0" sustain="255" release="2" volume="150" pan="0" />
- <instrument name="bass" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" />
- <instrument name="lead" wave="sine" attack="4" decay="30" sustain="150" release="10" volume="110" pan="-6" />
+ <instrument name="bleep_chamber" wave="sine" attack="0" decay="7" sustain="0" release="3" volume="82" pan="22" layer="0" until="0" />
+ <instrument name="bass_chamber" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" layer="0" until="0" />
+ <instrument name="kick_escape" wave="sample" sample="kick.wav" root="60" loop="0" attack="0" decay="0" sustain="255" release="2" volume="150" pan="0" layer="1" />
+ <instrument name="bass_escape" wave="triangle" attack="0" decay="16" sustain="130" release="4" volume="150" pan="0" layer="1" />
+ <instrument name="bleep_escape" wave="sine" attack="0" decay="7" sustain="0" release="3" volume="82" pan="22" layer="1" />
+ <instrument name="lead_escape" wave="sine" attack="4" decay="30" sustain="150" release="10" volume="110" pan="-6" layer="1" />
  <track name="pad" instrument="pad">
   <note t="0" key="66" len="164" vel="80" />
   <note t="192" key="67" len="164" vel="80" />
   <note t="384" key="67" len="164" vel="80" />
   <note t="576" key="70" len="164" vel="80" />
-  <note t="768" key="66" len="164" vel="80" />
-  <note t="960" key="67" len="164" vel="80" />
-  <note t="1152" key="67" len="164" vel="80" />
-  <note t="1344" key="70" len="164" vel="80" />
  </track>
- <track name="bleep" instrument="bleep">
+ <track name="bleep_chamber" instrument="bleep_chamber">
   <note t="0" key="71" len="3" vel="90" />
   <note t="24" key="74" len="3" vel="74" />
   <note t="48" key="78" len="3" vel="74" />
@@ -32,222 +30,184 @@
   <note t="312" key="83" len="3" vel="74" />
   <note t="336" key="71" len="3" vel="74" />
   <note t="360" key="74" len="3" vel="74" />
-  <note t="384" key="71" len="3" vel="79" />
-  <note t="408" key="76" len="3" vel="65" />
-  <note t="432" key="79" len="3" vel="65" />
-  <note t="456" key="83" len="3" vel="65" />
-  <note t="480" key="79" len="3" vel="56" />
-  <note t="492" key="71" len="3" vel="26" />
-  <note t="504" key="83" len="3" vel="46" />
-  <note t="516" key="71" len="3" vel="26" />
-  <note t="528" key="71" len="3" vel="46" />
-  <note t="546" key="76" len="3" vel="26" />
-  <note t="552" key="76" len="3" vel="46" />
-  <note t="564" key="71" len="3" vel="26" />
-  <note t="576" key="70" len="3" vel="34" />
-  <note t="588" key="73" len="3" vel="44" />
-  <note t="600" key="73" len="3" vel="28" />
-  <note t="612" key="73" len="3" vel="44" />
-  <note t="624" key="78" len="3" vel="28" />
-  <note t="642" key="78" len="3" vel="44" />
-  <note t="648" key="82" len="3" vel="28" />
-  <note t="660" key="73" len="3" vel="44" />
-  <note t="684" key="73" len="3" vel="61" />
-  <note t="708" key="73" len="3" vel="61" />
-  <note t="738" key="78" len="3" vel="61" />
-  <note t="756" key="73" len="3" vel="61" />
-  <note t="780" key="78" len="3" vel="70" />
-  <note t="804" key="78" len="3" vel="70" />
-  <note t="834" key="83" len="3" vel="70" />
-  <note t="852" key="78" len="3" vel="70" />
-  <note t="876" key="78" len="3" vel="70" />
-  <note t="900" key="78" len="3" vel="70" />
-  <note t="930" key="83" len="3" vel="70" />
-  <note t="948" key="78" len="3" vel="70" />
-  <note t="972" key="83" len="3" vel="70" />
-  <note t="996" key="83" len="3" vel="70" />
-  <note t="1026" key="71" len="3" vel="70" />
-  <note t="1044" key="83" len="3" vel="70" />
-  <note t="1068" key="83" len="3" vel="70" />
-  <note t="1092" key="83" len="3" vel="70" />
-  <note t="1122" key="71" len="3" vel="70" />
-  <note t="1140" key="83" len="3" vel="70" />
-  <note t="1164" key="71" len="3" vel="61" />
-  <note t="1188" key="71" len="3" vel="61" />
-  <note t="1218" key="76" len="3" vel="61" />
-  <note t="1236" key="71" len="3" vel="61" />
-  <note t="1248" key="79" len="3" vel="34" />
-  <note t="1260" key="71" len="3" vel="44" />
-  <note t="1272" key="83" len="3" vel="28" />
-  <note t="1284" key="71" len="3" vel="44" />
-  <note t="1296" key="71" len="3" vel="28" />
-  <note t="1314" key="76" len="3" vel="44" />
-  <note t="1320" key="76" len="3" vel="28" />
-  <note t="1332" key="71" len="3" vel="44" />
-  <note t="1344" key="70" len="3" vel="56" />
-  <note t="1356" key="73" len="3" vel="26" />
-  <note t="1368" key="73" len="3" vel="46" />
-  <note t="1380" key="73" len="3" vel="26" />
-  <note t="1392" key="78" len="3" vel="46" />
-  <note t="1410" key="78" len="3" vel="26" />
-  <note t="1416" key="82" len="3" vel="46" />
-  <note t="1428" key="73" len="3" vel="26" />
-  <note t="1440" key="78" len="3" vel="79" />
-  <note t="1464" key="82" len="3" vel="65" />
-  <note t="1488" key="70" len="3" vel="65" />
-  <note t="1512" key="73" len="3" vel="65" />
+  <note t="384" key="71" len="3" vel="90" />
+  <note t="408" key="76" len="3" vel="74" />
+  <note t="432" key="79" len="3" vel="74" />
+  <note t="456" key="83" len="3" vel="74" />
+  <note t="480" key="79" len="3" vel="90" />
+  <note t="504" key="83" len="3" vel="74" />
+  <note t="528" key="71" len="3" vel="74" />
+  <note t="552" key="76" len="3" vel="74" />
+  <note t="576" key="70" len="3" vel="90" />
+  <note t="600" key="73" len="3" vel="74" />
+  <note t="624" key="78" len="3" vel="74" />
+  <note t="648" key="82" len="3" vel="74" />
+  <note t="672" key="78" len="3" vel="90" />
+  <note t="696" key="82" len="3" vel="74" />
+  <note t="720" key="70" len="3" vel="74" />
+  <note t="744" key="73" len="3" vel="74" />
  </track>
- <track name="kick" instrument="kick">
-  <note t="480" key="60" len="7" vel="39" />
-  <note t="504" key="60" len="7" vel="39" />
-  <note t="528" key="60" len="7" vel="39" />
-  <note t="552" key="60" len="7" vel="39" />
-  <note t="576" key="60" len="7" vel="65" />
-  <note t="600" key="60" len="7" vel="65" />
-  <note t="624" key="60" len="7" vel="65" />
-  <note t="648" key="60" len="7" vel="65" />
-  <note t="672" key="60" len="7" vel="91" />
-  <note t="696" key="60" len="7" vel="91" />
-  <note t="720" key="60" len="7" vel="91" />
-  <note t="744" key="60" len="7" vel="91" />
-  <note t="768" key="60" len="7" vel="104" />
-  <note t="792" key="60" len="7" vel="104" />
-  <note t="816" key="60" len="7" vel="104" />
-  <note t="840" key="60" len="7" vel="104" />
-  <note t="864" key="60" len="7" vel="104" />
-  <note t="888" key="60" len="7" vel="104" />
-  <note t="912" key="60" len="7" vel="104" />
-  <note t="936" key="60" len="7" vel="104" />
-  <note t="960" key="60" len="7" vel="104" />
-  <note t="984" key="60" len="7" vel="104" />
-  <note t="1008" key="60" len="7" vel="104" />
-  <note t="1032" key="60" len="7" vel="104" />
-  <note t="1056" key="60" len="7" vel="104" />
-  <note t="1080" key="60" len="7" vel="104" />
-  <note t="1104" key="60" len="7" vel="104" />
-  <note t="1128" key="60" len="7" vel="104" />
-  <note t="1152" key="60" len="7" vel="91" />
-  <note t="1176" key="60" len="7" vel="91" />
-  <note t="1200" key="60" len="7" vel="91" />
-  <note t="1224" key="60" len="7" vel="91" />
-  <note t="1248" key="60" len="7" vel="65" />
-  <note t="1272" key="60" len="7" vel="65" />
-  <note t="1296" key="60" len="7" vel="65" />
-  <note t="1320" key="60" len="7" vel="65" />
-  <note t="1344" key="60" len="7" vel="39" />
-  <note t="1368" key="60" len="7" vel="39" />
-  <note t="1392" key="60" len="7" vel="39" />
-  <note t="1416" key="60" len="7" vel="39" />
- </track>
- <track name="bass" instrument="bass">
+ <track name="bass_chamber" instrument="bass_chamber">
   <note t="0" key="47" len="88" vel="90" />
   <note t="96" key="47" len="88" vel="90" />
   <note t="192" key="43" len="88" vel="90" />
   <note t="288" key="43" len="88" vel="90" />
-  <note t="384" key="40" len="88" vel="79" />
-  <note t="480" key="40" len="8" vel="38" />
-  <note t="480" key="40" len="88" vel="56" />
-  <note t="492" key="40" len="8" vel="30" />
-  <note t="504" key="40" len="8" vel="38" />
-  <note t="516" key="52" len="8" vel="30" />
-  <note t="528" key="40" len="8" vel="38" />
-  <note t="540" key="40" len="8" vel="30" />
-  <note t="552" key="40" len="8" vel="38" />
-  <note t="564" key="52" len="8" vel="30" />
-  <note t="576" key="42" len="8" vel="62" />
-  <note t="576" key="42" len="88" vel="34" />
-  <note t="588" key="42" len="8" vel="50" />
-  <note t="600" key="42" len="8" vel="62" />
-  <note t="612" key="54" len="8" vel="50" />
-  <note t="624" key="42" len="8" vel="62" />
-  <note t="636" key="42" len="8" vel="50" />
-  <note t="648" key="42" len="8" vel="62" />
-  <note t="660" key="54" len="8" vel="50" />
-  <note t="672" key="42" len="8" vel="88" />
-  <note t="684" key="42" len="8" vel="70" />
-  <note t="696" key="42" len="8" vel="88" />
-  <note t="708" key="54" len="8" vel="70" />
-  <note t="720" key="42" len="8" vel="88" />
-  <note t="732" key="42" len="8" vel="70" />
-  <note t="744" key="42" len="8" vel="88" />
-  <note t="756" key="54" len="8" vel="70" />
-  <note t="768" key="47" len="8" vel="100" />
-  <note t="780" key="47" len="8" vel="80" />
-  <note t="792" key="47" len="8" vel="100" />
-  <note t="804" key="59" len="8" vel="80" />
-  <note t="816" key="47" len="8" vel="100" />
-  <note t="828" key="47" len="8" vel="80" />
-  <note t="840" key="47" len="8" vel="100" />
-  <note t="852" key="59" len="8" vel="80" />
-  <note t="864" key="47" len="8" vel="100" />
-  <note t="876" key="47" len="8" vel="80" />
-  <note t="888" key="47" len="8" vel="100" />
-  <note t="900" key="59" len="8" vel="80" />
-  <note t="912" key="47" len="8" vel="100" />
-  <note t="924" key="47" len="8" vel="80" />
-  <note t="936" key="47" len="8" vel="100" />
-  <note t="948" key="59" len="8" vel="80" />
-  <note t="960" key="43" len="8" vel="100" />
-  <note t="972" key="43" len="8" vel="80" />
-  <note t="984" key="43" len="8" vel="100" />
-  <note t="996" key="55" len="8" vel="80" />
-  <note t="1008" key="43" len="8" vel="100" />
-  <note t="1020" key="43" len="8" vel="80" />
-  <note t="1032" key="43" len="8" vel="100" />
-  <note t="1044" key="55" len="8" vel="80" />
-  <note t="1056" key="43" len="8" vel="100" />
-  <note t="1068" key="43" len="8" vel="80" />
-  <note t="1080" key="43" len="8" vel="100" />
-  <note t="1092" key="55" len="8" vel="80" />
-  <note t="1104" key="43" len="8" vel="100" />
-  <note t="1116" key="43" len="8" vel="80" />
-  <note t="1128" key="43" len="8" vel="100" />
-  <note t="1140" key="55" len="8" vel="80" />
-  <note t="1152" key="40" len="8" vel="88" />
-  <note t="1164" key="40" len="8" vel="70" />
-  <note t="1176" key="40" len="8" vel="88" />
-  <note t="1188" key="52" len="8" vel="70" />
-  <note t="1200" key="40" len="8" vel="88" />
-  <note t="1212" key="40" len="8" vel="70" />
-  <note t="1224" key="40" len="8" vel="88" />
-  <note t="1236" key="52" len="8" vel="70" />
-  <note t="1248" key="40" len="8" vel="62" />
-  <note t="1248" key="40" len="88" vel="34" />
-  <note t="1260" key="40" len="8" vel="50" />
-  <note t="1272" key="40" len="8" vel="62" />
-  <note t="1284" key="52" len="8" vel="50" />
-  <note t="1296" key="40" len="8" vel="62" />
-  <note t="1308" key="40" len="8" vel="50" />
-  <note t="1320" key="40" len="8" vel="62" />
-  <note t="1332" key="52" len="8" vel="50" />
-  <note t="1344" key="42" len="8" vel="38" />
-  <note t="1344" key="42" len="88" vel="56" />
-  <note t="1356" key="42" len="8" vel="30" />
-  <note t="1368" key="42" len="8" vel="38" />
-  <note t="1380" key="54" len="8" vel="30" />
-  <note t="1392" key="42" len="8" vel="38" />
-  <note t="1404" key="42" len="8" vel="30" />
-  <note t="1416" key="42" len="8" vel="38" />
-  <note t="1428" key="54" len="8" vel="30" />
-  <note t="1440" key="42" len="88" vel="79" />
+  <note t="384" key="40" len="88" vel="90" />
+  <note t="480" key="40" len="88" vel="90" />
+  <note t="576" key="42" len="88" vel="90" />
+  <note t="672" key="42" len="88" vel="90" />
  </track>
- <track name="lead" instrument="lead">
-  <note t="768" key="78" len="26" vel="96" />
-  <note t="804" key="76" len="2" vel="96" />
-  <note t="816" key="74" len="38" vel="96" />
-  <note t="864" key="73" len="62" vel="96" />
-  <note t="936" key="71" len="14" vel="96" />
-  <note t="960" key="74" len="26" vel="96" />
-  <note t="996" key="76" len="2" vel="96" />
-  <note t="1008" key="79" len="38" vel="96" />
-  <note t="1056" key="78" len="86" vel="96" />
-  <note t="1152" key="76" len="26" vel="96" />
-  <note t="1188" key="74" len="2" vel="96" />
-  <note t="1200" key="71" len="38" vel="96" />
-  <note t="1248" key="73" len="38" vel="82" />
-  <note t="1296" key="74" len="38" vel="82" />
-  <note t="1344" key="70" len="62" vel="68" />
-  <note t="1416" key="73" len="14" vel="68" />
-  <note t="1440" key="71" len="80" vel="54" />
+ <track name="kick_escape" instrument="kick_escape">
+  <note t="0" key="60" len="7" vel="104" />
+  <note t="24" key="60" len="7" vel="104" />
+  <note t="48" key="60" len="7" vel="104" />
+  <note t="72" key="60" len="7" vel="104" />
+  <note t="96" key="60" len="7" vel="104" />
+  <note t="120" key="60" len="7" vel="104" />
+  <note t="144" key="60" len="7" vel="104" />
+  <note t="168" key="60" len="7" vel="104" />
+  <note t="192" key="60" len="7" vel="104" />
+  <note t="216" key="60" len="7" vel="104" />
+  <note t="240" key="60" len="7" vel="104" />
+  <note t="264" key="60" len="7" vel="104" />
+  <note t="288" key="60" len="7" vel="104" />
+  <note t="312" key="60" len="7" vel="104" />
+  <note t="336" key="60" len="7" vel="104" />
+  <note t="360" key="60" len="7" vel="104" />
+  <note t="384" key="60" len="7" vel="104" />
+  <note t="408" key="60" len="7" vel="104" />
+  <note t="432" key="60" len="7" vel="104" />
+  <note t="456" key="60" len="7" vel="104" />
+  <note t="480" key="60" len="7" vel="104" />
+  <note t="504" key="60" len="7" vel="104" />
+  <note t="528" key="60" len="7" vel="104" />
+  <note t="552" key="60" len="7" vel="104" />
+  <note t="576" key="60" len="7" vel="104" />
+  <note t="600" key="60" len="7" vel="104" />
+  <note t="624" key="60" len="7" vel="104" />
+  <note t="648" key="60" len="7" vel="104" />
+  <note t="672" key="60" len="7" vel="104" />
+  <note t="696" key="60" len="7" vel="104" />
+  <note t="720" key="60" len="7" vel="104" />
+  <note t="744" key="60" len="7" vel="104" />
+ </track>
+ <track name="bass_escape" instrument="bass_escape">
+  <note t="0" key="47" len="8" vel="100" />
+  <note t="12" key="47" len="8" vel="80" />
+  <note t="24" key="47" len="8" vel="100" />
+  <note t="36" key="59" len="8" vel="80" />
+  <note t="48" key="47" len="8" vel="100" />
+  <note t="60" key="47" len="8" vel="80" />
+  <note t="72" key="47" len="8" vel="100" />
+  <note t="84" key="59" len="8" vel="80" />
+  <note t="96" key="47" len="8" vel="100" />
+  <note t="108" key="47" len="8" vel="80" />
+  <note t="120" key="47" len="8" vel="100" />
+  <note t="132" key="59" len="8" vel="80" />
+  <note t="144" key="47" len="8" vel="100" />
+  <note t="156" key="47" len="8" vel="80" />
+  <note t="168" key="47" len="8" vel="100" />
+  <note t="180" key="59" len="8" vel="80" />
+  <note t="192" key="43" len="8" vel="100" />
+  <note t="204" key="43" len="8" vel="80" />
+  <note t="216" key="43" len="8" vel="100" />
+  <note t="228" key="55" len="8" vel="80" />
+  <note t="240" key="43" len="8" vel="100" />
+  <note t="252" key="43" len="8" vel="80" />
+  <note t="264" key="43" len="8" vel="100" />
+  <note t="276" key="55" len="8" vel="80" />
+  <note t="288" key="43" len="8" vel="100" />
+  <note t="300" key="43" len="8" vel="80" />
+  <note t="312" key="43" len="8" vel="100" />
+  <note t="324" key="55" len="8" vel="80" />
+  <note t="336" key="43" len="8" vel="100" />
+  <note t="348" key="43" len="8" vel="80" />
+  <note t="360" key="43" len="8" vel="100" />
+  <note t="372" key="55" len="8" vel="80" />
+  <note t="384" key="40" len="8" vel="100" />
+  <note t="396" key="40" len="8" vel="80" />
+  <note t="408" key="40" len="8" vel="100" />
+  <note t="420" key="52" len="8" vel="80" />
+  <note t="432" key="40" len="8" vel="100" />
+  <note t="444" key="40" len="8" vel="80" />
+  <note t="456" key="40" len="8" vel="100" />
+  <note t="468" key="52" len="8" vel="80" />
+  <note t="480" key="40" len="8" vel="100" />
+  <note t="492" key="40" len="8" vel="80" />
+  <note t="504" key="40" len="8" vel="100" />
+  <note t="516" key="52" len="8" vel="80" />
+  <note t="528" key="40" len="8" vel="100" />
+  <note t="540" key="40" len="8" vel="80" />
+  <note t="552" key="40" len="8" vel="100" />
+  <note t="564" key="52" len="8" vel="80" />
+  <note t="576" key="42" len="8" vel="100" />
+  <note t="588" key="42" len="8" vel="80" />
+  <note t="600" key="42" len="8" vel="100" />
+  <note t="612" key="54" len="8" vel="80" />
+  <note t="624" key="42" len="8" vel="100" />
+  <note t="636" key="42" len="8" vel="80" />
+  <note t="648" key="42" len="8" vel="100" />
+  <note t="660" key="54" len="8" vel="80" />
+  <note t="672" key="42" len="8" vel="100" />
+  <note t="684" key="42" len="8" vel="80" />
+  <note t="696" key="42" len="8" vel="100" />
+  <note t="708" key="54" len="8" vel="80" />
+  <note t="720" key="42" len="8" vel="100" />
+  <note t="732" key="42" len="8" vel="80" />
+  <note t="744" key="42" len="8" vel="100" />
+  <note t="756" key="54" len="8" vel="80" />
+ </track>
+ <track name="bleep_escape" instrument="bleep_escape">
+  <note t="12" key="78" len="3" vel="70" />
+  <note t="36" key="78" len="3" vel="70" />
+  <note t="66" key="83" len="3" vel="70" />
+  <note t="84" key="78" len="3" vel="70" />
+  <note t="108" key="78" len="3" vel="70" />
+  <note t="132" key="78" len="3" vel="70" />
+  <note t="162" key="83" len="3" vel="70" />
+  <note t="180" key="78" len="3" vel="70" />
+  <note t="204" key="83" len="3" vel="70" />
+  <note t="228" key="83" len="3" vel="70" />
+  <note t="258" key="71" len="3" vel="70" />
+  <note t="276" key="83" len="3" vel="70" />
+  <note t="300" key="83" len="3" vel="70" />
+  <note t="324" key="83" len="3" vel="70" />
+  <note t="354" key="71" len="3" vel="70" />
+  <note t="372" key="83" len="3" vel="70" />
+  <note t="396" key="71" len="3" vel="70" />
+  <note t="420" key="71" len="3" vel="70" />
+  <note t="450" key="76" len="3" vel="70" />
+  <note t="468" key="71" len="3" vel="70" />
+  <note t="492" key="71" len="3" vel="70" />
+  <note t="516" key="71" len="3" vel="70" />
+  <note t="546" key="76" len="3" vel="70" />
+  <note t="564" key="71" len="3" vel="70" />
+  <note t="588" key="73" len="3" vel="70" />
+  <note t="612" key="73" len="3" vel="70" />
+  <note t="642" key="78" len="3" vel="70" />
+  <note t="660" key="73" len="3" vel="70" />
+  <note t="684" key="73" len="3" vel="70" />
+  <note t="708" key="73" len="3" vel="70" />
+  <note t="738" key="78" len="3" vel="70" />
+  <note t="756" key="73" len="3" vel="70" />
+ </track>
+ <track name="lead_escape" instrument="lead_escape">
+  <note t="0" key="78" len="26" vel="96" />
+  <note t="36" key="76" len="2" vel="96" />
+  <note t="48" key="74" len="38" vel="96" />
+  <note t="96" key="73" len="62" vel="96" />
+  <note t="168" key="71" len="14" vel="96" />
+  <note t="192" key="74" len="26" vel="96" />
+  <note t="228" key="76" len="2" vel="96" />
+  <note t="240" key="79" len="38" vel="96" />
+  <note t="288" key="78" len="86" vel="96" />
+  <note t="384" key="76" len="26" vel="96" />
+  <note t="420" key="74" len="2" vel="96" />
+  <note t="432" key="71" len="38" vel="96" />
+  <note t="480" key="73" len="38" vel="96" />
+  <note t="528" key="74" len="38" vel="96" />
+  <note t="576" key="70" len="62" vel="96" />
+  <note t="648" key="73" len="14" vel="96" />
+  <note t="672" key="71" len="80" vel="96" />
  </track>
 </song>

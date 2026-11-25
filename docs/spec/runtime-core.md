@@ -503,7 +503,7 @@ value is dropped and counts as a script error.
 | 81 | `set_knockback(percent)` | object only: `steady = 100 - percent` (percent clamped to 0..100) |
 | 82, 83 | `say_line(record)`, `say_as(speaker, line)` | the dialogue box with a portrait (section 6, "Dialogue") |
 | 84 | `fade_music(percent, frames)` | the music's volume to `percent * 256 / 100` (0..100) in `frames` (0..65535); at 0 it stops (sound-format.md, "Dynamic music") |
-| 85 | `music_intensity(level)` | the sound engine's intensity (0..15): which layers of the music are heard |
+| 85 | `music_intensity(level)` | the sound engine's intensity (0..15): which instruments (layers, modes) of the music are heard (sound-format.md, "Dynamic music") |
 | 86 | `teleport(room, x, y)` | a teleport (section 12) to the room of that id (`#here`: this one) at `x`, `y`; false if there is no such room or a teleport is under way |
 | 87 | `screen_effect(name, a, b)` | the room's effect now (section 12): `#none`, `#wave`, `#spotlight`, `#pulse`, `#gradient`; `a`, `b` 0 for the defaults |
 | 93 | `lock_move(ground, air)` | for the lock just set (`owner_lock`): `lockGround`, `lockAir` (section 5, "Moving while locked"); out of range: slide, steer |

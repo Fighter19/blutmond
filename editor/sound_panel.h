@@ -128,7 +128,7 @@ private:
   ose::ui::SpinBox *attack_ = nullptr, *decay_ = nullptr, *sustain_ = nullptr, *release_ = nullptr, *volume_ = nullptr, *pan_ = nullptr, *root_ = nullptr;
   ose::ui::SpinBox *velocity_ = nullptr, *length_ = nullptr;
   ose::ui::CheckBox *loop_ = nullptr, *effect_ = nullptr, *sampleLoop_ = nullptr, *mute_ = nullptr, *solo_ = nullptr;
-  ose::ui::SpinBox *layer_ = nullptr, *intensity_ = nullptr;
+  ose::ui::SpinBox *layer_ = nullptr, *until_ = nullptr, *intensity_ = nullptr, *startIntensity_ = nullptr, *fade_ = nullptr;
   ose::ui::LineEdit *speakText_ = nullptr;
   int previewIntensity_ = 15;
   std::vector<bool> muted_;         // per track, for the preview

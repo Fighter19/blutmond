@@ -919,13 +919,10 @@ static void enterRoomSound(BmGame *g)
   }
   const char *music = g->room.musicId != 0xFFFF ? bmPackString(g->pPack, g->room.musicId) : NULL;
   // "none": what plays fades away (a boss's room: the boss brings its own); a song starts
-  // (full volume, all its layers) unless it is the one playing.
+  // (full volume, at its own intensity: its first mode) unless it is the one playing, which
+  // goes on in the mode it is in.
   if (music != NULL && strcmp(music, "none") == 0) bmSoundFadeMusic(&g->sound, 0, BM_GAME_MUSIC_FADE, true);
-  else if (music != NULL)
-  {
-    bmSoundSetIntensity(&g->sound, BM_SOUND_LAYERS - 1);
-    bmSoundPlayMusic(&g->sound, music);
-  }
+  else if (music != NULL) bmSoundPlayRoomMusic(&g->sound, music);
   roomAcoustics(g);
 }
 

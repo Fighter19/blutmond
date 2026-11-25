@@ -327,6 +327,8 @@ void SoundPanel::bind(Control &root, Context &ui)
   });
   echo_ms_ = number("snd_echo", 0, 225, [this](int v) { song_.echoMs = v; });
   feedback_ = number("snd_feedback", 0, 255, [this](int v) { song_.echoFeedback = v; });
+  startIntensity_ = number("snd_start_intensity", 0, 15, [this](int v) { song_.intensity = v; });
+  fade_ = number("snd_layer_fade", 0, 1020, [this](int v) { song_.fade = v; });
   attack_ = number("snd_attack", 0, 600, [this](int v) { if (auto *i = instrument()) i->attack = v; });
   decay_ = number("snd_decay", 0, 600, [this](int v) { if (auto *i = instrument()) i->decay = v; });
   sustain_ = number("snd_sustain", 0, 255, [this](int v) { if (auto *i = instrument()) i->sustain = v; });
@@ -334,7 +336,14 @@ void SoundPanel::bind(Control &root, Context &ui)
   volume_ = number("snd_volume", 0, 255, [this](int v) { if (auto *i = instrument()) i->volume = v; });
   pan_ = number("snd_pan", -64, 63, [this](int v) { if (auto *i = instrument()) i->pan = v; });
   root_ = number("snd_root", 0, 127, [this](int v) { if (auto *i = instrument()) i->root = v; });
-  layer_ = number("snd_layer", 0, 15, [this](int v) { if (auto *i = instrument()) i->layer = v; });
+  layer_ = number("snd_layer", 0, 15, [this](int v) {
+    if (auto *i = instrument()) i->layer = v, i->until = std::max(i->until, v);
+    showInstrument();
+  });
+  until_ = number("snd_until", 0, 15, [this](int v) {
+    if (auto *i = instrument()) i->until = v, i->layer = std::min(i->layer, v);
+    showInstrument();
+  });
   // The preview's intensity: which layers are heard, fading as in the game.
   intensity_ = root.findAs<SpinBox>("snd_intensity");
   intensity_->minValue = 0;
@@ -551,9 +560,10 @@ std::string SoundPanel::trackLabel(size_t i) const
   const song::Track &t = song_.tracks[i];
   const song::Instrument *in = t.instrument >= 0 && size_t(t.instrument) < song_.instruments.size() ? &song_.instruments[size_t(t.instrument)] : nullptr;
   std::string label = t.name + "  (" + (in ? in->wave : std::string("?")) + ", " + std::to_string(t.notes.size()) + " notes";
-  if (in && in->layer != 0) label += ", layer " + std::to_string(in->layer);
+  if (in && in->until != 15) label += ", intensity " + std::to_string(in->layer) + "-" + std::to_string(in->until);
+  else if (in && in->layer != 0) label += ", layer " + std::to_string(in->layer);
   label += ")";
-  if (in && in->layer > previewIntensity_) label += "  not heard at intensity " + std::to_string(previewIntensity_);
+  if (in && (in->layer > previewIntensity_ || in->until < previewIntensity_)) label += "  not heard at intensity " + std::to_string(previewIntensity_);
   if (soloTrack_ == int(i)) label += "  SOLO";
   else if (soloTrack_ < 0 && i < muted_.size() && muted_[i]) label += "  muted";
   return label;
@@ -638,6 +648,8 @@ void SoundPanel::fill()
   bars_->setValue(std::max(1, song_.length / 96), false);
   echo_ms_->setValue(song_.echoMs, false);
   feedback_->setValue(song_.echoFeedback, false);
+  startIntensity_->setValue(song_.intensity, false);
+  fade_->setValue(song_.fade, false);
   loop_->setPressed(song_.loopStart >= 0);
   effect_->setPressed(song_.effect);
   // The WAV files next to the song.
@@ -658,7 +670,7 @@ void SoundPanel::showInstrument()
   updating_ = true;
   song::Instrument *in = instrument();
   bool have = in != nullptr;
-  for (SpinBox *s : {attack_, decay_, sustain_, release_, volume_, pan_, root_, layer_}) s->disabled = !have;
+  for (SpinBox *s : {attack_, decay_, sustain_, release_, volume_, pan_, root_, layer_, until_}) s->disabled = !have;
   if (have)
   {
     trackName_->setText(in->name);
@@ -675,6 +687,7 @@ void SoundPanel::showInstrument()
     pan_->setValue(in->pan, false);
     root_->setValue(in->root, false);
     layer_->setValue(in->layer, false);
+    until_->setValue(in->until, false);
     sampleLoop_->setPressed(in->loop);
     bool isSample = in->wave == "sample";
     sample_->disabled = root_->disabled = sampleLoop_->disabled = !isSample;

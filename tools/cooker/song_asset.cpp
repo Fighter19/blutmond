@@ -103,6 +103,8 @@ Song load(const std::string &path)
   s.effect = root->attr("effect", "0") == "1";
   s.echoMs = toInt(root.get(), "echo", 0);
   s.echoFeedback = toInt(root.get(), "echo-feedback", 80);
+  s.intensity = toInt(root.get(), "intensity", 15);
+  s.fade = toInt(root.get(), "fade", 0);
   for (const xml::Element *e : root->childrenNamed("instrument"))
   {
     Instrument in;
@@ -118,6 +120,7 @@ Song load(const std::string &path)
     in.volume = toInt(e, "volume", 200);
     in.pan = toInt(e, "pan", 0);
     in.layer = toInt(e, "layer", 0);
+    in.until = toInt(e, "until", 15);
     s.instruments.push_back(in);
   }
   for (const xml::Element *t : root->childrenNamed("track"))
@@ -144,7 +147,10 @@ bool save(const Song &s, std::string *pError)
     return false;
   }
   out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<song version=\"1\" bpm=\"" << s.bpm << "\" length=\"" << s.length << "\" loop=\"" << s.loopStart
-      << "\" effect=\"" << (s.effect ? 1 : 0) << "\" echo=\"" << s.echoMs << "\" echo-feedback=\"" << s.echoFeedback << "\">\n";
+      << "\" effect=\"" << (s.effect ? 1 : 0) << "\" echo=\"" << s.echoMs << "\" echo-feedback=\"" << s.echoFeedback << "\"";
+  if (s.intensity != 15) out << " intensity=\"" << s.intensity << "\"";
+  if (s.fade != 0) out << " fade=\"" << s.fade << "\"";
+  out << ">\n";
   for (const Instrument &in : s.instruments)
   {
     out << " <instrument name=\"" << in.name << "\" wave=\"" << in.wave << "\"";
@@ -152,6 +158,7 @@ bool save(const Song &s, std::string *pError)
     out << " attack=\"" << in.attack << "\" decay=\"" << in.decay << "\" sustain=\"" << in.sustain << "\" release=\"" << in.release
         << "\" volume=\"" << in.volume << "\" pan=\"" << in.pan << "\"";
     if (in.layer != 0) out << " layer=\"" << in.layer << "\"";
+    if (in.until != 15) out << " until=\"" << in.until << "\"";
     out << "/>\n";
   }
   for (const Track &t : s.tracks)
@@ -181,6 +188,17 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
   if (s.length <= 0) return fail("the song has no length");
   if (s.instruments.empty()) return fail("the song has no instrument");
   if (s.instruments.size() > 255) return fail("more than 255 instruments");
+  if (s.intensity < 0 || s.intensity > 15) return fail("the song's intensity must be between 0 and 15");
+  if (s.fade < 0 || s.fade > 1020) return fail("the song's fade must be between 0 and 1020 frames");
+  for (size_t i = 0; i < s.instruments.size(); i++)
+  {
+    const Instrument &in = s.instruments[i];
+    bool ranged = in.layer != 0 || in.until != 15;
+    if (in.layer < 0 || in.layer > 15 || in.until < in.layer || in.until > 15)
+      return fail("instrument '" + in.name + "': its layer and until must be 0 to 15, until not below the layer");
+    if (ranged && i >= BM_SOUND_PARTS && !s.effect)
+      return fail("instrument '" + in.name + "': only the first " + std::to_string(BM_SOUND_PARTS) + " instruments can have a layer");
+  }
 
   // Events of all tracks in time order.
   struct Event
@@ -245,7 +263,7 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
   // Frames per minute on the GBA: 59.7275 * 60.
   uint32_t tickRate = uint32_t(std::lround(double(s.bpm) * BM_SOUND_TICKS_PER_BEAT * 65536.0 / 3583.65));
   u16(nameId);
-  u16(s.effect ? BM_SOUND_SONG_SFX : 0);
+  u16((s.effect ? BM_SOUND_SONG_SFX : 0) | uint32_t(15 - s.intensity) << 8);   // flags; the start intensity, from 15
   u16(uint32_t(s.instruments.size()));
   u16(uint32_t(s.tracks.size()));
   u32(uint32_t(events.size()));
@@ -254,7 +272,7 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
   u32(tickRate);
   u16(uint32_t(std::clamp(s.echoMs * BM_SOUND_RATE / 1000, 0, BM_SOUND_ECHO_MAX)));
   u8(std::clamp(s.echoFeedback, 0, 255));
-  u8(0);
+  u8(s.fade == 0 ? 0 : std::clamp((s.fade + 2) / 4, 1, 255));   // the fade in 4 frames, 0: the default
   u32(instrumentsAt);
   u32(eventsAt);
   u32(samplesAt);
@@ -274,7 +292,8 @@ std::vector<uint8_t> chunk(const Song &s, uint16_t nameId, Report &report, Cost 
     u16(in.attack <= 0 ? 0 : uint32_t(std::max(1, 65535 / in.attack)));
     u16(in.decay <= 0 ? 0 : uint32_t(std::max(1, (65535 - sustain * 256) / in.decay)));
     u16(in.release <= 0 ? 0 : uint32_t(std::max(1, 65535 / in.release)));
-    u16(uint32_t(std::clamp(in.layer, 0, 15)));   // the layer (sound-format.md, dynamic music)
+    // The range (sound-format.md, dynamic music): the layer, and 15 minus until above it.
+    u16(uint32_t(std::clamp(in.layer, 0, 15)) | uint32_t(15 - std::clamp(in.until, 0, 15)) << 8);
     if (sampleOf[i] >= 0)
     {
       const Sample &sm = samples[size_t(sampleOf[i])];

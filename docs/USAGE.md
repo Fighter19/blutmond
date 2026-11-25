@@ -66,8 +66,10 @@ it with the knight: each part its shape) and shiny steel. Its music, "night_stre
 (`tools/make_street_music.py`, after how players describe Persona 3's "The Voice Someone
 Calls": a soft kick on every beat, a sine bass leaning onto the flat second, a slow low pad,
 and a small piano call that comes back with silence between, in a long echo; at most 5 voices,
-so the game's sounds keep three). The same script writes "test_chamber" (cold electronics,
-a chamber and an escape, after the character of the Portal soundtrack), "infinite_corridor"
+so the game's sounds keep three). The same script writes "test_chamber" (cold electronics
+after the character of the Portal soundtrack, in two modes of the same eight bars: the chamber
+at music intensity 0, where it starts, and the escape from 1 on; `music_intensity(1)` brings the
+escape in over two bars, `music_intensity(0)` the chamber back), "infinite_corridor"
 (the same sounds driven harder, for an endless corridor),
 "quiet_sorrow" (a melancholic piece for an emotional scene), "hollow_dread" (horror ambience for an empty stage of high suspense)
 and "dusk_pulse" (dark wave for a livelier one), none of them in the test level.

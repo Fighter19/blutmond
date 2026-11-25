@@ -23,6 +23,7 @@ struct Instrument
   int volume = 200;               // 0-255
   int pan = 0;                    // -64 (left) .. 63 (right)
   int layer = 0;                  // 0: always heard; 1-15: heard from that music intensity on
+  int until = 15;                 // ... up to this intensity: lower, a mode that gives way to another
 };
 
 struct Note
@@ -49,6 +50,8 @@ struct Song
   bool effect = false;            // a sound effect (plays once, on top of the music)
   int echoMs = 0;                 // delay of the echo, 0: none (at most 225 ms)
   int echoFeedback = 80;          // 0-255
+  int intensity = 15;             // the music intensity a room starts the song at (its first mode)
+  int fade = 0;                   // frames an instrument takes to come in or go out; 0: 43
   std::vector<Instrument> instruments;
   std::vector<Track> tracks;
 };
