@@ -112,7 +112,7 @@ A kuudere: cool, quiet, hard to read, and cute anyway.
 | | |
 |---|---|
 | Hair | silver, a hime cut (a straight fringe, side locks), long down her back, an ahoge that will not lie down, a gold crescent pin |
-| Face | big eyes, half-lidded under level lashes: white, a crimson iris, a darker pupil, a glint; no mouth to speak of |
+| Face | big eyes set back on the sides of her head, half-lidded under level lashes: white, a crimson iris, a darker pupil, a glint; no mouth to speak of |
 | Clothes | a navy greatcoat, open over a white shirt with a red ribbon, cuffs too big for her, a red scarf trailing behind, dark tights, boots with white tops |
 | Arms | a katana (the sword's swings), a lance with a red lacquered shaft (the thrusts) |
 | Colours | 15: outline, three of hair, two of skin, two reds, three of coat, boot, two golds, steel (the eyes' white is the hair's light) |

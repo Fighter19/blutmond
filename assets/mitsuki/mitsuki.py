@@ -11,6 +11,8 @@ of the player's layout (assets/sources/player.bmsprite: idle, run, jump, fall, c
 swings and thrusts, push, aim, sit), and a portrait for the dialogue box.
 """
 
+import math
+
 OUT = (24, 20, 36)
 HAIR = [(118, 120, 160), (190, 196, 222), (240, 244, 255)]
 SKIN = [(226, 166, 150), (255, 226, 208)]
@@ -72,13 +74,19 @@ def build(Rig):
     r.ellipsoid('head', 'skin', (1.2, 0, 22.4), (2.3, 2.5, 1.9))
     r.tube('head', 'skin', (0.3, 0, 20.0), (0.4, 0, 21.6), 0.85)
     for s, y in SIDES:
-        # Big anime eyes, half-lidded: the white, a crimson iris in it, the pupil darker, a
-        # glint, and a heavy lash over them.
-        r.ellipsoid('head', 'sclera', (3.35, 1.4 * y, 23.05), (0.38, 0.95, 1.1))
-        r.ellipsoid('head', 'eye', (3.5, 1.3 * y, 22.95), (0.34, 0.55, 0.85))
-        r.ellipsoid('head', 'pupil', (3.62, 1.25 * y, 22.85), (0.26, 0.3, 0.48))
-        r.ellipsoid('head', 'shine', (3.8, 1.42 * y, 23.2), (0.1, 0.14, 0.17))
-        r.ellipsoid('head', 'lash', (3.55, 1.45 * y, 23.95), (0.42, 1.0, 0.26), rot=(-5 * y, 0, 0))
+        # Big anime eyes, half-lidded, set back on the sides of her head (not at the edge of
+        # her profile): the white, a crimson iris in it, the pupil darker, a glint, and a heavy
+        # lash over them; each layer a little further out along the head's surface normal.
+        turn = 37.0
+        nx, ny = math.cos(math.radians(turn)), math.sin(math.radians(turn)) * y
+
+        def on_face(out, z, dy=0.0):
+            return (3.05 + out * nx, 1.95 * y + out * ny + dy * y, z)
+        r.ellipsoid('head', 'sclera', on_face(0.0, 23.05), (0.38, 0.85, 1.1), rot=(0, 0, turn * y))
+        r.ellipsoid('head', 'eye', on_face(0.14, 22.95), (0.34, 0.55, 0.85), rot=(0, 0, turn * y))
+        r.ellipsoid('head', 'pupil', on_face(0.26, 22.85), (0.26, 0.3, 0.48), rot=(0, 0, turn * y))
+        r.ellipsoid('head', 'shine', on_face(0.36, 23.2, 0.12), (0.1, 0.14, 0.17), rot=(0, 0, turn * y))
+        r.ellipsoid('head', 'lash', on_face(0.18, 23.95), (0.42, 0.95, 0.26), rot=(-5 * y, 0, turn * y))
         r.tube('head', 'hair', (0.7, 3.25 * y, 24.8), (0.9, 3.05 * y, 20.2), 0.7, 0.45)
     # The hime cut: the cap of hair ends in a straight fringe above the eyes.
     r.ellipsoid('head', 'hair', (0.0, 0, 24.6), (3.9, 3.9, 4.1), cuts=[((3.0, 0, 24.7), (0.6, 0, -0.8))])
