@@ -1,0 +1,15 @@
+# Speakers (structure Speaker in dialogue.ms), with Mitsuki as the one who plays: the test
+# level's speakers (assets/test_room/data/speakers.bmdata) with her name and portrait.
+table Speaker
+
+record Hero {
+  name = "Mitsuki"
+  portrait = "mitsuki_face"
+  voice = "voice_hero"
+}
+
+record Vesper {
+  name = "Vesper"
+  portrait = "vesper_face"
+  voice = "voice_vesper"
+}

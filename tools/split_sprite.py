@@ -10,7 +10,8 @@ Each frame is cut at a line N pixels above its anchor (--waist), or by a mask im
 sheet's size (--mask: its opaque pixels go to the upper layer). The lower layer keeps the
 frames' rectangles, anchors, hitboxes and boxes, and gets a point (`waist` unless --point says
 otherwise) on every frame N pixels above the anchor; the upper layer has the same rectangles
-with the anchor moved to the cut, so drawn at that point it lands where it was. Both keep the
+with the anchor moved to the cut, so drawn at that point it lands where it was. A drawn normal
+map (normal="<file>") is split with the sheet into <name>_n.png. Both keep the
 animations. With --mask the point is at the anchor's height minus N as well (--waist is still
 needed for where the point goes). Frames of a layer that are alike (the same picture, size,
 anchor, points and boxes: the torso of a run step and of standing, say) become one, the
@@ -48,6 +49,12 @@ def main(argv):
     mask = Image.open(opts["--mask"]).convert("RGBA") if "--mask" in opts else None
     low = Image.new("RGBA", sheet.size, (0, 0, 0, 0))
     high = Image.new("RGBA", sheet.size, (0, 0, 0, 0))
+    # A drawn normal map is split with the sheet, pixel for pixel.
+    drawn = root.get("normal") not in (None, "auto")
+    if drawn:
+        normals = Image.open(os.path.join(os.path.dirname(src), root.get("normal"))).convert("RGBA")
+        low_n = Image.new("RGBA", sheet.size, (128, 128, 255, 0))
+        high_n = Image.new("RGBA", sheet.size, (128, 128, 255, 0))
 
     frames = root.findall("frame")
     for f in frames:
@@ -61,21 +68,26 @@ def main(argv):
                     continue
                 up = mask.getpixel((x + px, y + py))[3] >= 128 if mask else py < cut
                 (high if up else low).putpixel((x + px, y + py), c)
+                if drawn:
+                    (high_n if up else low_n).putpixel((x + px, y + py), normals.getpixel((x + px, y + py)))
 
     os.makedirs(out, exist_ok=True)
     low.save(os.path.join(out, lower + ".png"))
     high.save(os.path.join(out, upper + ".png"))
+    if drawn:
+        low_n.save(os.path.join(out, lower + "_n.png"))
+        high_n.save(os.path.join(out, upper + "_n.png"))
 
     def colours(img):
         return {"#%02x%02x%02x" % c[:3] for _, c in img.getcolors(1 << 16) if c[3] >= 128}
 
     def write(name, upper_layer):
         r = ET.Element("sprite", {"version": "1", "image": name + ".png"})
-        # Light (lighting.md): `auto` normals, emissive and shiny carry over (a drawn normal map
-        # would need splitting too, so it does not).
+        # Light (lighting.md): normals, emissive and shiny carry over; a drawn normal map is
+        # split with the sheet (<name>_n.png).
         for key in ("normal", "emissive", "shiny"):
-            if root.get(key) and (key != "normal" or root.get(key) == "auto"):
-                r.set(key, root.get(key))
+            if root.get(key):
+                r.set(key, name + "_n.png" if key == "normal" and drawn else root.get(key))
         present = colours(high if upper_layer else low)
         for child in root:
             if child.tag == "frame":
@@ -119,7 +131,8 @@ def main(argv):
         for i, f in enumerate(r.findall("frame")):
             x, y, w, h = (int(f.get(k)) for k in ("x", "y", "w", "h"))
             attrs = tuple(sorted((k, v) for k, v in f.attrib.items() if k not in ("x", "y")))
-            key = (img.crop((x, y, x + w, y + h)).tobytes(), attrs, tuple(ET.tostring(c) for c in f))
+            key = (img.crop((x, y, x + w, y + h)).tobytes(), attrs, tuple(ET.tostring(c) for c in f),
+                   (high_n if upper_layer else low_n).crop((x, y, x + w, y + h)).tobytes() if drawn else None)
             if i in own:
                 key = ("own", i)
             if key not in first:

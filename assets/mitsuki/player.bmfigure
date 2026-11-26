@@ -1,0 +1,4 @@
+# mitsuki (layered-sprites.md §4): legs and torso, rendered from mitsuki.py by
+# tools/sprite3d/make_sprite.py (docs/plans/3d-sprites.md) and split at the waist.
+layer legs   sprite=mitsuki_legs
+layer torso  sprite=mitsuki_torso  at=legs.waist  mode=sync

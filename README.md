@@ -31,10 +31,10 @@ The research notes and the plan are in [docs/PLAN.md](docs/PLAN.md), the specifi
 | `src/hal/gba/` | GBA back end: registers, start code, linker scripts for cartridge and multiboot |
 | `editor/` | the editor (`bmeditor`, on [ose-ui](https://github.com/Fighter19/ose-ui) with SDL3 and GLES 2) |
 | `apps/` | small programs: `backdrop` (smallest), `scene_test` (test scene for the video API), `room_viewer` (shows a cooked room), `game` (the test level, playable; `game_autoplay` plays itself) |
-| `assets/` | `engine/` (Tiled tilesets for collision and materials), `test_room/` (own test room) |
+| `assets/` | `engine/` (Tiled tilesets for collision and materials), `test_room/` (own test room), `mitsuki/` (a playable character rendered in Blender) |
 | `third_party/` | `stb_image.h` (public domain), used by the cooker |
 | `tests/` | host tests |
-| `tools/` | `cooker/` (`bmcook`: rooms, sprites and scripts to packs), `mondskript/` (the script compiler), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_mgba_pair.c` (two images in mGBA joined by a link cable), `bm_ppu_render.c` (renders a snapshot), `compare_images.py`, `bmlink/` (live link to a running game: Xboo cable, the PC game over TCP, or mGBA) |
+| `tools/` | `cooker/` (`bmcook`: rooms, sprites and scripts to packs), `mondskript/` (the script compiler), `gbafix.py` (GBA header), `check_hw_addresses.py`, `bm_mgba_run.c` (runs images in mGBA, takes screenshots and PPU snapshots), `bm_mgba_pair.c` (two images in mGBA joined by a link cable), `bm_ppu_render.c` (renders a snapshot), `compare_images.py`, `bmlink/` (live link to a running game: Xboo cable, the PC game over TCP, or mGBA), `sprite3d/` (sprites rendered by Blender from a 3D model: [docs/plans/3d-sprites.md](docs/plans/3d-sprites.md)) |
 
 Hardware addresses may only appear in `src/hal/gba/`; a test checks this.
 
