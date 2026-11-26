@@ -194,10 +194,12 @@ class Rig:
         self.scene.frame_start = 1
         self.scene.frame_end = len(self.poses)
 
-    def portrait(self, pose, target, zoom, size=32, yaw=None, pitch=None):
+    def portrait(self, pose, target, zoom, size=32, yaw=None, pitch=None, show=()):
         """A portrait for the dialogue box: pose number `pose` (one added with pose()), `size`
-        pixels square, `zoom` pixels a unit, the world point `target` in its middle."""
+        pixels square, `zoom` pixels a unit, the world point `target` in its middle; `show`:
+        groups of parts it shows besides its pose's (a far eye no sprite frame shows)."""
         self.portrait_job = {'pose': pose, 'target': list(target), 'zoom': zoom, 'size': size,
+                             'show': list(show),
                              'yaw': self.view['yaw'] if yaw is None else yaw,
                              'pitch': self.view['pitch'] if pitch is None else pitch}
 
@@ -218,5 +220,6 @@ class Rig:
             'palettes': self.palettes,
             'frames': len(self.poses),
             'portrait': getattr(self, 'portrait_job', None),
+            'groups': {g: [ob.name for ob in obs] for g, obs in self.groups.items()},
             'inner_lines': self.inner_lines,
         })

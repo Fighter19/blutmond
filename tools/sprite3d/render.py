@@ -131,7 +131,7 @@ def main():
         p = settings['portrait']
         jobs.append({'frame': p['pose'], 'w': p['size'], 'h': p['size'], 'ax': p['size'] // 2,
                      'ground': p['size'] // 2, 'target': p['target'], 'zoom': p['zoom'],
-                     'yaw': p['yaw'], 'pitch': p['pitch'], 'portrait': True})
+                     'yaw': p['yaw'], 'pitch': p['pitch'], 'portrait': True, 'show': p.get('show', [])})
     setup_render(scene, tmp)
     meta = {'settings': settings, 'jobs': []}
     for n, job in enumerate(jobs):
@@ -141,6 +141,17 @@ def main():
         w, h = job['w'], job['h']
         zoom = job.get('zoom', 1.0)
         scene.frame_set(job['frame'] + 1)
+        # Groups of parts the job shows beyond its pose's (the portrait's far eye): their keyed
+        # visibility muted for this job (the render would key it again), restored after.
+        muted = []
+        for g in job.get('show', []):
+            for name in settings.get('groups', {}).get(g, []):
+                ob = bpy.data.objects[name]
+                for fc in (ob.animation_data.action.fcurves if ob.animation_data and ob.animation_data.action else []):
+                    if fc.data_path == 'hide_render' and not fc.mute:
+                        fc.mute = True
+                        muted.append(fc)
+                ob.hide_render = False
         bpy.context.view_layer.update()
         target = Vector(job.get('target', (0, 0, 0)))
         # The target lands on the anchor (ax, ground) of a w x h frame.
@@ -152,6 +163,8 @@ def main():
         scene.render.resolution_y = h * ss
         bpy.context.view_layer.update()
         bpy.ops.render.render(write_still=False)
+        for fc in muted:
+            fc.mute = False
         f = scene.frame_current
         for slot in ('idx', 'nrm', 'dep'):
             src = os.path.join(tmp, '%s_%04d.exr' % (slot, f))

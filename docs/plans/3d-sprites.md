@@ -58,7 +58,8 @@ side), z up, **one unit a pixel**. The ground is z = 0 and (0, 0, 0) lands on a 
 - **Palettes** are colour swaps, written into the sprite (her `steel`: the coat when the chain
   mail is worn).
 - The **portrait** is one more render of a pose: closer (`zoom` pixels a unit), from more in
-  front (`yaw`), 32 × 32, for the dialogue box.
+  front (`yaw`), 32 × 32, for the dialogue box. It can `show` groups no sprite frame shows:
+  Mitsuki's far eye, which from the side would peek out past the edge of her face.
 
 Everything the later steps need is kept in the scene (`scene["sprite3d"]`), so the `.blend`
 that `--save-blend` writes can be opened in Blender, its joints posed by hand on the

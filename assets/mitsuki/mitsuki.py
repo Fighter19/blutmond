@@ -85,14 +85,17 @@ def build(Rig):
 
         def on_face(out, z, inward=0.0):
             return (3.05 + out * nx + inward * tx, 1.95 * y + out * ny + inward * ty, z)
-        r.ellipsoid('head', 'sclera', on_face(0.0, 23.05), (0.38, 0.85, 1.1), rot=(0, 0, turn * y))
         # The iris toward the nose in the white, so she looks ahead, not apart; the far eye,
         # seen across her face, more.
         gaze = 0.32 if y < 0 else 0.5
-        r.ellipsoid('head', 'eye', on_face(0.14, 22.95, gaze), (0.34, 0.55, 0.85), rot=(0, 0, turn * y))
-        r.ellipsoid('head', 'pupil', on_face(0.26, 22.85, gaze + 0.04), (0.26, 0.3, 0.48), rot=(0, 0, turn * y))
-        r.ellipsoid('head', 'shine', on_face(0.36, 23.2, gaze - 0.1), (0.1, 0.14, 0.17), rot=(0, 0, turn * y))
-        r.ellipsoid('head', 'lash', on_face(0.18, 23.95), (0.42, 0.95, 0.26), rot=(-5 * y, 0, turn * y))
+        # The far eye only in the portrait (from more in front): in the sprites, seen from the
+        # side, it would peek out past the edge of her face.
+        g = 'far_eye' if y > 0 else None
+        r.ellipsoid('head', 'sclera', on_face(0.0, 23.05), (0.38, 0.85, 1.1), rot=(0, 0, turn * y), group=g)
+        r.ellipsoid('head', 'eye', on_face(0.14, 22.95, gaze), (0.34, 0.55, 0.85), rot=(0, 0, turn * y), group=g)
+        r.ellipsoid('head', 'pupil', on_face(0.26, 22.85, gaze + 0.04), (0.26, 0.3, 0.48), rot=(0, 0, turn * y), group=g)
+        r.ellipsoid('head', 'shine', on_face(0.36, 23.2, gaze - 0.1), (0.1, 0.14, 0.17), rot=(0, 0, turn * y), group=g)
+        r.ellipsoid('head', 'lash', on_face(0.18, 23.95), (0.42, 0.95, 0.26), rot=(-5 * y, 0, turn * y), group=g)
         r.tube('head', 'hair', (0.7, 3.25 * y, 24.8), (0.9, 3.05 * y, 20.2), 0.7, 0.45)
     # The hime cut: the cap of hair ends in a straight fringe above the eyes.
     r.ellipsoid('head', 'hair', (0.0, 0, 24.6), (3.9, 3.9, 4.1), cuts=[((3.0, 0, 24.7), (0.6, 0, -0.8))])
@@ -133,7 +136,7 @@ def build(Rig):
 
     for p in poses():
         r.pose(**p)
-    r.portrait(0, (0.9, 0, 23.6), 3.3, yaw=58.0, pitch=4.0)
+    r.portrait(0, (0.9, 0, 23.6), 3.3, yaw=58.0, pitch=4.0, show=('far_eye',))
     # Wearing the chain mail (assets/test_room/data/armour.bmdata): the coat in steel.
     r.palette('steel', [(COAT[0], (64, 70, 86)), (COAT[1], (110, 118, 138)), (COAT[2], (164, 172, 190))])
     return r
