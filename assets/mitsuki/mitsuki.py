@@ -169,9 +169,16 @@ TUCK = {'hip_R': 70, 'knee_R': -100, 'hip_L': 50, 'knee_L': -90, 'scarf': -20, '
 
 def poses():
     out = []
-    # 0, 1: idle, breathing (the hair and the scarf settle a little).
-    out.append(pose())
-    out.append(pose(root=(0, 0, -0.5), spine=1, hair=3, hair_end=2, scarf=4, elbow_R=16, elbow_L=16))
+    # 0, 1: idle, at ease: her weight on the back leg, the front knee soft, turned a little
+    # toward the viewer, the head tilted, one hand loose at her side, the other behind her;
+    # breathing (the hair and the scarf settle a little).
+    rest = dict(spine=(2, 0, -10), chest=(-1, 0, -4), head=(-5, -7, 6),
+                hip_R=12, knee_R=-12, ankle_R=-2, hip_L=-6, knee_L=-3,
+                shoulder_R=(-6, -10), elbow_R=22, hand_R=10, shoulder_L=(-20, 6), elbow_L=45,
+                hair=2, scarf=3)
+    out.append(pose(root=(0, 0, -0.25), **rest))
+    rest.update(elbow_R=26, hand_R=14, elbow_L=48, hair=4, hair_end=2, scarf=6)
+    out.append(pose(root=(0, 0, -0.25), **rest))
     # 2-5: run.
     stride = pose(spine=-8, head=4, hip_R=40, knee_R=-25, ankle_R=10, hip_L=-35, knee_L=-40, ankle_L=-10,
                   shoulder_R=(-40, -8), elbow_R=60, shoulder_L=(40, 8), elbow_L=60, hair=-25, hair_end=-10, scarf=-15)
