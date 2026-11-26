@@ -36,7 +36,11 @@ What you get:
 ```
 build/game                      # the test level in a window
 build/game level.bmpk           # a pack of your own
+build/game build/mitsuki_level_gba.bmpk   # the test level with Mitsuki as the player
 ```
+
+Mitsuki is rendered in Blender from a 3D model ([plans/3d-sprites.md](plans/3d-sprites.md));
+`tools/sprite3d/make_sprite.py` renders her again after a change to `assets/mitsuki/mitsuki.py`.
 
 Keys: arrows to move, X or Space is A (jump), Z is B, A and S are L and R, Return is Start,
 Backspace is Select, F11 full screen, Escape ends (in the browser it only leaves full screen). Gamepads work. The window keeps a save game
