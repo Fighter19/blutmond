@@ -80,12 +80,18 @@ def build(Rig):
         turn = 37.0
         nx, ny = math.cos(math.radians(turn)), math.sin(math.radians(turn)) * y
 
-        def on_face(out, z, dy=0.0):
-            return (3.05 + out * nx, 1.95 * y + out * ny + dy * y, z)
+        # Along the face toward its middle (the nose), at right angles to the normal.
+        tx, ty = math.sin(math.radians(turn)), -math.cos(math.radians(turn)) * y
+
+        def on_face(out, z, inward=0.0):
+            return (3.05 + out * nx + inward * tx, 1.95 * y + out * ny + inward * ty, z)
         r.ellipsoid('head', 'sclera', on_face(0.0, 23.05), (0.38, 0.85, 1.1), rot=(0, 0, turn * y))
-        r.ellipsoid('head', 'eye', on_face(0.14, 22.95), (0.34, 0.55, 0.85), rot=(0, 0, turn * y))
-        r.ellipsoid('head', 'pupil', on_face(0.26, 22.85), (0.26, 0.3, 0.48), rot=(0, 0, turn * y))
-        r.ellipsoid('head', 'shine', on_face(0.36, 23.2, 0.12), (0.1, 0.14, 0.17), rot=(0, 0, turn * y))
+        # The iris toward the nose in the white, so she looks ahead, not apart; the far eye,
+        # seen across her face, more.
+        gaze = 0.32 if y < 0 else 0.5
+        r.ellipsoid('head', 'eye', on_face(0.14, 22.95, gaze), (0.34, 0.55, 0.85), rot=(0, 0, turn * y))
+        r.ellipsoid('head', 'pupil', on_face(0.26, 22.85, gaze + 0.04), (0.26, 0.3, 0.48), rot=(0, 0, turn * y))
+        r.ellipsoid('head', 'shine', on_face(0.36, 23.2, gaze - 0.1), (0.1, 0.14, 0.17), rot=(0, 0, turn * y))
         r.ellipsoid('head', 'lash', on_face(0.18, 23.95), (0.42, 0.95, 0.26), rot=(-5 * y, 0, turn * y))
         r.tube('head', 'hair', (0.7, 3.25 * y, 24.8), (0.9, 3.05 * y, 20.2), 0.7, 0.45)
     # The hime cut: the cap of hair ends in a straight fringe above the eyes.
