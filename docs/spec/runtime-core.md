@@ -298,7 +298,11 @@ start:
   its anchor at (8, 124) and priority 0, in front of the box. `say_line(record)` reads the
   record's fields `speaker` (a record) and `says` (a text), and of the speaker `name` (a text)
   and `portrait` (a sprite), by their names in whichever table holds them;
-  `say_as(speaker, line)` the speaker's two, and of the speaker also `voice` (a sound).
+  `say_as(speaker, line)` the speaker's two, and of the speaker also `voice` (a sound). A
+  speaker that is the player's own character's (the record of the data table `Character`
+  whose `figure` is `#player`) is replaced by the `speaker` of the character playing
+  (`src/world/character.c`; not in the multiboot images), so the player's lines show its name
+  and portrait.
 - **The line appears** letter by letter: `dialogueShown` letters of `dialogueLength`
   (characters of the line as wrapped: spaces and line breaks count) are drawn. In each game
   frame without a screen, after the buttons, one more appears; when its number n is even, a
@@ -350,8 +354,10 @@ start:
   than those named here are ignored.
 - At most 64 objects of a room are read; further ones do not exist for the runtime.
 - **Options** at offset 1024 of the save memory: u32 `BMOP`, u8 language (pack-format.md
-  §3.2), three zero bytes. Read when the game starts (an unknown language or none: 0), written
-  when the language is changed.
+  §3.2), u8 colour choice (0 the screen decides, 1 corrected, 2 as drawn), u16 character (the
+  string id of the playable figure chosen; 0 in older options, sprite-format.md "Figures").
+  Read when the game starts (an unknown language or none: 0; a character that is not a
+  playable figure with all its sprites in the pack: `player`), written when one is changed.
 - **Save game**: the `save` fields of the state ([state.md](state.md)) at offset 0 of the
   save memory. Loading one sets `vx = vy = 0`, enters the stored room with the scripted
   objects fresh, and equips again (`equip`) what each equipment slot holds.
@@ -550,6 +556,7 @@ value is dropped and counts as a script error.
 | 132 | `self()` | a handle to the calling object (0 from an attachment) |
 | 133-135 | `color_correction()`, `set_color_correction(on)`, `has_color_correction()` | the option of colours corrected for the GBA's screen ([mondskript.md](mondskript.md)) |
 | 136 | `save_game()` | as a `SavePoint` (section 3): `savedRoom`, `savedX`, `savedY` = the room and the player's place now, the save game written |
+| 137-140 | `character()`, `set_character(#figure)`, `has_character(#figure)`, `character_count()` | the playable character, an option (sprite-format.md "Figures"): the name of the figure the player is drawn with; another playable figure made the player at once (its sheets loaded in place of the old ones, the figure on its idle animation; false if the pack has none such with all its sprites); whether it has; how many it has. The multiboot images have none to choose (`src/hal/gba/character_off.c`): 1, false |
 
 Layer functions (112-122) work only from the player's attachments, on the player's figure (a
 layer named by the figure file); from an object, or for a layer the figure does not have,

@@ -1,0 +1,15 @@
+# The playable characters (structure Character in characters.ms), in the System menu's order.
+table Character
+
+record CharacterHero {
+  name = "Hero"
+  figure = #player
+  speaker = Hero
+}
+
+# Rendered in Blender from a 3D model (assets/mitsuki, docs/plans/3d-sprites.md).
+record CharacterMitsuki {
+  name = "Mitsuki"
+  figure = #player_mitsuki
+  speaker = Mitsuki
+}

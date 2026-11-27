@@ -220,7 +220,8 @@ static void forgetSprites(BmGame *g)
   }
 }
 
-// The player's sheets: the figure "player"'s, else the sprite "player" (layered-sprites.md §4).
+// The player's sheets: the chosen character's figure, else the figure "player"'s, else the
+// sprite "player" (layered-sprites.md §4).
 static void findPlayer(BmGame *g)
 {
   memset(&g->playerFigure, 0, sizeof(g->playerFigure));
@@ -234,7 +235,10 @@ static void findPlayer(BmGame *g)
   }
   g->playerSheetCount = 0;
   g->playerSheet = -1;
-  if (bmFigureFind(&g->playerFigure, g->pPack, "player") == BM_SUCCESS)
+  // The character chosen (an option, character.c), else the figure "player".
+  const char *chosen = bmGameChosenCharacter(g);
+  if ((chosen != NULL && bmFigureFind(&g->playerFigure, g->pPack, chosen) == BM_SUCCESS) ||
+      bmFigureFind(&g->playerFigure, g->pPack, "player") == BM_SUCCESS)
   {
     for (uint8_t i = 0; i < g->playerFigure.layerCount; i++)
     {
@@ -1452,6 +1456,7 @@ void bmGameSayLine(BmGame *g, uint32_t line)
 {
   int32_t speaker = 0, says = 0xFFFF, name = 0xFFFF, portrait = 0xFFFF;
   bmGameRecordField(g, line, "speaker", &speaker);
+  speaker = (int32_t)bmGameCharacterSpeaker(g, (uint32_t)speaker);   // the character playing's own
   bmGameRecordField(g, line, "says", &says);
   bmGameRecordField(g, (uint32_t)speaker, "name", &name);
   bmGameRecordField(g, (uint32_t)speaker, "portrait", &portrait);
@@ -2362,11 +2367,12 @@ BmResult bmGameAfterLoad(BmGame *g)
 #define OPTIONS_OFFSET 1024
 #define OPTIONS_MAGIC 0x504F4D42u   // "BMOP"
 
-// Options: u32 magic, u8 language, u8 colour choice (BmGame::colorChoice; 0 in older ones), u16 0.
-static void writeOptions(const BmGame *g)
+// Options: u32 magic, u8 language, u8 colour choice (BmGame::colorChoice; 0 in older ones),
+// u16 character (BmGame::character; 0 in older ones, which is no playable figure's name).
+void bmGameWriteOptions(const BmGame *g)
 {
   uint8_t o[8] = { (uint8_t)OPTIONS_MAGIC, (uint8_t)(OPTIONS_MAGIC >> 8), (uint8_t)(OPTIONS_MAGIC >> 16), (uint8_t)(OPTIONS_MAGIC >> 24),
-                   g->language, g->colorChoice, 0, 0 };
+                   g->language, g->colorChoice, (uint8_t)g->character, (uint8_t)(g->character >> 8) };
   bmHalSaveWrite(OPTIONS_OFFSET, o, sizeof(o));
 }
 
@@ -2397,6 +2403,7 @@ static void readOptions(BmGame *g)
   uint32_t magic = (uint32_t)o[0] | ((uint32_t)o[1] << 8) | ((uint32_t)o[2] << 16) | ((uint32_t)o[3] << 24);
   g->language = magic == OPTIONS_MAGIC && o[4] < bmTextLanguageCount(g->pPack) ? o[4] : 0;
   g->colorChoice = magic == OPTIONS_MAGIC && o[5] <= 2 ? o[5] : 0;
+  g->character = magic == OPTIONS_MAGIC ? (uint16_t)(o[6] | o[7] << 8) : 0xFFFF;   // checked when the player is found
   bmUiSetLanguage(&g->ui, g->language);
   applyColorCorrection(g);
 }
@@ -2407,7 +2414,7 @@ void bmGameSetLanguage(BmGame *g, uint8_t language)
   g->language = language;
   bmUiSetLanguage(&g->ui, language);
   g->noticeDrawn = false;   // its text in the new language
-  writeOptions(g);
+  bmGameWriteOptions(g);
 }
 
 // Every colour in palette memory written again (the correction changed): the room's, the UI's,
@@ -2429,8 +2436,19 @@ void bmGameSetColorCorrection(BmGame *g, bool on)
 {
   if (!g->colorCorrectable) return;
   g->colorChoice = on ? 1 : 2;
-  writeOptions(g);
+  bmGameWriteOptions(g);
   applyColorCorrection(g);
+  reloadPalettes(g);
+}
+
+void bmGameReloadPlayer(BmGame *g)
+{
+  // The player's sheets lie first in sprite memory, the room's after them: all of it again
+  // (as for a new pack), then what the room shows.
+  g->pSpritesFrom = NULL;
+  loadSprites(g);
+  preloadSprites(g);
+  bmAnimPlay(&g->playerAnim, (uint8_t)g->playerAnims[BM_PLAYER_ANIM_IDLE], true);
   reloadPalettes(g);
 }
 

@@ -174,7 +174,10 @@ layer (12 bytes):      u16 name, u16 sprite (string id, 0xFFFF none),
 ```
 
 How a pose is worked out and drawn is in [runtime-core.md](runtime-core.md) §9. The engine's
-player is the figure `player` if there is one (else the sprite `player`). In the test level it
+player is the figure `player` if there is one (else the sprite `player`). Figures named
+`player_<name>` are **playable characters** too: one of them is the player instead when the
+option says so (`set_character`, runtime-core.md) and the pack has all its sprites; the cooker
+keeps sprite memory for the largest of them in every room. In the test level it
 is legs and torso, made from the whole drawing (`assets/sources/player.png`) by
 `tools/split_sprite.py`: everything above a line 15 pixels over the feet goes to the torso,
 whose anchor moves to that line, and the legs get a `waist` point there on every frame, so the

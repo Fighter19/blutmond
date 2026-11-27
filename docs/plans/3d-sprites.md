@@ -13,7 +13,7 @@ Open: the points at the end.
 assets/mitsuki/mitsuki.py ──Blender──▶ passes ──pixel step──▶ sources/mitsuki.png, _n.png, .bmsprite
    (or mitsuki.blend)      render.py            pixelize.py       │
                                                                    └─split_sprite.py─▶ mitsuki_legs, mitsuki_torso,
-                                                                                      player.bmfigure, mitsuki_face
+                                                                                      player_mitsuki.bmfigure, mitsuki_face
 ```
 
 One command does all of it:
@@ -21,7 +21,7 @@ One command does all of it:
 ```
 python3 tools/sprite3d/make_sprite.py assets/mitsuki/mitsuki.py \
     --layout assets/sources/player.bmsprite --sink 2 --out assets/mitsuki --name mitsuki \
-    --split 13 --figure player --save-blend assets/mitsuki/mitsuki.blend --preview mitsuki_x4.png
+    --split 13 --figure player_mitsuki --save-blend assets/mitsuki/mitsuki.blend --preview mitsuki_x4.png
 ```
 
 It needs Blender 4.0 or later (`--blender`, `$BLENDER` or `blender` on the path; on Ubuntu
@@ -118,33 +118,35 @@ A kuudere: cool, quiet, hard to read, and cute anyway.
 | Arms | a katana (the sword's swings), a lance with a red lacquered shaft (the thrusts) |
 | Colours | 15: outline, three of hair, two of skin, two reds, three of coat, boot, two golds, steel (the eyes' white is the hair's light) |
 | Frames | the player's 43: idle (breathing, the hair and scarf settle), run, jump, fall, climb, the swing, the lance up and down, the low sweep, the arcs up and down, the thrust ahead, push, aim (9 directions), sitting on the bench (her feet do not reach the ground) |
-| Portrait | `mitsuki_face`, the dialogue box's Hero in her pack |
+| Portrait | `mitsuki_face`: her lines in the dialogue box while she is the player |
 
 Files in `assets/mitsuki/`: `mitsuki.py` (the model and the poses), `mitsuki.blend` (the same
 scene, written by `--save-blend`, for opening in Blender), `sources/` (the whole sprite and its
 normal map, the layout's frames), `mitsuki_legs` and `mitsuki_torso` (with `_n` normal maps),
-`player.bmfigure`, `mitsuki_face`, `data/speakers.bmdata`.
+`player_mitsuki.bmfigure` (her figure), `mitsuki_face`, `speaker.bmdata` (her `Speaker`
+record: name, portrait and voice in the dialogue box).
 
-**Playing her**: the build cooks `mitsuki_level_gba.bmpk`, the test level with her figure
-instead of the player's and her portrait and name in the dialogue (`BM_MITSUKI_LEVEL_ASSETS` in
-CMakeLists.txt: the test level's assets without the player's sprites and speakers, with hers):
+**Playing her**: she is in the test level as a playable character to choose (Start, System,
+Character): a figure named `player_<name>` can be the player (sprite-format.md, Figures), the
+data table `Character` (`assets/test_room/data/characters.bmdata`: a name for the menu, the
+figure and the speaker of the player's lines) lists who can be chosen, the screen `CharacterMenu` lists them, and the choice is an
+option kept with the language (runtime-core.md). The player of the test level stays the
+default, so the tests and their pictures keep it. Her sheets take 553 tiles against the old
+player's 388 (17.7 KB of sprite memory against 12.4 KB): she is wider, outlined, and her hair
+moves; the cooker keeps room for the largest playable character in every room.
 
-```
-build/game build/mitsuki_level_gba.bmpk
-```
-
-Her figure is named `player`, so the engine takes her without a change. The test level's own
-pack, the tests and their pictures keep the old player. Her sheets take 553 tiles against the
-old player's 388 (17.7 KB of sprite memory against 12.4 KB): she is wider, outlined, and her
-hair moves.
+The multiboot images have no choice of character: their code leaves it out
+(`src/hal/gba/character_off.c`), their pack leaves out Mitsuki, the table and the menu, and a
+pack fitted for one over the link (runtime-abi.md §0) leaves them out too
+(`src/link/live_master.c`), so a room is not left out for them.
 
 ## 3. Open
 
 - **More colour slots for the light**: with 15 colours a lit sprite has no slot left to split
   a colour by its normals (lighting.md), so in lit rooms each colour has one normal. A palette
   of 11 or 12 colours would let the cooker spend the rest on light.
-- **A cartridge image** (`game.gba` with her pack): the cartridge's pack list in CMakeLists.txt
-  would take `BM_MITSUKI_LEVEL_ASSETS`; not built here (no ARM toolchain where this was made).
+- **Her own voice**: her speaker uses the player's voice (`voice_hero`); one of her own would
+  be a song like it, higher.
 - **Raised arms**: her head is wide (she is small, her proportions are a chibi's) and her
   arms short, so an arm raised straight up (aiming up, climbing) mostly lies over her hair;
   it reads, but less than the other directions. Longer arms for those poses, or a turned

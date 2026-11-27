@@ -73,6 +73,7 @@ typedef struct FitPlan
   uint32_t size, crc, leftOut;
   // Working space, here rather than on the stack (a GBA sends with a small one).
   uint8_t named[BM_LIVE_MAX_CHUNKS / 8];
+  uint8_t choice[BM_LIVE_MAX_CHUNKS / 8];   // the choice of character (markCharacterChoice)
   int32_t queue[FIT_MAX_ROOMS];
   uint8_t seen[FIT_MAX_ROOMS];
   uint32_t near;   // queue[0 .. near): the rooms asked for and those one door from them
@@ -209,10 +210,54 @@ static uint32_t roomExits(const BmPack *pPack, int32_t room, int32_t *pOut, uint
   return out;
 }
 
-// Picks what goes into `budget` bytes: every chunk no room names (but the songs and the
-// languages), the room `room`, room 0 and the rooms one door from them, the songs, then the
-// other rooms nearest to them through doors first (then the ones no door leads to, in order;
-// each whole, if it fits), then the languages.
+// The name (string id) a chunk starts with, as sprites, figures and data tables do; that of the
+// first class of a script module (MODB: its classes from the offset at 16); 0xFFFF for none.
+static uint16_t chunkName(const BmPack *pPack, uint32_t i, uint32_t id)
+{
+  BmChunkEntry e;
+  uint32_t size = 0;
+  const uint8_t *d = bmPackGetChunk(pPack, i, &e) && e.id == id ? bmPackChunkData(pPack, i, &size) : NULL;
+  if (d == NULL || size < 2) return 0xFFFF;
+  if (id != BM_CHUNK_MODB) return bmRead16(d);
+  uint32_t classes = size >= 20 ? bmRead32(d + 16) : size;
+  return size >= 12 && bmRead16(d + 8) != 0 && classes + 2 <= size ? bmRead16(d + classes) : 0xFFFF;
+}
+
+static bool chunkNamed(const BmPack *pPack, uint32_t i, uint32_t id, const char *name)
+{
+  const char *n = bmPackString(pPack, chunkName(pPack, i, id));
+  return n != NULL && strcmp(n, name) == 0;
+}
+
+// Marks in `out` what only the choice of playable character needs (game.h, character.c): the
+// figures "player_<name>" and their sprites, the data table `Character` and the screen
+// `CharacterMenu` that lists it. A fitted pack goes to a runtime with little room (a multiboot
+// GBA), which has no choice of character: without these it plays as the figure "player".
+static void markCharacterChoice(const BmPack *pPack, uint8_t *out)
+{
+  uint32_t count = bmPackChunkCount(pPack);
+  for (uint32_t c = 0; c < count; c++)
+  {
+    if (chunkNamed(pPack, c, BM_CHUNK_DTAB, "Character") || chunkNamed(pPack, c, BM_CHUNK_MODB, "CharacterMenu"))
+      out[c / 8] |= (uint8_t)(1u << (c % 8));
+    const char *name = bmPackString(pPack, chunkName(pPack, c, BM_CHUNK_FIGR));
+    if (name == NULL || strncmp(name, "player_", 7) != 0) continue;
+    out[c / 8] |= (uint8_t)(1u << (c % 8));
+    uint32_t size = 0;
+    const uint8_t *fig = bmPackChunkData(pPack, c, &size);
+    for (uint32_t l = 0; fig != NULL && l < fig[2] && 4 + l * 12 + 12 <= size; l++)
+    {
+      uint16_t sprite = bmRead16(fig + 4 + l * 12 + 2);
+      for (uint32_t i = 0; i < count; i++)
+        if (chunkName(pPack, i, BM_CHUNK_SPRT) == sprite) out[i / 8] |= (uint8_t)(1u << (i % 8));
+    }
+  }
+}
+
+// Picks what goes into `budget` bytes: every chunk no room names (but the songs, the languages
+// and the choice of character, which is left out), the room `room`, room 0 and the rooms one
+// door from them, the songs, then the other rooms nearest to them through doors first (then
+// the ones no door leads to, in order; each whole, if it fits), then the languages.
 static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan *f, const BmLiveRemote *r)
 {
   uint32_t count = bmPackChunkCount(pPack);
@@ -220,6 +265,7 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
   memset(f, 0, sizeof(*f));
   f->size = BM_PACK_HEADER_SIZE + count * BM_PACK_CHUNK_ENTRY_SIZE;
   uint8_t *named = f->named;
+  markCharacterChoice(pPack, f->choice);
   int32_t rooms = 0;
   for (uint32_t i = 0; i < count; i++)
   {
@@ -236,7 +282,8 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
     bmPackGetChunk(pPack, i, &e);
     // (Not the save game's history either, MIGR: it serves only loading a save of an earlier
     // version, so it comes last, with the translations.)
-    if (e.id != BM_CHUNK_ROOM && e.id != BM_CHUNK_LANG && e.id != BM_CHUNK_SONG && e.id != BM_CHUNK_MIGR && !(named[i / 8] & (1u << (i % 8))))
+    if (e.id != BM_CHUNK_ROOM && e.id != BM_CHUNK_LANG && e.id != BM_CHUNK_SONG && e.id != BM_CHUNK_MIGR && !(named[i / 8] & (1u << (i % 8))) &&
+        !(f->choice[i / 8] & (1u << (i % 8))))
       fitKeep(pPack, f, i);
   }
   if (f->size > budget) return false;

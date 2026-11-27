@@ -162,7 +162,11 @@ typedef enum BmScriptType {
   X(color_correction,  BOOL, 0, VOID,  VOID,  VOID,  VOID, 0) \
   X(set_color_correction, VOID, 1, BOOL, VOID, VOID,  VOID, 0) \
   X(has_color_correction, BOOL, 0, VOID, VOID, VOID,  VOID, 0) \
-  X(save_game,         VOID, 0, VOID,  VOID,  VOID,  VOID, 0)
+  X(save_game,         VOID, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(character,         NAME, 0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(set_character,     BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(has_character,     BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(character_count,   INT,  0, VOID,  VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -295,6 +299,12 @@ typedef enum BmScriptType {
 //
 // save_game(): writes the save game as a SavePoint does, with the player's place now as the
 // place to start again from (a bench to rest on).
+//
+// The playable character (an option, game.h): character() is the name of the figure the player
+// is drawn with (#player, #player_mitsuki), set_character(#figure) makes another of the pack's
+// playable figures ("player" or "player_<name>") the player (false if it is none),
+// has_character(#figure) tells whether the pack has it (with all its sprites),
+// character_count() how many such the pack has.
 //
 // fade_music(percent, frames): the music's volume goes to `percent` (0-100) in that many
 // frames; at 0 it stops. music_intensity(level): dynamic music: a layer of the song is heard while

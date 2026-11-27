@@ -257,6 +257,9 @@ typedef struct BmGame
   // bmHalScreen; 1: corrected; 2: the original colours).
   bool colorCorrectable;
   uint8_t colorChoice;
+  // The playable character (an option too): which of the pack's figures "player" and
+  // "player_<name>" is the player, the string id of its name (0xFFFF: "player").
+  uint16_t character;
   // Music and sound effects. Not part of the game state yet: a loaded state starts the room's
   // song from its beginning.
   BmSound sound;
@@ -409,6 +412,29 @@ void bmGameSetLanguage(BmGame *pGame, uint8_t language);
 /// as an option in the save memory; without a CCOR chunk in the pack the colours stay as drawn).
 bool bmGameColorCorrection(const BmGame *pGame);
 void bmGameSetColorCorrection(BmGame *pGame, bool on);
+
+/// The playable characters (sprite-format.md "Figures"): the figure "player" and any figure
+/// "player_<name>" can be the player. Whether `name` (a string id) is one of the pack's;
+/// switching to it (kept as an option in the save memory; the player's sheets are loaded
+/// again in place, the figure starts on its idle animation), false if it is none.
+bool bmGameHasCharacter(const BmGame *pGame, uint16_t name);
+bool bmGameSetCharacter(BmGame *pGame, uint16_t name);
+/// How many playable characters the pack has (with all their sprites). In character.c; the
+/// multiboot images have none to choose (src/hal/gba/character_off.c).
+uint8_t bmGameCharacterCount(const BmGame *pGame);
+/// For character.c: the options written to the save memory; the player's sheets found and
+/// loaded again (the room's after them), the figure on its idle animation.
+void bmGameWriteOptions(const BmGame *pGame);
+/// Who says a line of `speaker` (a record key): the speaker of the character playing (its
+/// record in the data table `Character`, field `speaker`) if `speaker` is the player's own
+/// character's (the record whose `figure` is #player), else `speaker` itself.
+uint32_t bmGameCharacterSpeaker(const BmGame *pGame, uint32_t speaker);
+/// The name of the character chosen (the option) if it is one of the pack's, else NULL.
+const char *bmGameChosenCharacter(const BmGame *pGame);
+/// The script functions character(), set_character(name), has_character(name),
+/// character_count() (`api`: their BmScriptApi index; `arg` the name).
+int32_t bmGameCharacterCall(BmGame *pGame, uint32_t api, int32_t arg);
+void bmGameReloadPlayer(BmGame *pGame);
 
 /// Save game in the save memory: the `save` fields. Loading returns false if there is none
 /// or it was written by a different layout.

@@ -514,6 +514,12 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_has_color_correction:
     *result = g->colorCorrectable;
     break;
+  case BM_SCRIPT_API_character:
+  case BM_SCRIPT_API_set_character:
+  case BM_SCRIPT_API_has_character:
+  case BM_SCRIPT_API_character_count:
+    *result = bmGameCharacterCall(g, api, args[0]);
+    break;
   case BM_SCRIPT_API_save_game:
     // As a save point does, from where the player stands.
     g->savedRoom = g->roomIndex;
@@ -689,10 +695,11 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_say_as:
   {
     int32_t name = 0xFFFF, portrait = 0xFFFF;
-    bmGameRecordField(g, (uint32_t)args[0], "name", &name);
-    bmGameRecordField(g, (uint32_t)args[0], "portrait", &portrait);
+    uint32_t speaker = bmGameCharacterSpeaker(g, (uint32_t)args[0]);   // the character playing's own
+    bmGameRecordField(g, speaker, "name", &name);
+    bmGameRecordField(g, speaker, "portrait", &portrait);
     int32_t voice = 0xFFFF;
-    bmGameRecordField(g, (uint32_t)args[0], "voice", &voice);
+    bmGameRecordField(g, speaker, "voice", &voice);
     bmGameSpeak(g, (uint16_t)name, (uint16_t)args[1], (uint16_t)portrait, (uint16_t)voice);
     break;
   }

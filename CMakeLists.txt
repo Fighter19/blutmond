@@ -169,18 +169,17 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/test_room/scripts/gift.ms
   ${PROJECT_SOURCE_DIR}/assets/engine/font_latin.bmfont
   ${PROJECT_SOURCE_DIR}/assets/test_room/lang/de.bmlang
-  ${PROJECT_SOURCE_DIR}/assets/test_room/lang/fr.bmlang)
-# Mitsuki (assets/mitsuki, rendered in Blender: docs/plans/3d-sprites.md): the test level with
-# her as the player (her figure `player`, her legs and torso) and in the dialogue box.
-set(BM_MITSUKI_LEVEL_ASSETS ${BM_TEST_LEVEL_ASSETS})
-list(FILTER BM_MITSUKI_LEVEL_ASSETS EXCLUDE REGEX "test_room/(player[^/]*|data/speakers\\.bmdata)$")
-list(APPEND BM_MITSUKI_LEVEL_ASSETS
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/player.bmfigure
+  ${PROJECT_SOURCE_DIR}/assets/test_room/lang/fr.bmlang
+  # The playable characters to choose from in the System menu: the player and Mitsuki
+  # (assets/mitsuki, rendered in Blender: docs/plans/3d-sprites.md).
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/characters.ms
+  ${PROJECT_SOURCE_DIR}/assets/test_room/data/characters.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/test_room/screens/character_menu.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/player_mitsuki.bmfigure
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_legs.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_torso.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_face.bmsprite
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/data/speakers.bmdata)
-
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/speaker.bmdata)
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
@@ -232,8 +231,9 @@ function(bm_add_gba_image name)
       # Everything of a multiboot image shares 256 KB; the content pool gets what is left
       # (src/hal/gba/gba_mb.ld).
       target_compile_definitions(${target} PRIVATE BM_GBA_MULTIBOOT)
-      # Without the light (src/hal/gba/light_off.c says why).
-      target_sources(${target} PRIVATE ${PROJECT_SOURCE_DIR}/src/hal/gba/light_off.c)
+      # Without the light (src/hal/gba/light_off.c says why), nor a choice of character
+      # (character_off.c).
+      target_sources(${target} PRIVATE ${PROJECT_SOURCE_DIR}/src/hal/gba/light_off.c ${PROJECT_SOURCE_DIR}/src/hal/gba/character_off.c)
     endif()
     target_link_options(${target} PRIVATE
       -T ${PROJECT_SOURCE_DIR}/src/hal/gba/gba_${kind}.ld
@@ -324,9 +324,11 @@ if(BM_PLATFORM STREQUAL "gba")
   # rooms come last, so the other rooms keep their numbers.
   set(BM_TEST_LEVEL_MB_ROOMS ${BM_TEST_LEVEL_ROOMS})
   list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall|rural_street")
-  # Nor the street's scripts (the music's Threat, the bench): only that room uses them.
+  # Nor the street's scripts (the music's Threat, the bench): only that room uses them. Nor
+  # Mitsuki and the Character menu: with one playable character the System menu offers no
+  # choice.
   set(BM_TEST_LEVEL_MB_ASSETS ${BM_TEST_LEVEL_ASSETS})
-  list(FILTER BM_TEST_LEVEL_MB_ASSETS EXCLUDE REGEX "scripts/(threat|bench)\\.ms$")
+  list(FILTER BM_TEST_LEVEL_MB_ASSETS EXCLUDE REGEX "scripts/(threat|bench)\\.ms$|assets/mitsuki/|characters\\.(ms|bmdata)$|character_menu\\.ms$")
   set(BM_TEST_LEVEL_MB_PACK ${CMAKE_BINARY_DIR}/test_level_mb_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_MB_PACK}
     COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_MB_ROOMS} ${BM_TEST_LEVEL_MB_ASSETS}
@@ -586,16 +588,6 @@ if(BM_PLATFORM STREQUAL "host")
     COMMENT "Cooking the test level for the game")
   add_custom_target(game_level_pack ALL DEPENDS ${BM_GAME_LEVEL_PACK})
   add_dependencies(game game_level_pack)
-  # The same level with Mitsuki as the player: build/game build/mitsuki_level_gba.bmpk.
-  set(BM_MITSUKI_LEVEL_PACK ${CMAKE_BINARY_DIR}/mitsuki_level_gba.bmpk)
-  add_custom_command(OUTPUT ${BM_MITSUKI_LEVEL_PACK}
-    COMMAND bmcook --profile gba -o ${BM_MITSUKI_LEVEL_PACK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_MITSUKI_LEVEL_ASSETS}
-    DEPENDS bmcook ${BM_TEST_LEVEL_CART_ROOMS} ${BM_MITSUKI_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES}
-      ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_legs.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_legs_n.png
-      ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_torso.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_torso_n.png
-      ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_face.png
-    COMMENT "Cooking the test level with Mitsuki")
-  add_custom_target(mitsuki_level_pack ALL DEPENDS ${BM_MITSUKI_LEVEL_PACK})
   if(EMSCRIPTEN)
     # The game in the browser plays the test level, packed into the page's file system.
     target_compile_definitions(game PRIVATE "BM_GAME_DEFAULT_PACK=\"/blutmond/test_level.bmpk\"")

@@ -93,6 +93,8 @@ language fr "Français"
 "Language" = "Langue"
 "GBA colours" = "Teintes GBA"
 "PC colours" = "Teintes PC"
+"Character" = "Personnage"
+"Hero" = "Héros"
 
 # The moon bat (Vesper keeps her name)
 "Who wakes me under the blood moon?" = "Qui me réveille sous la lune de sang ?"

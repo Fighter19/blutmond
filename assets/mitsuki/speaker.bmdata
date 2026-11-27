@@ -1,0 +1,9 @@
+# Mitsuki in the dialogue box (structure Speaker in assets/test_room/data/dialogue.ms): her
+# name and portrait for the player's lines while she is the player (characters.bmdata).
+table Speaker
+
+record Mitsuki {
+  name = "Mitsuki"
+  portrait = "mitsuki_face"
+  voice = "voice_hero"
+}

@@ -3557,6 +3557,76 @@ static void testThePuddleMirrorsTheStreet(void)
   fclose(f);
 }
 
+// The playable characters (game.h, set_character; data/characters.bmdata): the System menu has
+// a row for the Character menu, which lists the characters whose figure the pack has;
+// choosing Mitsuki (assets/mitsuki, rendered in Blender) makes her figure the player's in
+// place: her sheets in sprite memory and the first banks instead of the player's, kept as an
+// option; the player's lines in the dialogue are hers then (her Character record's speaker),
+// the others' stay theirs. Figures that are not "player"/"player_<name>" are no characters.
+static void testChoosingACharacter(void)
+{
+  start();
+  frames(2, 0);
+  const int legs = sheetOf("player_legs"), mlegs = sheetOf("mitsuki_legs"), mtorso = sheetOf("mitsuki_torso");
+  TEST_ASSERT(legs >= 0 && mlegs >= 0 && mtorso >= 0 && s_game.playerSheet == legs && s_game.character == 0xFFFF);
+  TEST_ASSERT(bmGameCharacterCount(&s_game) == 2);
+  const uint16_t mitsuki = stringId("player_mitsuki"), hero = stringId("player");
+  TEST_ASSERT(bmGameHasCharacter(&s_game, mitsuki) && bmGameHasCharacter(&s_game, hero));
+  TEST_ASSERT(!bmGameHasCharacter(&s_game, stringId("mitsuki_legs")) && !bmGameSetCharacter(&s_game, stringId("mitsuki_legs")));
+
+  // The System menu (Start, down to below Map, A): below the languages and the colours the
+  // Character row; A there opens the Character menu, the one playing marked.
+  uint32_t errors = bm_script_errors;
+  press(BM_KEY_START);
+  for (int i = 0; i < 4; i++) press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 2 && uiShows("Character") && !uiShows("Mitsuki"));
+  const int rows = bmTextLanguageCount(&s_pack) + (s_game.colorCorrectable ? 1 : 0);
+  for (int i = 0; i < rows; i++) press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 3 && uiShows("Hero      *") && uiShows("Mitsuki"));
+  // Down to Mitsuki (the player's own is first), A.
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(bm_script_errors == errors && uiShows("Mitsuki   *") && !uiShows("Hero      *"));
+  TEST_ASSERT(s_game.playerSheet == mlegs && s_game.playerFigure.layerCount == 2 && s_game.playerFigure.nameId == mitsuki);
+  TEST_ASSERT(s_game.bankSheet[0] == mlegs && s_game.bankSheet[1] == mtorso);
+  TEST_ASSERT(s_game.sheetTile[mlegs] != BM_GAME_NO_TILES && s_game.sheetTile[mtorso] != BM_GAME_NO_TILES);
+  TEST_ASSERT(s_game.sheetTile[legs] == BM_GAME_NO_TILES);
+  press(BM_KEY_B);
+  press(BM_KEY_B);
+  press(BM_KEY_B);
+  TEST_ASSERT(s_game.screens.count == 0);
+  // She runs, her figure drawn from her sheets.
+  const int32_t x = s_game.player.x;
+  frames(30, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.player.x > x && s_game.playerAnim.anim == (uint8_t)s_game.playerAnims[BM_PLAYER_ANIM_RUN]);
+  // The first pieces in OAM are hers (the torso in front, then the legs), in banks 1 and 0.
+  const BmPpuState *ppu = bmHalHostGetPpu();
+  for (int i = 0; i < 2; i++)
+  {
+    const int sheet = (ppu->oam[4 * i + 2] >> 12) == 1 ? mtorso : mlegs;
+    const uint16_t tile = ppu->oam[4 * i + 2] & 0x3FF;
+    TEST_ASSERT(tile >= s_game.sheetTile[sheet] && tile < s_game.sheetTile[sheet] + s_game.sheets[sheet].tileCount);
+  }
+  // The player's line (the speaker Hero's) is said by her, Vesper's stays Vesper's.
+  bmGameSayLine(&s_game, keyOf("HeroAnswers"));
+  TEST_ASSERT(s_game.dialogueSpeaker == stringId("Mitsuki") && s_game.dialoguePortrait == stringId("mitsuki_face"));
+  bmGameSayLine(&s_game, keyOf("VesperWakes"));
+  TEST_ASSERT(s_game.dialogueSpeaker == stringId("Vesper") && s_game.dialoguePortrait == stringId("vesper_face"));
+  s_game.dialogue = 0;
+  // Kept as an option.
+  bmGameStart(&s_game, &s_pack, NULL);
+  TEST_ASSERT(s_game.character == mitsuki && s_game.playerSheet == mlegs);
+  // The player again, for the other tests.
+  TEST_ASSERT(bmGameSetCharacter(&s_game, hero) && s_game.playerSheet == legs && s_game.bankSheet[0] == legs);
+  bmGameSayLine(&s_game, keyOf("HeroAnswers"));
+  TEST_ASSERT(s_game.dialogueSpeaker == stringId("You") && s_game.dialoguePortrait == stringId("hero_face"));
+  s_game.dialogue = 0;
+  bmGameStart(&s_game, &s_pack, NULL);
+  TEST_ASSERT(s_game.playerSheet == legs);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -3598,6 +3668,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheStreetsBenchIsForResting);
   RUN_TEST(testPuddlesSplash);
   RUN_TEST(testColourCorrection);
+  RUN_TEST(testChoosingACharacter);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

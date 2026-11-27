@@ -2654,11 +2654,28 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     std::map<std::string, std::string> byLower;
     for (const auto &e : spriteMemory) byLower[lower(e.first)] = e.first;
     // The player's sprites stay in sprite memory, each in a bank of its own from bank 0: those
-    // of the figure "player", else the sprite "player".
-    std::vector<std::string> playerSprites = figureSprites.count("player") ? figureSprites["player"] : std::vector<std::string>{"player"};
-    int playerTiles = 0;
-    for (const std::string &n : playerSprites) playerTiles += spriteMemory.count(n) ? spriteMemory[n].first : 0;
-    const int freeTiles = 1024 - 12 - playerTiles, banks = 13 - int(playerSprites.size());
+    // of the figure "player", else the sprite "player". A pack with playable characters to
+    // choose from (figures "player_<name>", sprite-format.md "Figures") keeps room for the
+    // largest of them; no room draws any of their sprites.
+    std::vector<std::string> playerSprites;
+    int playerTiles = 0, playerBanks = 0;
+    auto playable = [](const std::string &n) { return n == "player" || n.rfind("player_", 0) == 0; };
+    for (const auto &[name, sprites] : figureSprites)
+    {
+      if (!playable(name)) continue;
+      int tiles = 0;
+      for (const std::string &n : sprites) tiles += spriteMemory.count(n) ? spriteMemory[n].first : 0;
+      playerTiles = std::max(playerTiles, tiles);
+      playerBanks = std::max(playerBanks, int(sprites.size()));
+      playerSprites.insert(playerSprites.end(), sprites.begin(), sprites.end());
+    }
+    if (playerSprites.empty())
+    {
+      playerSprites = {"player"};
+      playerTiles = spriteMemory.count("player") ? spriteMemory["player"].first : 0;
+      playerBanks = 1;
+    }
+    const int freeTiles = 1024 - 12 - playerTiles, banks = 13 - playerBanks;
     for (const RoomWork &r : rooms)
     {
       std::map<std::string, std::set<std::string>> used;   // sprite: palettes
