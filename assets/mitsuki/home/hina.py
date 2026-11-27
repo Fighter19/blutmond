@@ -225,10 +225,11 @@ def poses():
     # in the park's sprite an empty frame, its tiles saved for the close-up).
     out.append(pose(head=(-4, 0, -6), shoulder_R=(50, -22), elbow_R=115, hand_R=-10, tail_R=(0, -20), tail_L=(0, 20),
                     show=('body', 'portrait', 'phone') if PANIC else ()))
-    # 1, 2: hiding under the bench, crouched: only her eyes, glowing, then shut (a blink).
+    # 1, 2: hiding under the bench, crouched: only her eyes, glowing, then shut (a blink); low,
+    # in the dark under the seat (the park's bench: its seat 9 to 15 pixels up, the dark below).
     crouch = dict(spine=30, head=-30, hip_R=120, knee_R=-140, hip_L=110, knee_L=-140)
-    out.append(pose(root=(0, 0, -5.5), show=('eyes',), **crouch))
-    out.append(pose(root=(0, 0, -5.5), show=('blink',), **crouch))
+    out.append(pose(root=(0, 0, -13.5), show=('eyes',), **crouch))
+    out.append(pose(root=(0, 0, -13.5), show=('blink',), **crouch))
     # 3: out from under it in a leap, arms flung ahead.
     out.append(pose(root=(0, 0, 2.0), spine=-18, head=6, hip_R=40, knee_R=-60, hip_L=-30, knee_L=-70,
                     shoulder_R=(140, -20), elbow_R=10, shoulder_L=(130, 20), elbow_L=10, tail_R=(-30, -30), tail_L=(-30, 30)))

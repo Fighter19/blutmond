@@ -2,8 +2,8 @@
 <sprite version="1" image="hina.png" normal="hina_n.png">
  <hitbox x="-5" y="-28" w="10" h="28" />
  <frame x="0" y="0" w="1" h="1" ax="0" ay="0" />
- <frame x="1" y="0" w="6" h="5" ax="3" ay="17" />
- <frame x="7" y="0" w="5" h="3" ax="2" ay="16" />
+ <frame x="1" y="0" w="6" h="5" ax="3" ay="9" />
+ <frame x="7" y="0" w="5" h="3" ax="2" ay="8" />
  <frame x="12" y="0" w="19" h="29" ax="9" ay="29" />
  <frame x="31" y="0" w="14" h="29" ax="4" ay="25" />
  <frame x="45" y="0" w="14" h="29" ax="4" ay="25" />

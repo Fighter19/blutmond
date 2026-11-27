@@ -3830,11 +3830,12 @@ static void testMitsukisParkScene(void)
   const uint8_t first = s_game.sound.intensity;
   // West, until the scene takes her over.
   int f = 0, most = 0;
+  bool eyes = false;
   for (; f < 1200 && s_game.lockTimer == 0; f++)
   {
     frames(1, BM_KEY_LEFT);
     if (s_game.sound.intensity > most) most = s_game.sound.intensity;
-    if (BM_FIX_INT(s_game.player.x) == 240) shoot("park_eyes");
+    if (BM_FIX_INT(s_game.player.x) <= 240 && !eyes) eyes = true, shoot("park_eyes");
   }
   printf("    the music: intensity %d at the door, %d near the bench\n", first, most);
   TEST_ASSERT(s_game.lockTimer != 0 && most == 3 && first < most);
