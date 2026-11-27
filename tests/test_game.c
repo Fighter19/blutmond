@@ -4036,10 +4036,12 @@ static void testTheSearchAndTheSnow(void)
 }
 
 // The snowman in the snowy park (assets/mitsuki/snowman): once it snows he stands there, a
-// Christmas ball in his head. Up in front of him: Mitsuki doubts anyone built him tonight; Up
-// again: she grabs the ball, he holds on, grows and fights: snowballs rolling, a stomp with ice
-// shards, his frost breath, stopped by the blocks of ice. Beaten, a shadow leaves him and he is a
-// happy snowman (SnowmanDone).
+// Christmas ball in his forehead. Up in front of him: Mitsuki doubts anyone built him tonight; Up
+// again: she grabs the ball, he holds on, grows and fights: jumps at her (landing where she
+// stood), a ripple through the ground and a pillar of ice breaking out where she was, snowballs,
+// his frost beam (behind a pillar it does not reach her; in the open it strikes), and from half
+// his health icicles in a fixed rhythm. Beaten, a shadow leaves him and he is a happy snowman
+// (SnowmanDone).
 // A made object (spawn) of class `cls` playing the animation `anim` of its sheet, or -1.
 static int madePlaying(const char *cls, const char *anim)
 {
@@ -4053,6 +4055,13 @@ static int madePlaying(const char *cls, const char *anim)
     if (a >= 0 && s_game.actors.anim[i] == (uint8_t)a) return i;
   }
   return -1;
+}
+
+// The snowman's frost beam is out (any of its lengths).
+static bool frostBeam(void)
+{
+  return madePlaying("Frost", "beam1") >= 0 || madePlaying("Frost", "beam2") >= 0 || madePlaying("Frost", "beam3") >= 0 ||
+         madePlaying("Frost", "beam4") >= 0;
 }
 
 static void testTheSnowman(void)
@@ -4092,25 +4101,95 @@ static void testTheSnowman(void)
   TEST_ASSERT(lines == 2 && actorPlaying("Snowman", "grow") < 0);
   TEST_ASSERT(s_game.actors.health[man] == 30);
   shoot("snowman_fight");
-  // His attacks, in turn: snowballs, ice shards, the frost breath (its two, stopped by a block).
-  int ball = 0, shard = 0, breath = 0, block = 0, stopped = 0;
-  for (f = 0; f < 1200 && !(ball && shard && breath && stopped); f++)
+  // His attacks, in turn: a jump at her (he lands where she stood), the ripple and the pillar
+  // of ice it breaks out as, snowballs, his frost beam. She keeps behind the newest pillar
+  // (away from him): a beam while she is there does not strike her (it stops at the pillar).
+  int jumps = 0, aimed = 0, ripples = 0, pillars = 0, balls = 0, sheltered = 0, beams = 0;
+  bool wasJump = false;
+  int32_t aimX = 0, farX = 150;
+  int beamHurts = -1;
+  for (f = 0; f < 4000 && !(aimed && ripples && pillars && balls && sheltered); f++)
   {
-    // Out of the way, behind the west block (at 230), the snowman at 300.
-    bmBodyPlace(&s_game.player, 200, 128);
+    // She runs from his jumps (180 pixels, in the beam's reach); there she keeps behind the
+    // pillar farthest from him (it ends standing: rise).
+    const int32_t mx = BM_FIX_INT(s_game.actors.x[man]);
+    const int rise = bmSpriteSheetAnim(&s_game.sheets[s_game.actors.sheet[man]], &s_pack, "rise");
+    int pillar = -1;
+    for (uint8_t i = 0; i < s_game.actors.count; i++)
+      if (!s_game.actors.gone[i] && s_game.actors.object[i] == 0xFF && s_game.actors.anim[i] == (uint8_t)rise &&
+          (pillar < 0 || abs((int)(BM_FIX_INT(s_game.actors.x[i]) - mx)) > abs((int)(BM_FIX_INT(s_game.actors.x[pillar]) - mx))))
+        pillar = i;
+    int32_t px = farX;
+    if (pillar >= 0 && abs((int)(BM_FIX_INT(s_game.actors.x[pillar]) - mx)) > 60)
+    {
+      const int32_t at = BM_FIX_INT(s_game.actors.x[pillar]);
+      px = at + (at < mx ? -18 : 18);
+    }
+    bmBodyPlace(&s_game.player, px, 128);
     s_game.health = 30;
     frames(1, 0);
-    int breaths = 0;
-    ball += madePlaying("Frost", "roll") >= 0;
-    shard += madePlaying("Frost", "shard") >= 0;
-    block += madePlaying("Frost", "block") >= 0;
-    breaths = madePlaying("Frost", "frost") >= 0;
-    if (breaths) breath = 1;
-    if (breath && !breaths) stopped = 1;
-    if (breath && s_game.actors.x[man] > 0 && breaths) shoot("snowman_breath");
+    const bool jumping = actorPlaying("Snowman", "jump") == man;
+    if (jumping && !wasJump) jumps++, aimX = px < 40 ? 40 : px > 600 ? 600 : px, farX = aimX < 320 ? aimX + 180 : aimX - 180;
+    if (!jumping && wasJump && abs((int)(BM_FIX_INT(s_game.actors.x[man]) - aimX)) <= 4) aimed++;
+    wasJump = jumping;
+    ripples += madePlaying("Frost", "ripple") >= 0;
+    pillars += pillar >= 0;
+    balls += madePlaying("Frost", "roll") >= 0;
+    const bool beam = frostBeam();
+    // (A beam counts as sheltered from if it would reach her without the pillar: 20 + 256.)
+    if (beam && beamHurts == -1)
+      beamHurts = pillar >= 0 && abs((int)(BM_FIX_INT(s_game.player.x) - mx)) < 260 ? (int)s_game.hurts : -2, beams++;
+    if (!beam && beamHurts != -1)
+    {
+      if (beamHurts >= 0 && (int)s_game.hurts == beamHurts) sheltered = 1;
+      beamHurts = -1;
+    }
   }
-  printf("    his attacks: snowballs %d, shards %d, breath %d (stopped %d), blocks %d\n", ball > 0, shard > 0, breath, stopped, block > 0);
-  TEST_ASSERT(ball && shard && breath && stopped && block);
+  printf("    his attacks: jumps %d (landed where she stood %d), ripples %d, pillars %d, snowballs %d, beams %d (sheltered %d)\n",
+         jumps, aimed, ripples > 0, pillars > 0, balls > 0, beams, sheltered);
+  TEST_ASSERT(aimed && ripples && pillars && balls && sheltered);
+  // Caught in the open, between him and the pillar, the beam strikes her.
+  bool struck = false;
+  for (f = 0; f < 3000 && !struck; f++)
+  {
+    const int32_t mx = BM_FIX_INT(s_game.actors.x[man]);
+    const int d = mx > 320 ? -1 : 1;
+    bmBodyPlace(&s_game.player, mx + (actorPlaying("Snowman", "breath") == man ? 50 : 100) * d, 128);
+    s_game.health = 30;
+    const uint32_t hurts = s_game.hurts;
+    frames(1, 0);
+    struck = frostBeam() && s_game.hurts != hurts;
+  }
+  TEST_ASSERT(struck);
+  // From half his health on: icicles, fast, always in the same rhythm (16, 44, 16 frames apart).
+  s_game.actors.health[man] = 15;
+  int icicles = 0, last = -1, gaps[3] = {0, 0, 0};
+  bool wasIcicle[BM_ACTORS_MAX] = {false};
+  bool fast = false;
+  for (f = 0; f < 2000 && icicles < 4; f++)
+  {
+    bmBodyPlace(&s_game.player, 150, 128);
+    s_game.health = 30;
+    const int seen = madePlaying("Frost", "icicle");
+    const int32_t seenX = seen >= 0 ? s_game.actors.x[seen] : 0;
+    frames(1, 0);
+    if (seen >= 0 && !s_game.actors.gone[seen] && s_game.actors.x[seen] != seenX)
+      fast = fast || abs((int)(s_game.actors.x[seen] - seenX)) == (int)BM_FIX(4.5);
+    // A new icicle: a slot that holds one now and did not the frame before.
+    for (uint8_t i = 0; i < s_game.actors.count && i < BM_ACTORS_MAX; i++)
+    {
+      const bool is = !s_game.actors.gone[i] && s_game.actors.object[i] == 0xFF && s_game.actors.sheet[i] >= 0 &&
+                      s_game.actors.anim[i] == (uint8_t)bmSpriteSheetAnim(&s_game.sheets[s_game.actors.sheet[i]], &s_pack, "icicle");
+      if (is && !wasIcicle[i])
+      {
+        if (last >= 0 && icicles <= 3) gaps[icicles - 1] = f - last;
+        last = f, icicles++;
+      }
+      wasIcicle[i] = is;
+    }
+  }
+  printf("    icicles: %d, %d, %d frames apart, fast %d\n", gaps[0], gaps[1], gaps[2], fast);
+  TEST_ASSERT(icicles == 4 && gaps[0] == 16 && gaps[1] == 44 && gaps[2] == 16 && fast);
   // Beaten (the katana's last strike): the shadow, a happy snowman.
   const uint32_t katana = keyOf("Katana");
   bmInventoryGive(&s_game.inventory, katana, 1);

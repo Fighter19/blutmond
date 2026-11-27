@@ -1,55 +1,103 @@
 # The kinds of the snowman's fight's things (structure Thing in things.ms; frost.ms).
 table Thing
 
+# (Lives are short: the park has 4 places for the fight's things, its own objects the others:
+# two pillars, two icicles or the beam's two parts, a snowball or two.)
 record FrostBall {
   does = Roll
   dx = 16
   speed = 1.6
-  life = 420
+  life = 240
   damage = 2
 }
 
-record FrostShardLeft {
-  does = Shard
-  dx = -30
-  life = 50
+# The ripple his stomp sends through the ground, to where Mitsuki stood: there a pillar of ice
+# breaks out and stands (frost.ms STANDS; life: at most, its way and that).
+record FrostRipple {
+  does = Ripple
+  speed = 2.8
+  life = 560
   damage = 2
 }
 
-record FrostShardRight {
-  does = Shard
-  dx = 30
-  life = 50
+# (Gone after 250 pixels, about a screen: two at most in the air, snowman.ms Icicles.)
+record FrostIcicle {
+  does = Icicle
+  dx = 22
+  dy = -6
+  speed = 4.5
+  life = 56
   damage = 2
 }
 
-record FrostBreathLow {
-  does = Breath
-  dx = 18
-  speed = 2.4
-  life = 300
+# The frost beam: from where his breath meets the ground (dx), 1 to 4 pieces; a longer one has a
+# far part beyond it (dx + 121), which waits for the near one to have grown.
+record FrostBeam1 {
+  does = Beam
+  dx = 20
+  life = 96
   damage = 3
+  length = 1
 }
 
-record FrostBreathHigh {
-  does = Breath
-  dx = 18
-  dy = -14
-  speed = 2.4
-  life = 300
+record FrostBeam2 {
+  does = Beam
+  dx = 20
+  life = 96
   damage = 3
+  length = 2
 }
 
-record FrostBlockWest {
-  does = Block
-  dx = -70
-  damage = 0
+record FrostBeam3 {
+  does = Beam
+  dx = 20
+  life = 96
+  damage = 3
+  length = 3
 }
 
-record FrostBlockEast {
-  does = Block
-  dx = 120
-  damage = 0
+record FrostBeam4 {
+  does = Beam
+  dx = 20
+  life = 96
+  damage = 3
+  length = 4
+}
+
+record FrostBeamFar1 {
+  does = Beam
+  dx = 141
+  life = 96
+  damage = 3
+  length = 1
+  delay = 12
+}
+
+record FrostBeamFar2 {
+  does = Beam
+  dx = 141
+  life = 96
+  damage = 3
+  length = 2
+  delay = 12
+}
+
+record FrostBeamFar3 {
+  does = Beam
+  dx = 141
+  life = 96
+  damage = 3
+  length = 3
+  delay = 12
+}
+
+record FrostBeamFar4 {
+  does = Beam
+  dx = 141
+  life = 96
+  damage = 3
+  length = 4
+  delay = 12
 }
 
 record FrostShade {

@@ -844,6 +844,7 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_set_glow:
   case BM_SCRIPT_API_draw_in_front:
   case BM_SCRIPT_API_set_snow:
+  case BM_SCRIPT_API_set_scale:
     *result = bmGameStoryCall(g, i, api, args);
     break;
   case BM_SCRIPT_API_layer_track:
@@ -1555,9 +1556,9 @@ uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam, bool front)
                                                       (uint8_t)(maxOam - used)));
       }
     }
-    used = (uint8_t)(used + bmSpriteSheetDrawBank(s, frame, BM_FIX_INT(a->x[i]) - g->room.cameraX, BM_FIX_INT(a->y[i]) - g->room.cameraY,
-                                                  a->facing[i] < 0, 1, flash ? BM_HITS_FLASH_BANK : (uint8_t)bank, (uint8_t)(firstOam + used),
-                                                  (uint8_t)(maxOam - used)));
+    // (As it is, or larger: set_scale, story.c.)
+    used = (uint8_t)(used + bmGameDrawActor(g, i, frame, flash ? BM_HITS_FLASH_BANK : (uint8_t)bank, (uint8_t)(firstOam + used),
+                                            (uint8_t)(maxOam - used)));
     // Over a puddle (reflect.h): mirrored in it as the player is, behind the room's main layer.
     int32_t ax = BM_FIX_INT(a->x[i]), surface;
     uint8_t squash;

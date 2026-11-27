@@ -292,22 +292,40 @@ room by the property `Search.Room`):
 ### The snowman (`assets/mitsuki/snowman`)
 
 Back in the snowy park a snowman stands by the path (`snowman.py`: three balls of snow, coal
-eyes, stick arms, a red scarf, and where his nose would be a Christmas ball, dark glass glowing
-from inside). Up beside him the first time: "Who builds a snowman in the middle of the night?"
-The second time she grabs the ball; he holds on, grows by a third and fights (`snowman.ms`,
-health 30, the music `frost_waltz`):
+eyes, a carrot nose, stick arms, a red scarf, and set into his forehead a Christmas ball: red
+glass with a shine, a golden cap and hook, glowing from inside). Up beside him the first time:
+"Who builds a snowman in the middle of the night?" The second time she grabs the ball; he holds
+on, grows to 155 % and fights (`snowman.ms`, health 30, the music `frost_waltz`):
 
 | Attack | |
 |---|---|
+| A stomp | he jumps at her, landing where she stood (striking in the air); a ripple runs through the ground to where she is, and a pillar of ice breaks out there. The ripple and the pillar breaking out strike |
 | Snowballs | rolled along the ground: jump over them |
-| Stomps | he jumps and lands; ice shards burst up from the ground beside him |
-| Frost breath | a beam along the ground or higher; two blocks of ice (spawned when the fight starts) stop it: hide behind one |
+| Frost breath | once his newest pillar is out, he draws breath and a beam grows out along the ground; it stops at the nearest pillar in front of him: stand behind one |
+| Icicles | from half his health on, instead of the snowballs: fast, at her knees, always two close, a pause, two close |
 
-Beaten, a shadow leaves him and he is a happy snowman again (`SnowmanDone`, saved). His fight's
-things are frames of his own sprite (frames 7 to 15), and one class, `Frost`, does each by its
-record (`things.ms`, `things.bmdata`: what it does, its speed, life and damage): the pack's 48
-classes. The park's nightmare, the hands and the blocks are spawned, not placed: a room has
-at most 8 actors, and spawned ones do not reuse a placed one's slot.
+Beaten, a shadow leaves him and he is a happy snowman again (`SnowmanDone`, saved).
+
+How it fits:
+
+- **Grown by the PPU**: all his frames are rendered at one size; grown, the engine draws him at
+  155 % (`set_scale`, runtime-core.md: affine sprites). The grown frames' boxes are made as
+  large in the sheet (`snowman_sheet.py`), so the hits need nothing.
+- **One sheet**: the pack has its 28 sprites, so his fight's things are frames of his sheet
+  (the snowball, the ripple, the pillar rising and standing, an icicle, the shadow, the beam).
+  229 tiles: in the park, besides Mitsuki's figure and the doors' sheet, 287 are left.
+- **The beam**: four lengths of 32 pixels each, one tile row high (two rows would be covered
+  with 64 x 32 pieces, half empty), its middle one column repeated, so its pieces are shared; a
+  beam longer than 128 pixels (a frame's most) is two, the far one beyond the near one.
+- **One class**: `Frost` does each thing by its record (`things.ms`, `things.bmdata`): the
+  pack's 48 classes. The snowman reckons where the pillars are (the ripple goes where she stands,
+  the same reckoning as his) and when they are out, and stops the beam there.
+- **Four places**: the park's own objects (Hina, the snowman, two doors) take four of the eight,
+  so the things live short: at most two pillars (each stands 300 frames), the beam's two parts,
+  two icicles in the air (they fly about a screen), a snowball or two.
+- **Hits**: a hit holds while the animation it was armed in plays (hits.h), so each is armed
+  right after its animation starts (the jump, the breath, each length of the beam, the pillar
+  rising).
 
 ## 4. Open
 

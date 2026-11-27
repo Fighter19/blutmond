@@ -18,6 +18,10 @@
 
 #include <string.h>
 
+// Objects drawn larger (set_scale): percent, 0 as they are; cleared as a room is entered.
+static uint8_t s_scale[BM_ACTORS_MAX] BM_EWRAM_BSS;
+#define SCALE_MATRIX 28   // the affine matrix of the one drawn larger (reflect.h has 30 and 31)
+
 int32_t bmGameStoryCall(BmGame *g, uint8_t current, uint32_t api, const int32_t *args)
 {
   if (api == BM_SCRIPT_API_set_light)
@@ -28,6 +32,11 @@ int32_t bmGameStoryCall(BmGame *g, uint8_t current, uint32_t api, const int32_t 
   if (api == BM_SCRIPT_API_set_glow)
   {
     bmLightGlow(g, args[0]);
+    return 0;
+  }
+  if (api == BM_SCRIPT_API_set_scale)
+  {
+    if (current < BM_ACTORS_MAX) s_scale[current] = (uint8_t)(args[0] <= 100 ? 0 : args[0] > 200 ? 200 : args[0]);
     return 0;
   }
   if (api == BM_SCRIPT_API_set_snow)
@@ -276,8 +285,24 @@ uint8_t bmGameDrawSnow(BmGame *g, uint8_t first, uint8_t max)
 // door; one left behind (the player carried out of its room) ends with the room.
 void bmGameSceneFrame(BmGame *g, bool roomLeft)
 {
+  if (roomLeft) memset(s_scale, 0, sizeof(s_scale));
   if (g->lockTimer == 0) g->sceneLock = false;
   if (!g->sceneLock) return;
   if (roomLeft) g->lockTimer = 0, g->sceneLock = false;
   else if (g->hurtTimer < 2) g->hurtTimer = 2;
+}
+
+uint8_t bmGameDrawActor(BmGame *g, uint8_t i, uint16_t frame, uint8_t bank, uint8_t firstOam, uint8_t maxOam)
+{
+  const BmActors *a = &g->actors;
+  BmSpriteSheet *s = &g->sheets[a->sheet[i]];
+  int32_t x = BM_FIX_INT(a->x[i]) - g->room.cameraX, y = BM_FIX_INT(a->y[i]) - g->room.cameraY;
+  if (s_scale[i] == 0) return bmSpriteSheetDrawBank(s, frame, x, y, a->facing[i] < 0, 1, bank, firstOam, maxOam);
+  // Larger about the anchor: the sheared draw (its pieces in the sheet's bank: this one's for it).
+  int32_t k = s_scale[i] * 256 / 100;
+  uint8_t own = s->bank;
+  s->bank = bank;
+  uint8_t used = bmSpriteSheetDrawSheared(s, frame, x, y, a->facing[i] < 0 ? -k : k, 0, k, SCALE_MATRIX, 1, firstOam, maxOam);
+  s->bank = own;
+  return used;
 }

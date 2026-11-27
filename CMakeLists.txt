@@ -365,7 +365,7 @@ if(BM_PLATFORM STREQUAL "gba")
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES}
     COMMENT "Cooking the test level for the cartridge game")
   # For the multiboot images, which share 256 KB with the engine: the same level with the debug
-  # rooms, the boss hall (with the boss's sprites, music, voice, hit sound and fanfare, and the
+  # rooms (and the teleport sound only the debug lobby uses), the boss hall (with the boss's sprites, music, voice, hit sound and fanfare, and the
   # hero's face and voice, whose only line is said there), the Hall of Abilities behind it,
   # the Guard Room (with its knight and the Iron Bat's armour)
   # and the translations and the save game's history (MIGR: for loading a save of an earlier
@@ -377,7 +377,7 @@ if(BM_PLATFORM STREQUAL "gba")
     --absent-asset vesper --absent-asset moon_bat --absent-asset vesper_face --absent-asset voice_vesper
     --absent-asset hero_face --absent-asset voice_hero --absent-asset fanfare --absent-asset hit_moon
     --absent-asset fireball --absent-room guard_room --absent-asset knight --absent-asset bat_armour --absent-asset clang
-    --absent-asset torch --absent-asset night_escape --absent-asset splash
+    --absent-asset torch --absent-asset night_escape --absent-asset splash --absent-asset teleport
     --absent-kind LANG --absent-kind MIGR)
   # The torch halls (docs/plans/lighting.md), the rural street and Mitsuki's home (her prologue)
   # are not in it at all, not even

@@ -452,6 +452,10 @@ uint8_t bmGameDrawSnow(BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
 /// `roomLeft` as a room is entered, which ends it; story.c.
 void bmGameSceneFrame(BmGame *pGame, bool roomLeft);
 
+/// Draws object `i` (frame `frame`, palette bank `bank`) from OAM entry `firstOam`, at most
+/// `maxOam`, as it is or larger (set_scale; story.c). Returns the entries used.
+uint8_t bmGameDrawActor(BmGame *pGame, uint8_t i, uint16_t frame, uint8_t bank, uint8_t firstOam, uint8_t maxOam);
+
 /// A colour (BGR555) under snow, `level` 0 (as it is) to 4 (story.c; the light shades the
 /// room's colours with it).
 uint16_t bmGameSnowColour(uint8_t level, uint16_t colour);
