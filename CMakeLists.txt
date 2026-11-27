@@ -228,7 +228,15 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/search.ms
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/lines.bmdata
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/lang/de.bmlang
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/lang/fr.bmlang)
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/lang/fr.bmlang
+  # The snowman in the snowy park: the boss, his snowballs, ice shards, frost breath, the blocks
+  # of ice, the shadow (assets/mitsuki/snowman; his sprite from assets/mitsuki/park/snowman.py).
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/snowman/snowman.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/snowman/things.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/snowman/things.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/snowman/frost.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/sources/snowman.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/frost_waltz.bmsong)
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
@@ -387,6 +395,15 @@ if(BM_PLATFORM STREQUAL "gba")
     COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_MB_ROOMS} ${BM_TEST_LEVEL_MB_ASSETS}
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES}
     COMMENT "Cooking the test level for multiboot")
+  # The pack the link tests send to a multiboot GBA (and game_send sends it, booting the other
+  # GBA): the level as the multiboot images have it, but whole (no absent entries): without the
+  # rural street and Mitsuki's story, which a multiboot image cannot run (light_off.c,
+  # story_off.c), the full game no longer fits a multiboot GBA's room for content when fitted.
+  set(BM_TEST_LEVEL_LINK_PACK ${CMAKE_BINARY_DIR}/test_level_link_gba.bmpk)
+  add_custom_command(OUTPUT ${BM_TEST_LEVEL_LINK_PACK}
+    COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_LINK_PACK} ${BM_TEST_LEVEL_MB_ROOMS} ${BM_TEST_LEVEL_MB_ASSETS}
+    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png
+    COMMENT "Cooking the test level for the link tests")
   # The same level with the scripts also compiled to native code (mondskript.md section 12).
   set(BM_TEST_LEVEL_NATIVE_PACK ${CMAKE_BINARY_DIR}/test_level_native_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_NATIVE_PACK}
@@ -397,7 +414,8 @@ if(BM_PLATFORM STREQUAL "gba")
       ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES} ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
       ${PROJECT_SOURCE_DIR}/tools/mondskript/aot.cpp ${PROJECT_SOURCE_DIR}/tools/cooker/native_module.cpp
     COMMENT "Cooking the test level with native scripts")
-  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_GAME_CART_PACK} ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
+  add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_GAME_CART_PACK} ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_NATIVE_PACK}
+    ${BM_TEST_LEVEL_LINK_PACK})
 
   # The game, played with the buttons, and the same with the autopilot (for tests and demos).
   # embed_pack.S is compiled per target with that target's BM_PACK_PATH.
@@ -452,7 +470,10 @@ if(BM_PLATFORM STREQUAL "gba")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${CMAKE_BINARY_DIR}/no_pack.bmpk\"")
       elseif(target MATCHES "_mb$")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_MB_PACK}\"")
-      elseif(variant STREQUAL "game" OR variant STREQUAL "game_send")
+      elseif(variant STREQUAL "game_send")
+        # What it sends to the other GBA must fit a multiboot GBA: the link tests' pack.
+        target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_LINK_PACK}\"")
+      elseif(variant STREQUAL "game")
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_GAME_CART_PACK}\"")
       else()
         target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_LEVEL_PACK}\"")
@@ -485,7 +506,7 @@ if(BM_PLATFORM STREQUAL "gba")
   # The embedded pack is pulled in by the assembler, which the build system cannot see: every
   # image that embeds one is assembled again when either pack changes.
   set_source_files_properties(${PROJECT_SOURCE_DIR}/src/hal/gba/embed_pack.S PROPERTIES
-    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK};${BM_GAME_CART_PACK};${BM_TEST_LEVEL_MB_PACK};${BM_TEST_LEVEL_NATIVE_PACK};${BM_SCRIPT_BENCH_PACK}")
+    OBJECT_DEPENDS "${BM_TEST_ROOM_PACK};${BM_TEST_LEVEL_PACK};${BM_GAME_CART_PACK};${BM_TEST_LEVEL_MB_PACK};${BM_TEST_LEVEL_NATIVE_PACK};${BM_SCRIPT_BENCH_PACK};${BM_TEST_LEVEL_LINK_PACK}")
   foreach(target ${BM_GBA_TARGETS})
     add_dependencies(${target} test_room_pack)
     target_compile_definitions(${target} PRIVATE "BM_PACK_PATH=\"${BM_TEST_ROOM_PACK}\"")
@@ -828,6 +849,16 @@ if(BM_PLATFORM STREQUAL "host")
   add_test(NAME cook_test_level_cart_variant
     COMMAND bmcook --profile gba -o ${cooked}/test_level_cart_variant_gba.bmpk ${cooked}/room_variant.tmx ${cart_variant_rooms} ${BM_TEST_LEVEL_ASSETS})
   set_tests_properties(cook_test_level_cart_variant PROPERTIES FIXTURES_REQUIRED room_variant_tmx FIXTURES_SETUP test_level_cart_variant)
+  # The link tests' pack (BM_TEST_LEVEL_LINK_PACK) with the same changed tile.
+  # (The same lists as BM_TEST_LEVEL_MB_ROOMS and _ASSETS, which only the GBA build sets.)
+  set(link_variant_rooms ${BM_TEST_LEVEL_ROOMS})
+  list(FILTER link_variant_rooms EXCLUDE REGEX "torch_hall|rural_street|mitsuki_home|park|riverside|shrine_path")
+  list(REMOVE_ITEM link_variant_rooms ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx)
+  set(link_variant_assets ${BM_TEST_LEVEL_ASSETS})
+  list(FILTER link_variant_assets EXCLUDE REGEX "scripts/(threat|bench)\\.ms$|assets/mitsuki/|characters\\.(ms|bmdata)$|character_menu\\.ms$")
+  add_test(NAME cook_test_level_link_variant
+    COMMAND bmcook --profile gba -o ${cooked}/test_level_link_variant_gba.bmpk ${cooked}/room_variant.tmx ${link_variant_rooms} ${link_variant_assets})
+  set_tests_properties(cook_test_level_link_variant PROPERTIES FIXTURES_REQUIRED room_variant_tmx FIXTURES_SETUP test_level_link_variant)
   add_executable(test_live tests/test_live.c apps/game/autopilot.c apps/game/game_live.c)
   target_link_libraries(test_live PRIVATE blutmond bm_link_host)
   target_include_directories(test_live PRIVATE apps/game)
@@ -1120,11 +1151,13 @@ if(BM_PLATFORM STREQUAL "host")
       # The receiving GBA also carries the sender's inventory afterwards (the coin and the Short
       # Sword the autopilot took in the first room): bm_game_stats+92 counts the kinds of things
       # carried, +96 is the CRC of the inventory's keys and amounts.
+      # (game_send carries the link tests' pack, the cartridge game the full one: the content goes
+      # first, flag 4, then the state: two applied.)
       add_test(NAME gba_to_gba_state
         COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/game.gba --frames 1500 --until a ${send}+24=1000
-          --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=0 --check a ${send}+8=0 --check a ${send}+12=1
+          --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=4 --check a ${send}+8=0 --check a ${send}+12=1
           --check a ${send}+64 --check a ${send}+68
-          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+28=1
+          --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+28=2
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+92=2
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+96=2982369528)
       # (1800 frames were enough until the park came into the test level: about 1950 now.)
@@ -1195,7 +1228,7 @@ if(BM_PLATFORM STREQUAL "host")
       # A room's light (LITE) is its own: the cartridge game's pack, fitted for a multiboot GBA,
       # leaves out the light of the rooms it leaves out (else their tables would not fit).
       add_test(NAME light_fit_mb
-        COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game_mb.gba run 60 push ${BM_GBA_BUILD_DIR}/test_level_cart_gba.bmpk restart run 30)
+        COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game_mb.gba run 60 push ${BM_GBA_BUILD_DIR}/test_level_link_gba.bmpk restart run 30)
       set_tests_properties(light_fit_mb PROPERTIES PASS_REGULAR_EXPRESSION "restart: ok")
       add_test(NAME live_mgba_hot_changes_one_tile
         COMMAND ${compare} ${out}/live_before.ppm ${out}/live_after.ppm --changed-in 0 0 15 15
@@ -1217,7 +1250,7 @@ if(BM_PLATFORM STREQUAL "host")
       set(elf ${BM_GBA_BUILD_DIR}/game_runtime_mb.elf)
       add_test(NAME live_mgba_runtime_image
         COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game_runtime_mb.gba run 40 screenshot ${out}/runtime_waiting.ppm
-          push ${cooked}/test_level_gba.bmpk restart run 60 screenshot ${out}/runtime_running.ppm
+          push ${BM_GBA_BUILD_DIR}/test_level_link_gba.bmpk restart run 60 screenshot ${out}/runtime_running.ppm
           check ${elf}:bm_game_stats+28=1 check ${elf}:bm_game_stats+8=0 stats)
       set_tests_properties(live_mgba_runtime_image PROPERTIES FIXTURES_REQUIRED test_level_pack)
       foreach(image game_autoplay game_autoplay_mb)
@@ -1233,12 +1266,12 @@ if(BM_PLATFORM STREQUAL "host")
         endif()
         add_test(NAME live_mgba_bit_errors_${image}
           COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/${image}.gba --errors 2000 2000 run 30 hello
-            push ${cooked}/${level}_variant_gba.bmpk hot
+            push ${cooked}/${level}_link_variant_gba.bmpk hot
             state-get ${out}/live_${image}.bmst run 30 state-put ${out}/live_${image}.bmst
-            push ${cooked}/${level}_gba.bmpk restart:test_room
-            push ${cooked}/${level}_variant_gba.bmpk hot run 1500
+            push ${BM_GBA_BUILD_DIR}/${level}_link_gba.bmpk restart:test_room
+            push ${cooked}/${level}_link_variant_gba.bmpk hot run 1500
             check ${elf}:bm_game_stats+28=4 check ${elf}:bm_game_stats+8=0 check ${elf}:bm_game_stats+12=${rooms} stats)
-        set_tests_properties(live_mgba_bit_errors_${image} PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_variant")
+        set_tests_properties(live_mgba_bit_errors_${image} PROPERTIES FIXTURES_REQUIRED "test_level_pack;test_level_link_variant")
       endforeach()
 
       # Rooms on demand (runtime-abi.md §0): the multiboot autoplay walks into the boss hall's
@@ -1247,7 +1280,7 @@ if(BM_PLATFORM STREQUAL "host")
       set(elf ${BM_GBA_BUILD_DIR}/game_autoplay_mb.elf)
       add_test(NAME live_mgba_room_on_demand
         COMMAND bmlink --mgba ${BM_GBA_BUILD_DIR}/game_autoplay_mb.gba run 1400 screenshot ${out}/room_wait.ppm
-          check ${elf}:bm_game_stats+12=1 serve ${cooked}/test_level_gba.bmpk 1 100 run 200 screenshot ${out}/room_came.ppm
+          check ${elf}:bm_game_stats+12=1 serve ${BM_GBA_BUILD_DIR}/test_level_link_gba.bmpk 1 100 run 200 screenshot ${out}/room_came.ppm
           check ${elf}:bm_game_stats+12=2 check ${elf}:bm_game_stats+8=0)
       set_tests_properties(live_mgba_room_on_demand PROPERTIES FIXTURES_REQUIRED test_level_pack)
 

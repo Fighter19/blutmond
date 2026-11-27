@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="snowman.png" normal="snowman_n.png">
+ <hitbox x="-10" y="-42" w="20" h="42" />
+ <frame x="0" y="0" w="27" h="34" ax="12" ay="31" />
+ <frame x="27" y="0" w="18" h="34" ax="9" ay="31" />
+ <frame x="45" y="0" w="36" h="44" ax="16" ay="41" />
+ <frame x="81" y="0" w="39" h="44" ax="20" ay="41" />
+ <frame x="120" y="0" w="27" h="44" ax="12" ay="51" />
+ <frame x="147" y="0" w="37" h="44" ax="17" ay="41" />
+ <frame x="184" y="0" w="27" h="34" ax="12" ay="31" />
+ <frame x="211" y="0" w="12" h="12" ax="6" ay="9">
+  <box kind="hit" name="ice" x="-6" y="-11" w="12" h="12" />
+ </frame>
+ <frame x="223" y="0" w="12" h="14" ax="6" ay="9">
+  <box kind="hit" name="ice" x="-6" y="-11" w="12" h="12" />
+ </frame>
+ <frame x="235" y="0" w="10" h="9" ax="5" ay="4">
+  <box kind="hit" name="ice" x="-5" y="-6" w="10" h="9" />
+ </frame>
+ <frame x="245" y="0" w="10" h="15" ax="5" ay="9">
+  <box kind="hit" name="ice" x="-5" y="-11" w="10" h="15" />
+ </frame>
+ <frame x="0" y="44" w="18" h="9" ax="9" ay="10">
+  <box kind="hit" name="frost" x="-9" y="-12" w="18" h="9" />
+ </frame>
+ <frame x="18" y="44" w="19" h="10" ax="10" ay="11">
+  <box kind="hit" name="frost" x="-10" y="-13" w="19" h="10" />
+ </frame>
+ <frame x="37" y="44" w="16" h="35" ax="8" ay="31" />
+ <frame x="53" y="44" w="12" h="23" ax="6" ay="21" />
+ <frame x="65" y="44" w="12" h="24" ax="6" ay="21" />
+ <animation name="still" loop="1">
+  <step frame="0" duration="60" />
+ </animation>
+ <animation name="hold" loop="1">
+  <step frame="1" duration="60" />
+ </animation>
+ <animation name="grow" loop="0">
+  <step frame="1" duration="10" />
+  <step frame="2" duration="10" />
+  <step frame="1" duration="8" />
+  <step frame="2" duration="8" />
+  <step frame="1" duration="6" />
+  <step frame="2" duration="60" />
+ </animation>
+ <animation name="idle" loop="1">
+  <step frame="2" duration="60" />
+ </animation>
+ <animation name="throw" loop="1">
+  <step frame="3" duration="60" />
+ </animation>
+ <animation name="jump" loop="1">
+  <step frame="4" duration="60" />
+ </animation>
+ <animation name="land" loop="1">
+  <step frame="2" duration="60" />
+ </animation>
+ <animation name="breath" loop="1">
+  <step frame="5" duration="60" />
+ </animation>
+ <animation name="happy" loop="1">
+  <step frame="6" duration="60" />
+ </animation>
+ <animation name="roll" loop="1">
+  <step frame="7" duration="6" />
+  <step frame="8" duration="6" />
+ </animation>
+ <animation name="shard" loop="0">
+  <step frame="9" duration="6" />
+  <step frame="10" duration="60" />
+ </animation>
+ <animation name="frost" loop="1">
+  <step frame="11" duration="4" />
+  <step frame="12" duration="4" />
+ </animation>
+ <animation name="block" loop="1">
+  <step frame="13" duration="60" />
+ </animation>
+ <animation name="shade" loop="1">
+  <step frame="14" duration="8" />
+  <step frame="15" duration="8" />
+ </animation>
+</sprite>

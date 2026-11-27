@@ -18,6 +18,8 @@ a left hand breaking the chords in eighths and a soft sine bass, a sine pad ente
 second half. F C Dm Bb, F Am Bb C, Dm Bb F C, Gm Bb C F. Sines and triangles only, at most 5
 voices.
 
+frost_waltz.bmsong: the snowman's fight, a dark waltz in D minor (frost_waltz's docstring).
+
 hush.bmsong: the nightmare's hush: a breath of noise swelling and falling, with a low sine
 sinking under it (a sound effect).
 
@@ -138,6 +140,54 @@ def park_reunion():
     return s
 
 
+def frost_waltz():
+    """The snowman's fight: a dark waltz in D minor at 132 (3/4), 16 bars that loop, in layers:
+    0 always a bass on the downbeat and a low sine pad; 1 and up the waltz's chords on two and
+    three (a plucked triangle); 2 and up the melody (a pulse, ringing); 3 (enraged: below half
+    his health) high bells doubling it an octave up. At most 7 voices."""
+    beat = BEAT
+    bar = 3 * beat
+    bars = 16
+    s = ET.Element("song", {"version": "1", "bpm": "132", "length": str(bars * bar), "loop": "0", "effect": "0",
+                            "echo": "150", "echo-feedback": "110", "intensity": "2", "fade": "60"})
+    for lid, name, lo in ((0, "always", 0), (1, "waltz", 1), (2, "melody", 2), (3, "bells", 3)):
+        ET.SubElement(s, "layer", {"id": str(lid), "name": name, "from": str(lo), "until": "15"})
+    instruments = [
+        ("bass", {"wave": "triangle", "attack": "0", "decay": "30", "sustain": "90", "release": "10", "volume": "160", "pan": "0", "layer": "0"}),
+        ("pad", {"wave": "sine", "attack": "40", "decay": "0", "sustain": "160", "release": "30", "volume": "50", "pan": "-10", "layer": "0"}),
+        ("chord", {"wave": "triangle", "attack": "0", "decay": "10", "sustain": "40", "release": "6", "volume": "60", "pan": "12", "layer": "1"}),
+        ("lead", {"wave": "pulse25", "attack": "0", "decay": "30", "sustain": "90", "release": "12", "volume": "70", "pan": "-6", "layer": "2"}),
+        ("bells", {"wave": "sine", "attack": "0", "decay": "24", "sustain": "0", "release": "16", "volume": "70", "pan": "20", "layer": "3"}),
+    ]
+    for name, attrs in instruments:
+        ET.SubElement(s, "instrument", dict({"name": name}, **attrs))
+    # Dm Dm Gm A, Dm Bb Gm A, F C Dm A, Bb Gm A Dm.
+    chords = {"Dm": (38, (50, 53, 57)), "Gm": (43, (55, 58, 62)), "A": (45, (49, 52, 57)), "Bb": (46, (50, 53, 58)),
+              "F": (41, (53, 57, 60)), "C": (48, (52, 55, 60))}
+    progression = ["Dm", "Dm", "Gm", "A", "Dm", "Bb", "Gm", "A", "F", "C", "Dm", "A", "Bb", "Gm", "A", "Dm"]
+    melody = [
+        [(0, 74, 2), (2, 77, 1)], [(0, 76, 1), (1, 74, 1), (2, 73, 1)], [(0, 74, 2), (2, 70, 1)], [(0, 73, 3)],
+        [(0, 69, 1), (1, 74, 1), (2, 77, 1)], [(0, 81, 2), (2, 79, 1)], [(0, 77, 1), (1, 76, 1), (2, 74, 1)], [(0, 76, 3)],
+        [(0, 77, 2), (2, 79, 1)], [(0, 81, 1), (1, 79, 1), (2, 76, 1)], [(0, 77, 2), (2, 74, 1)], [(0, 73, 3)],
+        [(0, 74, 1), (1, 77, 1), (2, 82, 1)], [(0, 81, 2), (2, 79, 1)], [(0, 76, 1), (1, 73, 1), (2, 69, 1)], [(0, 74, 3)],
+    ]
+    notes = {name: [] for name, _ in instruments}
+    for b, ch in enumerate(progression):
+        t0 = b * bar
+        root, (r, third, fifth) = chords[ch]
+        notes["bass"].append((t0, root, beat - 4, 100))
+        if b % 2 == 0:
+            notes["pad"].append((t0, third, 2 * bar - 10, 80))
+        for k in (1, 2):
+            for key in (r, third, fifth):
+                notes["chord"].append((t0 + k * beat, key, beat // 2, 70))
+        for t, key, length in melody[b]:
+            notes["lead"].append((t0 + t * beat, key, length * beat - 6, 96 if t == 0 else 84))
+            notes["bells"].append((t0 + t * beat, key + 12, 10, 80))
+    tracks(s, instruments, notes)
+    return s
+
+
 def hush():
     s = ET.Element("song", {"version": "1", "bpm": "120", "length": str(2 * 4 * BEAT), "loop": "-1", "effect": "1",
                             "echo": "160", "echo-feedback": "60"})
@@ -155,7 +205,8 @@ def hush():
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "assets", "mitsuki", "park")
     os.makedirs(out, exist_ok=True)
-    for name, song in (("park_dread", park_dread()), ("park_reunion", park_reunion()), ("hush", hush())):
+    for name, song in (("park_dread", park_dread()), ("park_reunion", park_reunion()), ("hush", hush()),
+                       ("frost_waltz", frost_waltz())):
         write(os.path.join(out, name + ".bmsong"), song)
         print("wrote", name)
 

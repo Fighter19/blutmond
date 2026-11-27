@@ -1,0 +1,60 @@
+# The kinds of the snowman's fight's things (structure Thing in things.ms; frost.ms).
+table Thing
+
+record FrostBall {
+  does = Roll
+  dx = 16
+  speed = 1.6
+  life = 420
+  damage = 2
+}
+
+record FrostShardLeft {
+  does = Shard
+  dx = -30
+  life = 50
+  damage = 2
+}
+
+record FrostShardRight {
+  does = Shard
+  dx = 30
+  life = 50
+  damage = 2
+}
+
+record FrostBreathLow {
+  does = Breath
+  dx = 18
+  speed = 2.4
+  life = 300
+  damage = 3
+}
+
+record FrostBreathHigh {
+  does = Breath
+  dx = 18
+  dy = -14
+  speed = 2.4
+  life = 300
+  damage = 3
+}
+
+record FrostBlockWest {
+  does = Block
+  dx = -70
+  damage = 0
+}
+
+record FrostBlockEast {
+  does = Block
+  dx = 120
+  damage = 0
+}
+
+record FrostShade {
+  does = Shade
+  dy = -30
+  life = 200
+  damage = 0
+}

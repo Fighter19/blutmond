@@ -101,3 +101,33 @@ record MitsukiKnight {
   speaker = Mitsuki
   says = "...A knight. With a shield. On our street. Sure. Why not."
 }
+
+record MitsukiSnowmanNight {
+  speaker = Mitsuki
+  says = "...There's no way someone built a snowman in the middle of the night."
+}
+
+record MitsukiGrab {
+  speaker = Mitsuki
+  says = "That ball... Hina said a Christmas ball. Give it here."
+}
+
+record MitsukiHolds {
+  speaker = Mitsuki
+  says = "Let go...! It won't let go!"
+}
+
+record MitsukiShadowGone {
+  speaker = Mitsuki
+  says = "...A shadow. It got away."
+}
+
+record MitsukiHappySnowman {
+  speaker = Mitsuki
+  says = "And you're just a snowman again. ...A happy one."
+}
+
+record MitsukiSnowmanAfter {
+  speaker = Mitsuki
+  says = "He looks happier now. ...What a night."
+}

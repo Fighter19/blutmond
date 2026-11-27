@@ -3843,9 +3843,10 @@ static void testMitsukisParkScene(void)
   bmGameStart(&s_game, &s_pack, "park");
   frames(4, 0);
   TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "park") && s_game.character == stringId("player_mitsuki"));
-  const int hina = actorOf("Hina"), nightmare = actorOf("Nightmare"), hands = actorOf("Hands");
-  TEST_ASSERT(hina >= 0 && nightmare >= 0 && hands >= 0);
-  TEST_ASSERT(!s_game.actors.hidden[hina] && s_game.actors.hidden[nightmare] && s_game.actors.hidden[hands]);
+  // Hina under the bench; the nightmare and the close-up are made when the scene needs them.
+  const int hina = actorOf("Hina");
+  TEST_ASSERT(hina >= 0 && actorOfClass("Nightmare") < 0 && actorOfClass("Hands") < 0);
+  TEST_ASSERT(!s_game.actors.hidden[hina]);
   TEST_ASSERT(actorPlaying("Hina", "hide") == hina);
   // The bench is not in sight from where she comes in.
   TEST_ASSERT(BM_FIX_INT(s_game.player.x) > 137 + BM_PPU_WIDTH);
@@ -3886,7 +3887,8 @@ static void testMitsukisParkScene(void)
     if (actorPlaying("Hina", "hug") == hina && hug++ == 30) shoot("park_hug");
     if (actorPlaying("Hina", "walk") == hina && led++ == 20) shoot("park_lead");
     if (actorPlaying("Hina", "sit") == hina && sat++ == 30) shoot("park_sit");
-    if (!s_game.actors.hidden[hands])
+    const int hands = actorOfClass("Hands");
+    if (hands >= 0 && !s_game.actors.hidden[hands])
     {
       if (close++ == 30) shoot("park_hands");
       handsLoaded += s_game.sheetTile[s_game.actors.sheet[hands]] != BM_GAME_NO_TILES;
@@ -3908,7 +3910,9 @@ static void testMitsukisParkScene(void)
   TEST_ASSERT(handsLoaded >= close - 1);   // the close-up back in sprite memory once shown
   shoot("park_after");
   // After: Hina gone, the close-up and the nightmare too, the park tense.
-  TEST_ASSERT(s_game.actors.hidden[hina] && s_game.actors.hidden[hands] && s_game.actors.hidden[nightmare]);
+  const int hands = actorOfClass("Hands"), nightmare = actorOfClass("Nightmare");
+  TEST_ASSERT(s_game.actors.hidden[hina] && hands >= 0 && s_game.actors.hidden[hands] && nightmare >= 0 &&
+              s_game.actors.hidden[nightmare]);
   TEST_ASSERT(s_game.sound.intensity == 3);
   TEST_ASSERT(bm_script_errors == errors);
   TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player")));
@@ -4012,6 +4016,103 @@ static void testTheSearchAndTheSnow(void)
   bmGameStart(&s_game, &s_pack, NULL);
 }
 
+// The snowman in the snowy park (assets/mitsuki/snowman): once it snows he stands there, a
+// Christmas ball in his head. Up in front of him: Mitsuki doubts anyone built him tonight; Up
+// again: she grabs the ball, he holds on, grows and fights: snowballs rolling, a stomp with ice
+// shards, his frost breath, stopped by the blocks of ice. Beaten, a shadow leaves him and he is a
+// happy snowman (SnowmanDone).
+// A made object (spawn) of class `cls` playing the animation `anim` of its sheet, or -1.
+static int madePlaying(const char *cls, const char *anim)
+{
+  int32_t index = bmActorsClassNamed(&s_game, cls);
+  for (uint8_t i = 0; i < s_game.actors.count; i++)
+  {
+    if (s_game.actors.gone[i] || s_game.actors.object[i] != 0xFF || (int32_t)s_game.actors.classIndex[i] != index ||
+        s_game.actors.sheet[i] < 0)
+      continue;
+    int a = bmSpriteSheetAnim(&s_game.sheets[s_game.actors.sheet[i]], &s_pack, anim);
+    if (a >= 0 && s_game.actors.anim[i] == (uint8_t)a) return i;
+  }
+  return -1;
+}
+
+static void testTheSnowman(void)
+{
+  startWith(s_data, s_size, "park");
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player_mitsuki")));
+  bmGameStart(&s_game, &s_pack, "rural_street");
+  setStoryFlag("ParkDone");
+  setStoryFlag("Snowing");
+  TEST_ASSERT(bmEffectsTeleport(&s_game, (uint32_t)bmGameFindRoom(&s_pack, "park"), 260, 128));
+  frames(BM_TELEPORT_FRAMES + 6, 0);
+  TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "park") && s_game.snow == 70);
+  const uint32_t errors = bm_script_errors;
+  // The story's objects are gone (their slots free), the snowman stands still.
+  TEST_ASSERT(actorOfClass("Hina") < 0 && actorOfClass("Nightmare") < 0 && actorOfClass("Hands") < 0);
+  const int man = actorOfClass("Snowman");
+  TEST_ASSERT(man >= 0 && !s_game.actors.hidden[man] && actorPlaying("Snowman", "still") == man);
+  shoot("snowman_still");
+  // Up in front of him: her doubt; again: the grab, the fight.
+  bmBodyPlace(&s_game.player, 290, 128);
+  frames(4, 0);
+  press(BM_KEY_UP);
+  frames(2, 0);
+  TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueLine == stringId("...There's no way someone built a snowman in the middle of the night."));
+  int f = 0;
+  for (; f < 120 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  frames(4, 0);
+  press(BM_KEY_UP);
+  for (f = 0; f < 1200 && s_game.lockTimer == 0; f++) frames(1, 0);
+  int lines = 0;
+  uint16_t line = 0xFFFF;
+  for (f = 0; f < 1500 && (f < 10 || s_game.lockTimer != 0); f++)
+  {
+    if (s_game.dialogue != 0 && s_game.dialogueLine != line) line = s_game.dialogueLine, lines++;
+    frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  }
+  TEST_ASSERT(lines == 2 && actorPlaying("Snowman", "grow") < 0);
+  TEST_ASSERT(s_game.actors.health[man] == 30);
+  shoot("snowman_fight");
+  // His attacks, in turn: snowballs, ice shards, the frost breath (its two, stopped by a block).
+  int ball = 0, shard = 0, breath = 0, block = 0, stopped = 0;
+  for (f = 0; f < 1200 && !(ball && shard && breath && stopped); f++)
+  {
+    // Out of the way, behind the west block (at 230), the snowman at 300.
+    bmBodyPlace(&s_game.player, 200, 128);
+    s_game.health = 30;
+    frames(1, 0);
+    int breaths = 0;
+    ball += madePlaying("Frost", "roll") >= 0;
+    shard += madePlaying("Frost", "shard") >= 0;
+    block += madePlaying("Frost", "block") >= 0;
+    breaths = madePlaying("Frost", "frost") >= 0;
+    if (breaths) breath = 1;
+    if (breath && !breaths) stopped = 1;
+    if (breath && s_game.actors.x[man] > 0 && breaths) shoot("snowman_breath");
+  }
+  printf("    his attacks: snowballs %d, shards %d, breath %d (stopped %d), blocks %d\n", ball > 0, shard > 0, breath, stopped, block > 0);
+  TEST_ASSERT(ball && shard && breath && stopped && block);
+  // Beaten (the katana's last strike): the shadow, a happy snowman.
+  const uint32_t katana = keyOf("Katana");
+  bmInventoryGive(&s_game.inventory, katana, 1);
+  TEST_ASSERT(bmAttachmentsEquip(&s_game, 0, katana));
+  s_game.actors.health[man] = 1;
+  for (f = 0; f < 600 && actorPlaying("Snowman", "happy") < 0; f++)
+  {
+    bmBodyPlace(&s_game.player, 284, 128);
+    s_game.player.facing = 1;
+    s_game.health = 30;
+    frames(1, (f % 30) == 0 ? BM_KEY_B : 0);
+  }
+  TEST_ASSERT(actorPlaying("Snowman", "happy") == man);
+  for (f = 0; f < 1500 && (f < 10 || s_game.lockTimer != 0); f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  shoot("snowman_happy");
+  TEST_ASSERT(s_game.lockTimer == 0);
+  TEST_ASSERT(bm_script_errors == errors);
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player")));
+  bmGameStart(&s_game, &s_pack, NULL);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -4058,6 +4159,7 @@ int main(int argc, char **argv)
   RUN_TEST(testMitsukisParkScene);
   RUN_TEST(testTheStreetBeforeAndAfterTheNightmare);
   RUN_TEST(testTheSearchAndTheSnow);
+  RUN_TEST(testTheSnowman);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

@@ -231,11 +231,13 @@ def write(out, tiles, maps):
         ("PlayerStart", "start", W - 40, GROUND, 0, 0, True, [("facing", "left")]),
         ("Light", "lamp", LAMPS[0], LAMP_Y, 0, 0, True, lamp_props),
         ("Light", "lamp_swings", LAMPS[1], LAMP_Y, 0, 0, True, lamp_props),
-        # Hina under the bench (her eyes), the nightmare, the close-up of their hands
-        # (assets/mitsuki/park: their scripts).
+        # Hina under the bench (her eyes); the nightmare and the close-up of their hands are made
+        # when the scene needs them (park.ms: a room has 8 objects, those placed in it keep
+        # their slots, and the snowman's fight makes its things).
         ("Hina", "hina", (b0 + b1) // 2, GROUND, 0, 0, True, []),
-        ("Nightmare", "nightmare", b1 + 30, GROUND, 0, 0, True, []),
-        ("Hands", "hands", 126, 56, 0, 0, True, []),
+        # Once it snows (Snowing): the snowman with the Christmas ball in his head (he makes the
+        # blocks of ice he fights between: assets/mitsuki/snowman).
+        ("Snowman", "snowman", 300, GROUND, 0, 0, True, []),
         ("Door", "to_street", W - 16, GROUND - 48, 16, 48, False,
          [("target_room", "rural_street"), ("target_door", "to_park"), ("direction", "east")]),
         # West, the outskirts where Mitsuki searches for Hina (tools/make_outskirts.py).

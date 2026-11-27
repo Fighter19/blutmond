@@ -23,7 +23,8 @@ event spawn() {
   Taken = false;
   facing = 1;
   play_anim(#hide);
-  if flag(#ParkDone) { hide(); }
+  // After the scene she is gone: out of the room (its object slot for the snowman's fight).
+  if flag(#ParkDone) { destroy(); }
 }
 
 event tick() {

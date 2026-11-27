@@ -16,6 +16,7 @@ defaultproperties {
 event spawn() {
   Came = false;
   hide();
+  if flag(#ParkDone) { destroy(); }   // (after the scene: its slot for the snowman's fight)
 }
 
 event tick() {

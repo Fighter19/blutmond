@@ -55,7 +55,7 @@ plays (A through its lines). As Mitsuki (Character) it plays as written.
 
 **After the park**: west of it the riverside and the shrine path, where Mitsuki searches for
 Hina (`build/game --room riverside`). Hina's call comes on the shrine path, and from then on it
-snows outside.
+snows outside. Back in the park, a snowman stands by the path: Up beside him, twice.
 
 Keys: arrows to move, X or Space is A (jump), Z is B, A and S are L and R, Return is Start,
 Backspace is Select, F11 full screen, Escape ends (in the browser it only leaves full screen). Gamepads work. The window keeps a save game
@@ -308,7 +308,8 @@ does not go there. To play a left-out room, push again with that room:
 bmlink --xboo /dev/parport0 push build/test-output/test_level_gba.bmpk restart:debug_wave
 ```
 
-`push` reports how many chunks were left out. A cartridge GBA sending its game to a
+The link tests push `build-gba/test_level_link_gba.bmpk`: the test level without Mitsuki's
+rooms (the whole game no longer goes over the cable at once). `push` reports how many chunks were left out. A cartridge GBA sending its game to a
 multiboot one (section 8) fits the pack around the room it is in.
 
 Or let the game ask: walking into a door to a room its pack does not have, the multiboot game

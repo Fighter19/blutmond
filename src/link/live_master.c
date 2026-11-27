@@ -235,8 +235,9 @@ static bool chunkNamed(const BmPack *pPack, uint32_t i, uint32_t id, const char 
 }
 
 // The script modules (MODB, by the name of their first class) a room's objects are of, and those
-// of its attachments (the property `attach` of its `@room` object: "Wind, Rain"), and the
-// sprites named like its objects' classes, each once, at most ROOM_MODULES. A fitted pack brings them with the room, not before it: the scripts of a
+// of its attachments (the property `attach` of its `@room` object: "Wind, Rain"), the sprites
+// named like its objects' classes, and what those scripts make (the modules of classes they
+// name, the sprites their classes name), each once, at most ROOM_MODULES. A fitted pack brings them with the room, not before it: the scripts of a
 // room left out (a bench, a prologue) are left out with it. (A class one room has as an object
 // and another's script spawns is then there only with the first.)
 static uint32_t roomModules(const BmPack *pPack, uint32_t index, uint16_t *pOut)
@@ -288,6 +289,39 @@ static uint32_t roomModules(const BmPack *pPack, uint32_t index, uint16_t *pOut)
         if (list == NULL) break;
         name += len;
         while (*name != 0 && *name != ',') name++;
+      }
+    }
+  }
+  // What those scripts make (spawn): a module whose class name a module of the room uses (its
+  // code or constants hold the name's string id: a false match only brings more with the
+  // room), and the sprites the modules' classes name. (A boss's projectiles: the snowman's.)
+  for (uint32_t k = 0; k < out; k++)
+  {
+    uint32_t size = 0;
+    const uint8_t *d = bmPackChunkData(pPack, pOut[k], &size);
+    if (d == NULL || size < 36) continue;
+    uint32_t classes = bmRead32(d + 16), consts = bmRead32(d + 24), code = bmRead32(d + 28), words = bmRead32(d + 32);
+    uint32_t nconsts = bmRead16(d + 12), nclasses = bmRead16(d + 8);
+    for (uint32_t c = 0; c < count && out < ROOM_MODULES; c++)
+    {
+      uint16_t want = chunkName(pPack, c, BM_CHUNK_MODB);
+      bool used = false;
+      if (want == 0xFFFF) continue;
+      for (uint32_t w = 0; w < words && code + 2 * w + 2 <= size && !used; w++) used = bmRead16(d + code + 2 * w) == want;
+      for (uint32_t q = 0; q < nconsts && consts + 4 * q + 4 <= size && !used; q++) used = bmRead32(d + consts + 4 * q) == want;
+      bool seen = false;
+      for (uint32_t q = 0; q < out && !seen; q++) seen = pOut[q] == c;
+      if (used && !seen) pOut[out++] = (uint16_t)c;
+    }
+    for (uint32_t j = 0; j < nclasses && classes + 36 * j + 4 <= size; j++)
+    {
+      uint16_t sprite = bmRead16(d + classes + 36 * j + 2);
+      for (uint32_t c = 0; sprite != 0xFFFF && c < count && out < ROOM_MODULES; c++)
+      {
+        if (chunkName(pPack, c, BM_CHUNK_SPRT) != sprite) continue;
+        bool seen = false;
+        for (uint32_t q = 0; q < out && !seen; q++) seen = pOut[q] == c;
+        if (!seen) pOut[out++] = (uint16_t)c;
       }
     }
   }

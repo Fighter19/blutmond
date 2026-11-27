@@ -16,9 +16,17 @@ class ParkScene extends Attachment;
 
 const int BENCH = 137;      // the bench's middle (Hina under it)
 const int NEAR = 70;        // how close the scene starts
+const int SNOWMAN_X = 300;  // the snowman in the snow (park.tmx)
+const int NIGHTMARE_X = 194;  // where the nightmare rises (made then: spawn)
+const int GROUND = 128;
+const int HANDS_X = 126;    // the close-up of their hands (made when it is shown)
+const int HANDS_Y = 56;
 const int SIT_X = 126;      // Mitsuki's place on the bench (Hina at SIT_X + 7, shoulder to shoulder: pair.py)
 
 var int Level;              // the music's intensity
+var bool UpBefore;          // Up was held a frame ago (the snowman takes a fresh press)
+var fix Away;               // thrown off the snowman: her speed
+var int Steps;
 
 event attached() {
   Level = -1;
@@ -45,13 +53,61 @@ state Approach {
   }
 }
 
-// After the scene: the park tense, and once it snows (Snowing: the outskirts, search.ms) snow.
+// After the scene: the park tense, and once it snows (Snowing: the outskirts, search.ms) snow,
+// and the snowman (snowman.ms): Up in front of him once, she doubts anyone built him tonight;
+// twice, she grabs the ball in his head (Grab). Beaten, he is a happy snowman; Up: a word.
 state After {
   event tick() {
     if flag(#Snowing) { set_snow(70); }
+    var bool up = held(#Up) && !UpBefore && on_ground() && dialogue_done();
+    UpBefore = held(#Up);
+    var int d = int(player_x()) - SNOWMAN_X;
+    if d < 0 { d = -d; }
+    if !up || d > 20 || !flag(#Snowing) || flag(#SnowmanFight) { return; }
+    if flag(#SnowmanDone) {
+      say_line(#MitsukiSnowmanAfter);
+    } else if !flag(#SnowmanLooked) {
+      set_flag(#SnowmanLooked, true);
+      say_line(#MitsukiSnowmanNight);
+    } else if !flag(#SnowmanGrab) {
+      gotostate Grab;
+    }
   }
 begin:
+  UpBefore = true;
   music_intensity(3);
+}
+
+// She grabs the ball; he holds on (SnowmanHolds); he grows and pushes her off: the fight.
+state Grab {
+begin:
+  owner_lock(65535);
+  lock_move(GroundMove.Keep, AirMove.Keep);
+  owner_velocity(0.0, 0.0);
+  if player_x() < fix(SNOWMAN_X) { owner_turn(1); }
+  else { owner_turn(-1); }
+  say_line(#MitsukiGrab);
+  wait_until(dialogue_done());
+  owner_play_anim(#flip);
+  set_flag(#SnowmanGrab, true);
+  sleep(30);
+  say_line(#MitsukiHolds);
+  wait_until(dialogue_done());
+  set_flag(#SnowmanHolds, true);
+  wait_until(flag(#SnowmanFight));
+  // Thrown off as he grows.
+  owner_play_anim(#idle);
+  Away = -2.5;
+  if player_x() > fix(SNOWMAN_X) { Away = 2.5; }
+  Steps = 0;
+  while Steps < 14 {
+    owner_velocity(Away, 0.0);
+    sleep(1);
+    Steps += 1;
+  }
+  owner_velocity(0.0, 0.0);
+  owner_lock(0);
+  gotostate After;
 }
 
 state Scene {
@@ -108,6 +164,7 @@ begin:
   wait_until(dialogue_done());
   say_line(#ParkWarm);
   wait_until(dialogue_done());
+  spawn(#Hands, fix(HANDS_X), fix(HANDS_Y));   // (made now: the room keeps its object slots free)
   set_flag(#ParkHands, true);
   sleep(90);
   say_line(#ParkTellYou);
@@ -144,6 +201,7 @@ begin:
 state Taken {
 begin:
   fade_music(0, 30);
+  spawn(#Nightmare, fix(NIGHTMARE_X), fix(GROUND));
   set_flag(#ParkTaken, true);
   wait_until(flag(#NightmareGrab));
   owner_play_anim(#idle);

@@ -288,6 +288,26 @@ room by the property `Search.Room`):
   attachments), and she puts it together: "A Christmas ball. Snow. ...The park." At the gate:
   "The way's closed. She's not here."
 
+### The snowman (`assets/mitsuki/snowman`)
+
+Back in the snowy park a snowman stands by the path (`snowman.py`: three balls of snow, coal
+eyes, stick arms, a red scarf, and where his nose would be a Christmas ball, dark glass glowing
+from inside). Up beside him the first time: "Who builds a snowman in the middle of the night?"
+The second time she grabs the ball; he holds on, grows by a third and fights (`snowman.ms`,
+health 30, the music `frost_waltz`):
+
+| Attack | |
+|---|---|
+| Snowballs | rolled along the ground: jump over them |
+| Stomps | he jumps and lands; ice shards burst up from the ground beside him |
+| Frost breath | a beam along the ground or higher; two blocks of ice (spawned when the fight starts) stop it: hide behind one |
+
+Beaten, a shadow leaves him and he is a happy snowman again (`SnowmanDone`, saved). His fight's
+things are frames of his own sprite (frames 7 to 15), and one class, `Frost`, does each by its
+record (`things.ms`, `things.bmdata`: what it does, its speed, life and damage): the pack's 48
+classes. The park's nightmare, the hands and the blocks are spawned, not placed: a room has
+at most 8 actors, and spawned ones do not reuse a placed one's slot.
+
 ## 4. Open
 
 - **More colour slots for the light**: with 15 colours a lit sprite has no slot left to split
