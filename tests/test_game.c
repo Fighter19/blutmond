@@ -4006,7 +4006,8 @@ static void testTheSearchAndTheSnow(void)
   // On to the gate: closed.
   for (f = 0; f < 600 && s_game.dialogue == 0; f++) frames(1, BM_KEY_LEFT);
   TEST_ASSERT(s_game.dialogueLine == stringId("The way's closed. She's not here."));
-  // Back in the park it snows too.
+  // Back in the park it snows too (the gate's line closed first).
+  for (f = 0; f < 200 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
   TEST_ASSERT(bmEffectsTeleport(&s_game, (uint32_t)bmGameFindRoom(&s_pack, "park"), 300, 128));
   frames(BM_TELEPORT_FRAMES + 6, 0);
   TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "park") && s_game.snow == 70);
