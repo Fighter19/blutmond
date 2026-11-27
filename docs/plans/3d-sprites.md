@@ -292,10 +292,10 @@ room by the property `Search.Room`):
 ### The snowman (`assets/mitsuki/snowman`)
 
 Back in the snowy park a snowman stands by the path (`snowman.py`: three balls of snow, coal
-eyes, a carrot nose, stick arms, a red scarf, and set into his forehead a Christmas ball: red
-glass with a shine, a golden cap and hook, glowing from inside). Up beside him the first time:
+eyes, a carrot nose, stick arms, a red scarf, and in his hands a Christmas ball: clear glass,
+dark inside with a faint violet glow, a silver cap and ring). Up beside him the first time:
 "Who builds a snowman in the middle of the night?" The second time she grabs the ball; he holds
-on, grows to 155 % and fights (`snowman.ms`, health 30, the music `frost_waltz`):
+on, grows to 170 % and fights (`snowman.ms`, health 30, the music `frost_waltz`):
 
 | Attack | |
 |---|---|
@@ -309,11 +309,11 @@ Beaten, a shadow leaves him and he is a happy snowman again (`SnowmanDone`, save
 How it fits:
 
 - **Grown by the PPU**: all his frames are rendered at one size; grown, the engine draws him at
-  155 % (`set_scale`, runtime-core.md: affine sprites). The grown frames' boxes are made as
+  170 % (`set_scale`, runtime-core.md: affine sprites). The grown frames' boxes are made as
   large in the sheet (`snowman_sheet.py`), so the hits need nothing.
 - **One sheet**: the pack has its 28 sprites, so his fight's things are frames of his sheet
   (the snowball, the ripple, the pillar rising and standing, an icicle, the shadow, the beam).
-  229 tiles: in the park, besides Mitsuki's figure and the doors' sheet, 287 are left.
+  183 tiles: in the park, besides Mitsuki's figure and the doors' sheet, 287 are left.
 - **The beam**: four lengths of 32 pixels each, one tile row high (two rows would be covered
   with 64 x 32 pieces, half empty), its middle one column repeated, so its pieces are shared; a
   beam longer than 128 pixels (a frame's most) is two, the far one beyond the near one.

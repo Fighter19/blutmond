@@ -10,17 +10,17 @@
  <frame x="0" y="0" w="32" h="48" ax="16" ay="46"/>
  <frame x="0" y="0" w="32" h="48" ax="16" ay="46"/>
  <frame x="0" y="0" w="56" h="56" ax="28" ay="54">
-   <box kind="hurt" x="-9" y="-40" w="18" h="40"/>
+   <box kind="hurt" x="-8" y="-37" w="16" h="37"/>
  </frame>
  <frame x="0" y="0" w="56" h="56" ax="28" ay="54">
-   <box kind="hurt" x="-9" y="-40" w="18" h="40"/>
+   <box kind="hurt" x="-8" y="-37" w="16" h="37"/>
  </frame>
  <frame x="0" y="0" w="56" h="56" ax="28" ay="54">
-   <box kind="hurt" x="-9" y="-40" w="18" h="40"/>
+   <box kind="hurt" x="-8" y="-37" w="16" h="37"/>
    <box kind="hit" name="snow" x="0" y="0" w="1" h="1"/>
  </frame>
  <frame x="0" y="0" w="56" h="56" ax="28" ay="54">
-   <box kind="hurt" x="-9" y="-40" w="18" h="40"/>
+   <box kind="hurt" x="-8" y="-37" w="16" h="37"/>
    <box kind="hit" name="frost" x="0" y="0" w="1" h="1"/>
  </frame>
  <frame x="0" y="0" w="16" h="16" ax="8" ay="14">

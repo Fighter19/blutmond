@@ -1,54 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sprite version="1" image="snowman.png" normal="snowman_n.png">
  <hitbox x="-10" y="-42" w="20" h="42" />
- <frame x="0" y="0" w="29" h="40" ax="13" ay="37" />
- <frame x="29" y="0" w="20" h="39" ax="10" ay="36" />
- <frame x="49" y="0" w="29" h="40" ax="13" ay="37" />
- <frame x="78" y="0" w="31" h="39" ax="14" ay="36">
-  <box kind="hurt" x="-14" y="-62" w="28" h="62" />
+ <frame x="0" y="0" w="19" h="34" ax="9" ay="31" />
+ <frame x="19" y="0" w="19" h="34" ax="9" ay="31" />
+ <frame x="38" y="0" w="19" h="34" ax="9" ay="31" />
+ <frame x="57" y="0" w="19" h="34" ax="9" ay="31">
+  <box kind="hurt" x="-14" y="-63" w="27" h="63" />
  </frame>
- <frame x="109" y="0" w="33" h="40" ax="17" ay="37">
-  <box kind="hurt" x="-14" y="-62" w="28" h="62" />
+ <frame x="76" y="0" w="24" h="34" ax="15" ay="31">
+  <box kind="hurt" x="-14" y="-63" w="27" h="63" />
  </frame>
- <frame x="142" y="0" w="23" h="39" ax="10" ay="36">
-  <box kind="hurt" x="-14" y="-62" w="28" h="62" />
-  <box kind="hit" name="snow" x="-16" y="-56" w="31" h="57" />
+ <frame x="100" y="0" w="19" h="34" ax="9" ay="31">
+  <box kind="hurt" x="-14" y="-63" w="27" h="63" />
+  <box kind="hit" name="snow" x="-15" y="-56" w="31" h="58" />
  </frame>
- <frame x="165" y="0" w="32" h="41" ax="15" ay="38">
-  <box kind="hurt" x="-14" y="-62" w="28" h="62" />
-  <box kind="hit" name="frost" x="2" y="-42" w="25" h="43" />
+ <frame x="119" y="0" w="25" h="34" ax="9" ay="31">
+  <box kind="hurt" x="-14" y="-63" w="27" h="63" />
+  <box kind="hit" name="frost" x="2" y="-42" w="26" h="44" />
  </frame>
- <frame x="197" y="0" w="12" h="12" ax="6" ay="9">
+ <frame x="144" y="0" w="12" h="12" ax="6" ay="9">
   <box kind="hit" name="dust" x="-6" y="-11" w="12" h="12" />
  </frame>
- <frame x="209" y="0" w="12" h="14" ax="6" ay="9">
+ <frame x="156" y="0" w="12" h="14" ax="6" ay="9">
   <box kind="hit" name="dust" x="-6" y="-11" w="12" h="12" />
  </frame>
- <frame x="221" y="0" w="15" h="15" ax="7" ay="9">
+ <frame x="168" y="0" w="15" h="15" ax="7" ay="9">
   <box kind="hit" name="ice" x="-7" y="-11" w="15" h="11" />
  </frame>
- <frame x="236" y="0" w="13" h="15" ax="7" ay="9">
+ <frame x="183" y="0" w="13" h="15" ax="7" ay="9">
   <box kind="hit" name="ice" x="-7" y="-11" w="13" h="10" />
  </frame>
- <frame x="0" y="41" w="14" h="25" ax="7" ay="17">
+ <frame x="196" y="0" w="14" h="25" ax="7" ay="17">
   <box kind="hit" name="ice" x="-6" y="-19" w="13" h="25" />
  </frame>
- <frame x="14" y="41" w="14" h="47" ax="7" ay="39" />
- <frame x="28" y="41" w="17" h="8" ax="11" ay="6">
+ <frame x="210" y="0" w="14" h="47" ax="7" ay="39" />
+ <frame x="224" y="0" w="17" h="8" ax="11" ay="6">
   <box kind="hit" name="ice" x="-11" y="-8" w="17" h="8" />
  </frame>
- <frame x="45" y="41" w="14" h="28" ax="7" ay="25" />
- <frame x="59" y="41" w="14" h="28" ax="7" ay="25" />
- <frame x="73" y="41" w="31" h="8" ax="0" ay="6">
+ <frame x="241" y="0" w="14" h="28" ax="7" ay="25" />
+ <frame x="0" y="47" w="14" h="28" ax="7" ay="25" />
+ <frame x="14" y="47" w="31" h="8" ax="0" ay="6">
   <box kind="hit" name="frost" x="0" y="-8" w="31" h="8" />
  </frame>
- <frame x="104" y="41" w="63" h="8" ax="0" ay="6">
+ <frame x="45" y="47" w="63" h="8" ax="0" ay="6">
   <box kind="hit" name="frost" x="0" y="-8" w="63" h="8" />
  </frame>
- <frame x="0" y="88" w="95" h="8" ax="0" ay="6">
+ <frame x="108" y="47" w="95" h="8" ax="0" ay="6">
   <box kind="hit" name="frost" x="0" y="-8" w="95" h="8" />
  </frame>
- <frame x="95" y="88" w="127" h="8" ax="0" ay="6">
+ <frame x="0" y="75" w="127" h="8" ax="0" ay="6">
   <box kind="hit" name="frost" x="0" y="-8" w="127" h="8" />
  </frame>
  <animation name="still" loop="1">

@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: BSD-2-Clause OR MIT
 """The snowman in the snowy park (Mitsuki's story: snowman.ms): three balls of snow, coal eyes,
-a carrot nose, stick arms, a red scarf, and set into his forehead a Christmas ball: red glass
-with a shine, a golden cap and hook, glowing faintly from inside (where Hina is). Grabbed at the ball he
-holds on, grows and fights; beaten, he is a happy snowman again.
+a carrot nose, stick arms, a red scarf, and in his hands before his chest a Christmas ball:
+clear glass, dark inside with a faint violet glow (where Hina is), a silver cap and ring.
+Grabbed at the ball he holds on, grows and fights; beaten, he is a happy snowman again.
 
-One size of him: grown, the engine draws him larger (set_scale 155: affine sprites; his boxes
+One size of him: grown, the engine draws him larger (set_scale 170: affine sprites; his boxes
 in the sheet made as large, snowman_sheet.py). He is built twice (the rig has no groups per
 pose for the faces of both), as built (s) and as the boss (b). snowman_sheet.py then makes the
 beam's middle the same all along. (One sheet for him and his fight's things, the park's sprite
@@ -14,7 +14,7 @@ memory: the pack holds 28 sprites, all used.)
       --layout assets/mitsuki/park/snowman_layout.bmsprite --sink 2 --out assets/mitsuki/park --name snowman
   python3 assets/mitsuki/park/snowman_sheet.py assets/mitsuki/park/sources/snowman
 
-Frames: 0 standing still (a straight coal mouth), 1 holding on (his sticks round the ball), 2
+Frames: 0 standing still (a straight coal mouth), 1 holding on (his sticks tight round the ball), 2
 happy (small, smiling); the boss: 3 standing, 4 throwing (a stick arm back), 5 in a jump (arms
 up), 6 his frost breath (the frost pouring from his mouth to the ground before him); then the
 fight's things. Struck, he flashes (the engine's).
@@ -24,13 +24,14 @@ OUT = (24, 20, 36)
 SNOW = [(150, 170, 200), (205, 220, 240), (250, 252, 255)]
 COAL = [(30, 28, 36)]
 SCARF = [(150, 30, 44), (210, 60, 70)]
-BALL = [(84, 12, 28)] + SCARF          # red glass (the scarf's reds and a deep one)
+INSIDE = [(36, 16, 52), (110, 56, 150)]   # the Christmas ball's inside: dark, a faint violet glow (Hina there)
 CAP = [(220, 180, 80)]
-STICK = [(84, 56, 36), (120, 84, 52)]
-CARROT = [(200, 92, 24), (245, 150, 50)]
+STICK = [(100, 70, 44)]
+CARROT = [(230, 120, 36)]
 ICE = [(110, 170, 225), (190, 230, 255)]
+SILVER = [(96, 100, 120), SNOW[0]]      # the ball's cap (darker than the snow it is seen against)
 
-SIZE = 1.1          # both of him (grown: drawn at 155 %, snowman.ms)
+SIZE = 1.0          # both of him (grown: drawn at 170 %, snowman.ms)
 SMALL, BIG = SIZE, SIZE
 SIZES = (('s', SMALL), ('b', BIG))
 SIDES = (('R', -1), ('L', 1))
@@ -46,11 +47,14 @@ def build(Rig):
     r.inner_lines = 3.0
     r.material('snow', SNOW, bands=[0.35, 0.75])
     r.material('coal', COAL, weight=8, min_cover=0.15, bands=[], keep_inner=True)
-    r.material('ball', BALL, weight=6, min_cover=0.2, bands=[0.35, 0.75], keep_inner=True, emissive=True)
+    # The Christmas ball: clear glass (its rim, light blue; a shine), dark inside, a silver cap.
+    r.material('glass', ICE + [SNOW[2]], weight=6, min_cover=0.15, bands=[0.4, 0.8], keep_inner=True, emissive=True)
+    r.material('inside', INSIDE, weight=7, min_cover=0.2, bands=[0.5], keep_inner=True, emissive=True)
+    r.material('silver', SILVER, weight=8, min_cover=0.1, bands=[0.5], keep_inner=True)
     r.material('cap', CAP, weight=7, min_cover=0.2, bands=[], keep_inner=True)
     r.material('shine', [SNOW[2]], weight=9, min_cover=0.1, bands=[], keep_inner=True, emissive=True)
-    r.material('carrot', CARROT, weight=7, min_cover=0.2, bands=[0.5], keep_inner=True)
-    r.material('stick', STICK, weight=3, min_cover=0.15, bands=[0.5])
+    r.material('carrot', CARROT, weight=7, min_cover=0.2, bands=[], keep_inner=True)
+    r.material('stick', STICK, weight=3, min_cover=0.15, bands=[])
     r.material('scarf', SCARF, bands=[0.5])
     # (The fight's things: what strikes has a material of its own, its hit box.)
     r.material('ice', ICE + [SNOW[2]], bands=[0.4, 0.8])
@@ -88,10 +92,7 @@ def man(r, n, k):
     r.tube(j('body'), 'scarf', at(0, 0, 23.6), at(0, 0, 22.4), 4.6 * k, 4.8 * k, caps=False, group=g)
     r.tube(j('body'), 'scarf', at(2.5, -3.0, 23.0), at(3.5, -3.6, 18.0), 1.1 * k, 0.9 * k, group=g)
     # The Christmas ball, set into his forehead: red glass with a shine, its golden cap and hook.
-    r.ellipsoid(j('head'), 'ball', at(3.3, 0, 31.7), at(1.9, 1.9, 1.9), group=g)
-    r.ellipsoid(j('head'), 'shine', at(4.7, -0.7, 32.5), at(0.45, 0.45, 0.45), group=g)
-    r.tube(j('head'), 'cap', at(3.2, 0, 33.4), at(3.1, 0, 34.2), 0.8 * k, 0.75 * k, group=g)
-    r.tube(j('head'), 'cap', at(3.1, -0.4, 34.1), at(3.1, 0.4, 34.9), 0.22 * k, group=g)
+    christmas_ball(r, j('body'), at, k, g)
     # The carrot nose.
     r.tube(j('head'), 'carrot', at(4.2, 0, 28.2), at(7.8, 0.3, 27.6), 0.85 * k, 0.12 * k, group=g)
     # Coal eyes; a mouth of coal under the nose: straight, angry (down at the ends), smiling, or
@@ -116,6 +117,28 @@ def man(r, n, k):
         for f in (-1, 1):
             r.tube(j('arm_' + s), 'stick', at(0, 5.0 * y, 13.5), at(1.2 * f, 5.0 * y + 0.8 * f, 11.0), 0.3 * k, 0.2 * k,
                    group=g)
+
+
+BALL_AT = (8.2, 0.0, 16.5)   # the Christmas ball before his chest, in his hands
+BALL_R = 4.2
+
+
+def christmas_ball(r, joint, at, k, g):
+    """The Christmas ball he holds: clear glass (a light blue rim, a shine up toward the light),
+    dark inside with a faint violet glow and a little snow at its bottom, a silver cap and ring.
+    What is inside lies toward the viewer (from (0.866, -0.5)), so the glass shows as a rim."""
+    cx, cy, cz = BALL_AT
+    rr = BALL_R
+
+    def near(f, up=0.0, side=0.0):
+        # From the middle toward the viewer by f radii, up and along the view's right by radii.
+        return at(cx + rr * (0.866 * f + 0.5 * side), cy + rr * (-0.5 * f + 0.866 * side), cz + rr * up)
+    r.ellipsoid(joint, 'glass', at(cx, cy, cz), (rr * k, rr * k, rr * k), group=g)
+    r.ellipsoid(joint, 'inside', near(0.3), (0.78 * rr * k,) * 3, group=g)
+    r.ellipsoid(joint, 'snow', near(0.45, -0.5), (0.62 * rr * k, 0.62 * rr * k, 0.25 * rr * k), group=g)
+    r.ellipsoid(joint, 'shine', near(0.8, 0.45, -0.35), (0.2 * rr * k,) * 3, group=g)
+    r.tube(joint, 'silver', at(cx, cy, cz + rr * 0.9), at(cx, cy, cz + rr * 1.25), 0.38 * rr * k, 0.36 * rr * k, group=g)
+    r.tube(joint, 'silver', at(cx, cy - 0.3, cz + rr * 1.22), at(cx, cy + 0.3, cz + rr * 1.5), 0.08 * rr * k, group=g)
 
 
 def things(r):
@@ -169,15 +192,16 @@ SIDE = (0.0, 0.0)   # straight from the side: the beam's rows the same all along
 
 
 def poses():
-    rest = dict(arm_R=(30, -50), arm_L=(30, 50))
+    hold = dict(arm_R=(62, 10), arm_L=(62, -10))          # his hands round the ball
+    tight = dict(arm_R=(64, 16), arm_L=(64, -16))         # holding on (she grabs it)
     return [
-        pose('s', 'still', **rest),                                                    # 0 still
-        pose('s', 'angry', arm_R=(95, 20), arm_L=(95, -20), head=-6),                  # 1 holding on
-        pose('s', 'happy', **rest),                                                    # 2 happy
-        pose('b', 'angry', arm_R=(40, -60), arm_L=(40, 60), head=-4),                  # 3 the boss standing
-        pose('b', 'angry', arm_R=(-60, -40), arm_L=(30, 60), body=8, head=-6),         # 4 throwing
-        pose('b', 'angry', arm_R=(160, -30), arm_L=(160, 30), head=-8),                # 5 in a jump
-        pose('b', 'roar', extra=('b_breath',), arm_R=(60, -70), arm_L=(60, 70), body=4, head=8),  # 6 frost breath
+        pose('s', 'still', **hold),                                                     # 0 still
+        pose('s', 'angry', head=-6, **tight),                                           # 1 holding on
+        pose('s', 'happy', **hold),                                                     # 2 happy
+        pose('b', 'angry', head=-4, **hold),                                            # 3 the boss standing
+        pose('b', 'angry', arm_R=(-60, -40), arm_L=(62, -10), body=6, head=-6),         # 4 throwing (one hand on it)
+        pose('b', 'angry', head=-8, **tight),                                           # 5 in a jump
+        pose('b', 'roar', extra=('b_breath',), body=4, head=8, **hold),                 # 6 frost breath
         # The fight's things: 7, 8 the snowball rolling; 9, 10 the ripple; 11, 12 the pillar
         # (rising, standing); 13 an icicle; 14, 15 the shadow; 16 on the frost beam, 1 to BEAMS
         # pieces long.

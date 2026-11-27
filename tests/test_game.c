@@ -4036,7 +4036,7 @@ static void testTheSearchAndTheSnow(void)
 }
 
 // The snowman in the snowy park (assets/mitsuki/snowman): once it snows he stands there, a
-// Christmas ball in his forehead. Up in front of him: Mitsuki doubts anyone built him tonight; Up
+// Christmas ball in his hands. Up in front of him: Mitsuki doubts anyone built him tonight; Up
 // again: she grabs the ball, he holds on, grows and fights: jumps at her (landing where she
 // stood), a ripple through the ground and a pillar of ice breaking out where she was, snowballs,
 // his frost beam (behind a pillar it does not reach her; in the open it strikes), and from half

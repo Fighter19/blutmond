@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 from PIL import Image
 
 BOSS = (3, 4, 5, 6)                  # drawn at SCALE (snowman.ms set_scale): their boxes as large
-SCALE = 1.55
+SCALE = 1.7
 BEAMS = (16, 17, 18, 19)             # the beam, 1 to 4 pieces of BEAM long
 BEAM = 32
 TIP = 6                              # the beam's rounded end (pixels)

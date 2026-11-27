@@ -1,7 +1,7 @@
 class Snowman extends Actor;
 
 // The snowman in the snowy park (Mitsuki's story, after Hina's call: the story flag Snowing). In
-// his forehead, a Christmas ball: red glass glowing (where Hina is). Up in front of him once:
+// his hands, a Christmas ball: clear glass, dark inside (where Hina is). Up in front of him once:
 // Mitsuki doubts anyone built him tonight; twice: she grabs the ball (SnowmanGrab, park.ms), he
 // holds on, grows and fights, in turns:
 //
@@ -34,7 +34,7 @@ const int RIPPLE_SPEED10 = 28;  // the ripple's speed x 10 (FrostRipple: 2.8)
 const int PILLAR_HALF = 6;    // half a pillar's width
 const int BEAM_DX = 20;       // where the beam starts (FrostBeam*)
 const int BEAM = 32;          // a piece of the beam
-const int GROWN = 155;        // his size grown, percent (snowman_sheet.py SCALE)
+const int GROWN = 170;        // his size grown, percent (snowman_sheet.py SCALE)
 const int JUMP = 42;          // frames in the air
 const fix JUMP_UP = 4.1;      // his speed up as he jumps off; down by GRAVITY each frame
 const fix GRAVITY = 0.2;

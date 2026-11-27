@@ -58,7 +58,7 @@ state Approach {
 
 // After the scene: the park tense, and once it snows (Snowing: the outskirts, search.ms) snow,
 // and the snowman (snowman.ms): Up in front of him once, she doubts anyone built him tonight;
-// twice, she grabs the ball in his head (Grab). Beaten, he is a happy snowman; Up: a word.
+// twice, she grabs the ball in his hands (Grab). Beaten, he is a happy snowman; Up: a word.
 state After {
   event tick() {
     if flag(#Snowing) { set_snow(70); }
