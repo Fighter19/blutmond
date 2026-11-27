@@ -16,7 +16,7 @@ class ParkScene extends Attachment;
 
 const int BENCH = 137;      // the bench's middle (Hina under it)
 const int NEAR = 70;        // how close the scene starts
-const int SIT_X = 126;      // Mitsuki's place on the bench (Hina at SIT_X + 13)
+const int SIT_X = 126;      // Mitsuki's place on the bench (Hina at SIT_X + 7, shoulder to shoulder: pair.py)
 
 var int Level;              // the music's intensity
 
@@ -114,18 +114,23 @@ begin:
   gotostate Low;
 }
 
-// Hina, her head low, opens up.
+// Hina opens up; then she leans her head into Mitsuki's lap, and Mitsuki strokes her hair.
 state Low {
 begin:
-  set_flag(#ParkLow, true);
   say_line(#ParkSince);
   wait_until(dialogue_done());
   say_line(#ParkChest);
   wait_until(dialogue_done());
   say_line(#ParkOutLoud);
   wait_until(dialogue_done());
+  set_flag(#ParkLean, true);
+  owner_play_anim(#sit_leaned);
+  sleep(60);
   say_line(#ParkLookAtMe);
   wait_until(dialogue_done());
+  set_flag(#ParkCaress, true);
+  owner_play_anim(#caress);
+  sleep(50);
   say_line(#ParkHere);
   wait_until(dialogue_done());
   gotostate Taken;
@@ -155,7 +160,8 @@ begin:
   set_flag(#ParkHug, false);
   set_flag(#ParkLead, false);
   set_flag(#ParkSit, false);
-  set_flag(#ParkLow, false);
+  set_flag(#ParkLean, false);
+  set_flag(#ParkCaress, false);
   set_flag(#ParkTaken, false);
   set_flag(#NightmareGrab, false);
   set_flag(#NightmareLeap, false);

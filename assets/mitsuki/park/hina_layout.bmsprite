@@ -2,7 +2,10 @@
 <!-- Hina's frames (assets/mitsuki/home/hina.py; her park scene, park.ms): the phone call (only for her
      panicked portrait: empty here), hiding under the bench (her eyes, blinking), the leap out, in Mitsuki's arms (rocked: 12,
      13), led by the
-     hand, standing, sitting on the bench (seen from the front), snatched away. -->
+     hand, standing, sitting on the bench (seen from the front; 9, 10, 14, 15: holding hands,
+     her head in Mitsuki's lap, her hair stroked (two: Mitsuki's hand differs), from the scene of
+     both, pair.py),
+     snatched away. -->
 <sprite version="1" image="hina.png">
  <hitbox x="-5" y="-28" w="10" h="28"/>
  <frame x="0" y="0" w="8" h="8" ax="4" ay="4"/>
@@ -14,11 +17,13 @@
  <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
  <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
  <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
- <frame x="0" y="0" w="32" h="44" ax="16" ay="40"/>
- <frame x="0" y="0" w="32" h="44" ax="16" ay="40"/>
+ <frame x="0" y="0" w="40" h="44" ax="20" ay="40"/>
+ <frame x="0" y="0" w="40" h="44" ax="20" ay="40"/>
  <frame x="0" y="0" w="44" h="48" ax="22" ay="44"/>
  <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
  <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
+ <frame x="0" y="0" w="40" h="44" ax="20" ay="40"/>
+ <frame x="0" y="0" w="40" h="44" ax="20" ay="40"/>
  <animation name="hide" loop="1">
   <step frame="1" duration="80"/>
   <step frame="2" duration="6"/>
@@ -48,8 +53,12 @@
  <animation name="sit" loop="1">
   <step frame="9" duration="60"/>
  </animation>
- <animation name="sit_low" loop="1">
+ <animation name="lean" loop="1">
   <step frame="10" duration="60"/>
+ </animation>
+ <animation name="caress" loop="1">
+  <step frame="14" duration="24"/>
+  <step frame="15" duration="24"/>
  </animation>
  <animation name="grabbed" loop="1">
   <step frame="11" duration="60"/>

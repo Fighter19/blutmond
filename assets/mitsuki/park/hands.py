@@ -44,21 +44,12 @@ SKIN = [(204, 120, 98), (238, 170, 138), (255, 226, 196)]
 SKIRT = [(44, 70, 60), (82, 112, 88)]         # hina.py's teal, warmed
 SHOE = [(170, 40, 50)]
 NAIL_HINA = [(222, 150, 152)]                 # bare nails, a little darker and pinker than her skin
-SCALE = float(__import__("os").environ.get("HANDS_SCALE", "14.0"))   # Hina's figure, scaled to the close-up
-HIP = (10.0, 30.0, -14.0)                     # where her right hip is: the thigh runs under the hands
-HINA_TURN = float(__import__("os").environ.get("HANDS_TURN", "-115"))                            # the slant of her forearm and hand (degrees)
-HINA_LIFT = float(__import__("os").environ.get("HANDS_LIFT", "2.5"))   # Hina's hand above her lap
-HINA_WRIST = float(__import__("os").environ.get("HANDS_WRIST", "0"))   # Hina's hand turned from her forearm (degrees)
 ZOOM = float(__import__("os").environ.get("HANDS_ZOOM", "1.5"))     # the close-up's nearness
 # Wrapped around the far edge of Hina's hand, a little loose.
 MITSUKI_CURL = ((12, 30, 22), (10, 32, 24), (12, 30, 22), (14, 28, 20))
 MITSUKI_THUMB = (24, 22, 14)
 _w = float(__import__("os").environ.get("HANDS_WRAP", "40"))
 MITSUKI_WRAP = (_w * 0.5, _w, _w * 0.8)   # ... and round under Hina's hand
-MITSUKI_SHIFT = float(__import__("os").environ.get("HANDS_SHIFT", "6"))   # the thumb curled in under her hand
-SLEEVE_BACK = float(__import__("os").environ.get("HANDS_SLEEVE", "10"))   # her cuff that far up from her wrist
-MITSUKI_CROSS = float(__import__("os").environ.get("HANDS_CROSS", "50"))                         # Mitsuki's hand to Hina's (degrees)
-MITSUKI_LEAN = float(__import__("os").environ.get("HANDS_LEAN", "-26"))   # she leans in to reach (degrees)
 NAIL = [(150, 20, 44), (226, 52, 72)]
 COAT = [(46, 34, 60), (84, 64, 100)]          # her navy, warmed
 CUFF = [(255, 240, 220)]
@@ -94,13 +85,18 @@ HINA = {
 
 
 def build(Rig):
-    import importlib.util
     import os
-    from mathutils import Euler, Vector
+    import sys
+    import bpy
+    from mathutils import Vector
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import pair
     debug = os.environ.get('HANDS_DEBUG', '')
     r = Rig('hands')
     pitch = float(os.environ.get('HANDS_PITCH', '40'))
-    r.view = {'yaw': float(os.environ.get('HANDS_YAW', '30')), 'pitch': pitch if debug != 'side' else 0.0, 'light': (-0.35, 0.6, 0.72), 'supersample': 8}
+    # (From Hina's side, looking down at her lap: yaw in pair.py's scene, where they face +x.)
+    r.view = {'yaw': float(os.environ.get('HANDS_YAW', '120')), 'pitch': pitch if debug != 'side' else 0.0,
+              'light': (-0.35, 0.6, 0.72), 'supersample': 8}
     r.outline = OUT
     r.inner_lines = 1.6 * ZOOM * 1.6   # (in units of depth: the scene is scaled by ZOOM; only real overlaps)
     g = dict(emissive=True)
@@ -122,190 +118,38 @@ def build(Rig):
     r.material('shoe', SHOE, bands=[], **g)
     r.joint('bench', None, (0, 0, 0))
     # The bench's dark wood under and around them.
-    r.box('bench', 'ground', (0, 0, -60), (400, 400, 2))
+    r.box('bench', 'ground', (0, 0, -60), (4000, 4000, 2))
 
-    # Hina herself, sitting (assets/mitsuki/home/hina.py: her model, scaled to the close-up),
-    # facing the viewer: her hoodie's sleeve, her skirt, her thighs; her head is out of the
-    # picture, her right hand drawn in detail instead.
-    spec = importlib.util.spec_from_file_location('hina', os.path.join(os.path.dirname(__file__), '..', 'home', 'hina.py'))
-    hina = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(hina)
+    # The two of them on the bench (pair.py: the scene their sprites are drawn from too): Hina
+    # without her head (out of the picture) and her right hand (drawn in detail); Mitsuki in
+    # the close-up's colours, without her head and hair and her left hand.
+    hina = pair.load('../home/hina.py', 'hina')
     hina.model(r, head=False, right_hand=False)
-    sit = {'pelvis': (0, 0, -90), 'hip_R': (90, 8), 'knee_R': -86, 'hip_L': (90, -8), 'knee_L': -86,
-           'shoulder_L': (-24, 30), 'elbow_L': 10, 'spine': (4, 0, 0)}
+    pair.add_mitsuki(r, 'm_', material=lambda name, ramp, k: MITSUKI_MATERIALS.get(name),
+                     group=lambda grp: 'body' if grp is None else None, skip=('head', 'hair', 'hair_end', 'hand_L'))
+    solved = pair.solve(r, lambda n: 'm_' + n, lambda n: n, log=os.environ.get('HANDS_LOG') if debug else None)
+    sit = solved['joints']
+    wrist, turn, tilt = solved['hina_hand']
+    at, mturn = solved['mitsuki_hand']
+    middle = solved['middle']
 
-    def apply(joints):
-        for name, a in joints.items():
-            swing, spread, twist = (a, 0, 0) if isinstance(a, (int, float)) else (tuple(a) + (0, 0))[:3]
-            r.joints[name].rotation_euler = Euler((math.radians(spread), math.radians(-swing), math.radians(twist)))
-
-    import bpy
-    apply(sit)
-    pelvis = r.joints['pelvis']
-    pelvis.scale = (SCALE, SCALE, SCALE)
-    bpy.context.view_layer.update()
-    # Seated so her right thigh runs under the hands: its hip at HIP.
-    hip = r.joints['hip_R'].matrix_world.translation.copy()
-    pelvis.location = pelvis.location + (Vector(HIP) - hip)
-    bpy.context.view_layer.update()
-    knee = r.joints['knee_R'].matrix_world.translation.copy()
-    hip = r.joints['hip_R'].matrix_world.translation.copy()
-    # Her wrist on her thigh, a third of the way to the knee, on its top; her forearm along the
-    # slant the hand is drawn at: the arm's angles found by search (forward kinematics of her
-    # rig, the nearest of a grid).
-    top = 1.7 * SCALE + 0.6       # over her thigh and the skirt lying on it
-    target = hip + (knee - hip) * 0.4 + Vector((-2.0, 0, top))
-    aim = Vector((math.cos(math.radians(HINA_TURN)), math.sin(math.radians(HINA_TURN)), -0.25)).normalized()
-    best = None
-    for sw in range(0, 100, 6):
-        for sp in range(-40, 44, 6):
-            for el in range(0, 130, 8):
-                apply({'shoulder_R': (sw, sp), 'elbow_R': el})
-                bpy.context.view_layer.update()
-                w = r.joints['hand_R'].matrix_world.translation
-                e = r.joints['elbow_R'].matrix_world.translation
-                cost = (w - target).length + 12.0 * (1.0 - (w - e).normalized().dot(aim))
-                if best is None or cost < best[0]:
-                    best = (cost, sw, sp, el)
-    sit['shoulder_R'] = (best[1], best[2])
-    sit['elbow_R'] = best[3]
-    apply(sit)
-    bpy.context.view_layer.update()
-    wrist = r.joints['hand_R'].matrix_world.translation.copy()
-    elbow = r.joints['elbow_R'].matrix_world.translation.copy()
-    d = (wrist - elbow).normalized()
-    turn = math.degrees(math.atan2(d.y, d.x))
-    turn += HINA_WRIST   # her hand bent at the wrist: its fingers toward Mitsuki's side
-    tilt = -math.degrees(math.asin(max(-1.0, min(1.0, d.z))))
-    if debug:
-        print('hands: hip', tuple(hip), 'knee', tuple(knee), 'target', tuple(target), 'best', best, 'wrist', tuple(wrist),
-              'turn', turn, 'tilt', tilt, flush=True)
-
-    # Mitsuki herself, sitting right beside Hina (assets/mitsuki/mitsuki.py: her model, at the
-    # same scale): her left thigh against Hina's right one, no bench between them; her left
-    # arm reaching over to Hina's hand (posed below, once that is placed).
-    mitsuki_model(r)
-    for name, a in {'m_pelvis': (0, 0, -90), 'm_hip_R': (90, 6), 'm_knee_R': -86, 'm_hip_L': (90, -2),
-                    'm_knee_L': -86, 'm_shoulder_R': (20, -10), 'm_elbow_R': 40, 'm_spine': (MITSUKI_LEAN, 0, 0)}.items():
-        sit[name] = a
-    apply(sit)
-    mp = r.joints['m_pelvis']
-    mp.scale = (SCALE, SCALE, SCALE)
-    bpy.context.view_layer.update()
-    other = r.joints['hip_L'].matrix_world.translation.copy()
-    side = hip - other
-    side.z = 0
-    side.normalize()
-    gap = (0.95 + 1.05) * SCALE
-    mhip = r.joints['m_hip_L'].matrix_world.translation.copy()
-    mp.location = mp.location + (hip + side * gap - mhip)
-    bpy.context.view_layer.update()
-
-    # Her right hand, at her wrist, along her forearm, resting in her lap: bent at the wrist to
-    # lie on her thigh (her forearm comes down to it), palm down, its thumb toward Mitsuki's
-    # side, curled a little; natural nails.
-    # Out of her open sleeve (it ends a little short of her wrist joint): the hand's wrist,
-    # which reaches 6 back, just inside it.
-    wrist = wrist + d * (3.0 - 0.2 * SCALE)
-    # On her lap, not in it: the height of her skirt and thigh under the hand, measured (rays
-    # down onto her pelvis's and thighs' parts) from the wrist to the fingertips; the hand
-    # lies on the highest of them, and tilts down along the lap.
-    deps = bpy.context.evaluated_depsgraph_get()
-    dirv = Vector((math.cos(math.radians(turn)), math.sin(math.radians(turn)), 0))
-    across = Vector((-dirv.y, dirv.x, 0))
-
-    def lap_z(p):
-        best_z = None
-        for off in (-5.0, 0.0, 5.0):
-            origin = Vector((p.x, p.y, 400.0)) + across * off
-            while True:
-                hit, loc, nrm, idx, ob, mtx = r.scene.ray_cast(deps, origin, Vector((0, 0, -1)))
-                if not hit:
-                    break
-                if ob.parent is not None and ob.parent.name in ('pelvis', 'hip_R', 'hip_L'):
-                    best_z = loc.z if best_z is None else max(best_z, loc.z)
-                    break
-                origin = loc - Vector((0, 0, 0.01))
-        return best_z
-
-    near = lap_z(wrist + dirv * 4.0)
-    far = lap_z(wrist + dirv * 26.0)
-    heights = [z for z in (near, far, lap_z(wrist + dirv * 15.0)) if z is not None]
-    lap = max(heights) if heights else target.z
-    if debug:
-        with open(os.environ.get('HANDS_LOG', '/dev/null'), 'a') as f:
-            f.write('lap near %r far %r -> %r (was %r)\n' % (near, far, lap, target.z))
-    tilt = 0.0
-    if near is not None and far is not None:
-        tilt = max(-25.0, min(25.0, math.degrees(math.atan2(near - far, 22.0))))
-    # (Lifted a little off her lap: Mitsuki holds it, her thumb under it.)
-    wrist = Vector((wrist.x, wrist.y, (near if near is not None else lap) + HINA['thick'] + 0.8 + HINA_LIFT))
-    target = Vector((target.x, target.y, wrist.z))
+    # Hina's right hand, out of her open sleeve, resting in her lap (lifted a little: Mitsuki
+    # holds it), its thumb toward Mitsuki's side, curled a little; natural nails.
     if debug != 'nohina':
         hand(r, 'hina', HINA, thumb=1, at=tuple(wrist), turn=turn, tilt=tilt,
              curl=((6, 12, 6), (4, 10, 6), (6, 12, 8), (8, 14, 8)), fan=(6, 2, -2, -7),
              thumb_pose=(10, 18, 12))
-
-    # Mitsuki's left hand, reaching across from her side (the left) at a slant, laid over the
-    # back of Hina's and holding it: her long fingers cross Hina's knuckles and curl down past
-    # them, the nails red; her coat's cuff with the white trim at the wrist, her sleeve.
-    if debug == 'nomitsuki':
-        r.pose(joints=sit, show=('body', 'lap'))
-        return r
-    # Her palm over the back of Hina's hand, her forearm coming in at MITSUKI_CROSS to Hina's.
-    t = math.radians(turn)
-    mturn = turn + MITSUKI_CROSS
-    m = math.radians(mturn)
-    mdir = Vector((math.cos(m), math.sin(m), 0))
-    middle = wrist + Vector((math.cos(t), math.sin(t), 0)) * HINA['palm'] * float(os.environ.get('HANDS_OVER', '0.5'))
-    # Moved across her hand toward her fingers' side: Hina's hand's edge in the web of her
-    # thumb, the thumb down past it and under.
-    across = Vector((math.sin(m), -math.cos(m), 0))
-    at = tuple(middle - mdir * MITSUKI['palm'] * 0.55 + across * MITSUKI_SHIFT + Vector((0, 0, 3.6)))
-    # Her arm (her model's: the coat's sleeve and its white trim) posed to it: the angles found
-    # by search as Hina's were; her sleeve ends 0.6 short of her wrist joint.
-    m = math.radians(mturn)
-    aim = Vector((math.cos(m), math.sin(m), -0.2)).normalized()
-    # Her sleeve's end a little up her arm from her wrist: the lower half of her palm shows.
-    cuff = Vector(at) - Vector((math.cos(m), math.sin(m), 0)) * SLEEVE_BACK
-    best = None
-    for sw in range(0, 120, 6):
-        for sp in range(-60, 64, 6):
-            for el in range(0, 130, 8):
-                apply({'m_shoulder_L': (sw, sp), 'm_elbow_L': el})
-                bpy.context.view_layer.update()
-                w = r.joints['m_hand_L'].matrix_world.translation
-                e = r.joints['m_elbow_L'].matrix_world.translation
-                dd = (w - e).normalized()
-                cost = (w + dd * (3.0 - 0.6 * SCALE) - cuff).length + 10.0 * (1.0 - dd.dot(aim))
-                if best is None or cost < best[0]:
-                    best = (cost, sw, sp, el)
-    sit['m_shoulder_L'] = (best[1], best[2])
-    sit['m_elbow_L'] = best[3]
-    apply(sit)
-    bpy.context.view_layer.update()
-    if debug:
-        with open(os.environ.get('HANDS_LOG', '/dev/null'), 'a') as f:
-            f.write('mitsuki arm %r target %r shoulder %r hina wrist %r hina hip %r mhipL %r aim %r\n' % (
-                best, at, tuple(r.joints['m_shoulder_L'].matrix_world.translation), tuple(wrist), tuple(hip),
-                tuple(r.joints['m_hip_L'].matrix_world.translation), tuple(aim)))
-    mw = r.joints['m_hand_L'].matrix_world.translation
-    me_ = r.joints['m_elbow_L'].matrix_world.translation
-    dd = (mw - me_).normalized()
-    reached = mw + dd * (3.0 - 0.6 * SCALE)
-    # Her hand diagonally over Hina's (bent at the wrist to it, wherever her arm comes from), its
-    # fingers wrapping around the far edge of Hina's hand: bent more at the middle and the
-    # last joints, down past it.
-    at = tuple(Vector(at) * 0.85 + (reached + Vector((math.cos(m), math.sin(m), 0)) * SLEEVE_BACK) * 0.15)
-    mturn = turn + MITSUKI_CROSS
-    hand(r, 'mitsuki', MITSUKI, thumb=-1, at=at, turn=mturn,
-         curl=MITSUKI_CURL, fan=(-5, -1, 3, 8),
-         thumb_pose=MITSUKI_THUMB, thumb_wrap=MITSUKI_WRAP, tilt=-6.0)
+    # Mitsuki's left hand over it, crossing it: her long fingers wrapped round its far edge, the
+    # nails red, her thumb down its near side and under it.
+    if debug != 'nomitsuki':
+        hand(r, 'mitsuki', MITSUKI, thumb=-1, at=tuple(at), turn=mturn,
+             curl=MITSUKI_CURL, fan=(-5, -1, 3, 8),
+             thumb_pose=MITSUKI_THUMB, thumb_wrap=MITSUKI_WRAP, tilt=-6.0)
     # The frame on their hands: everything moved so the middle of Hina's hand, a little toward
-    # Mitsuki's, is at the origin (the frame's anchor, its middle).
+    # Mitsuki's, is at the origin (the frame's anchor, its middle), and scaled up about there
+    # (the frame's scale is fixed: a pixel a unit).
     focus = middle + (Vector(at) - middle) * 0.25
-    focus.z = 0.0
-    # Nearer: all of it scaled up about there (the frame's scale is fixed: a pixel a unit).
+    focus.z = middle.z - 10.0   # (the hands a little above the frame's middle, as before)
     for name in [n for n in ('pelvis', 'm_pelvis', 'bones_hina', 'bones_mitsuki') if n in bpy.data.objects]:
         ob = bpy.data.objects[name]
         ob.location = (ob.location - focus) * ZOOM
@@ -318,45 +162,6 @@ def build(Rig):
 # tones, as in her model); parts of others (her head, her hair, her things) are left out.
 MITSUKI_MATERIALS = {'skin': 'skin', 'coat': 'coat', 'skirt': 'coat', 'tights': 'coat', 'boot': 'coat', 'trim': 'cuff',
                      }   # her scarf left out: leaning in, it would hang over the shot
-
-
-def mitsuki_model(r):
-    """Builds Mitsuki's model (assets/mitsuki/mitsuki.py) into the close-up: her build run on a
-    stand-in rig that adds her joints and body parts to `r`, each joint named m_ and hers."""
-    import importlib.util
-    import os
-    spec = importlib.util.spec_from_file_location('mitsuki', os.path.join(os.path.dirname(__file__), '..', 'mitsuki.py'))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-
-    class Stand:
-        def __init__(self, name):
-            pass
-
-        def __getattr__(self, name):
-            return lambda *a, **k: None
-
-        def __setattr__(self, name, value):
-            pass
-
-        def joint(self, name, parent, at):
-            r.joint('m_' + name, None if parent is None else 'm_' + parent, at)
-
-        def _part(self, kind, joint, material, *a, group=None, **k):
-            if group or material not in MITSUKI_MATERIALS or joint in ('head', 'hair', 'hair_end', 'hand_L'):
-                return
-            getattr(r, kind)('m_' + joint, MITSUKI_MATERIALS[material], *a, group='body', **k)
-
-        def ellipsoid(self, *a, **k):
-            self._part('ellipsoid', *a, **k)
-
-        def tube(self, *a, **k):
-            self._part('tube', *a, **k)
-
-        def box(self, *a, **k):
-            self._part('box', *a, **k)
-
-    mod.build(Stand)
 
 
 def hand(r, name, spec, thumb, at, turn, curl, fan, thumb_pose, tilt=0.0, thumb_wrap=(0, 0, 0)):

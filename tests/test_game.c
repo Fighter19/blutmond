@@ -3840,7 +3840,7 @@ static void testMitsukisParkScene(void)
   TEST_ASSERT(s_game.lockTimer != 0 && most == 3 && first < most);
   TEST_ASSERT(BM_FIX_INT(s_game.player.x) - 137 <= 70);
   // Through the scene: A at each line.
-  int lines = 0, theirs = 0, hug = 0, led = 0, sat = 0, close = 0, taken = 0, portraits = 0, spoken = 0, handsLoaded = 0;
+  int lines = 0, theirs = 0, hug = 0, led = 0, sat = 0, close = 0, taken = 0, portraits = 0, spoken = 0, handsLoaded = 0, leaned = 0, both = 0;
   uint16_t line = 0xFFFF;
   for (f = 0; f < 8000 && (f < 20 || s_game.lockTimer != 0); f++)
   {
@@ -3869,10 +3869,16 @@ static void testMitsukisParkScene(void)
       handsLoaded += s_game.sheetTile[s_game.actors.sheet[hands]] != BM_GAME_NO_TILES;
     }
     if (actorPlaying("Hina", "grabbed") == hina && taken++ == 10) shoot("park_taken");
+    // On the bench: Hina's head in Mitsuki's lap, then Mitsuki stroking her hair (their sprites
+    // drawn from one scene, assets/mitsuki/park/pair.py).
+    if (actorPlaying("Hina", "lean") == hina && leaned++ == 20) shoot("park_lean");
+    if (actorPlaying("Hina", "caress") == hina && s_game.playerAnim.anim ==
+        (uint8_t)bmSpriteSheetAnim(&s_game.sheets[s_game.playerSheet], &s_pack, "caress") && both++ == 20) shoot("park_caress");
     frames(1, (f % 24) == 0 ? BM_KEY_A : 0);
   }
   printf("    the scene: %d lines, %d of them Hina's\n", lines, theirs);
   TEST_ASSERT(s_game.lockTimer == 0 && hug > 0 && led > 0 && sat > 0 && close > 0 && taken > 0);
+  TEST_ASSERT(leaned > 0 && both > 0);
   TEST_ASSERT(lines == 19 && theirs >= 8);
   printf("    portraits drawn %d of %d frames with a speaker\n", portraits, spoken);
   TEST_ASSERT(spoken > 0 && portraits >= spoken - 2);   // (loaded the frame after it is first needed)

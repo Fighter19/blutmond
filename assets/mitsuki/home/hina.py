@@ -31,6 +31,10 @@ SHOE = [(170, 40, 50)]
 SWEAT = [(150, 204, 255)]
 
 SIDES = (('R', -1), ('L', 1))
+LID_Z = float(os.environ.get('HINA_LID', '23.5'))       # her relaxed lids' edge (the bench)
+LID_TILT = float(os.environ.get('HINA_LID_TILT', '-12'))
+IRIS_IN = float(os.environ.get('HINA_IRIS_IN', '0'))
+LOOK = float(os.environ.get('HINA_LOOK', '-0.45'))     # her pupils toward Mitsuki (-y), both the same way
 PANIC = os.environ.get('HINA_FACE') == 'panic'
 
 
@@ -40,11 +44,42 @@ def build(Rig):
     r.outline = OUT
     r.inner_lines = 3.0
     model(r)
-    for p in poses():
+    ps = poses()
+    if not PANIC:   # (the panicked portrait's run needs no bench)
+        bench(r, ps)
+    for p in ps:
         r.pose(**p)
     # Panicked: the phone call (pose 0); soft: shy, close to tears (pose 8).
     r.portrait(0 if PANIC else 8, (0.9, 0, 23.6), 3.3, yaw=58.0, pitch=4.0, show=('portrait', 'far_eye'))
     return r
+
+
+def bench(r, ps):
+    """Her frames on the bench (9 holding hands, 10 her head in Mitsuki's lap, 14 and 15 her
+    hair stroked: Mitsuki's hand there differs) from the scene the close-up of their hands is drawn from too (assets/mitsuki/park/
+    pair.py): Mitsuki there as a holdout (hiding what of Hina is behind her: she is drawn by
+    her own sprite), Hina at the origin, her face relaxed."""
+    import sys
+    from mathutils import Vector
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'park'))
+    import pair
+    pair.add_mitsuki(r, 'm_', material=pair.holdout(r),
+                     group=lambda g: 'pair_mitsuki' if g in (None, 'far_eye', 'eyes') else None)
+    m = lambda n: 'm_' + n  # noqa: E731
+    h = lambda n: n  # noqa: E731
+    solved = pair.solve(r, m, h)
+    pair.shrink(r, ['pelvis', 'm_pelvis'])
+    off = r.joints['pelvis'].location - Vector((0, 0, 11.6 + pair.SIT_ROOT))
+    for n in ('pelvis', 'm_pelvis'):
+        r.joints[n].location = r.joints[n].location - off
+    show = ('body', 'far_eye', 'lap', 'relaxed', 'pair_mitsuki')
+    for i, js in zip((9, 10, 14, 15), pair.steps(r, solved['joints'], m, h)):
+        lids = 'relaxed_lids' if i == 9 else 'resting_lids'   # (her eyes shut, her head in her lap)
+        p = pose(view=FRONT, show=show + (lids,), root=(0, 0, pair.SIT_ROOT), **js)
+        if i < len(ps):
+            ps[i] = p
+        else:
+            ps.append(p)
 
 
 def model(r, head=True, right_hand=True):
@@ -70,6 +105,9 @@ def model(r, head=True, right_hand=True):
     mat('shoe', SHOE, bands=[])
     mat('phone', SKIRT[:1], weight=3, min_cover=0.3, bands=[])
     mat('glow', GLOW, weight=9, min_cover=0.2, bands=[], keep_inner=True, emissive=True)
+    mat('lid', SKIN, weight=9.5, min_cover=0.3, bands=[0.3], keep_inner=True)   # her relaxed face's lids
+    mat('lidline', [OUT], weight=11, min_cover=0.15, bands=[], keep_inner=True)   # their lashes, over them
+    mat('pupil_front', [GREEN[0]], weight=30, min_cover=0.2, bands=[], keep_inner=True)   # (a pixel of its own)
 
     # The rig: Mitsuki's (mitsuki.py), her twin tails on the head.
     r.joint('pelvis', None, (0, 0, 11.6))
@@ -112,6 +150,21 @@ def model(r, head=True, right_hand=True):
             r.ellipsoid('head', 'lash', on_face(0.25, 25.6, -0.1), (0.3, 0.75, 0.14), rot=(-12 * y, 0, turn * y), group='portrait')
         else:
             r.ellipsoid('head', 'lash', on_face(0.25, 25.3, -0.1), (0.3, 0.75, 0.14), rot=(18 * y, 0, turn * y), group='portrait')
+        # Relaxed (on the bench, her hand held): her brows level; her lids half down, her pupils
+        # showing under them (relaxed_lids), or down over them, resting (resting_lids), the
+        # lashes with them.
+        r.ellipsoid('head', 'lid', on_face(0.3, LID_Z + 0.95), (0.45, 1.0, 1.0), rot=(0, 0, turn * y), group='relaxed_lids')
+        r.ellipsoid('head', 'lidline', on_face(0.34, LID_Z), (0.42, 1.0, 0.32), rot=(LID_TILT * y, 0, turn * y),
+                    group='relaxed_lids')
+        # (Seen from the front her irises fill her eyes, no white beside them; the pupils keep a
+        # pixel of their own, both looking toward Mitsuki.)
+        r.ellipsoid('head', 'eye', on_face(0.16, 23.0, gaze + IRIS_IN), (0.38, 1.05, 1.0), rot=(0, 0, turn * y), group='relaxed')
+        px, py, pz = on_face(0.28, 22.95, gaze + IRIS_IN + 0.04)
+        r.ellipsoid('head', 'pupil_front', (px, py + LOOK, pz), (0.3, 0.55, 0.62), rot=(0, 0, turn * y),
+                    group='relaxed')
+        r.ellipsoid('head', 'lid', on_face(0.3, 23.55), (0.45, 1.0, 1.0), rot=(0, 0, turn * y), group='resting_lids')
+        r.ellipsoid('head', 'lidline', on_face(0.34, 22.6), (0.42, 1.0, 0.3), rot=(4 * y, 0, turn * y), group='resting_lids')
+        r.ellipsoid('head', 'lash', on_face(0.25, 25.2, -0.1), (0.3, 0.75, 0.13), rot=(0, 0, turn * y), group='relaxed')
         # Her eyes in the dark (only these, glowing, while she hides under the bench).
         if y < 0:
             r.ellipsoid('head', 'glow', on_face(0.2, 23.0, gaze), (0.4, 0.7, 0.9), rot=(0, 0, turn * y), group='eyes')
@@ -126,6 +179,8 @@ def model(r, head=True, right_hand=True):
         r.ellipsoid('head', 'sweat', (2.0, -3.2, 26.0), (0.4, 0.4, 0.7), group='portrait')
     else:
         r.ellipsoid('head', 'mouth', (3.6, -0.8, 21.2), (0.25, 0.55, 0.3), rot=(0, 0, -30), group='portrait')
+    # Relaxed: a small soft smile, closed.
+    r.ellipsoid('head', 'mouth', (3.62, -0.75, 21.3), (0.14, 0.62, 0.11), rot=(0, 0, -30), group='relaxed')
     r.ellipsoid('head', 'hair', (0.0, 0, 24.7), (3.9, 3.9, 4.0), cuts=[((2.7, 0, 25.4), (0.7, 0, -0.6))], group=H)
     r.tube('head', 'hair', (2.6, -1.6, 26.6), (3.5, -0.6, 25.0), 0.7, 0.3, group=H)
     r.tube('head', 'hair', (2.8, 1.4, 26.6), (3.5, 0.6, 25.2), 0.6, 0.3, group=H)

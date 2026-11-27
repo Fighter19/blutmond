@@ -10,7 +10,8 @@ the camera's space: x right, y up, z toward the viewer) on the mean normal of it
 pixel, cut at the material's `bands`. Around the figure goes a line in the outline colour (the
 pixels next to it, left, right, above and below); where a part lies well in front of another
 (`inner_lines`: units of depth), the farther one's edge pixel takes the line too, as it does
-where two materials `apart` meet however near they lie. The normal
+where two materials `apart` meet however near they lie. Materials `holdout` hide what is
+behind them and are left empty (two characters drawn as one scene, each its own sprite). The normal
 map is the mean normal (x right, y down, z toward the viewer, as lighting.md wants), the
 line's pointing out of the figure.
 """
@@ -77,6 +78,16 @@ def pixelize(meta, render_dir, n):
         score[better] = s[better]
         chosen[better] = i
     chosen[~opaque] = 0
+    # Materials `holdout` (the other of two characters drawn as one scene, each its own sprite):
+    # they hide what lies behind them, and their pixels are left empty; where they lie in front
+    # of the figure, its line around them is theirs to draw (their own sprite's), not its.
+    hold_ids = [i for i, m in mats.items() if m.get('holdout')]
+    held = np.isin(chosen, hold_ids) if hold_ids else np.zeros((h, w), bool)
+    held_depth = np.full((h, w), np.inf)
+    for i in hold_ids:
+        d = np.where(bi == i, bd, np.inf).min(-1)
+        held_depth = np.minimum(held_depth, d)
+    chosen[held] = 0
 
     light = np.array(view['light'], np.float64)
     light /= np.linalg.norm(light)
@@ -140,6 +151,9 @@ def pixelize(meta, render_dir, n):
         if dx == 1: nb[:, 0] = False
         if dx == -1: nb[:, -1] = False
         here = nb & ~inside
+        # (Not into a holdout in front of the figure's pixel there.)
+        with np.errstate(invalid='ignore'):
+            here &= ~(held & (held_depth < np.roll(depth, (dy, dx), (0, 1))))
         line |= here
         out_dir[here] += (-dx, -dy)      # away from the neighbour (x right, y down)
     rgba[line, :3] = outline

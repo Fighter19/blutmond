@@ -3,11 +3,12 @@ class Hina extends Actor;
 // Hina in the park (park.ms directs the scene through story flags): hiding under the bench,
 // only her eyes showing and blinking; out in a leap (ParkFound) into Mitsuki's arms (ParkHug,
 // rocked; ParkPat: she sobs while Mitsuki pats her head); led by the hand behind Mitsuki
-// (ParkLead); sitting close beside her on the bench (ParkSit; ParkLow: her head low); and
+// (ParkLead); sitting close beside her on the bench (ParkSit; ParkLean: her head in Mitsuki's
+// lap; ParkCaress: her hair stroked); and
 // snatched by the nightmare (ParkTaken: held up at its hand, NightmareGrab, reaching out for
 // Mitsuki; carried off with it, NightmareLeap). After the scene (ParkDone) she is gone.
 
-const int SIT_X = 139;      // beside Mitsuki on the bench (park.ms: SIT_X + 13)
+const int SIT_X = 133;      // beside Mitsuki on the bench, shoulder to shoulder (park.ms SIT_X + 7: pair.py)
 const int TAKE_X = 159;     // where the nightmare stands when it takes her (nightmare.ms)
 const int GRAB_DX = -18;    // its hand, from it (facing left)
 const int GRAB_Y = 114;     // her feet, held up
@@ -33,7 +34,8 @@ event tick() {
   } else if flag(#ParkSit) {
     x = fix(SIT_X);
     facing = 1;
-    if flag(#ParkLow) { play_anim(#sit_low); }
+    if flag(#ParkCaress) { play_anim(#caress); }
+    else if flag(#ParkLean) { play_anim(#lean); }
     else { play_anim(#sit); }
   } else if flag(#ParkLead) {
     draw_in_front(false);

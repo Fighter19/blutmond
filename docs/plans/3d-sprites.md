@@ -250,9 +250,11 @@ tenser the nearer she comes to the bench (intensity 0 to 3 by the distance). Und
 only Hina's green eyes, blinking. Close to it Hina storms out into Mitsuki's arms (drawn in
 front of her, `draw_in_front`), and the music turns warm with an ache in it (`park_reunion`, F
 major leaning on D minor); Mitsuki rocks her, pats her head while she sobs; lets go, takes her
-hand and leads her to the bench (seen from the side); they sit close, Mitsuki holding Hina's
-hand in her lap, a close-up of their hands shown over the scene for a while. Hina opens up,
-slowly, about what has weighed on her since "that day" (never said what). Then the nightmare
+hand and leads her to the bench (seen from the side); they sit close, shoulder to shoulder,
+their knees turned to each other, Mitsuki holding Hina's hand in her lap (her head turned to
+her, Hina's face relaxed), a close-up of their hands shown over the scene for a while. Hina
+opens up, slowly, about what has weighed on her since "that day" (never said what), then leans
+in, her head in Mitsuki's lap, her face turned a little toward us; Mitsuki strokes her hair. Then the nightmare
 rises out of the ground, hushing, reaches for her and takes her; she reaches out for Mitsuki
 and is carried off into the night, screaming off-screen; Mitsuki is left reaching after her.
 After it (`ParkDone`) the park stays tense and Hina gone.
@@ -260,10 +262,11 @@ After it (`ParkDone`) the park stays tense and Hina gone.
 | | |
 |---|---|
 | Starting it | through the street's west door; on the PC `build/game --room park` |
-| Hina | her full body (`hina.py`, 14 frames: hiding, the leap, the rocked hug, sobbing, led, sitting from the front, held up); her soft portrait `hina_soft` |
-| Mitsuki | her frames for the scene in `mitsuki.py` (hug rocking, pat, leading, sitting holding a hand, reaching out) |
+| Hina | her full body (`hina.py`, 16 frames: hiding, the leap, the rocked hug, sobbing, led, on the bench, held up); a relaxed face for the bench (lids over her pupils, level brows, a soft smile: group `relaxed`); her soft portrait `hina_soft` |
+| Mitsuki | her frames for the scene in `mitsuki.py` (hug rocking, pat, leading, on the bench: `sit_hand`, `sit_leaned`, `caress`; reaching out) |
 | The nightmare | a shadow, emissive (`nightmare.py`): rising, hushing, reaching, holding, leaping away |
-| The close-up | `hands.py`: both their models seated, their hands built as signed-distance shapes (metaballs skinned to bones), each hand a material `apart` (a line where one lies on the other, rig.py); a panel (`--clip yes`) |
+| On the bench | one scene, `pair.py`: both models seated (thighs touching at the knees, shoulders touching), their arms found by search; drawn for the close-up and for both sprites (Mitsuki's frames 55, 59 to 61, Hina's 9, 10, 14, 15), each sprite rendered with the other in the scene as a `holdout` material (hiding what is behind it, its pixels left empty; the nearer one draws the line where they meet). `bench.py` draws both together to look at (`--preview`, `--save-blend`) |
+| The close-up | `hands.py`: that scene near, their hands built as signed-distance shapes (metaballs skinned to bones), each hand a material `apart` (a line where one lies on the other, rig.py); a panel (`--clip yes`) |
 | Sprite memory | the room's sprites fill it with the player's; those not drawn for a while (the close-up, the nightmare) make room for the dialogue's portraits, least recently drawn first (runtime-core.md) |
 | Multiboot | none of it; a pack fitted over the link brings a room's sprites (named like its objects' classes) only with that room |
 

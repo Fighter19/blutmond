@@ -86,10 +86,13 @@
  <frame x="197" y="110" w="14" h="31" ax="5" ay="28" />
  <frame x="211" y="110" w="14" h="32" ax="8" ay="29" />
  <frame x="225" y="110" w="15" h="31" ax="9" ay="29" />
- <frame x="240" y="110" w="15" h="27" ax="7" ay="31" />
+ <frame x="240" y="110" w="12" h="26" ax="6" ay="30" />
  <frame x="0" y="142" w="14" h="30" ax="6" ay="28" />
  <frame x="14" y="142" w="14" h="32" ax="6" ay="29" />
  <frame x="28" y="142" w="15" h="31" ax="5" ay="28" />
+ <frame x="43" y="142" w="11" h="25" ax="6" ay="29" />
+ <frame x="54" y="142" w="10" h="25" ax="5" ay="29" />
+ <frame x="64" y="142" w="10" h="25" ax="5" ay="29" />
  <palette name="steel">
   <swap from="#1e203e" to="#404656" />
   <swap from="#343a68" to="#6e768a" />
@@ -203,6 +206,13 @@
  </animation>
  <animation name="sit_hand" loop="1">
   <step frame="55" duration="60" />
+ </animation>
+ <animation name="sit_leaned" loop="1">
+  <step frame="59" duration="60" />
+ </animation>
+ <animation name="caress" loop="1">
+  <step frame="60" duration="24" />
+  <step frame="61" duration="24" />
  </animation>
  <animation name="reach_out" loop="0">
   <step frame="56" duration="1" />

@@ -10,11 +10,13 @@
  <frame x="59" y="0" w="15" h="30" ax="8" ay="27" />
  <frame x="74" y="0" w="16" h="30" ax="9" ay="27" />
  <frame x="90" y="0" w="13" h="30" ax="7" ay="27" />
- <frame x="103" y="0" w="19" h="26" ax="10" ay="30" />
- <frame x="122" y="0" w="20" h="26" ax="10" ay="30" />
- <frame x="142" y="0" w="16" h="25" ax="12" ay="31" />
- <frame x="158" y="0" w="15" h="28" ax="4" ay="24" />
- <frame x="173" y="0" w="15" h="30" ax="6" ay="26" />
+ <frame x="103" y="0" w="16" h="26" ax="6" ay="30" />
+ <frame x="119" y="0" w="19" h="21" ax="12" ay="25" />
+ <frame x="138" y="0" w="16" h="25" ax="12" ay="31" />
+ <frame x="154" y="0" w="15" h="28" ax="4" ay="24" />
+ <frame x="169" y="0" w="15" h="30" ax="6" ay="26" />
+ <frame x="184" y="0" w="19" h="21" ax="12" ay="25" />
+ <frame x="203" y="0" w="19" h="21" ax="12" ay="25" />
  <animation name="hide" loop="1">
   <step frame="1" duration="80" />
   <step frame="2" duration="6" />
@@ -44,8 +46,12 @@
  <animation name="sit" loop="1">
   <step frame="9" duration="60" />
  </animation>
- <animation name="sit_low" loop="1">
+ <animation name="lean" loop="1">
   <step frame="10" duration="60" />
+ </animation>
+ <animation name="caress" loop="1">
+  <step frame="14" duration="24" />
+  <step frame="15" duration="24" />
  </animation>
  <animation name="grabbed" loop="1">
   <step frame="11" duration="60" />

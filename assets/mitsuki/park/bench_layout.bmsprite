@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Mitsuki and Hina on the bench as one scene (bench.py), to look at: holding hands, Hina's
+     head in Mitsuki's lap, Mitsuki stroking her hair (two); Mitsuki's anchor at ax. -->
+<sprite version="1" image="bench.png">
+ <hitbox x="-8" y="-28" w="24" h="28"/>
+ <frame x="0" y="0" w="40" h="44" ax="16" ay="40"/>
+ <frame x="0" y="0" w="40" h="44" ax="16" ay="40"/>
+ <frame x="0" y="0" w="40" h="44" ax="16" ay="40"/>
+ <frame x="0" y="0" w="40" h="44" ax="16" ay="40"/>
+ <animation name="sit" loop="1">
+  <step frame="0" duration="60"/>
+ </animation>
+</sprite>

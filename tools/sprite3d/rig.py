@@ -50,14 +50,15 @@ class Rig:
 
     # --- Materials ------------------------------------------------------------------------
 
-    def material(self, name, ramp, weight=1.0, min_cover=None, bands=None, keep_inner=False, emissive=False, apart=False):
+    def material(self, name, ramp, weight=1.0, min_cover=None, bands=None, keep_inner=False, emissive=False, apart=False, holdout=False):
         """A material: `ramp` colours (r, g, b) from shade to light. `weight`: how strongly
         it claims a pixel it shares with others (an eye, a blade: more). `min_cover`: the
         share of a pixel it needs to make a pixel on its own (thin parts: less than half).
         `bands`: where the light's steps lie (0..1, one fewer than the ramp). `keep_inner`:
         its pixels never take an inner line (an eye). `apart`: where it meets another material
         `apart`, the farther of the two takes an inner line however near they lie (two hands, one on the
-        other, in the same colours). `emissive`: it gives light itself (a room's
+        other, in the same colours). `holdout`: it hides what lies behind it and its pixels are left empty (the other character
+        of a scene of two, drawn each as its own sprite). `emissive`: it gives light itself (a room's
         night sky, a lamp): its normals are black in the normal map, so a lit room draws it as
         it is (make_room.py)."""
         mat = bpy.data.materials.new(name)
@@ -74,7 +75,7 @@ class Rig:
         self.materials[name] = (mat, {
             'name': name, 'index': mat.pass_index, 'ramp': [_hex(c) for c in ramp],
             'weight': weight, 'min_cover': min_cover, 'bands': bands, 'keep_inner': keep_inner,
-            'emissive': emissive, 'apart': apart})
+            'emissive': emissive, 'apart': apart, 'holdout': holdout})
         return name
 
     # --- Joints and parts -----------------------------------------------------------------

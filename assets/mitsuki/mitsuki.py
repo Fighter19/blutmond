@@ -159,12 +159,38 @@ def build(Rig):
     r.box('hand_R', 'phone', (0.6, -3.4, 11.8), (1.0, 0.7, 3.6), group='phone_hand')
     r.box('hand_R', 'screen', (0.6, -3.8, 11.8), (0.7, 0.2, 3.0), group='phone_hand')
 
-    for p in poses():
+    ps = poses()
+    if not getattr(r, 'is_stand', False):
+        bench(r, ps)
+    for p in ps:
         r.pose(**p)
     r.portrait(0, (0.9, 0, 23.6), 3.3, yaw=58.0, pitch=4.0, show=('far_eye',))
     # Wearing the chain mail (assets/test_room/data/armour.bmdata): the coat in steel.
     r.palette('steel', [(COAT[0], (64, 70, 86)), (COAT[1], (110, 118, 138)), (COAT[2], (164, 172, 190))])
     return r
+
+
+def bench(r, ps):
+    """Her frames on the bench (55 holding Hina's hand in her lap, 59 Hina's head in her lap,
+    60 and 61 stroking her hair) from the scene the close-up of their hands is drawn from
+    too (assets/mitsuki/park/pair.py): Hina there as a holdout (hiding what of Mitsuki is
+    behind her: she is drawn by her own sprite); Mitsuki's head turned to her.
+    """
+    import os
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'park'))
+    import pair
+    pair.add_hina(r, 'h_', material=pair.holdout(r), group=lambda g: 'pair_hina' if g in ('body', 'far_eye', 'lap') else None)
+    m = lambda n: n  # noqa: E731
+    h = lambda n: 'h_' + n  # noqa: E731
+    solved = pair.solve(r, m, h)
+    pair.shrink(r, ['pelvis', 'h_pelvis'])
+    for i, js in zip((55, 59, 60, 61), pair.steps(r, solved['joints'], m, h)):
+        p = pose(view=FRONT, show=('far_eye', 'pair_hina'), root=(0, 0, pair.SIT_ROOT), hair=4, scarf=6, **js)
+        if i < len(ps):
+            ps[i] = p
+        else:
+            ps.append(p)
 
 
 # --- Poses: one for each frame of the layout, in its order ------------------------------
@@ -313,8 +339,9 @@ def poses():
     # The park (assets/mitsuki/park), seen from the side until they sit: 51 holding Hina, her
     # arms around her (Hina's own sprite curled against her, behind); 52 a hand on her head (a
     # pat); 53, 54 walking, leading her by the hand behind her (her near arm back); 55 on the
-    # bench, seen from the front, Hina close at her side, her left hand reaching over into
-    # Hina's lap, holding hers; 56
+    # bench, seen from the front, Hina close at her side (8 to her left: their shoulders touch),
+    # her left hand reaching over into Hina's lap, on hers (the arm found in the scene of both,
+    # assets/mitsuki/park/bench.py); 56
     # reaching out after her, too late.
     hug = dict(spine=-10, chest=-6, head=16, shoulder_R=(84, 12), elbow_R=36, hand_R=20, shoulder_L=(80, -12), elbow_L=40,
                hand_L=20, hip_R=8, knee_R=-16, hip_L=-4, knee_L=-10, hair=2, scarf=4)
@@ -327,7 +354,7 @@ def poses():
                         knee_L=-36 if k > 0 else -20, shoulder_R=(-48, -6), elbow_R=6, hand_R=10,
                         shoulder_L=(18 * k, 8), elbow_L=30, hair=-8, scarf=-10))
     sit_hand = dict(hip_R=(102, 30), knee_R=(-78, 28), ankle_R=10, hip_L=(86, -6), knee_L=-88, shoulder_R=(26, 18), elbow_R=55,
-                    shoulder_L=(44, 34), elbow_L=26, hand_L=10, spine=(0, 4, 0), hair=4, scarf=6, head=(-4, 6, -8))
+                    shoulder_L=(65, 35), elbow_L=0, hand_L=20, spine=(0, 4, 0), hair=4, scarf=6, head=(-4, 6, -8))
     out.append(pose(view=FRONT, show=('far_eye',), root=(0, 0, 3.0), **sit_hand))
     out.append(pose(spine=-14, head=6, hip_R=34, knee_R=-30, hip_L=-24, knee_L=-8, **swing(100, elbow=0, hand=-4),
                     shoulder_L=(-30, 8), elbow_L=30, hair=-14, scarf=-18))

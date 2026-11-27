@@ -24,7 +24,7 @@ Writes <out>/sources/<name>.png, <name>_n.png (the normal map) and <name>.bmspri
 above the anchor) in <out>; with --figure, <out>/<figure name>.bmfigure of the two (named
 `player`, it is the engine's player). A character with a portrait gets <out>/<name>_face.png
 and .bmsprite (the dialogue box's, its anchor at the top left). --preview writes a sheet of
-every frame four times larger on a grey ground; --keep leaves the render's passes in a folder.
+every frame four times larger on a grey ground (even when the colours do not fit a sprite); --keep leaves the render's passes in a folder.
 --clip yes renders a panel (a close-up): the layout's rectangles exactly, what reaches past
 them cut off, a border in the outline's colour. --face-name N names the portrait N instead of
 <name>_face. --face-only yes writes the portrait and nothing else (a character who is only heard: on the phone).
@@ -208,6 +208,12 @@ def main(argv):
         nsheet[py:py + ph, px:px + pw] = nm
         fel.set('x', str(px))
         fel.set('y', str(py))
+    # The preview first: written even when the colours do not fit a sprite (a scene of two
+    # characters, to look at).
+    if 'preview' in opts:
+        bg = Image.new('RGBA', (sheet.shape[1], sheet.shape[0]), (96, 104, 112, 255))
+        bg.alpha_composite(Image.fromarray(sheet))
+        bg.resize((bg.width * 4, bg.height * 4), Image.NEAREST).save(opts['preview'])
     if len(used) > 15:
         print('make_sprite: %d colours, a sprite has 15' % len(used), file=sys.stderr)
         return 1
@@ -260,10 +266,6 @@ def main(argv):
                 fh.write('layer legs   sprite=%s_legs\n' % name)
                 fh.write('layer torso  sprite=%s_torso  at=legs.waist  mode=sync\n' % name)
 
-    if 'preview' in opts:
-        bg = Image.new('RGBA', (sheet.shape[1], sheet.shape[0]), (96, 104, 112, 255))
-        bg.alpha_composite(Image.fromarray(sheet))
-        bg.resize((bg.width * 4, bg.height * 4), Image.NEAREST).save(opts['preview'])
     if 'keep' not in opts:
         shutil.rmtree(work, ignore_errors=True)
     return 0
