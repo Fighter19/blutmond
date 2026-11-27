@@ -4,8 +4,9 @@ a carrot nose, stick arms, a red scarf, and in his hands before his chest a Chri
 clear glass, dark inside with a faint violet glow (where Hina is), a silver cap and ring.
 Grabbed at the ball he holds on, grows and fights; beaten, he is a happy snowman again.
 
-One size of him: grown, the engine draws him larger (set_scale 170: affine sprites; his boxes
-in the sheet made as large, snowman_sheet.py). He is built twice (the rig has no groups per
+One size of him: grown, the engine draws him twice as large (set_scale 200: affine sprites,
+each pixel 2 x 2, so his outline stays whole and even; his boxes in the sheet made as large,
+snowman_sheet.py). He is built twice (the rig has no groups per
 pose for the faces of both), as built (s) and as the boss (b). snowman_sheet.py then makes the
 beam's middle the same all along. (One sheet for him and his fight's things, the park's sprite
 memory: the pack holds 28 sprites, all used.)
@@ -32,7 +33,7 @@ SILVER = [(96, 100, 120), SNOW[0]]      # the ball's cap (darker than the snow i
 INSIDE = [(110, 56, 150)]                # in the ball: a violet glow over the dark (snowman_sheet.py)
 GLOW = [(236, 244, 255), (150, 200, 240)]  # in the ball, lit from inside: its snow, its rim (not the light's)
 
-SIZE = 1.0          # both of him (grown: drawn at 170 %, snowman.ms)
+SIZE = 1.0          # both of him (grown: drawn at 200 %, snowman.ms)
 SMALL, BIG = SIZE, SIZE
 SIZES = (('s', SMALL), ('b', BIG))
 SIDES = (('R', -1), ('L', 1))

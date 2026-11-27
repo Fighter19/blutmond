@@ -295,7 +295,7 @@ Back in the snowy park a snowman stands by the path (`snowman.py`: three balls o
 eyes, a carrot nose, stick arms, a red scarf, and in his hands a Christmas ball: clear glass,
 a silver cap and ring, and in it a snowy diorama). Up beside him the first time:
 "Who builds a snowman in the middle of the night?" The second time she grabs the ball; he holds
-on, grows to 170 % and fights (`snowman.ms`, health 30, the music `frost_waltz`):
+on, grows to 200 % and fights (`snowman.ms`, health 30, the music `frost_waltz`):
 
 | Attack | |
 |---|---|
@@ -309,7 +309,8 @@ Beaten, a shadow leaves him and he is a happy snowman again (`SnowmanDone`, save
 How it fits:
 
 - **Grown by the PPU**: all his frames are rendered at one size; grown, the engine draws him at
-  170 % (`set_scale`, runtime-core.md: affine sprites). The grown frames' boxes are made as
+  200 % (`set_scale`, runtime-core.md: affine sprites; a whole number, so each pixel is 2 x 2
+  and his outline stays as even as drawn). The grown frames' boxes are made as
   large in the sheet (`snowman_sheet.py`), so the hits need nothing.
 - **The Christmas ball**: glass a renderer of 15 colours does not do, so `snowman_sheet.py`
   draws what is seen in it, each pose rendered again without it: his body behind it tinted

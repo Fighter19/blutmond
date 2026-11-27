@@ -32,9 +32,9 @@ const int PILLAR_STANDS = 296;  // frames a pillar is counted on once out (frost
                                 // frame or two before he reckons)
 const int RIPPLE_SPEED10 = 28;  // the ripple's speed x 10 (FrostRipple: 2.8)
 const int PILLAR_HALF = 6;    // half a pillar's width
-const int BEAM_DX = 20;       // where the beam starts (FrostBeam*)
+const int BEAM_DX = 24;       // where the beam starts (FrostBeam*: where his breath meets the ground)
 const int BEAM = 32;          // a piece of the beam
-const int GROWN = 170;        // his size grown, percent (snowman_sheet.py SCALE)
+const int GROWN = 200;        // his size grown, percent (snowman_sheet.py SCALE: twice, so each pixel 2 x 2)
 const int JUMP = 42;          // frames in the air
 const fix JUMP_UP = 4.1;      // his speed up as he jumps off; down by GRAVITY each frame
 const fix GRAVITY = 0.2;

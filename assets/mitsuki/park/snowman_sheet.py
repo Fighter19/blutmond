@@ -31,7 +31,7 @@ import snowman as model  # noqa: E402  (its colours)
 HIM = 7                              # his frames 0 to 6 (with the ball), again from 20 without
 BARE = 20
 BOSS = (3, 4, 5, 6)                  # drawn at SCALE (snowman.ms set_scale): their boxes as large
-SCALE = 1.7
+SCALE = 2.0   # (a whole number: each pixel 2 x 2, the outline as even as drawn)
 BEAMS = (16, 17, 18, 19)             # the beam, 1 to 4 pieces of BEAM long
 BEAM = 32
 TIP = 6                              # the beam's rounded end (pixels)

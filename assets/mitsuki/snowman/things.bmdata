@@ -34,7 +34,7 @@ record FrostIcicle {
 # far part beyond it (dx + 121), which waits for the near one to have grown.
 record FrostBeam1 {
   does = Beam
-  dx = 20
+  dx = 24
   life = 96
   damage = 3
   length = 1
@@ -42,7 +42,7 @@ record FrostBeam1 {
 
 record FrostBeam2 {
   does = Beam
-  dx = 20
+  dx = 24
   life = 96
   damage = 3
   length = 2
@@ -50,7 +50,7 @@ record FrostBeam2 {
 
 record FrostBeam3 {
   does = Beam
-  dx = 20
+  dx = 24
   life = 96
   damage = 3
   length = 3
@@ -58,7 +58,7 @@ record FrostBeam3 {
 
 record FrostBeam4 {
   does = Beam
-  dx = 20
+  dx = 24
   life = 96
   damage = 3
   length = 4
@@ -66,7 +66,7 @@ record FrostBeam4 {
 
 record FrostBeamFar1 {
   does = Beam
-  dx = 141
+  dx = 145
   life = 96
   damage = 3
   length = 1
@@ -75,7 +75,7 @@ record FrostBeamFar1 {
 
 record FrostBeamFar2 {
   does = Beam
-  dx = 141
+  dx = 145
   life = 96
   damage = 3
   length = 2
@@ -84,7 +84,7 @@ record FrostBeamFar2 {
 
 record FrostBeamFar3 {
   does = Beam
-  dx = 141
+  dx = 145
   life = 96
   damage = 3
   length = 3
@@ -93,7 +93,7 @@ record FrostBeamFar3 {
 
 record FrostBeamFar4 {
   does = Beam
-  dx = 141
+  dx = 145
   life = 96
   damage = 3
   length = 4
