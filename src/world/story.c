@@ -4,7 +4,7 @@
  */
 
 // What scripts tell a story with (game.h, bmGameStoryCall): the player turned to a side by a
-// scene, and story flags (docs/plans/dialogue.md §5, a first part). A flag is on while the
+// scene, the room's light changed (a lamp switched on, a window lit: light.h), and story flags (docs/plans/dialogue.md §5, a first part). A flag is on while the
 // inventory holds one of its key, the FNV-1a hash of its name changed so that no record has
 // it (no menu lists it): the same in every room, kept in the save game.
 
@@ -15,6 +15,16 @@
 
 int32_t bmGameStoryCall(BmGame *g, uint8_t current, uint32_t api, const int32_t *args)
 {
+  if (api == BM_SCRIPT_API_set_light)
+  {
+    bmLightSet(g, args[0], args[1], args[2]);
+    return 0;
+  }
+  if (api == BM_SCRIPT_API_set_glow)
+  {
+    bmLightGlow(g, args[0]);
+    return 0;
+  }
   if (api == BM_SCRIPT_API_owner_turn)
   {
     // From an attachment, the player's or the room's (a scene drawing the player in a place).

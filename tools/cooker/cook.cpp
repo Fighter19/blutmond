@@ -638,7 +638,12 @@ void collectTiles(RoomWork &room, AreaWork &area, ColorConverter &colors, const 
                   }
                   if (emissive && lightOf.mode == light::Mode::Palette)
                   {
-                    c = area.litColour(c, lightOf.levels);
+                    // As drawn (`levels`), with the light's flicker (`levels` + 1: glow_light) or
+                    // as a script turns it (`levels` + 2: glow_switch).
+                    const uint8_t *sp = ts->image->pixel(ix, iy);
+                    uint32_t rgb = uint32_t(sp[0]) << 16 | uint32_t(sp[1]) << 8 | sp[2];
+                    int kind = lightOf.glowLight.count(rgb) ? 1 : lightOf.glowSwitch.count(rgb) ? 2 : 0;
+                    c = area.litColour(c, lightOf.levels + kind);
                     continue;
                   }
                   if (flip & FLIP_H) n.x = -n.x;

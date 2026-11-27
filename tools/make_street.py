@@ -5,7 +5,9 @@ cottage with a lit window, a picket fence, a tree, a bench and a gas lamp whose 
 all of it (lighting = palette, dithered), a puddle on the road that mirrors the lamp, the bench,
 the sky and whoever stands over it (a `Puddle` object, src/world/reflect.h), and a knight on
 watch by the bench. West of the debug lobby; the cottage is Mitsuki's home (its door leads to
-assets/mitsuki/home, her prologue).
+assets/mitsuki/home, her prologue), its window lit while her light is on (the room's
+`glow_switch`, turned by assets/mitsuki/home/cottage.ms); the lamp's glass glows with its
+flicker (`glow_light`).
 
 usage: make_street.py <assets/test_room>
 
@@ -326,9 +328,12 @@ def write_room(path, tiles, maps, cols, rows):
         "nextlayerid": "5", "nextobjectid": "1",
     })
     mp = ET.SubElement(m, "properties")
-    for k, v in (("music", "night_escape"), ("attach", "Threat, Bench"), ("room_id", "rural_street"), ("title", "Rural street"), ("lighting", "palette"),
+    hexes = lambda cs: ", ".join("#%02x%02x%02x" % c for c in cs)   # noqa: E731
+    # The lamp's glass glows with its flicker (glow_light); the cottage's window is Mitsuki's,
+    # lit while her light is on (glow_switch, turned by assets/mitsuki/home/cottage.ms).
+    for k, v in (("music", "night_escape"), ("attach", "Threat, Bench, Cottage"), ("room_id", "rural_street"), ("title", "Rural street"), ("lighting", "palette"),
                  ("ambient", "0.3"), ("light_levels", "6"), ("light_curve", "perceived"), ("light_dither", "true"),
-                 ("backdrop", "#101a2a")):
+                 ("backdrop", "#101a2a"), ("glow_light", hexes(GLASS)), ("glow_switch", hexes(GLOW))):
         rooms.prop(mp, k, v)
     ts = ET.SubElement(m, "tileset", {"firstgid": "1", "name": "street_tiles", "tilewidth": str(T),
                                       "tileheight": str(T), "tilecount": str(len(tiles)), "columns": str(cols)})
@@ -360,9 +365,6 @@ def write_room(path, tiles, maps, cols, rows):
         ("Puddle", "puddle", px, py, pw, ph, False, [("squash", "4"), ("ripple", "1"), ("strength", "12")]),
         ("Door", "exit_east", W - 16, GROUND - 48, 16, 48, False,
          [("target_room", "debug_lobby"), ("target_door", "to_rural_street"), ("direction", "east"), ("panel", "door_panel")]),
-        # The cottage's window is Mitsuki's: dark glass over it while her light is off
-        # (assets/mitsuki/home: props.py, home_prop.ms).
-        ("HomeProp", "window", WINDOW[0], WINDOW[1] + WINDOW[3], 0, 0, True, [("Kind", "Window")]),
         # The cottage's door: Mitsuki's home (assets/mitsuki/home), with Up.
         ("Door", "to_home", 82, GROUND - 48, 24, 48, False,
          [("target_room", "mitsuki_home"), ("target_door", "to_street"), ("direction", "north")]),

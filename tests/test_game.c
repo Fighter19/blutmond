@@ -3654,11 +3654,11 @@ static int actorPlaying(const char *cls, const char *anim)
 
 static void testMitsukisPrologue(void)
 {
-  // Her light still off: the cottage's window in the street is dark (its dark glass shown).
+  // Her light still off: the cottage's window in the street is dark (its glow_switch colours
+  // turned down: set_glow).
   startWith(s_data, s_size, "rural_street");
   frames(2, 0);
-  int window = actorOfClass("HomeProp");
-  TEST_ASSERT(window >= 0 && !s_game.actors.hidden[window]);
+  TEST_ASSERT(s_game.light.glow < 64);
   start();
   frames(2, 0);
   const uint32_t errors = bm_script_errors;
@@ -3726,8 +3726,8 @@ static void testMitsukisPrologue(void)
     frames(1, s_game.dialogue != 0 ? ((f % 20) == 0 ? BM_KEY_A : 0) : BM_KEY_RIGHT);
   TEST_ASSERT(bmInventoryCount(&s_game.inventory, katana) == 1 && s_game.inventory.equipped[0] == katana);
   TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "rural_street") && BM_FIX_INT(s_game.player.x) == 118);
-  window = actorOfClass("HomeProp");
-  TEST_ASSERT(window >= 0 && s_game.actors.hidden[window]);   // lit: her light is on
+  frames(2, 0);
+  TEST_ASSERT(s_game.light.glow == 255);   // the window lit: her light is on
   // Back in through the cottage's door (Up): awake, no second call.
   for (f = 0; f < 60 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
   frames(20, 0);

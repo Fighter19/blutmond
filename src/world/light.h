@@ -39,6 +39,7 @@ typedef struct BmLight
   uint8_t radius, height;
   uint8_t red, green, blue;  // 0..31
   uint8_t ambient;           // 0..255
+  uint8_t glow;              // palette: the switched glowing colours (glow_switch), 255 = as drawn
   uint8_t flicker, flickerSpeed, intensity, gain;   // /255, frames, /64, /64
   uint8_t shadows;
   uint8_t levels, firstBank, bankCount, normalCount;
@@ -76,6 +77,10 @@ void bmLightPresent(struct BmGame *pGame);
 /// The light from now on (set_light): colour 0xRRGGBB, intensity and ambient in percent. The
 /// palettes are shaded anew at the next present if anything changed.
 void bmLightSet(struct BmGame *pGame, int32_t colour, int32_t intensity, int32_t ambient);
+
+/// The room's switched glowing colours (glow_switch: a window) at `percent` of as drawn
+/// (set_glow); 100 when a room is entered.
+void bmLightGlow(struct BmGame *pGame, int32_t percent);
 
 /// Whether the room is lit (any mode).
 bool bmLightOn(const struct BmGame *pGame);

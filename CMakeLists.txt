@@ -187,6 +187,7 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   # Her prologue (assets/mitsuki/home, rendered in Blender as well): asleep at home, Hina calls.
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/prologue.ms
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/home_prop.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/cottage.ms
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/sources/mitsuki_props.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/light_switch.bmsong
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/katana.bmdata

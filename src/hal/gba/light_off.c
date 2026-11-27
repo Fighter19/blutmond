@@ -29,14 +29,6 @@ void bmLightPresent(BmGame *g)
   (void)g;
 }
 
-void bmLightSet(BmGame *g, int32_t colour, int32_t intensity, int32_t ambient)
-{
-  (void)g;
-  (void)colour;
-  (void)intensity;
-  (void)ambient;
-}
-
 bool bmLightOn(const BmGame *g)
 {
   (void)g;

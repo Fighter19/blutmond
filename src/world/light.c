@@ -103,6 +103,16 @@ static void mixColours(uint8_t *out, const uint8_t *src, uint32_t count, const B
 
 uint32_t bm_light_banks BM_EWRAM_BSS;   // sprite banks lit in the last frame (tests read it)
 
+void bmLightGlow(BmGame *g, int32_t percent)
+{
+  BmLight *l = &g->light;
+  int32_t v = percent * 255 / 100;
+  uint8_t glow = (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v);
+  if (l->mode == BM_LIGHT_NONE || glow == l->glow) return;
+  l->glow = glow;
+  l->fresh = true;
+}
+
 void bmLightSet(BmGame *g, int32_t colour, int32_t intensity, int32_t ambient)
 {
   BmLight *l = &g->light;
@@ -172,6 +182,7 @@ void bmLightEnterRoom(BmGame *g)
   l->green = (c >> 5) & 31;
   l->blue = (c >> 10) & 31;
   l->ambient = p[12];
+  l->glow = 255;   // switched glowing colours (glow_switch) on until set_glow says otherwise
   l->flicker = p[13];
   l->flickerSpeed = p[14];
   l->intensity = p[15];
@@ -199,7 +210,8 @@ void bmLightEnterRoom(BmGame *g)
     for (uint32_t i = 0; l->mode != BM_LIGHT_NONE && i < (uint32_t)l->bankCount * 16; i++)
     {
       uint8_t k = p[LITE_HEAD + i];
-      if (k > l->levels) l->mode = BM_LIGHT_NONE;   // `levels` itself: emissive, as drawn
+      // `levels` itself: emissive, as drawn; + 1 with the light's flicker; + 2 as set_glow says.
+      if (k > l->levels + 2) l->mode = BM_LIGHT_NONE;
       else if (k != 0) l->litBanks |= (uint16_t)(1u << (i / 16));
     }
   }
@@ -437,10 +449,16 @@ static void shadePalette(BmGame *g, int32_t now, uint16_t *out)
   const BmColorCorrection *cc = bmPaletteCorrection();
   const uint8_t *src = cc != NULL ? s_roomMixed : l->pPalette;
   // Per level the factor of each channel: ambient + light × level (two divisions in all).
-  int16_t fac[17 * 3];
+  int16_t fac[19 * 3];
   int32_t step = (now << 8) / (l->levels - 1);   // a level's light, 65536 = 1.0
   // One past the last level: emissive entries (a lamp's glass, a lit window), as drawn.
   fac[l->levels * 3] = fac[l->levels * 3 + 1] = fac[l->levels * 3 + 2] = 256;
+  // Glowing with the light (a lamp's glass: room property glow_light): as drawn at the
+  // flicker's brightest, darker as the light dims. Switched (a window: glow_switch): set_glow.
+  int32_t base = (int32_t)l->intensity * 4, most = base + base * l->flicker / 255;
+  int16_t with = (int16_t)(most > 0 ? clamp256(now * 256 / most) : 256);
+  fac[(l->levels + 1) * 3] = fac[(l->levels + 1) * 3 + 1] = fac[(l->levels + 1) * 3 + 2] = with;
+  fac[(l->levels + 2) * 3] = fac[(l->levels + 2) * 3 + 1] = fac[(l->levels + 2) * 3 + 2] = (int16_t)(l->glow + (l->glow >> 7));
   int32_t lr = l->red * 256 / 31, lg = l->green * 256 / 31, lb = l->blue * 256 / 31;
   for (uint8_t k = 0; k < l->levels; k++)
   {

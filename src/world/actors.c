@@ -834,12 +834,11 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     else if (i == BM_ACTORS_OWNER && tx != fx) g->player.facing = (int8_t)(tx < fx ? -1 : 1);
     break;
   }
-  case BM_SCRIPT_API_set_light:
-    bmLightSet(g, args[0], args[1], args[2]);
-    break;
   case BM_SCRIPT_API_flag:
   case BM_SCRIPT_API_set_flag:
   case BM_SCRIPT_API_owner_turn:
+  case BM_SCRIPT_API_set_light:
+  case BM_SCRIPT_API_set_glow:
     *result = bmGameStoryCall(g, i, api, args);
     break;
   case BM_SCRIPT_API_layer_track:

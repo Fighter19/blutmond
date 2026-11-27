@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="9">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="8">
  <properties>
   <property name="music" value="night_escape" />
-  <property name="attach" value="Threat, Bench" />
+  <property name="attach" value="Threat, Bench, Cottage" />
   <property name="room_id" value="rural_street" />
   <property name="title" value="Rural street" />
   <property name="lighting" value="palette" />
@@ -11,6 +11,8 @@
   <property name="light_curve" value="perceived" />
   <property name="light_dither" value="true" />
   <property name="backdrop" value="#101a2a" />
+  <property name="glow_light" value="#fff0ba, #fffce6" />
+  <property name="glow_switch" value="#ffce78, #eeaa56" />
  </properties>
  <tileset firstgid="1" name="street_tiles" tilewidth="16" tileheight="16" tilecount="211" columns="16">
   <properties>
@@ -107,13 +109,7 @@
     <property name="panel" value="door_panel" />
    </properties>
   </object>
-  <object id="7" name="window" type="HomeProp" x="128" y="104">
-   <point />
-   <properties>
-    <property name="Kind" value="Window" />
-   </properties>
-  </object>
-  <object id="8" name="to_home" type="Door" x="82" y="80" width="24" height="48">
+  <object id="7" name="to_home" type="Door" x="82" y="80" width="24" height="48">
    <properties>
     <property name="target_room" value="mitsuki_home" />
     <property name="target_door" value="to_street" />

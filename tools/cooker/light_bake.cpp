@@ -108,6 +108,16 @@ Light find(const tmx::Map &map, Report &report)
     if (l.streamNormals != count) report.error("lighting", map.path, "light_normals is 3 to 7, or 15");
   }
   l.dither = map.property("light_dither", "false") == "true";
+  for (auto [key, set] : {std::pair<const char *, std::set<uint32_t> *>{"glow_light", &l.glowLight}, {"glow_switch", &l.glowSwitch}})
+  {
+    std::string list = map.property(key, "");
+    for (size_t at = list.find('#'); at != std::string::npos; at = list.find('#', at + 1))
+    {
+      uint32_t rgb = uint32_t(std::strtoul(list.substr(at + 1, 6).c_str(), nullptr, 16));
+      set->insert(rgb);
+    }
+    if (!set->empty() && l.mode != Mode::Palette) report.warning("lighting", map.path, std::string(key) + " is for lighting = palette");
+  }
   l.levels = std::clamp(std::atoi(map.property("light_levels", "8").c_str()), 2, 16);
   std::string curve = map.property("light_curve", "linear");
   if (curve == "perceived")

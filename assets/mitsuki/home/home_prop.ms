@@ -7,8 +7,6 @@ class HomeProp extends Actor;
 //   Which weapon is the property Gives.
 // - #Switch: the light switch by her bed: it shows whether her light is on, the story flag
 //   MitsukiLight (her prologue flips it, and Up in front of it: prologue.ms).
-// - #Window: the cottage's window in the rural street, which is hers: drawn lit in the street's
-//   tiles, this dark glass over it while her light is off.
 // - #Monster: the thing peeking in at her window: it stares, blinks while anyone talks (the
 //   dialogue box is open), and ducks away once she gets up (the story flag MonsterGone,
 //   prologue.ms); it is back when the flag is off again.
@@ -26,10 +24,6 @@ event spawn() {
   if Kind == #Katana {
     play_anim(#katana);
     if Taken { hide(); }
-  }
-  if Kind == #Window {
-    play_anim(#window);
-    if flag(#MitsukiLight) { hide(); }
   }
   if Kind == #Monster {
     Here = !flag(#MonsterGone);

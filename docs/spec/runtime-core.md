@@ -560,6 +560,7 @@ value is dropped and counts as a script error.
 | 141 | `owner_turn(side)` | from the player's or the room's attachments: the player faces left (`side < 0`) or right (`side > 0`); 0 or from an object: nothing |
 | 142 | `set_light(colour, intensity, ambient)` | a lit room's light from now on, until a room is entered: `red, green, blue` the colour's (0xRRGGBB) top 5 bits each, `intensity = intensity × 64 / 100`, `ambient = ambient × 255 / 100` (each clamped to 0..255); if any changed, the palettes and the sprites' lit banks are shaded anew at the next present. Nothing in an unlit room, nor in the multiboot images (`light_off.c`) |
 | 143, 144 | `flag(#name)`, `set_flag(#name, on)` | story flags: on while the inventory holds one of the key `FNV-1a(name) ^ 0x464C4147` (no record's key: no menu lists it), so the same in every room and in the save game; `set_flag` gives or takes that one |
+| 145 | `set_glow(percent)` | a lit room's switched glowing colours (room property `glow_switch`, room-format.md) at `percent × 255 / 100` (clamped to 0..255; 255 when a room is entered) of as drawn; the palettes shaded anew if it changed. Nothing in an unlit room nor in the multiboot images |
 
 Layer functions (112-122) work only from the player's attachments, on the player's figure (a
 layer named by the figure file); from an object, or for a layer the figure does not have,

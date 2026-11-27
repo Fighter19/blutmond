@@ -211,7 +211,9 @@ staring at me. Rude."; it blinks while they talk), keeps calm ("Someone has to b
 agrees to meet her at the park, under the bench by the lamp: "Don't get eaten. Finding a new
 friend sounds tiring." She sits on the edge of the bed (the thing at the window ducks away),
 walks to the switch and flips it: the room goes warm and bright, and from now on the
-cottage's window in the street is lit (dark while her light is off). She says she'll bring
+cottage's window in the street is lit (dark while her light is off: its colours are the
+street's `glow_switch`, turned by `cottage.ms` through the palette, no sprite over them; the
+street's lamp glass, `glow_light`, flickers with its light). She says she'll bring
 her katana, and the player has her. The katana (`Katana`, `katana.bmdata`, with its moves Iai
 and Crescent in `commands.bmdata`) lies on its rack on the way to the door (walked under, it is
 taken and equipped); the door (`needs = Katana`) opens only with it, and she says so if she
@@ -227,8 +229,8 @@ again.
 | | |
 |---|---|
 | Starting it | Start, System, Character, Prologue (the Character record's `prologue`, `prologue_x`, `prologue_y`: a teleport there); on the PC `build/game --room mitsuki_home` |
-| Objects | `HomeProp` (`home_prop.ms`, one sprite: `props.py`) by its property `Kind`: the katana, the switch, the thing at the window (staring, blinking while the dialogue box is open, ducking away), the cottage's dark window in the street |
-| Story flags | `MitsukiLight` (her light: the switch, the street's window), `MonsterGone` (set when she gets up): `flag`, `set_flag` (runtime-core.md, API 143-144), kept in the save game |
+| Objects | `HomeProp` (`home_prop.ms`, one sprite: `props.py`) by its property `Kind`: the katana, the switch, the thing at the window (staring, blinking while the dialogue box is open, ducking away); the street's `Cottage` attachment (`cottage.ms`) sets its window's glow |
+| Story flags | `MitsukiLight` (her light: the switch, the street's window), `MonsterGone` (set when she gets up): `flag`, `set_flag` (runtime-core.md, API 143-144), kept in the save game; the window through `set_glow` (145) |
 | Hina | only her portrait (`hina.py`, `--face-only yes`): chestnut twin tails, wide green eyes, mouth open, a drop of sweat, a yellow hoodie, the phone at her ear; her voice a quick shrill blip (`voice_hina`) |
 | Sounds | the phone's ring, a buzzing two-note trill (`phone_ring`); the switch's click (`light_switch`); from `tools/make_test_songs.py` |
 | Texts | the lines (`lines.bmdata`), German and French in `lang/` (a language may come in several files, pack-format.md §3.2) |

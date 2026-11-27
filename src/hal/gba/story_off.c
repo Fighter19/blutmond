@@ -6,7 +6,7 @@
 // The story functions (src/world/story.c) left out of the multiboot images: everything of one
 // shares 256 KB, and their packs have no scene that uses them (Mitsuki's prologue is left
 // out). Linked before the engine's library, this takes the place of story.c: flags are off,
-// owner_turn does nothing.
+// owner_turn, set_light and set_glow do nothing.
 
 #include "game.h"
 

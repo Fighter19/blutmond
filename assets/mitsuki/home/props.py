@@ -6,13 +6,10 @@ own thing:
    a gold guard, the grip wrapped in navy; its middle on the anchor
 1  the light switch by her bed: an ivory plate, its brass rocker pressed in at the bottom (off)
 2  ... and at the top (on)
-3  the cottage's window in the rural street (tools/make_street.py, WINDOW), unlit: dark glass
-   over its four panes, its anchor at the window's bottom left; seen straight on, as the
-   street is drawn
-4  the thing peeking in at her window (home.py, MONSTER): a dark head with two ears over the
+3  the thing peeking in at her window (home.py, MONSTER): a dark head with two ears over the
    sill, its red eyes glowing (black in the normal map: not shaded by the room's light)
-5  ... its eyes shut (a blink)
-6  ... ducking away below the sill
+4  ... its eyes shut (a blink)
+5  ... ducking away below the sill
 
 The first three are seen as her room is (yaw 0, pitch 14).
 
@@ -26,12 +23,10 @@ RED = [(120, 16, 40), (200, 32, 56)]
 GOLD = [(176, 128, 40), (248, 212, 96)]
 GRIP = [(30, 32, 62), (52, 58, 104)]
 PLATE = [(190, 196, 222), (240, 244, 255)]
-GLASS = [(30, 34, 54)]
 NIGHT = [(10, 12, 28)]
 EYES = [(255, 72, 64)]
 
 ROOM = (0.0, 14.0)
-STREET = (0.0, 0.0)
 
 
 def build(Rig):
@@ -43,7 +38,6 @@ def build(Rig):
     r.material('gold', GOLD, weight=3, min_cover=0.3, bands=[0.5], keep_inner=True)
     r.material('grip', GRIP, bands=[0.5])
     r.material('plate', PLATE, bands=[0.5])
-    r.material('glass', GLASS, bands=[])
     r.material('night', NIGHT, bands=[], emissive=True)
     r.material('eyes', EYES, bands=[], weight=9, min_cover=0.15, emissive=True, keep_inner=True)
     r.joint('prop', None, (0, 0, 0))
@@ -67,12 +61,6 @@ def build(Rig):
     r.box('prop', 'gold', (0, -0.9, -1.3), (2.4, 1.0, 2.4), group='rocker_off')
     r.box('prop', 'gold', (0, -0.9, 1.3), (2.4, 1.0, 2.4), group='rocker_on')
 
-    # The cottage's window: its panes in street pixels from its bottom left (columns 1-12 and
-    # 15-26, rows 1-6 and 9-14 up).
-    for x0 in (1, 15):
-        for z0 in (1, 9):
-            r.box('prop', 'glass', (x0 + 6, 0, z0 + 3), (12, 0.5, 6), group='window')
-
     # The thing at the window: its head on the sill (the anchor), ears up, eyes on her.
     m = 'monster'
     r.ellipsoid('head', 'night', (0, 0, 1.6), (4.2, 0.6, 3.4), group=m)
@@ -83,7 +71,6 @@ def build(Rig):
     r.pose(show=('katana',))
     r.pose(show=('switch', 'rocker_off'))
     r.pose(show=('switch', 'rocker_on'))
-    r.pose(show=('window',), view=STREET)
     r.pose(show=('monster', 'eyes'))
     r.pose(show=('monster',))
     r.pose(show=('monster',), root=(0, 0, -1.6))

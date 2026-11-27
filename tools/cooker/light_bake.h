@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <set>
 #include <vector>
 
 namespace bm::light {
@@ -54,6 +55,10 @@ struct Light
   float gain = 0.5f;          // the light layer's strength (it adds, the baked mode multiplies)
   bool shadows = true;
   bool dither = false;          // Palette: levels dithered between neighbours (room property `light_dither`)
+  // Palette: colours (0xRRGGBB, as drawn) of pixels that give light (black normals) and change
+  // with it: `glow_light` follow the light's flicker (a lamp's glass), `glow_switch` are turned
+  // up and down by scripts (set_glow: a window lit or dark). Others that give light: as drawn.
+  std::set<uint32_t> glowLight, glowSwitch;
   int levels = LEVELS;          // Palette: levels of light, 2 to 16 (room property `light_levels`)
   // Palette: the light of each level (0 to 1). Empty: even steps (k / (levels - 1)). With
   // `light_curve = perceived` even steps of how bright a surface looks (the square root of

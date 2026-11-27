@@ -170,7 +170,8 @@ typedef enum BmScriptType {
   X(owner_turn,        VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(set_light,         VOID, 3, INT,   INT,   INT,   VOID, 0) \
   X(flag,              BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
-  X(set_flag,          VOID, 2, NAME,  BOOL,  VOID,  VOID, 0)
+  X(set_flag,          VOID, 2, NAME,  BOOL,  VOID,  VOID, 0) \
+  X(set_glow,          VOID, 1, INT,   VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -318,6 +319,9 @@ typedef enum BmScriptType {
 // entered again): its colour 0xRRGGBB, its intensity in percent (100: as `intensity` 1.0) and
 // the room's ambient in percent (100: as drawn). A light switch: the moon through the window,
 // then a warm lamp. Nothing in a room without light.
+//
+// set_glow(percent): a lit room's switched glowing colours (its property glow_switch: a
+// window lit from inside) at that much of as drawn (100 when the room is entered; 0 black).
 //
 // flag(#name), set_flag(#name, on): story flags (docs/plans/dialogue.md §5, a first part): a
 // name that is on or off, the same in every room and kept in the save game (in the inventory,
