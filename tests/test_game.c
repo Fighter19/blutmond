@@ -3611,7 +3611,8 @@ static void testChoosingACharacter(void)
   }
   // The player's line (the speaker Hero's) is said by her, Vesper's stays Vesper's.
   bmGameSayLine(&s_game, keyOf("HeroAnswers"));
-  TEST_ASSERT(s_game.dialogueSpeaker == stringId("Mitsuki") && s_game.dialoguePortrait == stringId("mitsuki_face"));
+  TEST_ASSERT(s_game.dialogueSpeaker == stringId("Mitsuki") && s_game.dialoguePortrait == stringId("mitsuki_face") &&
+              s_game.dialogueVoice == stringId("voice_mitsuki"));
   bmGameSayLine(&s_game, keyOf("VesperWakes"));
   TEST_ASSERT(s_game.dialogueSpeaker == stringId("Vesper") && s_game.dialoguePortrait == stringId("vesper_face"));
   s_game.dialogue = 0;

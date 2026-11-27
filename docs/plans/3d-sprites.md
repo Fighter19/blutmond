@@ -124,7 +124,9 @@ Files in `assets/mitsuki/`: `mitsuki.py` (the model and the poses), `mitsuki.ble
 scene, written by `--save-blend`, for opening in Blender), `sources/` (the whole sprite and its
 normal map, the layout's frames), `mitsuki_legs` and `mitsuki_torso` (with `_n` normal maps),
 `player_mitsuki.bmfigure` (her figure), `mitsuki_face`, `speaker.bmdata` (her `Speaker`
-record: name, portrait and voice in the dialogue box).
+record: name, portrait and voice in the dialogue box), `voice_mitsuki.bmsong` (her voice: a
+quiet, cool sine higher than the hero's blip with a faint glassy glint above it, written by
+`tools/make_test_songs.py` with the other voices).
 
 **Playing her**: she is in the test level as a playable character to choose (Start, System,
 Character): a figure named `player_<name>` can be the player (sprite-format.md, Figures), the
@@ -145,8 +147,6 @@ pack fitted for one over the link (runtime-abi.md §0) leaves them out too
 - **More colour slots for the light**: with 15 colours a lit sprite has no slot left to split
   a colour by its normals (lighting.md), so in lit rooms each colour has one normal. A palette
   of 11 or 12 colours would let the cooker spend the rest on light.
-- **Her own voice**: her speaker uses the player's voice (`voice_hero`); one of her own would
-  be a song like it, higher.
 - **Raised arms**: her head is wide (she is small, her proportions are a chibi's) and her
   arms short, so an arm raised straight up (aiming up, climbing) mostly lies over her hair;
   it reads, but less than the other directions. Longer arms for those poses, or a turned

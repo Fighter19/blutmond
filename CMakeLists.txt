@@ -179,7 +179,8 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_legs.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_torso.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_face.bmsprite
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/speaker.bmdata)
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/speaker.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/voice_mitsuki.bmsong)
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)

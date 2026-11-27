@@ -9,8 +9,9 @@ kick drum's sample. The moon bat's song (vesper.bmsong) is dynamic music in D ph
 layers that come in as the fight grows (instrument attribute `layer`, the script's
 music_intensity): 0 a drone under the dialogue, 1 bass and a heartbeat of kicks, 2 the lead
 and hats, 3 a frantic diminished arpeggio. The speakers' voices are short blips
-(voice_hero, voice_vesper). Everything is made by this script, so the test assets stay free of
-third-party material.
+(voice_hero, voice_vesper; Mitsuki's, voice_mitsuki, goes to assets/mitsuki beside the music's
+folder). Everything is made by this script, so the test assets stay free of third-party
+material.
 """
 import math
 import os
@@ -322,6 +323,14 @@ def voices(out):
         'name="rasp" wave="saw" attack="0" decay="5" sustain="0" release="2" volume="110" pan="8"',
         'name="hiss" wave="pulse12" attack="0" decay="4" sustain="0" release="1" volume="45" pan="8"',
     ], [("rasp", "rasp", [(0, 47, 8, 100)]), ("hiss", "hiss", [(0, 54, 6, 70)])])
+    # Mitsuki (assets/mitsuki): quiet and cool, a soft sine higher than the hero's blip, with a
+    # faint glassy glint an octave and a fifth above it.
+    mitsuki = os.path.join(out, "..", "..", "mitsuki")
+    if os.path.isdir(mitsuki):
+        song(os.path.join(mitsuki, "voice_mitsuki.bmsong"), 'bpm="400" length="6" loop="-1" effect="1" echo="0" echo-feedback="0"', [
+            'name="tone" wave="sine" attack="0" decay="4" sustain="0" release="2" volume="95" pan="-4"',
+            'name="glint" wave="triangle" attack="0" decay="2" sustain="0" release="1" volume="28" pan="-4"',
+        ], [("tone", "tone", [(0, 79, 5, 80)]), ("glint", "glint", [(0, 98, 3, 60)])])
 
 
 if __name__ == "__main__":

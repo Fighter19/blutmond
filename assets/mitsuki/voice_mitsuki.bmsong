@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="400" length="6" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="tone" wave="sine" attack="0" decay="4" sustain="0" release="2" volume="95" pan="-4"/>
+ <instrument name="glint" wave="triangle" attack="0" decay="2" sustain="0" release="1" volume="28" pan="-4"/>
+ <track name="tone" instrument="tone">
+  <note t="0" key="79" len="5" vel="80"/>
+ </track>
+ <track name="glint" instrument="glint">
+  <note t="0" key="98" len="3" vel="60"/>
+ </track>
+</song>
