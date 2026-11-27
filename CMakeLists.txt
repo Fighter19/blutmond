@@ -49,7 +49,9 @@ set(BM_WARNINGS -Wall -Wextra -Werror -pedantic)
 # scripts compiled to native code fit the 12 KB native slot in IWRAM; the native-script images
 # play it. The full level adds languages, menus and the boss; every other image plays that.
 set(BM_HOME_TILES ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home_tiles.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home_tiles_n.png
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park_tiles.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park_tiles_n.png)
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park_tiles.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park_tiles_n.png
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/riverside_tiles.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/riverside_tiles_n.png
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/shrine_path_tiles.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/shrine_path_tiles_n.png)
 set(BM_TEST_LEVEL_BASE_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
 set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/player_legs.bmsprite
@@ -89,7 +91,10 @@ set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets
   # Mitsuki's prologue (assets/mitsuki/home): her room, behind the cottage door of the street.
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home.tmx
   # Her park scene (assets/mitsuki/park): west of the street, Hina under the bench.
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park.tmx)
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park.tmx
+  # West of the park, where Mitsuki searches for Hina (assets/mitsuki/outskirts).
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/riverside.tmx
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/shrine_path.tmx)
 set(BM_TORCH_HALLS torch_hall torch_hall_layer torch_hall_fitted)
 if(BM_LIGHT_EXPERIMENTAL)
   list(APPEND BM_TEST_LEVEL_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
@@ -218,7 +223,12 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park_reunion.bmsong
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/hush.bmsong
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/lang/de.bmlang
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/lang/fr.bmlang)
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/lang/fr.bmlang
+  # The search in the outskirts: Hina's call, the snow.
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/search.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/lines.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/lang/de.bmlang
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/outskirts/lang/fr.bmlang)
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
@@ -366,7 +376,7 @@ if(BM_PLATFORM STREQUAL "gba")
   # as absent entries: the multiboot images have no light and no puddles (light_off.c), and these
   # rooms come last, so the other rooms keep their numbers.
   set(BM_TEST_LEVEL_MB_ROOMS ${BM_TEST_LEVEL_ROOMS})
-  list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall|rural_street|mitsuki_home|park")
+  list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall|rural_street|mitsuki_home|park|riverside|shrine_path")
   # Nor the street's scripts (the music's Threat, the bench): only that room uses them. Nor
   # Mitsuki, her prologue (assets/mitsuki/: all of it) and the Character menu: with one
   # playable character the System menu offers no choice.

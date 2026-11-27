@@ -238,6 +238,9 @@ def write(out, tiles, maps):
         ("Hands", "hands", 126, 56, 0, 0, True, []),
         ("Door", "to_street", W - 16, GROUND - 48, 16, 48, False,
          [("target_room", "rural_street"), ("target_door", "to_park"), ("direction", "east")]),
+        # West, the outskirts where Mitsuki searches for Hina (tools/make_outskirts.py).
+        ("Door", "to_riverside", 0, GROUND - 48, 16, 48, False,
+         [("target_room", "riverside"), ("target_door", "to_park"), ("direction", "west")]),
     ]
     oid = 1
     for otype, name, x, y, ow, oh, point, props in objects:

@@ -197,8 +197,8 @@ static int8_t sheetNamed(const BmGame *g, uint16_t name)
 }
 
 // The tiles the built-in graphics take at the start of sprite memory: the figure (8), the
-// placeholder frame (4).
-#define BUILTIN_TILES 12
+// placeholder frame (4), a snowflake (1: set_snow, story.c loads it).
+#define BUILTIN_TILES 13
 
 // Forgets every sheet in sprite memory but the player's and gives back the banks
 // (layered-sprites.md §3): a room loads what it shows.
@@ -415,6 +415,7 @@ static void loadBuiltinPalettes(void)
   pal[5] = bmColorRGB(28, 26, 22);  // shirt
   pal[6] = bmColorRGB(6, 6, 12);    // trousers
   pal[16 + 1] = bmColorRGB(4, 31, 31);
+  pal[16 + 2] = bmColorRGB(31, 31, 31);   // a snowflake (story.c)
   bmPaletteLoadObj(14 * 16, pal, 32);
 }
 
@@ -752,6 +753,8 @@ static void updateSprites(BmGame *g)
                                                 next, 4));
     }
   }
+  // Snow falling (set_snow), in front of the figures.
+  next = (uint8_t)(next + bmGameDrawSnow(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
   // Effects (sparks, debris) in front of the figures they are on, the player too.
   for (uint8_t k = 0; k < BM_GAME_EFFECTS && next < BM_GAME_MAX_OAM; k++)
   {
@@ -1019,6 +1022,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   // The room being left takes its attachments with it (they get detached() while it is
   // still there). A state just loaded (not fresh) brings its own.
   if (fresh) bmAttachmentsLeaveRoom(g);
+  g->snow = 0;   // (a room's attachment snows again: set_snow)
   memset(g->effectAge, 0, sizeof(g->effectAge));
   if (fresh) bmHitsClear(g);
   BmResult r = bmRoomOpen(&g->room, g->pPack, index);

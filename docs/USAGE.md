@@ -53,6 +53,10 @@ The cottage's door in the street (Up) leads back in.
 Walk west toward the bench under the far lamp: the music grows tense; near it Hina's scene
 plays (A through its lines). As Mitsuki (Character) it plays as written.
 
+**After the park**: west of it the riverside and the shrine path, where Mitsuki searches for
+Hina (`build/game --room riverside`). Hina's call comes on the shrine path, and from then on it
+snows outside.
+
 Keys: arrows to move, X or Space is A (jump), Z is B, A and S are L and R, Return is Start,
 Backspace is Select, F11 full screen, Escape ends (in the browser it only leaves full screen). Gamepads work. The window keeps a save game
 in a file and listens for the link on `127.0.0.1:7414`.

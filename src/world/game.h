@@ -103,6 +103,8 @@ typedef struct BmGame
   int16_t health;                  // the player's; at 0 they start again at the last safe place
   int16_t mana;                    // the player's; spent by spells, back 1 every 90 frames
   int16_t speedPercent;            // added to the player's running speed (add_speed: heavy armour)
+  uint8_t snow;                    // snow falling, percent (set_snow; 0 when a room is entered)
+  bool snowTile;                   // the snowflake's tile is loaded (story.c)
   uint8_t resists[BM_GAME_ELEMENTS];   // per element: what the player wears that resists it
   uint8_t striker;                 // the figure striking the player right now (hits.h), else 0xFF
   uint8_t hitStop;                 // frames the game holds still after a hit with #Stop struck
@@ -435,10 +437,13 @@ const char *bmGameChosenCharacter(const BmGame *pGame);
 int32_t bmGameCharacterCall(BmGame *pGame, uint32_t api, int32_t arg);
 
 /// The scripts' story functions (story.c): owner_turn(side), flag(#name), set_flag(#name, on),
-/// set_light(colour, intensity, ambient), set_glow(percent), draw_in_front(on) (`api`: their BmScriptApi index;
+/// set_light(colour, intensity, ambient), set_glow(percent), draw_in_front(on), set_snow(percent) (`api`: their BmScriptApi index;
 /// `current`: who calls, actors.h). Left out of the multiboot images (src/hal/gba/story_off.c:
 /// nothing, flags off).
 int32_t bmGameStoryCall(BmGame *pGame, uint8_t current, uint32_t api, const int32_t *pArgs);
+/// The snow falling (set_snow) from OAM entry `firstOam`, at most `maxOam`; how many it used
+/// (story.c; nothing in the multiboot images).
+uint8_t bmGameDrawSnow(BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
 void bmGameReloadPlayer(BmGame *pGame);
 
 /// Save game in the save memory: the `save` fields. Loading returns false if there is none

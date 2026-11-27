@@ -562,6 +562,7 @@ value is dropped and counts as a script error.
 | 143, 144 | `flag(#name)`, `set_flag(#name, on)` | story flags: on while the inventory holds one of the key `FNV-1a(name) ^ 0x464C4147` (no record's key: no menu lists it), so the same in every room and in the save game; `set_flag` gives or takes that one |
 | 145 | `set_glow(percent)` | a lit room's switched glowing colours (room property `glow_switch`, room-format.md) at `percent × 255 / 100` (clamped to 0..255; 255 when a room is entered) of as drawn; the palettes shaded anew if it changed. Nothing in an unlit room nor in the multiboot images |
 | 146 | `draw_in_front(on)` | the object drawn in front of the player (`on`: its sprite before the player's in OAM) or, as objects are, behind it (off; off when it is made or comes back): one held in the player's arms (Mitsuki's park scene). Nothing in the multiboot images |
+| 147 | `set_snow(percent)` | snow falling over the room: `percent` (0 to 100) of 24 flakes, the built-in snowflake tile (after the figure and the placeholder) in the placeholder's palette bank, each falling at its own speed, drifting, swaying and wrapping round the screen (moving against the camera at half its speed), in front of the figures and behind the UI; 0 when a room is entered (a room's attachment snows again). Nothing in the multiboot images |
 
 Layer functions (112-122) work only from the player's attachments, on the player's figure (a
 layer named by the figure file); from an object, or for a layer the figure does not have,

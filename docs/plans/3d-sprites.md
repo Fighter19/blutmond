@@ -271,6 +271,23 @@ After it (`ParkDone`) the park stays tense and Hina gone.
 | Sprite memory | the room's sprites fill it with the player's; those not drawn for a while (the close-up, the nightmare) make room for the dialogue's portraits, least recently drawn first (runtime-core.md) |
 | Multiboot | none of it; a pack fitted over the link brings a room's sprites (named like its objects' classes) only with that room |
 
+### The search in the outskirts (`assets/mitsuki/outskirts`)
+
+West of the park, two rooms drawn as the park is (`tools/make_outskirts.py`), where Mitsuki
+searches for Hina after the nightmare took her; their attachment `Search` (`search.ms`, which
+room by the property `Search.Room`):
+
+- **The riverside**: a path along a river at night (an embankment, an iron railing, the water
+  with the moon's glints, the far bank's trees, a willow, two lamps); bats. The first time she
+  comes she calls for Hina, and nothing answers; the first bats get a word from her.
+- **The shrine path**: dark woods, two stone lanterns, a wooden gate at the west end with a
+  rope across it: closed (a wall). A knight. A little way in her phone rings: Hina, somewhere
+  dark and round, "like the inside of a Christmas ball. But wrong. The glass is cold... and it
+  breathes."; the call drops. Then it starts to snow (the story flag `Snowing`; outside it
+  snows from now on: the engine's `set_snow`, runtime-core.md, called by the rooms'
+  attachments), and she puts it together: "A Christmas ball. Snow. ...The park." At the gate:
+  "The way's closed. She's not here."
+
 ## 4. Open
 
 - **More colour slots for the light**: with 15 colours a lit sprite has no slot left to split

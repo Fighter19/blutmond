@@ -1,0 +1,63 @@
+# The lines of Mitsuki's search in the outskirts (structure Line in
+# assets/test_room/data/dialogue.ms), in the order search.ms says them.
+table Line
+
+record MitsukiCallsHina {
+  speaker = Mitsuki
+  says = "HINA! ...Hina, where are you?!"
+}
+
+record MitsukiNothing {
+  speaker = Mitsuki
+  says = "...Nothing. Just the river."
+}
+
+record MitsukiBats {
+  speaker = Mitsuki
+  says = "Bats. Glowing ones. With teeth. ...Fine. I'm awake now."
+}
+
+record HinaCanYouHear {
+  speaker = Hina
+  says = "Mitsuki...? Can you hear me?"
+}
+
+record MitsukiWhereAreYou {
+  speaker = Mitsuki
+  says = "Hina! Where are you?!"
+}
+
+record HinaDarkRound {
+  speaker = Hina
+  says = "I don't know... It's dark. And round. The walls curve all around me."
+}
+
+record HinaChristmasBall {
+  speaker = Hina
+  says = "Like the inside of a Christmas ball. But wrong. The glass is cold... and it breathes."
+}
+
+record MitsukiHina {
+  speaker = Mitsuki
+  says = "Hina? ...Hina!"
+}
+
+record MitsukiCallGone {
+  speaker = Mitsuki
+  says = "...The call's gone."
+}
+
+record MitsukiSnow {
+  speaker = Mitsuki
+  says = "...Snow? It was warm an hour ago."
+}
+
+record MitsukiThePark {
+  speaker = Mitsuki
+  says = "A Christmas ball. Snow. ...The park."
+}
+
+record MitsukiDeadEnd {
+  speaker = Mitsuki
+  says = "The way's closed. She's not here."
+}

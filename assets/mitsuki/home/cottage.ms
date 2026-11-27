@@ -24,6 +24,7 @@ event attached() {
 event tick() {
   if flag(#MitsukiLight) { set_glow(100); }
   else { set_glow(18); }
+  if flag(#Snowing) { set_snow(70); }   // (it snows outside since Hina's call: search.ms)
   if !flag(#ParkDone) { return; }
   if !Spawned {
     Spawned = spawn(#Knight, fix(KNIGHT_X), fix(GROUND));

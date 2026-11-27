@@ -45,7 +45,11 @@ state Approach {
   }
 }
 
+// After the scene: the park tense, and once it snows (Snowing: the outskirts, search.ms) snow.
 state After {
+  event tick() {
+    if flag(#Snowing) { set_snow(70); }
+  }
 begin:
   music_intensity(3);
 }

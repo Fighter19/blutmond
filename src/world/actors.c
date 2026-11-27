@@ -840,6 +840,7 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_set_light:
   case BM_SCRIPT_API_set_glow:
   case BM_SCRIPT_API_draw_in_front:
+  case BM_SCRIPT_API_set_snow:
     *result = bmGameStoryCall(g, i, api, args);
     break;
   case BM_SCRIPT_API_layer_track:

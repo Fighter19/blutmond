@@ -3948,6 +3948,70 @@ static void testTheStreetBeforeAndAfterTheNightmare(void)
   bmGameStart(&s_game, &s_pack, NULL);
 }
 
+// After the nightmare took Hina, Mitsuki searches the outskirts west of the park
+// (assets/mitsuki/outskirts, search.ms): at the riverside she calls for her the first time (no
+// answer); on the shrine path her phone rings, Hina somewhere dark and round "like the inside of
+// a Christmas ball", the call drops, and it starts to snow (Snowing: set_snow); she thinks of the
+// park, where it snows too. At the shrine's gate the way is closed.
+static void testTheSearchAndTheSnow(void)
+{
+  startWith(s_data, s_size, "park");
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player_mitsuki")));
+  bmGameStart(&s_game, &s_pack, "park");
+  afterTheNightmare();
+  setStoryFlag("ParkDone");
+  frames(4, 0);
+  const uint32_t errors = bm_script_errors;
+  // West out of the park: the riverside.
+  bmBodyPlace(&s_game.player, 24, 128);
+  int f = 0;
+  for (; f < 200 && s_game.roomIndex != (uint32_t)bmGameFindRoom(&s_pack, "riverside"); f++) frames(1, BM_KEY_LEFT);
+  frames(BM_TELEPORT_FRAMES + 4, 0);
+  TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "riverside") && s_game.snow == 0);
+  for (f = 0; f < 200 && s_game.dialogue == 0; f++) frames(1, 0);
+  TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueLine == stringId("HINA! ...Hina, where are you?!"));
+  for (f = 0; f < 400 && !(s_game.dialogue != 0 && s_game.dialogueLine == stringId("...Nothing. Just the river.")); f++)
+    frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  TEST_ASSERT(s_game.dialogueLine == stringId("...Nothing. Just the river."));
+  for (f = 0; f < 100 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  // West along the river to the shrine path (the bats left out of it: s_game.actors.gone).
+  for (uint8_t i = 0; i < s_game.actors.count; i++)
+    if (actorOfClass("Bat") >= 0) s_game.actors.gone[actorOfClass("Bat")] = 1;
+  bmBodyPlace(&s_game.player, 24, 128);
+  for (f = 0; f < 200 && s_game.roomIndex != (uint32_t)bmGameFindRoom(&s_pack, "shrine_path"); f++) frames(1, BM_KEY_LEFT);
+  frames(BM_TELEPORT_FRAMES + 4, 0);
+  TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "shrine_path"));
+  int knight = actorOfClass("Knight");
+  if (knight >= 0) s_game.actors.gone[knight] = 1;
+  // In along the path: the call, then the snow.
+  int lines = 0, hina = 0;
+  uint16_t line = 0xFFFF;
+  for (f = 0; f < 3000 && !(s_game.snow > 0 && s_game.lockTimer == 0 && s_game.dialogue == 0); f++)
+  {
+    if (s_game.dialogue != 0 && s_game.dialogueLine != line)
+    {
+      line = s_game.dialogueLine;
+      lines++;
+      hina += s_game.dialogueSpeaker == stringId("Hina");
+    }
+    frames(1, s_game.dialogue != 0 ? ((f % 20) == 0 ? BM_KEY_A : 0) : BM_KEY_LEFT);
+  }
+  printf("    the call: %d lines, %d of them Hina's; snow %d\n", lines, hina, s_game.snow);
+  TEST_ASSERT(lines == 8 && hina == 3 && s_game.snow == 70);
+  shoot("shrine_snow");
+  // On to the gate: closed.
+  for (f = 0; f < 600 && s_game.dialogue == 0; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(s_game.dialogueLine == stringId("The way's closed. She's not here."));
+  // Back in the park it snows too.
+  TEST_ASSERT(bmEffectsTeleport(&s_game, (uint32_t)bmGameFindRoom(&s_pack, "park"), 300, 128));
+  frames(BM_TELEPORT_FRAMES + 6, 0);
+  TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "park") && s_game.snow == 70);
+  shoot("park_snow");
+  TEST_ASSERT(bm_script_errors == errors);
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player")));
+  bmGameStart(&s_game, &s_pack, NULL);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -3993,6 +4057,7 @@ int main(int argc, char **argv)
   RUN_TEST(testMitsukisPrologue);
   RUN_TEST(testMitsukisParkScene);
   RUN_TEST(testTheStreetBeforeAndAfterTheNightmare);
+  RUN_TEST(testTheSearchAndTheSnow);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

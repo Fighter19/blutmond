@@ -1,0 +1,129 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="9">
+ <properties>
+  <property name="music" value="park_dread" />
+  <property name="room_id" value="riverside" />
+  <property name="title" value="The riverside" />
+  <property name="lighting" value="palette" />
+  <property name="ambient" value="0.25" />
+  <property name="light_levels" value="4" />
+  <property name="light_curve" value="perceived" />
+  <property name="light_dither" value="false" />
+  <property name="backdrop" value="#101a2a" />
+  <property name="glow_light" value="#fff0ba, #fffce6" />
+  <property name="attach" value="Search" />
+  <property name="Search.Room" value="1" />
+ </properties>
+ <tileset firstgid="1" name="riverside_tiles" tilewidth="16" tileheight="16" tilecount="190" columns="16">
+  <properties>
+   <property name="normal" value="riverside_tiles_n.png" />
+  </properties>
+  <image source="riverside_tiles.png" width="256" height="192" />
+ </tileset>
+ <tileset firstgid="191" source="../../engine/blutmond_collision.tsx" />
+ <layer id="1" name="background" width="30" height="10">
+  <properties>
+   <property name="role" value="background" />
+  </properties>
+  <data encoding="csv">
+1,1,1,2,3,1,1,1,1,1,1,1,4,1,1,1,1,5,6,1,1,7,1,8,1,1,1,1,1,1,
+9,9,9,9,10,11,12,9,9,9,13,9,14,15,9,9,9,16,9,17,9,9,9,18,19,20,9,9,9,9,
+21,22,22,22,22,22,22,23,22,22,22,22,22,22,24,22,22,22,25,22,22,22,22,26,27,22,22,22,22,22,
+28,29,28,30,31,28,32,33,28,28,28,28,28,28,28,28,28,34,35,36,37,28,38,39,40,28,28,28,28,28,
+41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,
+71,72,73,71,74,75,76,77,78,71,74,79,80,74,78,81,82,83,84,85,86,87,88,89,71,74,78,90,74,78,
+91,92,93,94,95,96,97,98,99,100,101,102,103,104,93,105,106,107,108,109,110,111,112,113,111,114,115,116,117,118,
+119,120,121,122,123,124,125,126,121,122,123,124,125,120,121,122,123,124,127,128,121,122,123,129,130,120,121,122,123,124,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+</data>
+ </layer>
+ <layer id="2" name="main" width="30" height="10">
+  <properties>
+   <property name="role" value="main" />
+  </properties>
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,
+161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190
+</data>
+ </layer>
+ <layer id="3" name="collision" width="30" height="10" opacity="0.5">
+  <properties>
+   <property name="role" value="collision" />
+  </properties>
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,
+192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192,192
+</data>
+ </layer>
+ <objectgroup id="4" name="objects">
+  <properties>
+   <property name="role" value="objects" />
+  </properties>
+  <object id="1" name="room" type="CameraZone" x="0" y="0" width="480" height="160" />
+  <object id="2" name="start" type="PlayerStart" x="440" y="128">
+   <point />
+   <properties>
+    <property name="facing" value="left" />
+   </properties>
+  </object>
+  <object id="3" name="lamp" type="Light" x="120" y="59">
+   <point />
+   <properties>
+    <property name="colour" value="#ffd890" />
+    <property name="radius" value="150" />
+    <property name="height" value="24" />
+    <property name="intensity" value="1.5" />
+    <property name="flicker" value="0.2" />
+    <property name="flicker_speed" value="4" />
+   </properties>
+  </object>
+  <object id="4" name="lamp_east" type="Light" x="380" y="59">
+   <point />
+   <properties>
+    <property name="colour" value="#ffd890" />
+    <property name="radius" value="150" />
+    <property name="height" value="24" />
+    <property name="intensity" value="1.5" />
+    <property name="flicker" value="0.2" />
+    <property name="flicker_speed" value="4" />
+   </properties>
+  </object>
+  <object id="5" name="bat" type="Bat" x="250" y="70">
+   <point />
+  </object>
+  <object id="6" name="bat_west" type="Bat" x="90" y="64">
+   <point />
+  </object>
+  <object id="7" name="to_park" type="Door" x="464" y="80" width="16" height="48">
+   <properties>
+    <property name="target_room" value="park" />
+    <property name="target_door" value="to_riverside" />
+    <property name="direction" value="east" />
+   </properties>
+  </object>
+  <object id="8" name="to_shrine" type="Door" x="0" y="80" width="16" height="48">
+   <properties>
+    <property name="target_room" value="shrine_path" />
+    <property name="target_door" value="to_riverside" />
+    <property name="direction" value="west" />
+   </properties>
+  </object>
+ </objectgroup>
+</map>
