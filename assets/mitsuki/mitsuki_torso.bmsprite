@@ -1,59 +1,60 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sprite version="1" image="mitsuki_torso.png" normal="mitsuki_torso_n.png">
  <hitbox x="0" y="0" w="0" h="0" />
- <frame x="0" y="0" w="16" h="32" ax="8" ay="17" />
- <frame x="16" y="0" w="16" h="32" ax="8" ay="17" />
- <frame x="32" y="0" w="16" h="32" ax="8" ay="17" />
- <frame x="48" y="0" w="16" h="32" ax="8" ay="17" />
- <frame x="64" y="0" w="16" h="32" ax="8" ay="17" />
- <frame x="80" y="0" w="16" h="32" ax="8" ay="17" />
- <frame x="96" y="0" w="16" h="32" ax="8" ay="17" />
- <frame x="112" y="0" w="16" h="32" ax="8" ay="17" />
- <frame x="0" y="32" w="16" h="32" ax="8" ay="17" />
- <frame x="16" y="32" w="16" h="32" ax="8" ay="17" />
- <frame x="32" y="32" w="32" h="32" ax="8" ay="17" />
- <frame x="64" y="32" w="32" h="32" ax="8" ay="17" />
- <frame x="96" y="32" w="32" h="32" ax="8" ay="17" />
- <frame x="0" y="64" w="16" h="48" ax="8" ay="33" />
- <frame x="16" y="64" w="16" h="48" ax="8" ay="33" />
- <frame x="32" y="64" w="16" h="48" ax="8" ay="17" />
- <frame x="48" y="64" w="16" h="48" ax="8" ay="17" />
- <frame x="64" y="64" w="32" h="32" ax="8" ay="17" />
- <frame x="96" y="64" w="32" h="32" ax="8" ay="17" />
- <frame x="0" y="112" w="32" h="48" ax="16" ay="33" />
- <frame x="32" y="112" w="32" h="48" ax="16" ay="33" />
- <frame x="64" y="112" w="32" h="48" ax="16" ay="33" />
- <frame x="96" y="112" w="32" h="48" ax="16" ay="33" />
- <frame x="128" y="112" w="32" h="48" ax="16" ay="17" />
- <frame x="160" y="112" w="32" h="48" ax="16" ay="17" />
- <frame x="192" y="112" w="32" h="48" ax="16" ay="17" />
- <frame x="224" y="112" w="32" h="48" ax="16" ay="17" />
- <frame x="128" y="64" w="32" h="32" ax="8" ay="17" />
- <frame x="160" y="64" w="16" h="32" ax="8" ay="17" />
- <frame x="176" y="64" w="16" h="32" ax="8" ay="17" />
- <frame x="0" y="160" w="24" h="32" ax="8" ay="17">
+ <frame x="0" y="0" w="11" h="31" ax="6" ay="15" />
+ <frame x="11" y="0" w="11" h="31" ax="6" ay="15" />
+ <frame x="22" y="0" w="18" h="31" ax="9" ay="16" />
+ <frame x="40" y="0" w="14" h="32" ax="8" ay="16" />
+ <frame x="54" y="0" w="18" h="31" ax="10" ay="16" />
+ <frame x="72" y="0" w="14" h="31" ax="8" ay="16" />
+ <frame x="86" y="0" w="12" h="30" ax="6" ay="15" />
+ <frame x="98" y="0" w="21" h="32" ax="12" ay="16" />
+ <frame x="119" y="0" w="17" h="32" ax="9" ay="16" />
+ <frame x="136" y="0" w="17" h="32" ax="8" ay="16" />
+ <frame x="153" y="0" w="25" h="32" ax="20" ay="16" />
+ <frame x="178" y="0" w="26" h="30" ax="6" ay="15" />
+ <frame x="204" y="0" w="20" h="30" ax="6" ay="15" />
+ <frame x="224" y="0" w="13" h="40" ax="8" ay="24" />
+ <frame x="237" y="0" w="13" h="39" ax="9" ay="23" />
+ <frame x="0" y="40" w="13" h="36" ax="7" ay="16" />
+ <frame x="13" y="40" w="13" h="38" ax="7" ay="16" />
+ <frame x="26" y="40" w="14" h="34" ax="7" ay="13" />
+ <frame x="40" y="40" w="24" h="28" ax="7" ay="12" />
+ <frame x="64" y="40" w="24" h="31" ax="6" ay="15" />
+ <frame x="88" y="40" w="20" h="32" ax="6" ay="16" />
+ <frame x="108" y="40" w="13" h="37" ax="8" ay="21" />
+ <frame x="121" y="40" w="27" h="32" ax="22" ay="16" />
+ <frame x="148" y="40" w="22" h="30" ax="7" ay="16" />
+ <frame x="170" y="40" w="23" h="30" ax="7" ay="16" />
+ <frame x="193" y="40" w="13" h="36" ax="7" ay="16" />
+ <frame x="206" y="40" w="26" h="30" ax="20" ay="16" />
+ <frame x="0" y="78" w="28" h="30" ax="6" ay="15" />
+ <frame x="28" y="78" w="17" h="31" ax="7" ay="15" />
+ <frame x="45" y="78" w="14" h="32" ax="4" ay="16" />
+ <frame x="59" y="78" w="17" h="30" ax="7" ay="15" />
+ <frame x="90" y="78" w="11" h="32" ax="6" ay="16">
   <point name="hand" x="-3" y="-9" angle="192" />
  </frame>
- <frame x="24" y="160" w="24" h="32" ax="8" ay="17">
+ <frame x="101" y="78" w="11" h="32" ax="6" ay="16">
   <point name="hand" x="0" y="-9" angle="208" />
  </frame>
- <frame x="48" y="160" w="24" h="32" ax="8" ay="17">
+ <frame x="112" y="78" w="11" h="32" ax="6" ay="16">
   <point name="hand" x="2" y="-8" angle="224" />
  </frame>
- <frame x="72" y="160" w="24" h="32" ax="8" ay="17">
+ <frame x="123" y="78" w="12" h="32" ax="6" ay="16">
   <point name="hand" x="4" y="-6" angle="240" />
  </frame>
- <frame x="96" y="160" w="24" h="32" ax="8" ay="17">
+ <frame x="135" y="78" w="12" h="32" ax="6" ay="16">
   <point name="hand" x="5" y="-4" angle="0" />
  </frame>
- <frame x="120" y="160" w="24" h="32" ax="8" ay="17">
+ <frame x="147" y="78" w="12" h="32" ax="6" ay="16">
   <point name="hand" x="4" y="-1" angle="16" />
  </frame>
- <frame x="144" y="160" w="24" h="32" ax="8" ay="17" />
- <frame x="168" y="160" w="24" h="32" ax="8" ay="17" />
- <frame x="192" y="160" w="24" h="32" ax="8" ay="17" />
- <frame x="128" y="32" w="16" h="32" ax="8" ay="17" />
- <frame x="144" y="32" w="16" h="32" ax="8" ay="17" />
+ <frame x="159" y="78" w="11" h="32" ax="6" ay="16" />
+ <frame x="170" y="78" w="11" h="32" ax="6" ay="16" />
+ <frame x="181" y="78" w="11" h="32" ax="6" ay="16" />
+ <frame x="192" y="78" w="11" h="27" ax="5" ay="18" />
+ <frame x="203" y="78" w="12" h="27" ax="5" ay="18" />
  <palette name="steel">
   <swap from="#1e203e" to="#404656" />
   <swap from="#343a68" to="#6e768a" />
@@ -115,11 +116,10 @@
  <animation name="push" loop="1">
   <step frame="28" duration="10" />
   <step frame="29" duration="10" />
-  <step frame="28" duration="10" />
+  <step frame="30" duration="10" />
   <step frame="29" duration="10" />
  </animation>
  <animation name="aim" loop="0" directions="9" from="192" to="64">
-  <step frame="30" duration="1" />
   <step frame="31" duration="1" />
   <step frame="32" duration="1" />
   <step frame="33" duration="1" />
@@ -128,9 +128,10 @@
   <step frame="36" duration="1" />
   <step frame="37" duration="1" />
   <step frame="38" duration="1" />
+  <step frame="39" duration="1" />
  </animation>
  <animation name="sit" loop="1">
-  <step frame="39" duration="60" />
   <step frame="40" duration="60" />
+  <step frame="41" duration="60" />
  </animation>
 </sprite>

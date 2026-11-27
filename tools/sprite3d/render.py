@@ -135,7 +135,11 @@ def main():
     setup_render(scene, tmp)
     meta = {'settings': settings, 'jobs': []}
     for n, job in enumerate(jobs):
-        cam = camera(scene, {'yaw': job.get('yaw', view['yaw']), 'pitch': job.get('pitch', view['pitch'])})
+        # The camera: the job's angle (the portrait's), else the pose's own (rig.py, pose(view=...)),
+        # else the character's.
+        pv = settings.get('pose_views') or []
+        own = pv[job['frame']] if job['frame'] < len(pv) and pv[job['frame']] and not job.get('portrait') else view
+        cam = camera(scene, {'yaw': job.get('yaw', own['yaw']), 'pitch': job.get('pitch', own['pitch'])})
         m = cam.rotation_euler.to_matrix()
         right, up, back = m.col[0], m.col[1], m.col[2]
         w, h = job['w'], job['h']

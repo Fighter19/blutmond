@@ -52,7 +52,9 @@ side), z up, **one unit a pixel**. The ground is z = 0 and (0, 0, 0) lands on a 
   win their pixel: an eye of half a pixel, a blade a third of a pixel wide.
 - **Poses** turn joints by `swing` (forward and back in the picture's plane: an arm hanging
   down, swung 90, points ahead), `spread` (sideways) and `twist`, move the root, and show
-  groups of parts (the katana, the lance). Pose i is timeline frame i + 1, keyed constant.
+  groups of parts (the katana, the lance). Pose i is timeline frame i + 1, keyed constant. A
+  pose can have a camera angle of its own (`view=(yaw, pitch)`): Mitsuki climbs seen from
+  behind and sits seen from the front.
 - **Locators** are empties whose place is measured in every frame (the hand: the sprite's
   `hand` points for aiming).
 - **Palettes** are colour swaps, written into the sprite (her `steel`: the coat when the chain
@@ -72,8 +74,10 @@ regenerates from; an edited `.blend` becomes the source instead (say so next to 
 The camera is orthographic, turned `yaw` degrees from the side toward her front (Mitsuki: 22)
 and `pitch` degrees down (8), so the sprite has a three-quarter look and mirrors well. For
 each frame of the layout it is placed so that the world's origin falls on the frame's anchor
-(on the ground row: the anchor plus the layout's sink) and the frame is `supersample` (8)
-times larger than the sprite. Cycles renders one sample a pixel with a box filter of 0.01, so
+(on the ground row: the anchor plus the layout's sink); the frame is rendered 16 pixels
+larger each way than the layout's and `supersample` (8) times larger than the sprite, and
+later cut to what is drawn, so nothing that reaches past the layout's rectangle (hair flying
+up as she falls) is cut off. Cycles renders one sample a pixel with a box filter of 0.01, so
 every render pixel is exactly one ray: material index, normal (world space) and depth, written
 by the compositor as EXR and handed on as raw floats.
 
@@ -100,7 +104,8 @@ For each sprite pixel (64 render pixels):
 The **layout** is a sprite whose frames (rectangles, anchors, boxes, points), animations and
 palettes the new one takes over: Mitsuki takes the player's (`assets/sources/player.bmsprite`),
 so frame i of the player is her pose i and every animation the engine and the scripts ask for
-is there. Hit boxes named after a material (`blade`) are measured around that material's
+is there. The frames' rectangles are each cut to the picture (the anchor, boxes and points
+keep their places on the figure) and laid out in rows of a sheet 256 pixels wide. Hit boxes named after a material (`blade`) are measured around that material's
 pixels, one pixel more each way, so the katana's arcs hit where they are drawn; points named
 after a locator (`hand`) go where it lies. Then `tools/split_sprite.py` cuts the sheet at the
 waist into legs and torso (a drawn normal map is split with it) and the figure `player` puts
@@ -117,7 +122,7 @@ A kuudere: cool, quiet, hard to read, and cute anyway.
 | Clothes | a navy greatcoat, open over a white shirt with a red ribbon, cuffs too big for her, a red scarf trailing behind, dark tights, boots with white tops |
 | Arms | a katana (the sword's swings), a lance with a red lacquered shaft (the thrusts) |
 | Colours | 15: outline, three of hair, two of skin, two reds, three of coat, boot, two golds, steel (the eyes' white is the hair's light) |
-| Frames | the player's 43: idle (breathing, the hair and scarf settle), run, jump, fall, climb, the swing, the lance up and down, the low sweep, the arcs up and down, the thrust ahead, push, aim (9 directions), sitting on the bench (her feet do not reach the ground) |
+| Frames | the player's 43: idle (breathing, the hair and scarf settle), run, jump, fall, climb (seen from behind), the swing, the lance up and down, the low sweep, the arcs up and down, the thrust ahead, push, aim (9 directions), sitting on the bench (seen from the front, her right leg crossed over her left, her hands in her lap; her feet do not reach the ground) |
 | Portrait | `mitsuki_face`: her lines in the dialogue box while she is the player |
 
 Files in `assets/mitsuki/`: `mitsuki.py` (the model and the poses), `mitsuki.blend` (the same
@@ -133,8 +138,8 @@ Character): a figure named `player_<name>` can be the player (sprite-format.md, 
 data table `Character` (`assets/test_room/data/characters.bmdata`: a name for the menu, the
 figure and the speaker of the player's lines) lists who can be chosen, the screen `CharacterMenu` lists them, and the choice is an
 option kept with the language (runtime-core.md). The player of the test level stays the
-default, so the tests and their pictures keep it. Her sheets take 553 tiles against the old
-player's 388 (17.7 KB of sprite memory against 12.4 KB): she is wider, outlined, and her hair
+default, so the tests and their pictures keep it. Her sheets take 493 tiles against the old
+player's 388 (15.8 KB of sprite memory against 12.4 KB): she is wider, outlined, and her hair
 moves; the cooker keeps room for the largest playable character in every room.
 
 The multiboot images have no choice of character: their code leaves it out

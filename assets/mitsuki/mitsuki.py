@@ -147,10 +147,10 @@ def build(Rig):
 IDLE = {'shoulder_R': (-4, -8), 'shoulder_L': (4, 8), 'elbow_R': 12, 'elbow_L': 12, 'head': -3}
 
 
-def pose(base=IDLE, root=(0, 0, 0), show=(), **joints):
+def pose(base=IDLE, root=(0, 0, 0), show=(), view=None, **joints):
     j = dict(base)
     j.update(joints)
-    return {'joints': j, 'root': root, 'show': show}
+    return {'joints': j, 'root': root, 'show': show, 'view': view}
 
 
 def mirror(p):
@@ -161,7 +161,7 @@ def mirror(p):
         if isinstance(v, tuple):
             v = (v[0], -v[1]) + tuple(v[2:])
         j[k2] = v
-    return {'joints': j, 'root': p['root'], 'show': p['show']}
+    return {'joints': j, 'root': p['root'], 'show': p['show'], 'view': p['view']}
 
 
 def swing(total, elbow=10, hand=0):
@@ -170,6 +170,10 @@ def swing(total, elbow=10, hand=0):
     spread = -min(28.0, max(0.0, total - 95) * 0.35) - 6
     return {'shoulder_R': (total - elbow - hand, spread), 'elbow_R': elbow, 'hand_R': hand}
 
+
+# Camera angles of their own (rig.py, pose(view=...)): from the front and from behind.
+FRONT = (90.0, 8.0)
+BACK = (-90.0, 8.0)
 
 STANCE = {'hip_R': 25, 'knee_R': -20, 'hip_L': -20, 'knee_L': -10}
 LUNGE = {'hip_R': 38, 'knee_R': -30, 'hip_L': -30, 'knee_L': -5}
@@ -201,8 +205,10 @@ def poses():
                     shoulder_L=(165, 8), elbow_L=15, shoulder_R=(-25, -8), elbow_R=40, hair=12, scarf=10))
     out.append(pose(hip_R=25, knee_R=-35, hip_L=-15, knee_L=-40, shoulder_R=(50, -30), elbow_R=30,
                     shoulder_L=(60, 30), elbow_L=30, hair=-60, hair_end=-25, scarf=-40))
-    # 8, 9: climb.
-    climb = pose(shoulder_L=(150, 22), elbow_L=10, shoulder_R=(115, -22), elbow_R=40, hip_R=65, knee_R=-95, hip_L=5, knee_L=-10, head=8)
+    # 8, 9: climb, seen from behind (facing the ladder).
+    # Her arms reach up and out to the rungs, past her hair.
+    climb = pose(view=BACK, shoulder_L=(160, 42), elbow_L=10, shoulder_R=(120, -38), elbow_R=35, hip_R=(60, -8), knee_R=-95,
+                 hip_L=(5, 6), knee_L=-10, head=8)
     out += [climb, mirror(climb)]
     # 10-12: the sword's swing: raised behind, ahead, down ahead.
     out.append(pose(show=('sword',), spine=4, **STANCE, **swing(240, elbow=40, hand=30)))
@@ -236,10 +242,12 @@ def poses():
         t = 90 - a * 360 / 256
         t = (t + 180) % 360 - 180
         out.append(pose(**swing(t if t != -180 else 180, elbow=0)))
-    # 41, 42: sitting on a bench (her feet do not reach the ground), still, breathing.
-    sit = dict(hip_R=88, knee_R=-85, hip_L=88, knee_L=-92, shoulder_R=(25, -8), elbow_R=45,
-               shoulder_L=(25, 8), elbow_L=45, hair=4, scarf=6)
-    out.append(pose(root=(0, 0, 3.0), **sit))
-    sit.update(knee_R=-75, knee_L=-98, spine=1)
-    out.append(pose(root=(0, 0, 2.6), **sit))
+    # 41, 42: sitting on a bench, seen from the front, her right leg crossed over her left (her
+    # feet do not reach the ground), her hands in her lap; still, breathing.
+    # Both eyes show from the front (the far one is hidden in the side views).
+    sit = dict(hip_R=(102, 30), knee_R=(-78, 28), ankle_R=10, hip_L=(86, -6), knee_L=-88, shoulder_R=(26, 18), elbow_R=55,
+               shoulder_L=(26, -18), elbow_L=55, hair=4, scarf=6, head=-4)
+    out.append(pose(view=FRONT, show=('far_eye',), root=(0, 0, 3.0), **sit))
+    sit.update(spine=1, knee_R=(-72, 28), elbow_R=58, elbow_L=58)
+    out.append(pose(view=FRONT, show=('far_eye',), root=(0, 0, 3.0), **sit))
     return out

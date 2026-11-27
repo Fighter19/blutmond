@@ -42,6 +42,7 @@ class Rig:
         self.groups = {}          # group name -> [objects]
         self.locators = []
         self.poses = []
+        self.pose_views = []   # per pose: its own camera angle, or None for the character's
         self.view = {'yaw': 30.0, 'pitch': 8.0, 'light': (-0.3, 0.75, 0.6), 'supersample': 8}
         self.outline = (24, 20, 36)
         self.inner_lines = 3.0
@@ -159,12 +160,13 @@ class Rig:
 
     # --- Poses ----------------------------------------------------------------------------
 
-    def pose(self, joints=None, root=(0, 0, 0), show=()):
+    def pose(self, joints=None, root=(0, 0, 0), show=(), view=None):
         """Adds the next frame's pose: `joints` name -> swing or (swing, spread, twist) in
         degrees (swing forward is positive: an arm hanging down swung by 90 points ahead);
         `root` moves the first joint; `show` names the groups of parts to show (the others
         are hidden)."""
         self.poses.append((dict(joints or {}), tuple(root), tuple(show)))
+        self.pose_views.append(None if view is None else {'yaw': view[0], 'pitch': view[1]})
 
     def _key_poses(self):
         root = next(iter(self.joints))
@@ -219,6 +221,7 @@ class Rig:
             'locators': self.locators,
             'palettes': self.palettes,
             'frames': len(self.poses),
+            'pose_views': self.pose_views,
             'portrait': getattr(self, 'portrait_job', None),
             'groups': {g: [ob.name for ob in obs] for g, obs in self.groups.items()},
             'inner_lines': self.inner_lines,
