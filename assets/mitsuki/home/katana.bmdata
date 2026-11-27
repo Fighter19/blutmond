@@ -1,5 +1,5 @@
 # Mitsuki's katana (structure Weapon in assets/test_room/data/items.ms), on the rack in her room
-# (the object SwordRack): what she takes before going out in her prologue.
+# (a HomeProp, home_prop.ms): what she takes before going out in her prologue.
 table Weapon
 
 record Katana {

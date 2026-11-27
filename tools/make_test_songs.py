@@ -333,13 +333,18 @@ def voices(out):
         ], [("tone", "tone", [(0, 79, 5, 80)]), ("glint", "glint", [(0, 98, 3, 60)])])
     # Her prologue (assets/mitsuki/home): Hina's voice, high, quick and a little shrill (a narrow
     # pulse that jumps up a fourth), and the phone ringing in the night: a buzzing trill of two
-    # notes, twice.
+    # notes, twice; and the click of her light switch.
     home = os.path.join(mitsuki, "home")
     if os.path.isdir(home):
         song(os.path.join(home, "voice_hina.bmsong"), 'bpm="400" length="5" loop="-1" effect="1" echo="0" echo-feedback="0"', [
             'name="chirp" wave="pulse25" attack="0" decay="3" sustain="0" release="1" volume="80" pan="4"',
         ], [("chirp", "chirp", [(0, 81, 2, 80), (2, 86, 2, 70)])])
         trill = [(t + burst * 14, 88 if t % 2 == 0 else 92, 1, 75) for burst in range(2) for t in range(10)]
+        # The light switch by her bed: a short dry click.
+        song(os.path.join(home, "light_switch.bmsong"), 'bpm="400" length="3" loop="-1" effect="1" echo="0" echo-feedback="0"', [
+            'name="click" wave="noise" attack="0" decay="1" sustain="0" release="0" volume="90" pan="0"',
+            'name="tick" wave="pulse12" attack="0" decay="1" sustain="0" release="0" volume="50" pan="0"',
+        ], [("click", "click", [(0, 72, 1, 90)]), ("tick", "tick", [(0, 96, 1, 60)])])
         song(os.path.join(home, "phone_ring.bmsong"), 'bpm="400" length="40" loop="-1" effect="1" echo="0" echo-feedback="0"', [
             'name="bell" wave="pulse50" attack="0" decay="2" sustain="6" release="1" volume="70" pan="0"',
         ], [("bell", "bell", trill)])

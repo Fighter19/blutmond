@@ -167,7 +167,10 @@ typedef enum BmScriptType {
   X(set_character,     BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
   X(has_character,     BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
   X(character_count,   INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
-  X(owner_turn,        VOID, 1, INT,   VOID,  VOID,  VOID, 0)
+  X(owner_turn,        VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(set_light,         VOID, 3, INT,   INT,   INT,   VOID, 0) \
+  X(flag,              BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
+  X(set_flag,          VOID, 2, NAME,  BOOL,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -310,6 +313,15 @@ typedef enum BmScriptType {
 // owner_turn(side): from the player's or the room's attachments, the player faces left (side
 // below 0) or right (above 0); 0 changes nothing (a scene that draws the player in a place:
 // Mitsuki in her bed).
+//
+// set_light(colour, intensity, ambient): the lit room's light from now on (until the room is
+// entered again): its colour 0xRRGGBB, its intensity in percent (100: as `intensity` 1.0) and
+// the room's ambient in percent (100: as drawn). A light switch: the moon through the window,
+// then a warm lamp. Nothing in a room without light.
+//
+// flag(#name), set_flag(#name, on): story flags (docs/plans/dialogue.md §5, a first part): a
+// name that is on or off, the same in every room and kept in the save game (in the inventory,
+// under the name's key changed so no record has it: no menu lists them).
 //
 // fade_music(percent, frames): the music's volume goes to `percent` (0-100) in that many
 // frames; at 0 it stops. music_intensity(level): dynamic music: a layer of the song is heard while

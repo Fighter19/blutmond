@@ -154,11 +154,12 @@ class Rig:
         self._cut(bm, cuts)
         return self._attach('%s.%s' % (joint, material), bm, material, joint, group)
 
-    def box(self, joint, material, center, size, rot=(0, 0, 0), group=None):
+    def box(self, joint, material, center, size, rot=(0, 0, 0), cuts=None, group=None):
         bm = bmesh.new()
         m = (Matrix.Translation(Vector(center)) @ Euler([math.radians(a) for a in rot]).to_matrix().to_4x4()
              @ Matrix.Diagonal((size[0], size[1], size[2], 1.0)))
         bmesh.ops.create_cube(bm, size=1.0, matrix=m)
+        self._cut(bm, cuts)
         return self._attach('%s.%s' % (joint, material), bm, material, joint, group, smooth=False)
 
     # --- Poses ----------------------------------------------------------------------------

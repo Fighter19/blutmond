@@ -419,6 +419,7 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
   // is split in two. A pixel takes the slot of its colour with the nearest normal.
   const bool lit = !s.normalAttr.empty() || s.emissive || !s.shiny.empty();
   std::vector<light::Vec3> pixelNormal;   // per sheet pixel
+  std::vector<uint8_t> pixelGlow;          // per sheet pixel: black in the normal map (gives light)
   struct Slot { uint8_t colour; light::Vec3 normal; };
   std::vector<Slot> slots;
   std::vector<std::vector<int>> slotsOfColour(16);
@@ -449,14 +450,35 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
         Image n = loadImage(np);
         if (n.width != img.width || n.height != img.height) report.error("lighting", np, "a normal map must be the size of its sheet");
         else
+        {
+          pixelGlow.assign(size_t(img.width) * img.height, 0);
           for (int y = 0; y < img.height; y++)
-            for (int x = 0; x < img.width; x++) pixelNormal[size_t(y) * img.width + x] = light::decodeNormal(n.pixel(x, y));
+            for (int x = 0; x < img.width; x++)
+            {
+              const uint8_t *q = n.pixel(x, y);
+              pixelNormal[size_t(y) * img.width + x] = light::decodeNormal(q);
+              pixelGlow[size_t(y) * img.width + x] = q[0] == 0 && q[1] == 0 && q[2] == 0 && q[3] != 0;
+            }
+        }
       }
       catch (const std::exception &e)
       {
         report.error("lighting", np, e.what());
       }
     }
+    // Colours all of whose pixels are black in the normal map give light (lighting.md, as a
+    // tile's): their slots are emissive, drawn as they are.
+    std::vector<int> glowing(16, -1);   // -1 not seen, 1 all black so far, 0 not
+    if (!pixelGlow.empty())
+      for (const Frame &f : s.frames)
+        for (int y = 0; y < f.h && f.y + y < img.height; y++)
+          for (int x = 0; x < f.w && f.x + x < img.width; x++)
+            if (uint16_t c = colourAt(f.x + x, f.y + y); c != NONE)
+            {
+              int &gl = glowing[indexOf[c]];
+              bool black = pixelGlow[size_t(f.y + y) * img.width + f.x + x] != 0;
+              gl = (gl != 0 && black) ? 1 : 0;
+            }
     // The normals of each colour's pixels.
     std::vector<std::vector<light::Vec3>> of(16);
     for (const Frame &f : s.frames)
@@ -520,7 +542,7 @@ Cooked cook(const Sprite &s, const Profile &profile, Report &report)
     for (size_t i = 0; i < slots.size(); i++)
     {
       const light::Vec3 &n = slots[i].normal;
-      uint8_t flags = s.emissive ? 1 : 0;
+      uint8_t flags = s.emissive || glowing[slots[i].colour] == 1 ? 1 : 0;
       for (uint32_t rgb : s.shiny)
         if (bgr(rgb) == base[slots[i].colour]) flags |= 2;
       out.normals[i + 1] = {int8_t(std::lround(n.x * 127)), int8_t(std::lround(n.y * 127)), int8_t(std::lround(n.z * 127)), int8_t(flags)};

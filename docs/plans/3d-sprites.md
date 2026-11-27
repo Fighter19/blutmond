@@ -136,9 +136,21 @@ normal map: a lit room draws them as they are and shades the rest by its `Light`
 normals. The picture is cut into 16 x 16 tiles, each once: `<name>_tiles.png`,
 `<name>_tiles_n.png` and `<name>.tmx` (the background layer; the main layer empty).
 
-With `lighting = palette` every (colour, light level) pair is a palette entry: a room with 20
-colours fits the GBA's 15 banks with 4 levels and no dither, so a room script keeps few
-colours (two of a ramp where one would do, the stars the moon's).
+With `lighting = palette` every (colour, light level) pair is a palette entry: Mitsuki's room,
+23 colours, fits the GBA's 15 banks with 3 levels and no dither, so a room script keeps few
+colours (two of a ramp where one would do, the stars the moon's) and draws what the room's
+light does not reach (her attic) `emissive`: one entry a colour. A lit colour is at most as
+drawn (ambient plus light, at most 1): draw a room as its brightest light shows it, and let
+the darker ones darken it.
+
+**Scale.** Draw a room to its characters' scale and look at them together (Mitsuki: 31
+pixels, 1.55 m, so a pixel is 5 cm; her room's ceiling 2.8 m, its bed 2 m, its window 1.3 m):
+`home.py` says where its objects and her bed frames go, and one picture with her sprites put in
+(at the PlayerStart, lying in the bed, in front of the dresser) shows whether it holds.
+Objects of a room drawn by the same tools (`props.py`: the katana, the switch, the thing at
+the window) are rendered from the room's angle at the place `on_screen` gives them. A sprite
+can glow in part as a tile can: an `emissive` material is black in its normal map, and the
+cooker draws those colours as they are (sprite-format.md).
 
 ## 2. Mitsuki
 
@@ -179,34 +191,48 @@ pack fitted for one over the link (runtime-abi.md §0) leaves them out too
 
 ## 3. Her prologue
 
-Her room at home (`assets/mitsuki/home/`, section 1, "Rooms"): an attic bedroom at night,
-cut open at the front like a doll's house; a bed with lilac-white sheets (the colours of her
-hair, so the blanket in her bed frames matches), a window with the moon and a dark shape with
-red eyes looking in, red curtains, a rug, a dresser with a plush rabbit, the rack her katana
-rests on, the door out. Lit by the moon through the window (a `Light`).
+Her room at home (`assets/mitsuki/home/`, section 1, "Rooms"): an attic room at night, cut
+open at the front like a doll's house, the roof's gable cut open above it (unlit, the stars
+past it); her bed with lilac-white sheets (the colours of her hair, so the blanket in her bed
+frames matches), a window with the moon and something with red eyes peeking in over the sill,
+red curtains, a rug, a low dresser with a plush rabbit (red-eyed too, at her head's height:
+standing in front of it, half its head shows over hers), a light switch by the foot of the
+bed and a lamp on the ceiling; through a door frame a little hall with her katana on its rack,
+shoes, and the door out. One `Light` at the lamp: off, the moon's dim blue light; on, warm and
+bright (`set_light`).
 
 **The scene** (`prologue.ms`, the room's `attach`): entered at her bed (the room's
-`PlayerStart`, x 56), it makes Mitsuki the player if another character is, turns her to the
+`PlayerStart`, x 46), it makes Mitsuki the player if another character is, turns her to the
 right (`owner_turn`: her bed frames are drawn facing that way), and plays: asleep; the phone
 rings three times and she sleeps on, a fourth and she answers. **Hina**, her friend, in a
 panic: does she see them too, the things with teeth? Mitsuki, flat: it is three in the
 morning; did Hina eat cheese before bed again? Then she sees one at her own window ("It's
-staring at me. Rude."), keeps calm ("Someone has to be"), and agrees to meet her at the
-park, under the bench by the lamp: "Don't get eaten. Finding a new friend sounds tiring."
-She sits on the edge of the bed, gets up, says she'll bring her katana, and the player has
-her. The katana (`Katana`, `katana.bmdata`, with its moves Iai and Crescent in
-`commands.bmdata`) lies on its rack on the way to the door (`SwordRack`, `sword_rack.ms`:
-walked under, it is taken and equipped); the door (`needs = Katana`) opens only with it, and
-she says so if she tries without. Out through it is the rural street, at the cottage's door
-(Up there leads back in, where she is awake).
+staring at me. Rude."; it blinks while they talk), keeps calm ("Someone has to be"), and
+agrees to meet her at the park, under the bench by the lamp: "Don't get eaten. Finding a new
+friend sounds tiring." She sits on the edge of the bed (the thing at the window ducks away),
+walks to the switch and flips it: the room goes warm and bright, and from now on the
+cottage's window in the street is lit (dark while her light is off). She says she'll bring
+her katana, and the player has her. The katana (`Katana`, `katana.bmdata`, with its moves Iai
+and Crescent in `commands.bmdata`) lies on its rack on the way to the door (walked under, it is
+taken and equipped); the door (`needs = Katana`) opens only with it, and she says so if she
+tries without. Out through it is the rural street, at the cottage's door (Up there leads back
+in, where she is awake).
+
+**Up in front of things**: the switch turns the light on and off; the rabbit gets a word,
+by turns "Usagi-san. Guard the room while I'm out." and "...You were facing the bed a minute
+ago."; the bed is one ending: she lies down ("...Monsters are a tomorrow problem."), the phone
+rings again ("MITSUKI!! THEY'RE EATING THE BENCH!!"), "Zzz...", **The end?** — and she gets up
+again.
 
 | | |
 |---|---|
 | Starting it | Start, System, Character, Prologue (the Character record's `prologue`, `prologue_x`, `prologue_y`: a teleport there); on the PC `build/game --room mitsuki_home` |
+| Objects | `HomeProp` (`home_prop.ms`, one sprite: `props.py`) by its property `Kind`: the katana, the switch, the thing at the window (staring, blinking while the dialogue box is open, ducking away), the cottage's dark window in the street |
+| Story flags | `MitsukiLight` (her light: the switch, the street's window), `MonsterGone` (set when she gets up): `flag`, `set_flag` (runtime-core.md, API 143-144), kept in the save game |
 | Hina | only her portrait (`hina.py`, `--face-only yes`): chestnut twin tails, wide green eyes, mouth open, a drop of sweat, a yellow hoodie, the phone at her ear; her voice a quick shrill blip (`voice_hina`) |
-| Sounds | the phone's ring, a buzzing two-note trill (`phone_ring`); both from `tools/make_test_songs.py` |
+| Sounds | the phone's ring, a buzzing two-note trill (`phone_ring`); the switch's click (`light_switch`); from `tools/make_test_songs.py` |
 | Texts | the lines (`lines.bmdata`), German and French in `lang/` (a language may come in several files, pack-format.md §3.2) |
-| Multiboot | none of it: `assets/mitsuki/` and the room are left out of the multiboot pack; a pack fitted for one over the link brings a room's scripts only with that room (runtime-abi.md §0) |
+| Multiboot | none of it: `assets/mitsuki/` and the room are left out of the multiboot pack, and their images leave out the story functions (`src/hal/gba/story_off.c`) and the light (`light_off.c`); a pack fitted for one over the link brings a room's scripts only with that room (runtime-abi.md §0) |
 
 ## 4. Open
 

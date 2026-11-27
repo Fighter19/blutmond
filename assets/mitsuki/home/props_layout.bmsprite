@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Things of Mitsuki's home (props.py): her katana, the light switch off and on, the
+     cottage's dark window, the thing at her window (staring, blinking, ducking away). The hitbox (the katana's) reaches down to the floor, so walking
+     under the rack takes the katana. -->
+<sprite version="1" image="mitsuki_props.png">
+ <hitbox x="-16" y="-6" w="32" h="44"/>
+ <frame x="0" y="0" w="36" h="12" ax="18" ay="6"/>
+ <frame x="0" y="0" w="10" h="12" ax="5" ay="6"/>
+ <frame x="0" y="0" w="10" h="12" ax="5" ay="6"/>
+ <frame x="0" y="0" w="28" h="16" ax="0" ay="16"/>
+ <frame x="0" y="0" w="16" h="14" ax="8" ay="10"/>
+ <frame x="0" y="0" w="16" h="14" ax="8" ay="10"/>
+ <frame x="0" y="0" w="16" h="14" ax="8" ay="10"/>
+ <animation name="katana" loop="1">
+  <step frame="0" duration="60"/>
+ </animation>
+ <animation name="switch_off" loop="1">
+  <step frame="1" duration="60"/>
+ </animation>
+ <animation name="switch_on" loop="1">
+  <step frame="2" duration="60"/>
+ </animation>
+ <animation name="window" loop="1">
+  <step frame="3" duration="60"/>
+ </animation>
+ <animation name="monster" loop="1">
+  <step frame="4" duration="60"/>
+ </animation>
+ <animation name="monster_blink" loop="1">
+  <step frame="4" duration="54"/>
+  <step frame="5" duration="6"/>
+  <step frame="4" duration="30"/>
+  <step frame="5" duration="5"/>
+ </animation>
+ <animation name="monster_hush" loop="0">
+  <step frame="5" duration="10"/>
+  <step frame="6" duration="8"/>
+ </animation>
+</sprite>

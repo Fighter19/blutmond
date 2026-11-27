@@ -32,6 +32,7 @@ GROUND = 128                 # the road's top: where everything stands
 LAMP_X = 298                 # the lamp post's middle
 LAMP_LIGHT = (298, 59)       # the flame in its glass
 PUDDLE = (254, GROUND, 116, 20)  # x, y (the water line), w, h
+WINDOW = (128, 88, 28, 16)       # the cottage's window (frame included): x, y, w, h
 
 # Colours (few: every lit colour takes a palette entry per level of light it is used at).
 SKY = [(10, 14, 34), (14, 20, 44), (20, 27, 56), (28, 36, 68)]
@@ -149,8 +150,9 @@ def background():
         for y in range(92, GROUND):
             L.put(x, y, WOOD[2], 0.4)
     L.put(100, 112, IRON[0], 1.8)
-    for y in range(88, 104):                    # window, lit from inside
-        for x in range(128, 156):
+    wx, wy, ww, wh = WINDOW
+    for y in range(wy, wy + wh):                # window, lit from inside
+        for x in range(wx, wx + ww):
             bar = x in (141, 142) or y in (95, 96)
             frame = x in (128, 155) or y in (88, 103)
             if frame or bar:
@@ -358,6 +360,9 @@ def write_room(path, tiles, maps, cols, rows):
         ("Puddle", "puddle", px, py, pw, ph, False, [("squash", "4"), ("ripple", "1"), ("strength", "12")]),
         ("Door", "exit_east", W - 16, GROUND - 48, 16, 48, False,
          [("target_room", "debug_lobby"), ("target_door", "to_rural_street"), ("direction", "east"), ("panel", "door_panel")]),
+        # The cottage's window is Mitsuki's: dark glass over it while her light is off
+        # (assets/mitsuki/home: props.py, home_prop.ms).
+        ("HomeProp", "window", WINDOW[0], WINDOW[1] + WINDOW[3], 0, 0, True, [("Kind", "Window")]),
         # The cottage's door: Mitsuki's home (assets/mitsuki/home), with Up.
         ("Door", "to_home", 82, GROUND - 48, 24, 48, False,
          [("target_room", "mitsuki_home"), ("target_door", "to_street"), ("direction", "north")]),

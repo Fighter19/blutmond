@@ -434,6 +434,11 @@ const char *bmGameChosenCharacter(const BmGame *pGame);
 /// The script functions character(), set_character(name), has_character(name),
 /// character_count() (`api`: their BmScriptApi index; `arg` the name).
 int32_t bmGameCharacterCall(BmGame *pGame, uint32_t api, int32_t arg);
+
+/// The scripts' story functions (story.c): owner_turn(side), flag(#name), set_flag(#name, on)
+/// (`api`: their BmScriptApi index; `current`: who calls, actors.h). Left out of the multiboot
+/// images (src/hal/gba/story_off.c: nothing, flags off).
+int32_t bmGameStoryCall(BmGame *pGame, uint8_t current, uint32_t api, const int32_t *pArgs);
 void bmGameReloadPlayer(BmGame *pGame);
 
 /// Save game in the save memory: the `save` fields. Loading returns false if there is none

@@ -135,6 +135,11 @@ def main(argv):
     pictures = []
     for i, (f, fel) in enumerate(zip(frames, root.findall('frame'))):
         rgba, nmap, material = pixelize.pixelize(meta, work, i)
+        # What gives light (an `emissive` material: eyes glowing in the night) is black in the
+        # normal map: the cooker draws those colours as they are in a lit room.
+        for m in settings['materials']:
+            if m.get('emissive'):
+                nmap[material == m['index']] = (0, 0, 0, 255)
         used |= {tuple(c) for c in rgba[rgba[..., 3] > 0][:, :3]}
         ax, ay, ground = f['ax'] + MARGIN, f['ay'] + MARGIN, f['ay'] + sink + MARGIN
         for box in fel.findall('box'):

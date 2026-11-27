@@ -186,8 +186,9 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/voice_mitsuki.bmsong
   # Her prologue (assets/mitsuki/home, rendered in Blender as well): asleep at home, Hina calls.
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/prologue.ms
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/sword_rack.ms
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/sources/katana.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/home_prop.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/sources/mitsuki_props.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/light_switch.bmsong
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/katana.bmdata
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/commands.bmdata
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/hina_face.bmsprite
@@ -249,8 +250,9 @@ function(bm_add_gba_image name)
       # (src/hal/gba/gba_mb.ld).
       target_compile_definitions(${target} PRIVATE BM_GBA_MULTIBOOT)
       # Without the light (src/hal/gba/light_off.c says why), nor a choice of character
-      # (character_off.c).
-      target_sources(${target} PRIVATE ${PROJECT_SOURCE_DIR}/src/hal/gba/light_off.c ${PROJECT_SOURCE_DIR}/src/hal/gba/character_off.c)
+      # (character_off.c), nor the story functions (story_off.c: flags, turning the player).
+      target_sources(${target} PRIVATE ${PROJECT_SOURCE_DIR}/src/hal/gba/light_off.c ${PROJECT_SOURCE_DIR}/src/hal/gba/character_off.c
+        ${PROJECT_SOURCE_DIR}/src/hal/gba/story_off.c)
     endif()
     target_link_options(${target} PRIVATE
       -T ${PROJECT_SOURCE_DIR}/src/hal/gba/gba_${kind}.ld

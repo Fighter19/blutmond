@@ -1,5 +1,6 @@
 # The lines of Mitsuki's prologue (structure Line in assets/test_room/data/dialogue.ms):
-# Hina calls her in the night (prologue.ms says them in this order).
+# Hina calls her in the night (prologue.ms says them in this order); then what she says to the
+# rabbit on her dresser, and the ending back in bed.
 table Line
 
 record HinaWakes {
@@ -95,4 +96,29 @@ record MitsukiNotWithout {
 record MitsukiReady {
   speaker = Mitsuki
   says = "Good. Let's go."
+}
+
+record MitsukiRabbit {
+  speaker = Mitsuki
+  says = "Usagi-san. Guard the room while I'm out."
+}
+
+record MitsukiRabbitMoved {
+  speaker = Mitsuki
+  says = "...You were facing the bed a minute ago."
+}
+
+record MitsukiTomorrow {
+  speaker = Mitsuki
+  says = "...Monsters are a tomorrow problem."
+}
+
+record HinaBench {
+  speaker = Hina
+  says = "MITSUKI!! THEY'RE EATING THE BENCH!!"
+}
+
+record MitsukiZzz {
+  speaker = Mitsuki
+  says = "Zzz..."
 }

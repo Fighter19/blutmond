@@ -3632,11 +3632,33 @@ static void testChoosingACharacter(void)
 // Mitsuki's prologue (assets/mitsuki/home, its room rendered in Blender): the Character menu's
 // Prologue row takes the player to her bed; the room's script (prologue.ms) makes her the
 // player, asleep (her frames on the bed, facing right), the phone rings, she answers and Hina
-// talks with her (Hina's portrait and voice), she gets up and the player has her. The door out
+// talks with her (Hina's portrait and voice), she gets up, walks to the switch by the bed and
+// flips it (the room's light warm and bright, set_light; the story flag MitsukiLight, which
+// the cottage's window in the street follows), and the player has her. The door out
 // needs her katana, which lies on its rack on the way; out through it the street, in front of
 // the cottage; back in, she is awake.
+// The room's object of class `cls` playing the animation `anim` of its sheet, or -1; and
+// whether such an object is there (shown).
+static int actorPlaying(const char *cls, const char *anim)
+{
+  for (uint8_t i = 0; i < s_game.actors.count; i++)
+  {
+    if (s_game.actors.gone[i] || s_game.actors.object[i] == 0xFF || s_game.actors.sheet[i] < 0 ||
+        strcmp(s_game.objects[s_game.actors.object[i]].className, cls) != 0)
+      continue;
+    int a = bmSpriteSheetAnim(&s_game.sheets[s_game.actors.sheet[i]], &s_pack, anim);
+    if (a >= 0 && s_game.actors.anim[i] == (uint8_t)a) return i;
+  }
+  return -1;
+}
+
 static void testMitsukisPrologue(void)
 {
+  // Her light still off: the cottage's window in the street is dark (its dark glass shown).
+  startWith(s_data, s_size, "rural_street");
+  frames(2, 0);
+  int window = actorOfClass("HomeProp");
+  TEST_ASSERT(window >= 0 && !s_game.actors.hidden[window]);
   start();
   frames(2, 0);
   const uint32_t errors = bm_script_errors;
@@ -3654,7 +3676,10 @@ static void testMitsukisPrologue(void)
   TEST_ASSERT(s_game.screens.count == 0);
   frames(BM_TELEPORT_FRAMES + 4, 0);
   TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "mitsuki_home"));
-  TEST_ASSERT(BM_FIX_INT(s_game.player.x) == 56 && s_game.player.facing == 1);
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) == 46 && s_game.player.facing == 1);
+  // The thing at her window stares (not blinking: nobody talks yet).
+  const int monster = actorPlaying("HomeProp", "monster");
+  TEST_ASSERT(monster >= 0 && !s_game.actors.hidden[monster]);
   TEST_ASSERT(s_game.character == stringId("player_mitsuki") && s_game.lockTimer != 0);
   const BmSpriteSheet *sheet = &s_game.sheets[s_game.playerSheet];
   const int sleep = bmSpriteSheetAnim(sheet, &s_pack, "sleep"), ring = bmSpriteSheetAnim(sheet, &s_pack, "ring");
@@ -3671,6 +3696,8 @@ static void testMitsukisPrologue(void)
   TEST_ASSERT(rang && s_game.dialogue != 0 && s_game.playerAnim.anim == (uint8_t)call);
   TEST_ASSERT(s_game.dialogueSpeaker == stringId("Hina") && s_game.dialoguePortrait == stringId("hina_face") &&
               s_game.dialogueVoice == stringId("voice_hina"));
+  frames(2, 0);
+  TEST_ASSERT(actorPlaying("HomeProp", "monster_blink") == monster);   // blinking while they talk
   // A through the call: Hina's lines and hers, until she is up and can walk.
   int lines = 0, hina = 0;
   uint16_t line = 0xFFFF;
@@ -3686,6 +3713,10 @@ static void testMitsukisPrologue(void)
   }
   printf("    the call: %d lines, %d of them Hina's\n", lines, hina);
   TEST_ASSERT(s_game.lockTimer == 0 && lines == 16 && hina == 7);
+  // At the switch, the light on: warm (the lamp's #ffc882) and brighter than the moon's (ambient 0.7, not 0.3).
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) >= 50 && s_game.light.red == 31 && s_game.light.blue < 20 &&
+              s_game.light.ambient > 160);
+  TEST_ASSERT(s_game.actors.hidden[monster]);   // it ducked away when she got up
   // She says she'll bring her katana; it lies on the rack between her and the door.
   for (f = 0; f < 200 && s_game.dialogue == 0; f++) frames(1, 0);
   TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueSpeaker == stringId("Mitsuki"));
@@ -3695,6 +3726,8 @@ static void testMitsukisPrologue(void)
     frames(1, s_game.dialogue != 0 ? ((f % 20) == 0 ? BM_KEY_A : 0) : BM_KEY_RIGHT);
   TEST_ASSERT(bmInventoryCount(&s_game.inventory, katana) == 1 && s_game.inventory.equipped[0] == katana);
   TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "rural_street") && BM_FIX_INT(s_game.player.x) == 118);
+  window = actorOfClass("HomeProp");
+  TEST_ASSERT(window >= 0 && s_game.actors.hidden[window]);   // lit: her light is on
   // Back in through the cottage's door (Up): awake, no second call.
   for (f = 0; f < 60 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
   frames(20, 0);
@@ -3703,9 +3736,40 @@ static void testMitsukisPrologue(void)
   press(BM_KEY_UP);
   frames(40, 0);
   TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "mitsuki_home") && s_game.lockTimer == 0);
-  TEST_ASSERT(BM_FIX_INT(s_game.player.x) == 292);
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) == 212);
   frames(200, 0);
   TEST_ASSERT(s_game.dialogue == 0 && s_game.lockTimer == 0);
+  // Still lit; Up at the switch turns it off, the moon's light again.
+  TEST_ASSERT(s_game.light.red == 31);
+  bmBodyPlace(&s_game.player, 56, 128);
+  frames(4, 0);
+  press(BM_KEY_UP);
+  frames(2, 0);
+  TEST_ASSERT(s_game.light.red < 31 && s_game.light.blue > 25);   // the moon's #8ca0e6
+  // Up at the rabbit on the dresser: a word for it; again: another.
+  bmBodyPlace(&s_game.player, 115, 128);
+  frames(4, 0);
+  press(BM_KEY_UP);
+  TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueLine == stringId("Usagi-san. Guard the room while I'm out."));
+  for (f = 0; f < 120 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  frames(4, 0);
+  press(BM_KEY_UP);
+  TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueLine == stringId("...You were facing the bed a minute ago."));
+  for (f = 0; f < 120 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  // Up at the bed: back to sleep, the phone, Hina, "The end?"; then she is up again.
+  bmBodyPlace(&s_game.player, 30, 128);
+  frames(4, 0);
+  press(BM_KEY_UP);
+  int said = 0;
+  bool ended = false;
+  uint16_t last = 0xFFFF;
+  for (f = 0; f < 2000 && (f < 10 || s_game.lockTimer != 0); f++)
+  {
+    if (s_game.dialogue != 0 && s_game.dialogueLine != last) last = s_game.dialogueLine, said++;
+    ended |= uiShows("The end?");
+    frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  }
+  TEST_ASSERT(said == 3 && ended && s_game.lockTimer == 0 && BM_FIX_INT(s_game.player.x) == 46);
   TEST_ASSERT(bm_script_errors == errors);
   // The player again, for the other tests.
   TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player")));

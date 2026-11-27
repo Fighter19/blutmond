@@ -74,13 +74,14 @@
  </frame>
  <frame x="192" y="78" w="11" h="27" ax="5" ay="31" />
  <frame x="203" y="78" w="12" h="27" ax="5" ay="31" />
- <frame x="215" y="78" w="41" h="12" ax="40" ay="25" />
- <frame x="0" y="110" w="41" h="13" ax="40" ay="26" />
- <frame x="41" y="110" w="41" h="12" ax="40" ay="25" />
- <frame x="82" y="110" w="42" h="12" ax="40" ay="25" />
- <frame x="124" y="110" w="22" h="24" ax="22" ay="38" />
- <frame x="146" y="110" w="22" h="24" ax="22" ay="38" />
- <frame x="168" y="110" w="10" h="27" ax="5" ay="33" />
+ <frame x="215" y="78" w="39" h="12" ax="35" ay="24" />
+ <frame x="0" y="110" w="39" h="13" ax="35" ay="25" />
+ <frame x="39" y="110" w="39" h="12" ax="35" ay="24" />
+ <frame x="78" y="110" w="39" h="12" ax="35" ay="24" />
+ <frame x="117" y="110" w="22" h="24" ax="17" ay="37" />
+ <frame x="139" y="110" w="22" h="24" ax="17" ay="37" />
+ <frame x="161" y="110" w="10" h="27" ax="5" ay="32" />
+ <frame x="171" y="110" w="12" h="32" ax="5" ay="29" />
  <palette name="steel">
   <swap from="#1e203e" to="#404656" />
   <swap from="#343a68" to="#6e768a" />
@@ -174,5 +175,8 @@
  </animation>
  <animation name="wake" loop="0">
   <step frame="49" duration="1" />
+ </animation>
+ <animation name="flip" loop="0">
+  <step frame="50" duration="1" />
  </animation>
 </sprite>

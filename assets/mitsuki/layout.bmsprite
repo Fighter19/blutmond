@@ -2,7 +2,7 @@
 <sprite version="1" image="player.png" normal="auto">
 <!-- The layout of Mitsuki's sprite (assets/mitsuki/mitsuki.py, tools/sprite3d/make_sprite.py): the
      player's frames and animations (assets/sources/player.bmsprite), then her bed at home for
-     the prologue (43 on: sleep, ring, call, wake). -->
+     the prologue (43 on: sleep, ring, call, wake) and her reach for the light switch (50: flip). -->
  <hitbox x="-5" y="-30" w="10" h="30"/>
  <frame x="0" y="0" w="16" h="32" ax="8" ay="30"/>
  <frame x="16" y="0" w="16" h="32" ax="8" ay="30"/>
@@ -84,6 +84,7 @@
  <frame x="0" y="96" w="56" h="52" ax="44" ay="44"/>
  <frame x="0" y="96" w="56" h="52" ax="44" ay="44"/>
  <frame x="0" y="96" w="24" h="48" ax="12" ay="44"/>
+ <frame x="0" y="0" w="24" h="40" ax="10" ay="34"/>
  <palette name="steel">
   <swap from="#b51021" to="#8c94a5"/>
   <swap from="#820a18" to="#5a6270"/>
@@ -176,5 +177,8 @@
  </animation>
  <animation name="wake" loop="0">
   <step frame="49" duration="1"/>
+ </animation>
+ <animation name="flip" loop="0">
+  <step frame="50" duration="1"/>
  </animation>
 </sprite>

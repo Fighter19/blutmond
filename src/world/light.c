@@ -103,6 +103,22 @@ static void mixColours(uint8_t *out, const uint8_t *src, uint32_t count, const B
 
 uint32_t bm_light_banks BM_EWRAM_BSS;   // sprite banks lit in the last frame (tests read it)
 
+void bmLightSet(BmGame *g, int32_t colour, int32_t intensity, int32_t ambient)
+{
+  BmLight *l = &g->light;
+  if (l->mode == BM_LIGHT_NONE) return;
+  int32_t i = intensity * 64 / 100, a = ambient * 255 / 100;
+  uint8_t r = (uint8_t)((colour >> 19) & 31), gr = (uint8_t)((colour >> 11) & 31), b = (uint8_t)((colour >> 3) & 31);
+  uint8_t in = (uint8_t)(i < 0 ? 0 : i > 255 ? 255 : i), am = (uint8_t)(a < 0 ? 0 : a > 255 ? 255 : a);
+  if (r == l->red && gr == l->green && b == l->blue && in == l->intensity && am == l->ambient) return;
+  l->red = r;
+  l->green = gr;
+  l->blue = b;
+  l->intensity = in;
+  l->ambient = am;
+  l->fresh = true;   // shaded anew, every bank and the sprites
+}
+
 bool bmLightOn(const BmGame *g)
 {
   return g->light.mode != BM_LIGHT_NONE;

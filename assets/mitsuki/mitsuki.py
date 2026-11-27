@@ -9,7 +9,7 @@ lacquered shaft for its thrusts.
 Built in Blender by tools/sprite3d/make_sprite.py (build() below), one pose for every frame
 of her layout (layout.bmsprite: the player's frames, assets/sources/player.bmsprite: idle,
 run, jump, fall, climb, the swings and thrusts, push, aim, sit; then her bed at home for her
-prologue: sleep, ring, call, wake), and a portrait for the dialogue box.
+prologue: sleep, ring, call, wake, flip), and a portrait for the dialogue box.
 """
 
 import math
@@ -202,14 +202,14 @@ FRONT = (90.0, 8.0)
 BACK = (-90.0, 8.0)
 
 # Her bed at home (assets/mitsuki/home/home.py): the frames from 43 on are drawn from where she
-# stands in front of it (the room's PlayerStart, x 56), from the room's own angle (yaw 0,
+# stands in front of it (the room's PlayerStart, x 46), from the room's own angle (yaw 0,
 # pitch 14), so she lies on its mattress. HOME_X: the room's x of that place; BED_Y: the
 # middle of the bed, away from the viewer; MATTRESS: its top with the sheet.
 HOME = (0.0, 14.0)
-HOME_X = 56.0
-BED_Y = 27.0
-MATTRESS = 14.6
-BED_PHONE = (54.0 - HOME_X, 10.0, MATTRESS + 0.3)   # on the sheet at the front, by her feet
+HOME_X = 46.0
+BED_Y = 30.0
+MATTRESS = 12.6
+BED_PHONE = (42.0 - HOME_X, 18.0, MATTRESS + 0.3)   # on the sheet at the front, by her feet
 
 STANCE = {'hip_R': 25, 'knee_R': -20, 'hip_L': -20, 'knee_L': -10}
 LUNGE = {'hip_R': 38, 'knee_R': -30, 'hip_L': -30, 'knee_L': -5}
@@ -292,7 +292,7 @@ def poses():
     # get up (the next frame: standing there).
     lie = dict(pelvis=88, spine=-4, chest=-4, head=-8, hip_R=2, hip_L=2, shoulder_R=(4, -4), shoulder_L=(4, 4),
                elbow_R=6, elbow_L=6, hair=172, hair_end=8, scarf=90)
-    at = (38.0 - HOME_X, BED_Y, MATTRESS - 0.5 - 11.6)
+    at = (33.0 - HOME_X, BED_Y, MATTRESS - 0.5 - 11.6)
     for k, ph in enumerate(('phone_bed', 'phone_bed', 'ring_a', 'ring_b')):
         breath = dict(lie)
         if k == 1:
@@ -300,11 +300,14 @@ def poses():
         out.append(pose(view=HOME, closed=True, show=('blanket', ph), root=at, **breath))
     call = dict(spine=-4, chest=-2, head=4, hip_R=88, hip_L=88, knee_R=-4, knee_L=-4, ankle_R=-30, ankle_L=-30,
                 shoulder_R=(150, -20), elbow_R=150, hand_R=-20, shoulder_L=(20, 6), elbow_L=30, hair=-4, scarf=-10)
-    seat = (40.0 - HOME_X, BED_Y - 4.0, MATTRESS + 1.2 - 11.6)
+    seat = (35.0 - HOME_X, BED_Y - 4.0, MATTRESS + 1.2 - 11.6)
     out.append(pose(view=HOME, show=('blanket_legs', 'phone_hand'), root=seat, **call))
     call.update(head=8, spine=-3, chest=-3)
     out.append(pose(view=HOME, show=('blanket_legs', 'phone_hand'), root=seat, **call))
     edge = dict(hip_R=(88, 4), knee_R=-84, ankle_R=12, hip_L=(80, -4), knee_L=-70, ankle_L=10, shoulder_R=(20, 22),
                 elbow_R=20, shoulder_L=(20, -22), elbow_L=20, head=-6, hair=2, scarf=4)
-    out.append(pose(view=FRONT, show=('far_eye',), root=(-8.0, 0, MATTRESS + 1.0 - 11.6), **edge))
+    out.append(pose(view=FRONT, show=('far_eye',), root=(-15.0, 0, MATTRESS + 1.0 - 11.6), **edge))
+    # 50: reaching ahead to the light switch on the wall by the bed, leaning in a little.
+    out.append(pose(spine=(-6, 0, -6), head=(2, -4, 4), hip_R=10, knee_R=-14, ankle_R=4, hip_L=-6, knee_L=-10,
+                    **swing(96, elbow=4, hand=-6), shoulder_L=(-12, 6), elbow_L=30, hair=2, scarf=2))
     return out

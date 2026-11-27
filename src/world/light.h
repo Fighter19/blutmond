@@ -73,5 +73,9 @@ int32_t bmLightIntensity(const BmLight *pLight, uint32_t frame);
 /// Once a frame after the sprites and the effects: the lit palettes, the light layer's blend.
 void bmLightPresent(struct BmGame *pGame);
 
+/// The light from now on (set_light): colour 0xRRGGBB, intensity and ambient in percent. The
+/// palettes are shaded anew at the next present if anything changed.
+void bmLightSet(struct BmGame *pGame, int32_t colour, int32_t intensity, int32_t ambient);
+
 /// Whether the room is lit (any mode).
 bool bmLightOn(const struct BmGame *pGame);

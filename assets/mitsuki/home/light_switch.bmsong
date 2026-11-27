@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="400" length="3" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="click" wave="noise" attack="0" decay="1" sustain="0" release="0" volume="90" pan="0"/>
+ <instrument name="tick" wave="pulse12" attack="0" decay="1" sustain="0" release="0" volume="50" pan="0"/>
+ <track name="click" instrument="click">
+  <note t="0" key="72" len="1" vel="90"/>
+ </track>
+ <track name="tick" instrument="tick">
+  <note t="0" key="96" len="1" vel="60"/>
+ </track>
+</song>

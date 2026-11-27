@@ -44,8 +44,9 @@ language. She is rendered in Blender from a 3D model ([plans/3d-sprites.md](plan
 
 **Her prologue**: Start, System, Character, then Prologue (below the characters): she is
 asleep in her room when her friend Hina calls about the monsters in the street. A through the
-call; then take her katana from the rack on the way to the door, which leads out to the
-street with the bench. The PC game can also start there: `build/game --room mitsuki_home`.
+call; she turns the light on, then take her katana from the rack on the way to the door, which
+leads out to the street with the bench. Up in front of the switch, the rabbit on the dresser
+or the bed does something each. The PC game can also start there: `build/game --room mitsuki_home`.
 The cottage's door in the street (Up) leads back in.
 
 Keys: arrows to move, X or Space is A (jump), Z is B, A and S are L and R, Return is Start,

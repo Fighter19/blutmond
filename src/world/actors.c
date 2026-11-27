@@ -459,8 +459,8 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     *result = g->filterElement == (uint8_t)args[0];
     break;
   case BM_SCRIPT_API_owner_velocity:
-    // Only the player's attachments move their owner.
-    if (i != BM_ACTORS_OWNER) break;
+    // Only attachments move their owner: the player's, and the room's (a scene walking her).
+    if (i != BM_ACTORS_OWNER && i != BM_ACTORS_ROOM) break;
     g->player.vx = args[0];
     g->player.vy = args[1];
     break;
@@ -615,7 +615,7 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     bmGameReturnToSave(g);
     break;
   case BM_SCRIPT_API_lock_move:
-    if (i != BM_ACTORS_OWNER) break;
+    if (i != BM_ACTORS_OWNER && i != BM_ACTORS_ROOM) break;
     g->lockGround = (uint8_t)(args[0] >= 0 && args[0] <= BM_LOCK_WALK ? args[0] : BM_LOCK_SLIDE);
     g->lockAir = (uint8_t)(args[1] >= 0 && args[1] <= BM_LOCK_DRIFT ? args[1] : BM_LOCK_STEER);
     break;
@@ -834,8 +834,13 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     else if (i == BM_ACTORS_OWNER && tx != fx) g->player.facing = (int8_t)(tx < fx ? -1 : 1);
     break;
   }
+  case BM_SCRIPT_API_set_light:
+    bmLightSet(g, args[0], args[1], args[2]);
+    break;
+  case BM_SCRIPT_API_flag:
+  case BM_SCRIPT_API_set_flag:
   case BM_SCRIPT_API_owner_turn:
-    if (i == BM_ACTORS_OWNER && args[0] != 0) g->player.facing = (int8_t)(args[0] < 0 ? -1 : 1);
+    *result = bmGameStoryCall(g, i, api, args);
     break;
   case BM_SCRIPT_API_layer_track:
     if (i == BM_ACTORS_OWNER) *result = bmGameLayerCall(g, api, args);

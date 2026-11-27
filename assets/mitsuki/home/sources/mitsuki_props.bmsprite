@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="mitsuki_props.png" normal="mitsuki_props_n.png">
+ <hitbox x="-16" y="-6" w="32" h="44" />
+ <frame x="0" y="0" w="31" h="8" ax="16" ay="3" />
+ <frame x="31" y="0" w="6" h="8" ax="3" ay="4" />
+ <frame x="37" y="0" w="6" h="8" ax="3" ay="4" />
+ <frame x="43" y="0" w="28" h="16" ax="0" ay="16" />
+ <frame x="71" y="0" w="10" h="12" ax="5" ay="9" />
+ <frame x="81" y="0" w="10" h="12" ax="5" ay="9" />
+ <frame x="91" y="0" w="10" h="12" ax="5" ay="8" />
+ <animation name="katana" loop="1">
+  <step frame="0" duration="60" />
+ </animation>
+ <animation name="switch_off" loop="1">
+  <step frame="1" duration="60" />
+ </animation>
+ <animation name="switch_on" loop="1">
+  <step frame="2" duration="60" />
+ </animation>
+ <animation name="window" loop="1">
+  <step frame="3" duration="60" />
+ </animation>
+ <animation name="monster" loop="1">
+  <step frame="4" duration="60" />
+ </animation>
+ <animation name="monster_blink" loop="1">
+  <step frame="4" duration="54" />
+  <step frame="5" duration="6" />
+  <step frame="4" duration="30" />
+  <step frame="5" duration="5" />
+ </animation>
+ <animation name="monster_hush" loop="0">
+  <step frame="5" duration="10" />
+  <step frame="6" duration="8" />
+ </animation>
+</sprite>

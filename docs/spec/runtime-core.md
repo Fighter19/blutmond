@@ -522,7 +522,7 @@ value is dropped and counts as a script error.
 | 96 | `map_reveal(room)` | the room (its id as a name) is revealed; false if it is not on the map |
 | 97 | `set_damage(n)` | in `damage_in` or `damage_out` (section 6, 10): the amount the next filter gets and the strike uses |
 | 98 | `damage_is(element)` | in a filter: the damage is of that element |
-| 99 | `owner_velocity(vx, vy)` | from one of the player's attachments: the player's `vx`, `vy` (fix) are these now; nothing from anything else |
+| 99 | `owner_velocity(vx, vy)` | from one of the player's or the room's attachments (a scene walking the player): the player's `vx`, `vy` (fix) are these now; nothing from anything else |
 | 100 | `hit_option(name, n)` | the next hit of the figure: `#Pierce`, `#Reflect`, `#Multi` n, `#Stop` n (section 10) |
 | 101 | `hit_knock(x, y)` | the next hit's push (fix) |
 | 102 | `fly(vx, vy)` | an object's speed, moved by the engine (section 10) |
@@ -558,6 +558,8 @@ value is dropped and counts as a script error.
 | 136 | `save_game()` | as a `SavePoint` (section 3): `savedRoom`, `savedX`, `savedY` = the room and the player's place now, the save game written |
 | 137-140 | `character()`, `set_character(#figure)`, `has_character(#figure)`, `character_count()` | the playable character, an option (sprite-format.md "Figures"): the name of the figure the player is drawn with; another playable figure made the player at once (its sheets loaded in place of the old ones, the figure on its idle animation; false if the pack has none such with all its sprites); whether it has; how many it has. The multiboot images have none to choose (`src/hal/gba/character_off.c`): 1, false |
 | 141 | `owner_turn(side)` | from the player's or the room's attachments: the player faces left (`side < 0`) or right (`side > 0`); 0 or from an object: nothing |
+| 142 | `set_light(colour, intensity, ambient)` | a lit room's light from now on, until a room is entered: `red, green, blue` the colour's (0xRRGGBB) top 5 bits each, `intensity = intensity × 64 / 100`, `ambient = ambient × 255 / 100` (each clamped to 0..255); if any changed, the palettes and the sprites' lit banks are shaded anew at the next present. Nothing in an unlit room, nor in the multiboot images (`light_off.c`) |
+| 143, 144 | `flag(#name)`, `set_flag(#name, on)` | story flags: on while the inventory holds one of the key `FNV-1a(name) ^ 0x464C4147` (no record's key: no menu lists it), so the same in every room and in the save game; `set_flag` gives or takes that one |
 
 Layer functions (112-122) work only from the player's attachments, on the player's figure (a
 layer named by the figure file); from an object, or for a layer the figure does not have,
