@@ -323,7 +323,10 @@ Each line pairs a text of the main language, exactly as it is in the scripts and
 its translation (`\"`, `\\` and `\n` inside quotes; `#` starts a comment). A translation of a
 text the pack does not have is reported as a warning. With at least one language file the
 cooker writes a `LANG` chunk (category text) for the main language (code `en`, name `English`,
-no entries) and then one per file, in the order given:
+no entries) and then one per language, in the order their first files are given. A language
+may come in several files (a part of the game keeping its texts beside it: Mitsuki's
+prologue, `assets/mitsuki/home/lang/`): their translations are put together, the first file's
+name kept. Each chunk:
 
 ```
 u16 code            string id ("de")

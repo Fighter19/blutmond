@@ -166,7 +166,8 @@ typedef enum BmScriptType {
   X(character,         NAME, 0, VOID,  VOID,  VOID,  VOID, 0) \
   X(set_character,     BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
   X(has_character,     BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
-  X(character_count,   INT,  0, VOID,  VOID,  VOID,  VOID, 0)
+  X(character_count,   INT,  0, VOID,  VOID,  VOID,  VOID, 0) \
+  X(owner_turn,        VOID, 1, INT,   VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -305,6 +306,10 @@ typedef enum BmScriptType {
 // playable figures ("player" or "player_<name>") the player (false if it is none),
 // has_character(#figure) tells whether the pack has it (with all its sprites),
 // character_count() how many such the pack has.
+//
+// owner_turn(side): from the player's or the room's attachments, the player faces left (side
+// below 0) or right (above 0); 0 changes nothing (a scene that draws the player in a place:
+// Mitsuki in her bed).
 //
 // fade_music(percent, frames): the music's volume goes to `percent` (0-100) in that many
 // frames; at 0 it stops. music_intensity(level): dynamic music: a layer of the song is heard while

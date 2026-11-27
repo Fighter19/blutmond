@@ -331,6 +331,18 @@ def voices(out):
             'name="tone" wave="sine" attack="0" decay="4" sustain="0" release="2" volume="95" pan="-4"',
             'name="glint" wave="triangle" attack="0" decay="2" sustain="0" release="1" volume="28" pan="-4"',
         ], [("tone", "tone", [(0, 79, 5, 80)]), ("glint", "glint", [(0, 98, 3, 60)])])
+    # Her prologue (assets/mitsuki/home): Hina's voice, high, quick and a little shrill (a narrow
+    # pulse that jumps up a fourth), and the phone ringing in the night: a buzzing trill of two
+    # notes, twice.
+    home = os.path.join(mitsuki, "home")
+    if os.path.isdir(home):
+        song(os.path.join(home, "voice_hina.bmsong"), 'bpm="400" length="5" loop="-1" effect="1" echo="0" echo-feedback="0"', [
+            'name="chirp" wave="pulse25" attack="0" decay="3" sustain="0" release="1" volume="80" pan="4"',
+        ], [("chirp", "chirp", [(0, 81, 2, 80), (2, 86, 2, 70)])])
+        trill = [(t + burst * 14, 88 if t % 2 == 0 else 92, 1, 75) for burst in range(2) for t in range(10)]
+        song(os.path.join(home, "phone_ring.bmsong"), 'bpm="400" length="40" loop="-1" effect="1" echo="0" echo-feedback="0"', [
+            'name="bell" wave="pulse50" attack="0" decay="2" sustain="6" release="1" volume="70" pan="0"',
+        ], [("bell", "bell", trill)])
 
 
 if __name__ == "__main__":

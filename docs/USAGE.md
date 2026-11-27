@@ -42,6 +42,12 @@ build/game level.bmpk           # a pack of your own
 language. She is rendered in Blender from a 3D model ([plans/3d-sprites.md](plans/3d-sprites.md));
 `tools/sprite3d/make_sprite.py` renders her again after a change to `assets/mitsuki/mitsuki.py`.
 
+**Her prologue**: Start, System, Character, then Prologue (below the characters): she is
+asleep in her room when her friend Hina calls about the monsters in the street. A through the
+call; then take her katana from the rack on the way to the door, which leads out to the
+street with the bench. The PC game can also start there: `build/game --room mitsuki_home`.
+The cottage's door in the street (Up) leads back in.
+
 Keys: arrows to move, X or Space is A (jump), Z is B, A and S are L and R, Return is Start,
 Backspace is Select, F11 full screen, Escape ends (in the browser it only leaves full screen). Gamepads work. The window keeps a save game
 in a file and listens for the link on `127.0.0.1:7414`.

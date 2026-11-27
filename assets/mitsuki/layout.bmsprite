@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="player.png" normal="auto">
+<!-- The layout of Mitsuki's sprite (assets/mitsuki/mitsuki.py, tools/sprite3d/make_sprite.py): the
+     player's frames and animations (assets/sources/player.bmsprite), then her bed at home for
+     the prologue (43 on: sleep, ring, call, wake). -->
+ <hitbox x="-5" y="-30" w="10" h="30"/>
+ <frame x="0" y="0" w="16" h="32" ax="8" ay="30"/>
+ <frame x="16" y="0" w="16" h="32" ax="8" ay="30"/>
+ <frame x="32" y="0" w="16" h="32" ax="8" ay="30"/>
+ <frame x="48" y="0" w="16" h="32" ax="8" ay="30"/>
+ <frame x="64" y="0" w="16" h="32" ax="8" ay="30"/>
+ <frame x="80" y="0" w="16" h="32" ax="8" ay="30"/>
+ <frame x="96" y="0" w="16" h="32" ax="8" ay="30"/>
+ <frame x="112" y="0" w="16" h="32" ax="8" ay="30"/>
+ <frame x="0" y="32" w="16" h="32" ax="8" ay="30"/>
+ <frame x="16" y="32" w="16" h="32" ax="8" ay="30"/>
+ <frame x="32" y="32" w="32" h="32" ax="8" ay="30"/>
+ <frame x="64" y="32" w="32" h="32" ax="8" ay="30"/>
+ <frame x="96" y="32" w="32" h="32" ax="8" ay="30"/>
+ <frame x="0" y="64" w="16" h="48" ax="8" ay="46"/>
+ <frame x="16" y="64" w="16" h="48" ax="8" ay="46"/>
+ <frame x="32" y="64" w="16" h="48" ax="8" ay="30"/>
+ <frame x="48" y="64" w="16" h="48" ax="8" ay="30"/>
+ <frame x="64" y="64" w="32" h="32" ax="8" ay="30"/>
+ <frame x="96" y="64" w="32" h="32" ax="8" ay="30"/>
+ <frame x="0" y="112" w="32" h="48" ax="16" ay="46"/>
+ <frame x="32" y="112" w="32" h="48" ax="16" ay="46">
+  <box kind="hit" name="blade" x="4" y="-35" w="14" h="12"/>
+ </frame>
+ <frame x="64" y="112" w="32" h="48" ax="16" ay="46">
+  <box kind="hit" name="blade" x="2" y="-42" w="5" h="18"/>
+ </frame>
+ <frame x="96" y="112" w="32" h="48" ax="16" ay="46">
+  <box kind="hit" name="blade" x="-10" y="-36" w="15" h="13"/>
+ </frame>
+ <frame x="128" y="112" w="32" h="48" ax="16" ay="30"/>
+ <frame x="160" y="112" w="32" h="48" ax="16" ay="30">
+  <box kind="hit" name="blade" x="3" y="-11" w="15" h="13"/>
+ </frame>
+ <frame x="192" y="112" w="32" h="48" ax="16" ay="30">
+  <box kind="hit" name="blade" x="1" y="-10" w="5" h="21"/>
+ </frame>
+ <frame x="224" y="112" w="32" h="48" ax="16" ay="30">
+  <box kind="hit" name="blade" x="-14" y="-11" w="18" h="14"/>
+ </frame>
+ <frame x="128" y="64" w="32" h="32" ax="8" ay="30"/>
+ <frame x="160" y="64" w="16" h="32" ax="8" ay="30"/>
+ <frame x="176" y="64" w="16" h="32" ax="8" ay="30"/>
+ <frame x="192" y="64" w="16" h="32" ax="8" ay="30"/>
+ <frame x="208" y="64" w="16" h="32" ax="8" ay="30"/>
+ <frame x="0" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="hand" x="3" y="-27" angle="192"/>
+ </frame>
+ <frame x="24" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="hand" x="5" y="-27" angle="208"/>
+ </frame>
+ <frame x="48" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="hand" x="7" y="-25" angle="224"/>
+ </frame>
+ <frame x="72" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="hand" x="9" y="-23" angle="240"/>
+ </frame>
+ <frame x="96" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="hand" x="9" y="-21" angle="0"/>
+ </frame>
+ <frame x="120" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="hand" x="9" y="-19" angle="16"/>
+ </frame>
+ <frame x="144" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="hand" x="7" y="-17" angle="32"/>
+ </frame>
+ <frame x="168" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="hand" x="5" y="-15" angle="48"/>
+ </frame>
+ <frame x="192" y="160" w="24" h="32" ax="8" ay="30">
+  <point name="hand" x="3" y="-15" angle="64"/>
+ </frame>
+ <frame x="128" y="32" w="16" h="32" ax="8" ay="30"/>
+ <frame x="144" y="32" w="16" h="32" ax="8" ay="30"/>
+ <frame x="0" y="96" w="64" h="40" ax="52" ay="30"/>
+ <frame x="0" y="96" w="64" h="40" ax="52" ay="30"/>
+ <frame x="0" y="96" w="64" h="40" ax="52" ay="30"/>
+ <frame x="0" y="96" w="64" h="40" ax="52" ay="30"/>
+ <frame x="0" y="96" w="56" h="52" ax="44" ay="44"/>
+ <frame x="0" y="96" w="56" h="52" ax="44" ay="44"/>
+ <frame x="0" y="96" w="24" h="48" ax="12" ay="44"/>
+ <palette name="steel">
+  <swap from="#b51021" to="#8c94a5"/>
+  <swap from="#820a18" to="#5a6270"/>
+ </palette>
+ <animation name="idle" loop="1">
+  <step frame="0" duration="40"/>
+  <step frame="1" duration="40"/>
+ </animation>
+ <animation name="run" loop="1">
+  <step frame="2" duration="6"/>
+  <step frame="3" duration="6"/>
+  <step frame="4" duration="6"/>
+  <step frame="5" duration="6"/>
+ </animation>
+ <animation name="jump" loop="0">
+  <step frame="6" duration="1"/>
+ </animation>
+ <animation name="fall" loop="0">
+  <step frame="7" duration="1"/>
+ </animation>
+ <animation name="climb" loop="1">
+  <step frame="8" duration="10"/>
+  <step frame="9" duration="10"/>
+ </animation>
+ <animation name="slash" loop="0">
+  <step frame="10" duration="4"/>
+  <step frame="11" duration="4"/>
+  <step frame="12" duration="8"/>
+ </animation>
+ <animation name="thrust_up" loop="0">
+  <step frame="13" duration="4"/>
+  <step frame="14" duration="10"/>
+ </animation>
+ <animation name="thrust_down" loop="0">
+  <step frame="15" duration="4"/>
+  <step frame="16" duration="14"/>
+ </animation>
+ <animation name="slash_low" loop="0">
+  <step frame="17" duration="4"/>
+  <step frame="18" duration="10"/>
+ </animation>
+ <animation name="slash_up" loop="0">
+  <step frame="19" duration="4"/>
+  <step frame="20" duration="3"/>
+  <step frame="21" duration="3"/>
+  <step frame="22" duration="4"/>
+ </animation>
+ <animation name="slash_down" loop="0">
+  <step frame="23" duration="4"/>
+  <step frame="24" duration="3"/>
+  <step frame="25" duration="3"/>
+  <step frame="26" duration="8"/>
+ </animation>
+ <animation name="thrust" loop="0">
+  <step frame="17" duration="4"/>
+  <step frame="27" duration="10"/>
+ </animation>
+ <animation name="push" loop="1">
+  <step frame="28" duration="10"/>
+  <step frame="29" duration="10"/>
+  <step frame="30" duration="10"/>
+  <step frame="31" duration="10"/>
+ </animation>
+ <animation name="aim" loop="0" directions="9" from="192" to="64">
+  <step frame="32" duration="1"/>
+  <step frame="33" duration="1"/>
+  <step frame="34" duration="1"/>
+  <step frame="35" duration="1"/>
+  <step frame="36" duration="1"/>
+  <step frame="37" duration="1"/>
+  <step frame="38" duration="1"/>
+  <step frame="39" duration="1"/>
+  <step frame="40" duration="1"/>
+ </animation>
+ <animation name="sit" loop="1">
+  <step frame="41" duration="60"/>
+  <step frame="42" duration="60"/>
+ </animation>
+ <animation name="sleep" loop="1">
+  <step frame="43" duration="70"/>
+  <step frame="44" duration="70"/>
+ </animation>
+ <animation name="ring" loop="1">
+  <step frame="45" duration="3"/>
+  <step frame="46" duration="3"/>
+ </animation>
+ <animation name="call" loop="1">
+  <step frame="47" duration="50"/>
+  <step frame="48" duration="50"/>
+ </animation>
+ <animation name="wake" loop="0">
+  <step frame="49" duration="1"/>
+ </animation>
+</sprite>

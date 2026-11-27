@@ -12,4 +12,8 @@ record CharacterMitsuki {
   name = "Mitsuki"
   figure = #player_mitsuki
   speaker = Mitsuki
+  # Asleep at home when Hina calls (assets/mitsuki/home): in front of her bed.
+  prologue = #mitsuki_home
+  prologue_x = 56
+  prologue_y = 128
 }

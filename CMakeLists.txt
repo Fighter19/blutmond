@@ -48,6 +48,7 @@ set(BM_WARNINGS -Wall -Wextra -Werror -pedantic)
 # What the test level is cooked from besides its rooms. The base: the first two rooms, whose
 # scripts compiled to native code fit the 12 KB native slot in IWRAM; the native-script images
 # play it. The full level adds languages, menus and the boss; every other image plays that.
+set(BM_HOME_TILES ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home_tiles.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home_tiles_n.png)
 set(BM_TEST_LEVEL_BASE_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
 set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/player_legs.bmsprite
@@ -83,7 +84,9 @@ set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets
   ${PROJECT_SOURCE_DIR}/assets/test_room/debug_gradient.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_layer.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_fitted.tmx
-  ${PROJECT_SOURCE_DIR}/assets/test_room/rural_street.tmx)
+  ${PROJECT_SOURCE_DIR}/assets/test_room/rural_street.tmx
+  # Mitsuki's prologue (assets/mitsuki/home): her room, behind the cottage door of the street.
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home.tmx)
 set(BM_TORCH_HALLS torch_hall torch_hall_layer torch_hall_fitted)
 if(BM_LIGHT_EXPERIMENTAL)
   list(APPEND BM_TEST_LEVEL_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
@@ -180,7 +183,20 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_torso.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/mitsuki_face.bmsprite
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/speaker.bmdata
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/voice_mitsuki.bmsong)
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/voice_mitsuki.bmsong
+  # Her prologue (assets/mitsuki/home, rendered in Blender as well): asleep at home, Hina calls.
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/prologue.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/sword_rack.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/sources/katana.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/katana.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/commands.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/hina_face.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/speakers.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/lines.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/voice_hina.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/phone_ring.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/lang/de.bmlang
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/lang/fr.bmlang)
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
@@ -290,14 +306,14 @@ if(BM_PLATFORM STREQUAL "gba")
   set(BM_TEST_ROOM_PACK ${CMAKE_BINARY_DIR}/test_room_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_ROOM_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_ROOM_PACK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx
-    DEPENDS host_tools ${BM_BMCOOK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png
+    DEPENDS host_tools ${BM_BMCOOK} ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES}
     COMMENT "Cooking the test room")
   add_custom_target(test_room_pack DEPENDS ${BM_TEST_ROOM_PACK})
 
   set(BM_TEST_LEVEL_PACK ${CMAKE_BINARY_DIR}/test_level_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_TEST_LEVEL_PACK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png
+    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES}
     COMMENT "Cooking the test level")
   # The cartridge game's own pack (game.gba and game_send.gba, also on the project's pages): the
   # test level with the streamed and the hybrid torch hall. Sent to another GBA it is fitted
@@ -305,7 +321,7 @@ if(BM_PLATFORM STREQUAL "gba")
   set(BM_GAME_CART_PACK ${CMAKE_BINARY_DIR}/test_level_cart_gba.bmpk)
   add_custom_command(OUTPUT ${BM_GAME_CART_PACK}
     COMMAND ${BM_BMCOOK} --profile gba -o ${BM_GAME_CART_PACK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS}
-    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png
+    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES}
     COMMENT "Cooking the test level for the cartridge game")
   # For the multiboot images, which share 256 KB with the engine: the same level with the debug
   # rooms, the boss hall (with the boss's sprites, music and voice), the Hall of Abilities behind it,
@@ -320,20 +336,21 @@ if(BM_PLATFORM STREQUAL "gba")
     --absent-asset fireball --absent-room guard_room --absent-asset knight --absent-asset bat_armour --absent-asset clang
     --absent-asset torch --absent-asset night_escape --absent-asset splash
     --absent-kind LANG --absent-kind MIGR)
-  # The torch halls (docs/plans/lighting.md) and the rural street are not in it at all, not even
+  # The torch halls (docs/plans/lighting.md), the rural street and Mitsuki's home (her prologue)
+  # are not in it at all, not even
   # as absent entries: the multiboot images have no light and no puddles (light_off.c), and these
   # rooms come last, so the other rooms keep their numbers.
   set(BM_TEST_LEVEL_MB_ROOMS ${BM_TEST_LEVEL_ROOMS})
-  list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall|rural_street")
+  list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall|rural_street|mitsuki_home")
   # Nor the street's scripts (the music's Threat, the bench): only that room uses them. Nor
-  # Mitsuki and the Character menu: with one playable character the System menu offers no
-  # choice.
+  # Mitsuki, her prologue (assets/mitsuki/: all of it) and the Character menu: with one
+  # playable character the System menu offers no choice.
   set(BM_TEST_LEVEL_MB_ASSETS ${BM_TEST_LEVEL_ASSETS})
   list(FILTER BM_TEST_LEVEL_MB_ASSETS EXCLUDE REGEX "scripts/(threat|bench)\\.ms$|assets/mitsuki/|characters\\.(ms|bmdata)$|character_menu\\.ms$")
   set(BM_TEST_LEVEL_MB_PACK ${CMAKE_BINARY_DIR}/test_level_mb_gba.bmpk)
   add_custom_command(OUTPUT ${BM_TEST_LEVEL_MB_PACK}
     COMMAND ${BM_BMCOOK} --profile gba ${BM_TEST_LEVEL_ABSENT} -o ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_MB_ROOMS} ${BM_TEST_LEVEL_MB_ASSETS}
-    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png
+    DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES}
     COMMENT "Cooking the test level for multiboot")
   # The same level with the scripts also compiled to native code (mondskript.md section 12).
   set(BM_TEST_LEVEL_NATIVE_PACK ${CMAKE_BINARY_DIR}/test_level_native_gba.bmpk)
@@ -342,7 +359,7 @@ if(BM_PLATFORM STREQUAL "gba")
       --script-c ${CMAKE_BINARY_DIR}/test_level_native.c -o ${BM_TEST_LEVEL_NATIVE_PACK}
       ${BM_TEST_LEVEL_BASE_ROOMS} ${BM_TEST_LEVEL_BASE_ASSETS}
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_BASE_ROOMS} ${BM_TEST_LEVEL_BASE_ASSETS}
-      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
+      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES} ${PROJECT_SOURCE_DIR}/src/script/native.h ${PROJECT_SOURCE_DIR}/src/script/vm.h
       ${PROJECT_SOURCE_DIR}/tools/mondskript/aot.cpp ${PROJECT_SOURCE_DIR}/tools/cooker/native_module.cpp
     COMMENT "Cooking the test level with native scripts")
   add_custom_target(test_level_pack DEPENDS ${BM_TEST_LEVEL_PACK} ${BM_GAME_CART_PACK} ${BM_TEST_LEVEL_MB_PACK} ${BM_TEST_LEVEL_NATIVE_PACK})
@@ -585,7 +602,7 @@ if(BM_PLATFORM STREQUAL "host")
   add_custom_command(OUTPUT ${BM_GAME_LEVEL_PACK}
     COMMAND bmcook --profile gba -o ${BM_GAME_LEVEL_PACK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS}
     DEPENDS bmcook ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES}
-      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png
+      ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES}
     COMMENT "Cooking the test level for the game")
   add_custom_target(game_level_pack ALL DEPENDS ${BM_GAME_LEVEL_PACK})
   add_dependencies(game game_level_pack)

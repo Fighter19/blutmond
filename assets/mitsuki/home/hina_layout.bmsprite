@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hina (hina.py) has only a portrait; one frame to render her pose in. -->
+<sprite version="1" image="hina.png">
+ <hitbox x="-5" y="-30" w="10" h="30"/>
+ <frame x="0" y="0" w="24" h="32" ax="12" ay="30"/>
+ <animation name="idle" loop="1">
+  <step frame="0" duration="60"/>
+ </animation>
+</sprite>

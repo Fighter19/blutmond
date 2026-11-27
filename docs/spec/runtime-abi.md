@@ -38,7 +38,11 @@ Most of this document is the design. Built so far (`src/link/live.h`,
   `target_room`); then the songs (a song left out is silence); then the other rooms nearest
   through doors first, then those no door leads to, each whole where it fits; then the
   languages and the save game's history. What a room names: its maps, collision, objects, area and layers, and its light
-  (`LITE`, room-format.md §7).
+  (`LITE`, room-format.md §7), and the script modules (`MODB`, by their first class) of its
+  objects' classes and of its `attach` list: these come with their room, not before it (a
+  class one room has as an object and a script of another spawns is there only with the
+  first). Left out of every fitted push: the choice of playable character (the figures
+  `player_<name>` and their sprites, the data table `Character`, the screen `CharacterMenu`).
   The CRC is of the pack as it arrives. The runtime marks the left-out chunks as there. The
   game does not go to a left-out room; a later push fitted around that room brings it (and
   leaves out others). On the test level and a pool 12 KB smaller than it, 21 of 142 chunks

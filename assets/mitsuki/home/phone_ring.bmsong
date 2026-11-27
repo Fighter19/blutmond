@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<song version="1" bpm="400" length="40" loop="-1" effect="1" echo="0" echo-feedback="0">
+ <instrument name="bell" wave="pulse50" attack="0" decay="2" sustain="6" release="1" volume="70" pan="0"/>
+ <track name="bell" instrument="bell">
+  <note t="0" key="88" len="1" vel="75"/>
+  <note t="1" key="92" len="1" vel="75"/>
+  <note t="2" key="88" len="1" vel="75"/>
+  <note t="3" key="92" len="1" vel="75"/>
+  <note t="4" key="88" len="1" vel="75"/>
+  <note t="5" key="92" len="1" vel="75"/>
+  <note t="6" key="88" len="1" vel="75"/>
+  <note t="7" key="92" len="1" vel="75"/>
+  <note t="8" key="88" len="1" vel="75"/>
+  <note t="9" key="92" len="1" vel="75"/>
+  <note t="14" key="88" len="1" vel="75"/>
+  <note t="15" key="92" len="1" vel="75"/>
+  <note t="16" key="88" len="1" vel="75"/>
+  <note t="17" key="92" len="1" vel="75"/>
+  <note t="18" key="88" len="1" vel="75"/>
+  <note t="19" key="92" len="1" vel="75"/>
+  <note t="20" key="88" len="1" vel="75"/>
+  <note t="21" key="92" len="1" vel="75"/>
+  <note t="22" key="88" len="1" vel="75"/>
+  <note t="23" key="92" len="1" vel="75"/>
+ </track>
+</song>

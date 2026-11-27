@@ -119,7 +119,11 @@ static void fitKeep(const BmPack *pPack, FitPlan *f, uint32_t i)
   f->keep[i / 8] |= (uint8_t)(1u << (i % 8));
 }
 
-// The room `room` (its number) with what it names, if that fits in `budget`.
+#define ROOM_MODULES 16
+static uint32_t roomModules(const BmPack *pPack, uint32_t index, uint16_t *pOut);
+
+// The room `room` (its number) with what it names and the script modules of its objects and
+// attachments, if that fits in `budget`.
 static void fitRoom(const BmPack *pPack, FitPlan *f, int32_t room, uint32_t budget)
 {
   uint32_t count = bmPackChunkCount(pPack);
@@ -129,8 +133,9 @@ static void fitRoom(const BmPack *pPack, FitPlan *f, int32_t room, uint32_t budg
     bmPackGetChunk(pPack, i, &e);
     if (e.id != BM_CHUNK_ROOM || room-- != 0) continue;
     if ((e.flags & BM_PACK_ENTRY_ABSENT) || kept(f, i)) return;
-    uint16_t refs[ROOM_REFS];
+    uint16_t refs[ROOM_REFS + ROOM_MODULES];
     uint32_t n = roomRefs(pPack, i, refs), cost = fitCost(pPack, f, i);
+    n += roomModules(pPack, i, refs + n);
     for (uint32_t k = 0; k < n; k++) cost += fitCost(pPack, f, refs[k]);
     if (f->size + cost > budget) return;
     fitKeep(pPack, f, i);
@@ -229,6 +234,55 @@ static bool chunkNamed(const BmPack *pPack, uint32_t i, uint32_t id, const char 
   return n != NULL && strcmp(n, name) == 0;
 }
 
+// The script modules (MODB, by the name of their first class) a room's objects are of, and those
+// of its attachments (the property `attach` of its `@room` object: "Wind, Rain"), each once, at
+// most ROOM_MODULES. A fitted pack brings them with the room, not before it: the scripts of a
+// room left out (a bench, a prologue) are left out with it. (A class one room has as an object
+// and another's script spawns is then there only with the first.)
+static uint32_t roomModules(const BmPack *pPack, uint32_t index, uint16_t *pOut)
+{
+  uint16_t refs[ROOM_REFS];
+  uint32_t n = roomRefs(pPack, index, refs), out = 0, count = bmPackChunkCount(pPack);
+  for (uint32_t k = 0; k < n; k++)
+  {
+    BmChunkEntry e;
+    uint32_t size = 0;
+    const uint8_t *o = bmPackChunkData(pPack, refs[k], &size);
+    if (o == NULL || !bmPackGetChunk(pPack, refs[k], &e) || e.id != BM_CHUNK_OBJS || size < 4) continue;
+    for (uint32_t j = 0; j < bmRead16(o) && 4 + j * 20 + 20 <= size; j++)
+    {
+      const uint8_t *ob = o + 4 + j * 20;
+      const char *cls = bmPackString(pPack, bmRead16(ob)), *list = NULL;
+      uint32_t props = bmRead16(ob + 14), at = bmRead32(ob + 16);
+      for (uint32_t p = 0; cls != NULL && strcmp(cls, "@room") == 0 && p < props && at + p * 4 + 4 <= size; p++)
+      {
+        const char *key = bmPackString(pPack, bmRead16(o + at + p * 4));
+        if (key != NULL && strcmp(key, "attach") == 0) list = bmPackString(pPack, bmRead16(o + at + p * 4 + 2));
+      }
+      // The object's class, then each name of the list.
+      for (const char *name = list != NULL ? list : cls; name != NULL && *name != 0;)
+      {
+        while (*name == ' ' || *name == ',') name++;
+        size_t len = 0;
+        while (name[len] != 0 && name[len] != ',' && (list != NULL || name[len] != ' ')) len++;
+        while (len > 0 && name[len - 1] == ' ') len--;
+        for (uint32_t c = 0; c < count && len > 0; c++)
+        {
+          const char *m = bmPackString(pPack, chunkName(pPack, c, BM_CHUNK_MODB));
+          if (m == NULL || strncmp(m, name, len) != 0 || m[len] != 0) continue;
+          bool seen = false;
+          for (uint32_t q = 0; q < out && !seen; q++) seen = pOut[q] == c;
+          if (!seen && out < ROOM_MODULES) pOut[out++] = (uint16_t)c;
+        }
+        if (list == NULL) break;
+        name += len;
+        while (*name != 0 && *name != ',') name++;
+      }
+    }
+  }
+  return out;
+}
+
 // Marks in `out` what only the choice of playable character needs (game.h, character.c): the
 // figures "player_<name>" and their sprites, the data table `Character` and the screen
 // `CharacterMenu` that lists it. A fitted pack goes to a runtime with little room (a multiboot
@@ -255,7 +309,8 @@ static void markCharacterChoice(const BmPack *pPack, uint8_t *out)
 }
 
 // Picks what goes into `budget` bytes: every chunk no room names (but the songs, the languages
-// and the choice of character, which is left out), the room `room`, room 0 and the rooms one
+// and the choice of character, which is left out; the scripts of rooms' objects come with
+// their rooms, roomModules), the room `room`, room 0 and the rooms one
 // door from them, the songs, then the other rooms nearest to them through doors first (then
 // the ones no door leads to, in order; each whole, if it fits), then the languages.
 static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan *f, const BmLiveRemote *r)
@@ -269,8 +324,9 @@ static bool fitPack(const BmPack *pPack, int32_t room, uint32_t budget, FitPlan 
   int32_t rooms = 0;
   for (uint32_t i = 0; i < count; i++)
   {
-    uint16_t refs[ROOM_REFS];
+    uint16_t refs[ROOM_REFS + ROOM_MODULES];
     uint32_t n = roomRefs(pPack, i, refs);
+    n += roomModules(pPack, i, refs + n);
     for (uint32_t k = 0; k < n; k++) named[refs[k] / 8] |= (uint8_t)(1u << (refs[k] % 8));
     BmChunkEntry e;
     bmPackGetChunk(pPack, i, &e);

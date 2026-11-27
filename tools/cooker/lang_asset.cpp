@@ -58,6 +58,7 @@ Language load(const std::string &path)
     std::string translation = quoted(line, at, where);
     l.texts.push_back({original, translation});
     l.lines.push_back(n);
+    l.files.push_back(path);
   }
   if (l.code.empty()) throw std::runtime_error(path + ": no language line");
   return l;

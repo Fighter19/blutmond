@@ -1,0 +1,98 @@
+# The lines of Mitsuki's prologue (structure Line in assets/test_room/data/dialogue.ms):
+# Hina calls her in the night (prologue.ms says them in this order).
+table Line
+
+record HinaWakes {
+  speaker = Hina
+  says = "Mitsuki! Mitsuki, are you awake?!"
+}
+
+record MitsukiNow {
+  speaker = Mitsuki
+  says = "...I am now."
+}
+
+record HinaOutside {
+  speaker = Hina
+  says = "Look outside! Do you see them too?!"
+}
+
+record MitsukiWhat {
+  speaker = Mitsuki
+  says = "See what. It's three in the morning."
+}
+
+record HinaThings {
+  speaker = Hina
+  says = "The THINGS! With the teeth! And the eyes!"
+}
+
+record MitsukiCheese {
+  speaker = Mitsuki
+  says = "Hina. Did you eat cheese before bed again?"
+}
+
+record HinaNotCheese {
+  speaker = Hina
+  says = "This is not a cheese dream!!"
+}
+
+record MitsukiWindow {
+  speaker = Mitsuki
+  says = "...Hm. There is one at my window."
+}
+
+record MitsukiStaring {
+  speaker = Mitsuki
+  says = "It's staring at me. Rude."
+}
+
+record HinaCalm {
+  speaker = Hina
+  says = "WHY ARE YOU SO CALM?!"
+}
+
+record MitsukiWhere {
+  speaker = Mitsuki
+  says = "Someone has to be. Where are you?"
+}
+
+record HinaPark {
+  speaker = Hina
+  says = "In the park. Under the bench by the lamp."
+}
+
+record MitsukiStay {
+  speaker = Mitsuki
+  says = "Stay there. And don't get eaten."
+}
+
+record MitsukiTiring {
+  speaker = Mitsuki
+  says = "Finding a new friend sounds tiring."
+}
+
+record HinaComfort {
+  speaker = Hina
+  says = "...Was that supposed to be comforting?"
+}
+
+record MitsukiOnMyWay {
+  speaker = Mitsuki
+  says = "Yes. I'm on my way. Ten minutes."
+}
+
+record MitsukiKatana {
+  speaker = Mitsuki
+  says = "...I'll bring my katana. Just in case."
+}
+
+record MitsukiNotWithout {
+  speaker = Mitsuki
+  says = "Not without my katana."
+}
+
+record MitsukiReady {
+  speaker = Mitsuki
+  says = "Good. Let's go."
+}

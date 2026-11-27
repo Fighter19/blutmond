@@ -284,12 +284,13 @@ static void testAPickupStaysTaken(void)
 static uint16_t stringIdOf(const char *text);
 
 // The item tables of first-items.md §3 to §7 in the cooked test level: every table there, the
-// numbers as the plan has them, a record copied from another with its changes.
+// numbers as the plan has them, a record copied from another with its changes. (Mitsuki's
+// katana and its two moves, assets/mitsuki/home, are one weapon and two commands more.)
 static void testTheItemTables(void)
 {
   start();
   static const struct { const char *table; uint16_t records; } tables[] = {
-    { "Weapon", 7 }, { "Spell", 5 }, { "Ability", 6 }, { "Consumable", 7 }, { "Armour", 10 }, { "KeyItem", 3 }, { "Command", 17 } };
+    { "Weapon", 8 }, { "Spell", 5 }, { "Ability", 6 }, { "Consumable", 7 }, { "Armour", 10 }, { "KeyItem", 3 }, { "Command", 19 } };
   for (size_t i = 0; i < sizeof(tables) / sizeof(tables[0]); i++)
   {
     BmDataTable t;
@@ -3628,6 +3629,89 @@ static void testChoosingACharacter(void)
   TEST_ASSERT(s_game.playerSheet == legs);
 }
 
+// Mitsuki's prologue (assets/mitsuki/home, its room rendered in Blender): the Character menu's
+// Prologue row takes the player to her bed; the room's script (prologue.ms) makes her the
+// player, asleep (her frames on the bed, facing right), the phone rings, she answers and Hina
+// talks with her (Hina's portrait and voice), she gets up and the player has her. The door out
+// needs her katana, which lies on its rack on the way; out through it the street, in front of
+// the cottage; back in, she is awake.
+static void testMitsukisPrologue(void)
+{
+  start();
+  frames(2, 0);
+  const uint32_t errors = bm_script_errors;
+  press(BM_KEY_START);
+  for (int i = 0; i < 4; i++) press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  const int rows = bmTextLanguageCount(&s_pack) + (s_game.colorCorrectable ? 1 : 0);
+  for (int i = 0; i < rows; i++) press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 3 && uiShows("Prologue"));
+  // Down past Hero and Mitsuki to Prologue: out of the menus, and the teleport.
+  press(BM_KEY_DOWN);
+  press(BM_KEY_DOWN);
+  press(BM_KEY_A);
+  TEST_ASSERT(s_game.screens.count == 0);
+  frames(BM_TELEPORT_FRAMES + 4, 0);
+  TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "mitsuki_home"));
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) == 56 && s_game.player.facing == 1);
+  TEST_ASSERT(s_game.character == stringId("player_mitsuki") && s_game.lockTimer != 0);
+  const BmSpriteSheet *sheet = &s_game.sheets[s_game.playerSheet];
+  const int sleep = bmSpriteSheetAnim(sheet, &s_pack, "sleep"), ring = bmSpriteSheetAnim(sheet, &s_pack, "ring");
+  const int call = bmSpriteSheetAnim(sheet, &s_pack, "call");
+  TEST_ASSERT(sleep >= 0 && ring >= 0 && call >= 0 && s_game.playerAnim.anim == (uint8_t)sleep);
+  // Pressing nothing: she sleeps through three rings, then answers the fourth.
+  bool rang = false;
+  int f = 0;
+  for (; f < 600 && s_game.dialogue == 0; f++)
+  {
+    frames(1, 0);
+    rang |= s_game.playerAnim.anim == (uint8_t)ring && strcmp(effectPlaying(), "phone_ring") == 0;
+  }
+  TEST_ASSERT(rang && s_game.dialogue != 0 && s_game.playerAnim.anim == (uint8_t)call);
+  TEST_ASSERT(s_game.dialogueSpeaker == stringId("Hina") && s_game.dialoguePortrait == stringId("hina_face") &&
+              s_game.dialogueVoice == stringId("voice_hina"));
+  // A through the call: Hina's lines and hers, until she is up and can walk.
+  int lines = 0, hina = 0;
+  uint16_t line = 0xFFFF;
+  for (f = 0; f < 4000 && s_game.lockTimer != 0; f++)
+  {
+    if (s_game.dialogue != 0 && s_game.dialogueLine != line)
+    {
+      line = s_game.dialogueLine;
+      lines++;
+      hina += s_game.dialogueSpeaker == stringId("Hina");
+    }
+    frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  }
+  printf("    the call: %d lines, %d of them Hina's\n", lines, hina);
+  TEST_ASSERT(s_game.lockTimer == 0 && lines == 16 && hina == 7);
+  // She says she'll bring her katana; it lies on the rack between her and the door.
+  for (f = 0; f < 200 && s_game.dialogue == 0; f++) frames(1, 0);
+  TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueSpeaker == stringId("Mitsuki"));
+  const uint32_t katana = keyOf("Katana");
+  TEST_ASSERT(bmInventoryCount(&s_game.inventory, katana) == 0);
+  for (f = 0; f < 600 && s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "mitsuki_home"); f++)
+    frames(1, s_game.dialogue != 0 ? ((f % 20) == 0 ? BM_KEY_A : 0) : BM_KEY_RIGHT);
+  TEST_ASSERT(bmInventoryCount(&s_game.inventory, katana) == 1 && s_game.inventory.equipped[0] == katana);
+  TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "rural_street") && BM_FIX_INT(s_game.player.x) == 118);
+  // Back in through the cottage's door (Up): awake, no second call.
+  for (f = 0; f < 60 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  frames(20, 0);
+  bmBodyPlace(&s_game.player, 94, 128);
+  frames(2, 0);
+  press(BM_KEY_UP);
+  frames(40, 0);
+  TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "mitsuki_home") && s_game.lockTimer == 0);
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) == 292);
+  frames(200, 0);
+  TEST_ASSERT(s_game.dialogue == 0 && s_game.lockTimer == 0);
+  TEST_ASSERT(bm_script_errors == errors);
+  // The player again, for the other tests.
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player")));
+  bmGameStart(&s_game, &s_pack, NULL);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -3670,6 +3754,7 @@ int main(int argc, char **argv)
   RUN_TEST(testPuddlesSplash);
   RUN_TEST(testColourCorrection);
   RUN_TEST(testChoosingACharacter);
+  RUN_TEST(testMitsukisPrologue);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

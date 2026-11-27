@@ -1,0 +1,38 @@
+# French texts of Mitsuki's prologue (assets/mitsuki/home), added to the test level's
+# (assets/test_room/lang/fr.bmlang). Each line: "original" = "translation".
+language fr "Français"
+
+# The Character menu's row that starts it
+"Prologue" = "Prologue"
+
+# The room, the katana
+"Mitsuki's room" = "Chambre de Mitsuki"
+"Katana" = "Katana"
+"Mitsuki's own. Quick, and kept very sharp." = "Celui de Mitsuki. Rapide, très affûté."
+
+# The katana's moves
+"Iai" = "Iai"
+"Drawn and struck in one step, faster than seen." = "Dégainé et frappé d'un seul geste, plus vite que l'œil."
+"Crescent" = "Croissant"
+"A rising arc, like the moon's edge." = "Un arc montant, comme le bord de la lune."
+
+# Hina's call
+"Mitsuki! Mitsuki, are you awake?!" = "Mitsuki ! Mitsuki, tu dors ?!"
+"...I am now." = "...Plus maintenant."
+"Look outside! Do you see them too?!" = "Regarde dehors ! Tu les vois aussi ?!"
+"See what. It's three in the morning." = "Voir quoi. Il est trois heures du matin."
+"The THINGS! With the teeth! And the eyes!" = "Les CHOSES ! Avec les dents ! Les yeux !"
+"Hina. Did you eat cheese before bed again?" = "Hina. Encore du fromage avant de dormir ?"
+"This is not a cheese dream!!" = "Ce n'est pas un rêve de fromage !!"
+"...Hm. There is one at my window." = "...Hm. Il y en a un à ma fenêtre."
+"It's staring at me. Rude." = "Il me fixe. Malpoli."
+"WHY ARE YOU SO CALM?!" = "POURQUOI T'ES SI CALME ?!"
+"Someone has to be. Where are you?" = "Il en faut une. Tu es où ?"
+"In the park. Under the bench by the lamp." = "Au parc. Sous le banc près du lampadaire."
+"Stay there. And don't get eaten." = "Restes-y. Et ne te fais pas manger."
+"Finding a new friend sounds tiring." = "Trouver une autre amie, ça a l'air fatigant."
+"...Was that supposed to be comforting?" = "...C'était censé me rassurer ?"
+"Yes. I'm on my way. Ten minutes." = "Oui. J'arrive. Dix minutes."
+"...I'll bring my katana. Just in case." = "...Je prends mon katana. Au cas où."
+"Not without my katana." = "Pas sans mon katana."
+"Good. Let's go." = "Bien. On y va."

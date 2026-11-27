@@ -557,6 +557,7 @@ value is dropped and counts as a script error.
 | 133-135 | `color_correction()`, `set_color_correction(on)`, `has_color_correction()` | the option of colours corrected for the GBA's screen ([mondskript.md](mondskript.md)) |
 | 136 | `save_game()` | as a `SavePoint` (section 3): `savedRoom`, `savedX`, `savedY` = the room and the player's place now, the save game written |
 | 137-140 | `character()`, `set_character(#figure)`, `has_character(#figure)`, `character_count()` | the playable character, an option (sprite-format.md "Figures"): the name of the figure the player is drawn with; another playable figure made the player at once (its sheets loaded in place of the old ones, the figure on its idle animation; false if the pack has none such with all its sprites); whether it has; how many it has. The multiboot images have none to choose (`src/hal/gba/character_off.c`): 1, false |
+| 141 | `owner_turn(side)` | from the player's or the room's attachments: the player faces left (`side < 0`) or right (`side > 0`); 0 or from an object: nothing |
 
 Layer functions (112-122) work only from the player's attachments, on the player's figure (a
 layer named by the figure file); from an object, or for a layer the figure does not have,

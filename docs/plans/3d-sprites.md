@@ -3,8 +3,10 @@
 Sprites drawn by Blender: a character is modelled once, posed once for every frame, rendered
 and turned into the engine's pixels, palette and normal map. The first is **Mitsuki**
 (`assets/mitsuki/`), a playable character with every animation of the test level's player.
+Rooms are made the same way: her bedroom (`assets/mitsuki/home/`), where her prologue starts.
 
-Built: the workflow below, Mitsuki, and a pack of the test level with her as the player.
+Built: the workflow below, Mitsuki, her room and her prologue (section 3), and the test level
+with her as a character to choose.
 Open: the points at the end.
 
 ## 1. The workflow
@@ -20,21 +22,23 @@ One command does all of it:
 
 ```
 python3 tools/sprite3d/make_sprite.py assets/mitsuki/mitsuki.py \
-    --layout assets/sources/player.bmsprite --sink 2 --out assets/mitsuki --name mitsuki \
+    --layout assets/mitsuki/layout.bmsprite --sink 2 --out assets/mitsuki --name mitsuki \
     --split 13 --figure player_mitsuki --save-blend assets/mitsuki/mitsuki.blend --preview mitsuki_x4.png
 ```
 
 It needs Blender 4.0 or later (`--blender`, `$BLENDER` or `blender` on the path; on Ubuntu
 `sudo apt install blender`), and numpy and PIL for the pixel step. Blender runs in the
 background (`blender -b`); nothing in it needs numpy, so the distributions' Blender works as
-well as blender.org's. Mitsuki's 43 frames and portrait take about five seconds.
+well as blender.org's. Mitsuki's 50 frames and portrait take about five seconds. (Blender
+4.0's ray tracer now and then crashes setting up a scene; the tools try up to three times.)
 
 | Step | Where | What |
 |---|---|---|
 | Model | the character's script (`build(Rig)`), `tools/sprite3d/rig.py` | joints, parts, materials, poses, locators, palettes, the portrait |
 | Render | `tools/sprite3d/render.py`, in Blender | one orthographic Cycles render a frame, 8 × 8 samples a pixel, passes: material index, normal, depth |
 | Pixels | `tools/sprite3d/pixelize.py` | the sprite's pixels from the passes: material, light band, outline, normal map |
-| Sprite | `tools/sprite3d/make_sprite.py` | the sheet in the layout's places, the `.bmsprite` (boxes and points measured), the split, the figure, the portrait |
+| Sprite | `tools/sprite3d/make_sprite.py` | the sheet in the layout's places, the `.bmsprite` (boxes and points measured), the split, the figure, the portrait (`--face-only yes`: only that) |
+| Room | `tools/sprite3d/make_room.py` | a room's picture in one render: its tiles, their normal map, the Tiled map with its properties and objects |
 
 ### Model (rig.py)
 
@@ -59,6 +63,8 @@ side), z up, **one unit a pixel**. The ground is z = 0 and (0, 0, 0) lands on a 
   `hand` points for aiming).
 - **Palettes** are colour swaps, written into the sprite (her `steel`: the coat when the chain
   mail is worn).
+- A part can hang on a **joint of its own that never turns** (Mitsuki's `prop`): it stays
+  where it is in the world whatever she does (her phone on the bed).
 - The **portrait** is one more render of a pose: closer (`zoom` pixels a unit), from more in
   front (`yaw`), 32 × 32, for the dialogue box. It can `show` groups no sprite frame shows:
   Mitsuki's far eye, which from the side would peek out past the edge of her face.
@@ -102,14 +108,37 @@ For each sprite pixel (64 render pixels):
 ### Sprite (make_sprite.py)
 
 The **layout** is a sprite whose frames (rectangles, anchors, boxes, points), animations and
-palettes the new one takes over: Mitsuki takes the player's (`assets/sources/player.bmsprite`),
-so frame i of the player is her pose i and every animation the engine and the scripts ask for
-is there. The frames' rectangles are each cut to the picture (the anchor, boxes and points
+palettes the new one takes over: Mitsuki's (`assets/mitsuki/layout.bmsprite`) is the player's
+(`assets/sources/player.bmsprite`) with her bed's frames after it, so frame i of the player is
+her pose i and every animation the engine and the scripts ask for is there. The frames' rectangles are each cut to the picture (the anchor, boxes and points
 keep their places on the figure) and laid out in rows of a sheet 256 pixels wide. Hit boxes named after a material (`blade`) are measured around that material's
 pixels, one pixel more each way, so the katana's arcs hit where they are drawn; points named
 after a locator (`hand`) go where it lies. Then `tools/split_sprite.py` cuts the sheet at the
 waist into legs and torso (a drawn normal map is split with it) and the figure `player` puts
 them together, as for the test level's player (layered-sprites.md §4).
+
+### Rooms (make_room.py)
+
+```
+python3 tools/sprite3d/make_room.py assets/mitsuki/home/home.py --out assets/mitsuki/home \
+    --save-blend assets/mitsuki/home/mitsuki_home.blend
+```
+
+A room's script builds it with the same `Rig` (walls, furniture: boxes, ellipsoids, tubes on
+one joint, one pose) and says in `ROOM` what the room is: its size, the row the floor's front
+edge lands on (the player's feet, the sprites' sink below the collision's top), the solid rows,
+the map's properties and its objects. The camera looks straight at the back wall (`yaw` 0)
+and a little down (`pitch`: Mitsuki's room 14 degrees, so the floor shows as a strip), and the
+picture is one job of the render and pixel steps above: materials, light bands, inner lines
+(`inner_lines` larger than for a figure: going up the floor, each pixel is 4 units further
+away). Materials marked `emissive` (the night sky, the moon, the eyes outside) are black in the
+normal map: a lit room draws them as they are and shades the rest by its `Light` from the
+normals. The picture is cut into 16 x 16 tiles, each once: `<name>_tiles.png`,
+`<name>_tiles_n.png` and `<name>.tmx` (the background layer; the main layer empty).
+
+With `lighting = palette` every (colour, light level) pair is a palette entry: a room with 20
+colours fits the GBA's 15 banks with 4 levels and no dither, so a room script keeps few
+colours (two of a ramp where one would do, the stars the moon's).
 
 ## 2. Mitsuki
 
@@ -122,10 +151,11 @@ A kuudere: cool, quiet, hard to read, and cute anyway.
 | Clothes | a navy greatcoat, open over a white shirt with a red ribbon, cuffs too big for her, a red scarf trailing behind, dark tights, boots with white tops |
 | Arms | a katana (the sword's swings), a lance with a red lacquered shaft (the thrusts) |
 | Colours | 15: outline, three of hair, two of skin, two reds, three of coat, boot, two golds, steel (the eyes' white is the hair's light) |
-| Frames | the player's 43: idle (breathing, the hair and scarf settle), run, jump, fall, climb (seen from behind), the swing, the lance up and down, the low sweep, the arcs up and down, the thrust ahead, push, aim (9 directions), sitting on the bench (seen from the front, her right leg crossed over her left, her hands in her lap; her feet do not reach the ground) |
+| Frames | 50: the player's 43, idle (breathing, the hair and scarf settle), run, jump, fall, climb (seen from behind), the swing, the lance up and down, the low sweep, the arcs up and down, the thrust ahead, push, aim (9 directions), sitting on the bench (seen from the front, her right leg crossed over her left, her hands in her lap; her feet do not reach the ground); then 7 in her bed at home for her prologue, drawn from where she stands in front of it and from the room's own angle: asleep under the blanket (eyes closed: a line instead), the phone beside her lighting up and buzzing, sitting up with it at her ear, sitting on the bed's edge (`sleep`, `ring`, `call`, `wake`) |
 | Portrait | `mitsuki_face`: her lines in the dialogue box while she is the player |
 
-Files in `assets/mitsuki/`: `mitsuki.py` (the model and the poses), `mitsuki.blend` (the same
+Files in `assets/mitsuki/`: `mitsuki.py` (the model and the poses), `layout.bmsprite` (her frames:
+the player's, then the bed's), `mitsuki.blend` (the same
 scene, written by `--save-blend`, for opening in Blender), `sources/` (the whole sprite and its
 normal map, the layout's frames), `mitsuki_legs` and `mitsuki_torso` (with `_n` normal maps),
 `player_mitsuki.bmfigure` (her figure), `mitsuki_face`, `speaker.bmdata` (her `Speaker`
@@ -147,7 +177,38 @@ The multiboot images have no choice of character: their code leaves it out
 pack fitted for one over the link (runtime-abi.md §0) leaves them out too
 (`src/link/live_master.c`), so a room is not left out for them.
 
-## 3. Open
+## 3. Her prologue
+
+Her room at home (`assets/mitsuki/home/`, section 1, "Rooms"): an attic bedroom at night,
+cut open at the front like a doll's house; a bed with lilac-white sheets (the colours of her
+hair, so the blanket in her bed frames matches), a window with the moon and a dark shape with
+red eyes looking in, red curtains, a rug, a dresser with a plush rabbit, the rack her katana
+rests on, the door out. Lit by the moon through the window (a `Light`).
+
+**The scene** (`prologue.ms`, the room's `attach`): entered at her bed (the room's
+`PlayerStart`, x 56), it makes Mitsuki the player if another character is, turns her to the
+right (`owner_turn`: her bed frames are drawn facing that way), and plays: asleep; the phone
+rings three times and she sleeps on, a fourth and she answers. **Hina**, her friend, in a
+panic: does she see them too, the things with teeth? Mitsuki, flat: it is three in the
+morning; did Hina eat cheese before bed again? Then she sees one at her own window ("It's
+staring at me. Rude."), keeps calm ("Someone has to be"), and agrees to meet her at the
+park, under the bench by the lamp: "Don't get eaten. Finding a new friend sounds tiring."
+She sits on the edge of the bed, gets up, says she'll bring her katana, and the player has
+her. The katana (`Katana`, `katana.bmdata`, with its moves Iai and Crescent in
+`commands.bmdata`) lies on its rack on the way to the door (`SwordRack`, `sword_rack.ms`:
+walked under, it is taken and equipped); the door (`needs = Katana`) opens only with it, and
+she says so if she tries without. Out through it is the rural street, at the cottage's door
+(Up there leads back in, where she is awake).
+
+| | |
+|---|---|
+| Starting it | Start, System, Character, Prologue (the Character record's `prologue`, `prologue_x`, `prologue_y`: a teleport there); on the PC `build/game --room mitsuki_home` |
+| Hina | only her portrait (`hina.py`, `--face-only yes`): chestnut twin tails, wide green eyes, mouth open, a drop of sweat, a yellow hoodie, the phone at her ear; her voice a quick shrill blip (`voice_hina`) |
+| Sounds | the phone's ring, a buzzing two-note trill (`phone_ring`); both from `tools/make_test_songs.py` |
+| Texts | the lines (`lines.bmdata`), German and French in `lang/` (a language may come in several files, pack-format.md §3.2) |
+| Multiboot | none of it: `assets/mitsuki/` and the room are left out of the multiboot pack; a pack fitted for one over the link brings a room's scripts only with that room (runtime-abi.md §0) |
+
+## 4. Open
 
 - **More colour slots for the light**: with 15 colours a lit sprite has no slot left to split
   a colour by its normals (lighting.md), so in lit rooms each colour has one normal. A palette
@@ -158,5 +219,7 @@ pack fitted for one over the link (runtime-abi.md §0) leaves them out too
   head, would help.
 - **Editor**: a button in the Animation panel that runs make_sprite.py for a sprite that has
   a character script or `.blend` beside it.
+- **Fades and the camera**: the prologue starts and ends as a cut; fades, a letterbox and a
+  directed camera (dialogue.md §6) would let it breathe, and a skip.
 - **Other characters**: an enemy has its own layout (its `.bmsprite`); a character script
   with as many poses as that layout has frames is all it takes.

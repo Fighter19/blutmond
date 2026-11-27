@@ -1,0 +1,9 @@
+# Hina in the dialogue box (structure Speaker in assets/test_room/data/dialogue.ms): her
+# portrait rendered from hina.py, her voice from tools/make_test_songs.py.
+table Speaker
+
+record Hina {
+  name = "Hina"
+  portrait = "hina_face"
+  voice = "voice_hina"
+}

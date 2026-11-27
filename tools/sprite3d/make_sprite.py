@@ -6,7 +6,7 @@ of the engine.
 usage: make_sprite.py <character.py | scene.blend> --layout <sprite.bmsprite> --out <dir>
                       --name <name> [--sink N] [--split WAIST] [--figure <figure name>]
                       [--save-blend <file.blend>] [--preview <file.png>] [--blender <path>]
-                      [--keep <dir>]
+                      [--keep <dir>] [--face-only yes]
 
 <character.py> builds the character in Blender (its build(Rig), tools/sprite3d/rig.py); a
 .blend (made by --save-blend) is rendered as it is. --layout is a sprite whose frames (their
@@ -25,6 +25,7 @@ above the anchor) in <out>; with --figure, <out>/<figure name>.bmfigure of the t
 `player`, it is the engine's player). A character with a portrait gets <out>/<name>_face.png
 and .bmsprite (the dialogue box's, its anchor at the top left). --preview writes a sheet of
 every frame four times larger on a grey ground; --keep leaves the render's passes in a folder.
+--face-only yes writes the portrait and nothing else (a character who is only heard: on the phone).
 Needs Blender (4.0 or later; --blender or $BLENDER, else `blender` on the path), numpy and PIL.
 """
 import copy
@@ -108,7 +109,11 @@ def main(argv):
     cmd += ['--jobs', os.path.join(work, 'jobs.json'), '--out', work]
     if 'save-blend' in opts:
         cmd += ['--save-blend', opts['save-blend']]
-    r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    # Blender 4.0's ray tracer (Embree) now and then crashes building its scene: tried again.
+    for _ in range(3):
+        r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r.returncode == 0:
+            break
     if r.returncode != 0 or not os.path.exists(os.path.join(work, 'meta.json')):
         print(r.stdout[-4000:], file=sys.stderr)
         print('make_sprite: Blender failed', file=sys.stderr)
@@ -197,10 +202,14 @@ def main(argv):
         root.insert(at, p)
         at += 1
     sources = os.path.join(out, 'sources')
-    os.makedirs(sources, exist_ok=True)
-    Image.fromarray(sheet).save(os.path.join(sources, name + '.png'))
-    Image.fromarray(nsheet).save(os.path.join(sources, name + '_n.png'))
-    write_xml(root, os.path.join(sources, name + '.bmsprite'))
+    face_only = opts.get('face-only') == 'yes'
+    os.makedirs(out, exist_ok=True)
+    if not face_only:
+        os.makedirs(sources, exist_ok=True)
+    if not face_only:
+        Image.fromarray(sheet).save(os.path.join(sources, name + '.png'))
+        Image.fromarray(nsheet).save(os.path.join(sources, name + '_n.png'))
+        write_xml(root, os.path.join(sources, name + '.bmsprite'))
     print('make_sprite: %s: %d frames, %d colours' % (name, len(frames), len(used)))
 
     portrait = [j for j in meta['jobs'] if j['job'].get('portrait')]

@@ -1,0 +1,13 @@
+# Mitsuki's katana (structure Weapon in assets/test_room/data/items.ms), on the rack in her room
+# (the object SwordRack): what she takes before going out in her prologue.
+table Weapon
+
+record Katana {
+  title = "Katana"
+  description = "Mitsuki's own. Quick, and kept very sharp."
+  price = 200
+  attack = 4
+  reach = 22
+  startup = 3
+  recovery = 9
+}

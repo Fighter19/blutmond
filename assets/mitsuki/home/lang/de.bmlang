@@ -1,0 +1,38 @@
+# German texts of Mitsuki's prologue (assets/mitsuki/home), added to the test level's
+# (assets/test_room/lang/de.bmlang). Each line: "original" = "translation".
+language de "Deutsch"
+
+# The Character menu's row that starts it
+"Prologue" = "Prolog"
+
+# The room, the katana
+"Mitsuki's room" = "Mitsukis Zimmer"
+"Katana" = "Katana"
+"Mitsuki's own. Quick, and kept very sharp." = "Mitsukis eigenes. Schnell und sehr scharf."
+
+# The katana's moves
+"Iai" = "Iai"
+"Drawn and struck in one step, faster than seen." = "Gezogen und geschlagen in einem Zug, schneller als das Auge."
+"Crescent" = "Sichel"
+"A rising arc, like the moon's edge." = "Ein steigender Bogen, wie der Rand des Mondes."
+
+# Hina's call
+"Mitsuki! Mitsuki, are you awake?!" = "Mitsuki! Mitsuki, bist du wach?!"
+"...I am now." = "...Jetzt schon."
+"Look outside! Do you see them too?!" = "Schau raus! Siehst du sie auch?!"
+"See what. It's three in the morning." = "Wen. Es ist drei Uhr morgens."
+"The THINGS! With the teeth! And the eyes!" = "Die DINGER! Mit den Zähnen! Und Augen!"
+"Hina. Did you eat cheese before bed again?" = "Hina. Hast du wieder spät Käse gegessen?"
+"This is not a cheese dream!!" = "Das ist kein Käsetraum!!"
+"...Hm. There is one at my window." = "...Hm. Da ist eins an meinem Fenster."
+"It's staring at me. Rude." = "Es starrt mich an. Unhöflich."
+"WHY ARE YOU SO CALM?!" = "WIESO BIST DU SO RUHIG?!"
+"Someone has to be. Where are you?" = "Einer muss es ja sein. Wo bist du?"
+"In the park. Under the bench by the lamp." = "Im Park. Unter der Bank bei der Laterne."
+"Stay there. And don't get eaten." = "Bleib da. Und lass dich nicht fressen."
+"Finding a new friend sounds tiring." = "Eine neue Freundin suchen klingt anstrengend."
+"...Was that supposed to be comforting?" = "...Sollte das tröstlich sein?"
+"Yes. I'm on my way. Ten minutes." = "Ja. Bin unterwegs. Zehn Minuten."
+"...I'll bring my katana. Just in case." = "...Ich nehme mein Katana mit. Sicher ist sicher."
+"Not without my katana." = "Nicht ohne mein Katana."
+"Good. Let's go." = "Gut. Los geht's."

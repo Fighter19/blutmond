@@ -74,6 +74,13 @@
  </frame>
  <frame x="192" y="78" w="11" h="27" ax="5" ay="31" />
  <frame x="203" y="78" w="12" h="27" ax="5" ay="31" />
+ <frame x="215" y="78" w="41" h="12" ax="40" ay="25" />
+ <frame x="0" y="110" w="41" h="13" ax="40" ay="26" />
+ <frame x="41" y="110" w="41" h="12" ax="40" ay="25" />
+ <frame x="82" y="110" w="42" h="12" ax="40" ay="25" />
+ <frame x="124" y="110" w="22" h="24" ax="22" ay="38" />
+ <frame x="146" y="110" w="22" h="24" ax="22" ay="38" />
+ <frame x="168" y="110" w="10" h="27" ax="5" ay="33" />
  <palette name="steel">
   <swap from="#1e203e" to="#404656" />
   <swap from="#343a68" to="#6e768a" />
@@ -152,5 +159,20 @@
  <animation name="sit" loop="1">
   <step frame="41" duration="60" />
   <step frame="42" duration="60" />
+ </animation>
+ <animation name="sleep" loop="1">
+  <step frame="43" duration="70" />
+  <step frame="44" duration="70" />
+ </animation>
+ <animation name="ring" loop="1">
+  <step frame="45" duration="3" />
+  <step frame="46" duration="3" />
+ </animation>
+ <animation name="call" loop="1">
+  <step frame="47" duration="50" />
+  <step frame="48" duration="50" />
+ </animation>
+ <animation name="wake" loop="0">
+  <step frame="49" duration="1" />
  </animation>
 </sprite>

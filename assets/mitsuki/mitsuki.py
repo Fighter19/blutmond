@@ -7,8 +7,9 @@ behind, a crescent pin in her hair. A katana for the sword's swings, a lance wit
 lacquered shaft for its thrusts.
 
 Built in Blender by tools/sprite3d/make_sprite.py (build() below), one pose for every frame
-of the player's layout (assets/sources/player.bmsprite: idle, run, jump, fall, climb, the
-swings and thrusts, push, aim, sit), and a portrait for the dialogue box.
+of her layout (layout.bmsprite: the player's frames, assets/sources/player.bmsprite: idle,
+run, jump, fall, climb, the swings and thrusts, push, aim, sit; then her bed at home for her
+prologue: sleep, ring, call, wake), and a portrait for the dialogue box.
 """
 
 import math
@@ -51,6 +52,7 @@ def build(Rig):
     r.material('grip', RED, bands=two)
     r.material('blade', STEEL, weight=4, min_cover=0.12, bands=[0.6], keep_inner=True)
     r.material('shaft', RED, weight=2, min_cover=0.2, bands=two, keep_inner=True)
+    r.material('blanket', HAIR, bands=[0.35, 0.75])
 
     # The rig.
     r.joint('pelvis', None, (0, 0, 11.6))
@@ -90,12 +92,15 @@ def build(Rig):
         gaze = 0.32 if y < 0 else 0.5
         # The far eye only in the portrait (from more in front): in the sprites, seen from the
         # side, it would peek out past the edge of her face.
-        g = 'far_eye' if y > 0 else None
+        # The near eye is shown unless she sleeps (pose(closed=True): a line instead).
+        g = 'far_eye' if y > 0 else 'eyes'
         r.ellipsoid('head', 'sclera', on_face(0.0, 23.05), (0.38, 0.85, 1.1), rot=(0, 0, turn * y), group=g)
         r.ellipsoid('head', 'eye', on_face(0.14, 22.95, gaze), (0.34, 0.55, 0.85), rot=(0, 0, turn * y), group=g)
         r.ellipsoid('head', 'pupil', on_face(0.26, 22.85, gaze + 0.04), (0.26, 0.3, 0.48), rot=(0, 0, turn * y), group=g)
         r.ellipsoid('head', 'shine', on_face(0.36, 23.2, gaze - 0.1), (0.1, 0.14, 0.17), rot=(0, 0, turn * y), group=g)
         r.ellipsoid('head', 'lash', on_face(0.18, 23.95), (0.42, 0.95, 0.26), rot=(-5 * y, 0, turn * y), group=g)
+        if y < 0:
+            r.ellipsoid('head', 'lash', on_face(0.2, 22.7, 0.1), (0.4, 0.9, 0.22), rot=(5 * y, 0, turn * y), group='closed')
         r.tube('head', 'hair', (0.7, 3.25 * y, 24.8), (0.9, 3.05 * y, 20.2), 0.7, 0.45)
     # The hime cut: the cap of hair ends in a straight fringe above the eyes.
     r.ellipsoid('head', 'hair', (0.0, 0, 24.6), (3.9, 3.9, 4.1), cuts=[((3.0, 0, 24.7), (0.6, 0, -0.8))])
@@ -134,6 +139,26 @@ def build(Rig):
     r.ellipsoid('hand_R', 'gold', (0, -2.6, -2.6), (0.6, 0.6, 0.35), group='lance')
     r.tube('hand_R', 'blade', (0, -2.6, -2.6), (0, -2.6, -5.8), 0.7, 0.05, caps=False, group='lance')
 
+    # At home (assets/mitsuki/home, her prologue): her blanket, over her lying and over her legs
+    # sitting up; her phone on the bed (dark, or ringing and buzzing) and in her hand. The
+    # bed's things hang on `prop`, a joint of its own that never turns: they stay where the
+    # bed is whatever she does.
+    r.material('screen', [GOLD[1]], weight=6, min_cover=0.3, bands=[], keep_inner=True)
+    r.material('phone', BOOT[:1], weight=4, min_cover=0.3, bands=[])
+    r.joint('prop', None, (0, 0, 0))
+    r.box('pelvis', 'blanket', (1.4, 0, 6.5), (6.6, 11, 18), group='blanket')
+    r.ellipsoid('pelvis', 'blanket', (1.4, 0, 15.2), (3.3, 5.6, 2.8), group='blanket')
+    r.ellipsoid('pelvis', 'blanket', (1.6, 0, -2.2), (3.4, 5.6, 2.2), group='blanket')
+    r.box('pelvis', 'blanket', (6.8, 0, 14.4), (12, 11, 2.2), group='blanket_legs')
+    r.ellipsoid('pelvis', 'blanket', (12.6, 0, 14.2), (2.2, 5.6, 2.0), group='blanket_legs')
+    px, py, pz = BED_PHONE
+    for g, dx in (('phone_bed', 0.0), ('ring_a', -0.5), ('ring_b', 0.5)):
+        r.box('prop', 'phone', (px + dx, py, pz), (4.6, 2.6, 0.8), group=g)
+        if g != 'phone_bed':
+            r.box('prop', 'screen', (px + dx, py - 0.2, pz + 0.45), (3.8, 2.0, 0.2), group=g)
+    r.box('hand_R', 'phone', (0.6, -3.4, 11.8), (1.0, 0.7, 3.6), group='phone_hand')
+    r.box('hand_R', 'screen', (0.6, -3.8, 11.8), (0.7, 0.2, 3.0), group='phone_hand')
+
     for p in poses():
         r.pose(**p)
     r.portrait(0, (0.9, 0, 23.6), 3.3, yaw=58.0, pitch=4.0, show=('far_eye',))
@@ -147,9 +172,10 @@ def build(Rig):
 IDLE = {'shoulder_R': (-4, -8), 'shoulder_L': (4, 8), 'elbow_R': 12, 'elbow_L': 12, 'head': -3}
 
 
-def pose(base=IDLE, root=(0, 0, 0), show=(), view=None, **joints):
+def pose(base=IDLE, root=(0, 0, 0), show=(), view=None, closed=False, **joints):
     j = dict(base)
     j.update(joints)
+    show = tuple(show) + (('closed',) if closed else ('eyes',))
     return {'joints': j, 'root': root, 'show': show, 'view': view}
 
 
@@ -174,6 +200,16 @@ def swing(total, elbow=10, hand=0):
 # Camera angles of their own (rig.py, pose(view=...)): from the front and from behind.
 FRONT = (90.0, 8.0)
 BACK = (-90.0, 8.0)
+
+# Her bed at home (assets/mitsuki/home/home.py): the frames from 43 on are drawn from where she
+# stands in front of it (the room's PlayerStart, x 56), from the room's own angle (yaw 0,
+# pitch 14), so she lies on its mattress. HOME_X: the room's x of that place; BED_Y: the
+# middle of the bed, away from the viewer; MATTRESS: its top with the sheet.
+HOME = (0.0, 14.0)
+HOME_X = 56.0
+BED_Y = 27.0
+MATTRESS = 14.6
+BED_PHONE = (54.0 - HOME_X, 10.0, MATTRESS + 0.3)   # on the sheet at the front, by her feet
 
 STANCE = {'hip_R': 25, 'knee_R': -20, 'hip_L': -20, 'knee_L': -10}
 LUNGE = {'hip_R': 38, 'knee_R': -30, 'hip_L': -30, 'knee_L': -5}
@@ -250,4 +286,25 @@ def poses():
     out.append(pose(view=FRONT, show=('far_eye',), root=(0, 0, 3.0), **sit))
     sit.update(spine=1, knee_R=(-72, 28), elbow_R=58, elbow_L=58)
     out.append(pose(view=FRONT, show=('far_eye',), root=(0, 0, 3.0), **sit))
+    # 43, 44: asleep in her bed at home, on her back under the blanket, her head on the pillow,
+    # the phone dark beside it; breathing. 45, 46: the phone rings and buzzes. 47, 48: sitting
+    # up, the phone at her ear. 49: sitting on the bed's edge, seen from the front, about to
+    # get up (the next frame: standing there).
+    lie = dict(pelvis=88, spine=-4, chest=-4, head=-8, hip_R=2, hip_L=2, shoulder_R=(4, -4), shoulder_L=(4, 4),
+               elbow_R=6, elbow_L=6, hair=172, hair_end=8, scarf=90)
+    at = (38.0 - HOME_X, BED_Y, MATTRESS - 0.5 - 11.6)
+    for k, ph in enumerate(('phone_bed', 'phone_bed', 'ring_a', 'ring_b')):
+        breath = dict(lie)
+        if k == 1:
+            breath.update(chest=-6, head=-9)
+        out.append(pose(view=HOME, closed=True, show=('blanket', ph), root=at, **breath))
+    call = dict(spine=-4, chest=-2, head=4, hip_R=88, hip_L=88, knee_R=-4, knee_L=-4, ankle_R=-30, ankle_L=-30,
+                shoulder_R=(150, -20), elbow_R=150, hand_R=-20, shoulder_L=(20, 6), elbow_L=30, hair=-4, scarf=-10)
+    seat = (40.0 - HOME_X, BED_Y - 4.0, MATTRESS + 1.2 - 11.6)
+    out.append(pose(view=HOME, show=('blanket_legs', 'phone_hand'), root=seat, **call))
+    call.update(head=8, spine=-3, chest=-3)
+    out.append(pose(view=HOME, show=('blanket_legs', 'phone_hand'), root=seat, **call))
+    edge = dict(hip_R=(88, 4), knee_R=-84, ankle_R=12, hip_L=(80, -4), knee_L=-70, ankle_L=10, shoulder_R=(20, 22),
+                elbow_R=20, shoulder_L=(20, -22), elbow_L=20, head=-6, hair=2, scarf=4)
+    out.append(pose(view=FRONT, show=('far_eye',), root=(-8.0, 0, MATTRESS + 1.0 - 11.6), **edge))
     return out

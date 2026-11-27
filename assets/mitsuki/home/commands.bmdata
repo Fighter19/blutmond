@@ -1,0 +1,30 @@
+# The katana's special moves (structure Command in assets/test_room/data/items.ms; how they
+# work: src/world/commands.h, CommandStrike), as every weapon has its list.
+table Command
+
+record Iai {
+  title = "Iai"
+  keys = "Down, Down-Fwd, Fwd + B"
+  description = "Drawn and struck in one step, faster than seen."
+  input = #Down_DownFwd_Fwd_Attack
+  cost = 4
+  weapon = Katana
+  frames = 18
+  power = 220
+  reach = 26
+  dash = 6.0
+}
+
+record Crescent {
+  title = "Crescent"
+  keys = "Fwd, Down, Down-Fwd + B"
+  description = "A rising arc, like the moon's edge."
+  input = #Fwd_Down_DownFwd_Attack
+  cost = 5
+  weapon = Katana
+  frames = 24
+  power = 160
+  hits = 2
+  every = 5
+  hop = 5.0
+}

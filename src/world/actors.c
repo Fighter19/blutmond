@@ -834,6 +834,9 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     else if (i == BM_ACTORS_OWNER && tx != fx) g->player.facing = (int8_t)(tx < fx ? -1 : 1);
     break;
   }
+  case BM_SCRIPT_API_owner_turn:
+    if (i == BM_ACTORS_OWNER && args[0] != 0) g->player.facing = (int8_t)(args[0] < 0 ? -1 : 1);
+    break;
   case BM_SCRIPT_API_layer_track:
     if (i == BM_ACTORS_OWNER) *result = bmGameLayerCall(g, api, args);
     break;

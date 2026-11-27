@@ -21,6 +21,7 @@ struct Language
   std::string path, code, name;
   std::vector<std::pair<std::string, std::string>> texts;   // original, translation; with line numbers below
   std::vector<int> lines;
+  std::vector<std::string> files;   // per text, the file it is in (a language may come in several)
 };
 
 /// Reads a language file. Throws with file and line on errors.

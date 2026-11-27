@@ -50,12 +50,14 @@ class Rig:
 
     # --- Materials ------------------------------------------------------------------------
 
-    def material(self, name, ramp, weight=1.0, min_cover=None, bands=None, keep_inner=False):
+    def material(self, name, ramp, weight=1.0, min_cover=None, bands=None, keep_inner=False, emissive=False):
         """A material: `ramp` colours (r, g, b) from shade to light. `weight`: how strongly
         it claims a pixel it shares with others (an eye, a blade: more). `min_cover`: the
         share of a pixel it needs to make a pixel on its own (thin parts: less than half).
         `bands`: where the light's steps lie (0..1, one fewer than the ramp). `keep_inner`:
-        its pixels never take an inner line (an eye)."""
+        its pixels never take an inner line (an eye). `emissive`: it gives light itself (a room's
+        night sky, a lamp): its normals are black in the normal map, so a lit room draws it as
+        it is (make_room.py)."""
         mat = bpy.data.materials.new(name)
         mat.pass_index = len(self.materials) + 1
         r, g, b = (c / 255.0 for c in ramp[len(ramp) // 2])
@@ -69,7 +71,8 @@ class Rig:
             bands = [(i + 1) / len(ramp) * 0.9 for i in range(len(ramp) - 1)]
         self.materials[name] = (mat, {
             'name': name, 'index': mat.pass_index, 'ramp': [_hex(c) for c in ramp],
-            'weight': weight, 'min_cover': min_cover, 'bands': bands, 'keep_inner': keep_inner})
+            'weight': weight, 'min_cover': min_cover, 'bands': bands, 'keep_inner': keep_inner,
+            'emissive': emissive})
         return name
 
     # --- Joints and parts -----------------------------------------------------------------

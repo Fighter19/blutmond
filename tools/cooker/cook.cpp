@@ -2552,11 +2552,22 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     main.code = options.mainLanguage;
     main.name = options.mainLanguageName;
     languages.push_back(main);
+    // A language may come in several files (a part of the game with texts of its own, kept
+    // beside it: Mitsuki's prologue): their texts are put together, the first file's name kept.
     for (const std::string &path : options.languages)
     {
       try
       {
-        languages.push_back(lang::load(path));
+        lang::Language l = lang::load(path);
+        auto same = std::find_if(languages.begin() + 1, languages.end(), [&](const lang::Language &o) { return o.code == l.code; });
+        if (same == languages.end())
+        {
+          languages.push_back(std::move(l));
+          continue;
+        }
+        same->texts.insert(same->texts.end(), l.texts.begin(), l.texts.end());
+        same->lines.insert(same->lines.end(), l.lines.begin(), l.lines.end());
+        same->files.insert(same->files.end(), l.files.begin(), l.files.end());
       }
       catch (const std::exception &e)
       {
@@ -2568,7 +2579,7 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
     {
       if (!codes.insert(l.code).second)
       {
-        report.error("text", l.path, "language '" + l.code + "' is there twice");
+        report.error("text", l.path, "language '" + l.code + "' is the project's main language");
         continue;
       }
       uint16_t code = strings.id(l.code), name = strings.id(l.name);
@@ -2580,7 +2591,7 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
         if (id < 0)
         {
           if (unused++ < 5)
-            report.warning("text", l.path + ":" + std::to_string(l.lines[i]), "\"" + l.texts[i].first + "\" is no text of this pack");
+            report.warning("text", l.files[i] + ":" + std::to_string(l.lines[i]), "\"" + l.texts[i].first + "\" is no text of this pack");
           continue;
         }
         entries[uint16_t(id)] = l.texts[i].second;
