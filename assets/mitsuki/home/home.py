@@ -85,7 +85,7 @@ ROOM = {
     'collision_tileset': '../../engine/blutmond_collision.tsx',
     'properties': [
         ('room_id', 'mitsuki_home'), ('title', "Mitsuki's room"), ('music', 'none'),
-        ('attach', 'Prologue'), ('lighting', 'palette'), ('ambient', '0.3'), ('light_levels', '3'),
+        ('attach', 'Prologue, Uneasy'), ('lighting', 'palette'), ('ambient', '0.3'), ('light_levels', '3'),
         ('light_curve', 'perceived'), ('backdrop', '#101a2a'),
     ],
     'objects': [

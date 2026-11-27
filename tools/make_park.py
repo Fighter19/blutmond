@@ -204,7 +204,7 @@ def write(out, tiles, maps):
     })
     mp = ET.SubElement(m, "properties")
     hexes = lambda cs: ", ".join("#%02x%02x%02x" % c for c in cs)   # noqa: E731
-    for k, v in (("music", "park_dread"), ("attach", "ParkScene"), ("room_id", "park"), ("title", "The park"),
+    for k, v in (("music", "park_dread"), ("attach", "ParkScene, Uneasy"), ("room_id", "park"), ("title", "The park"),
                  ("lighting", "palette"), ("ambient", "0.25"), ("light_levels", "4"), ("light_curve", "perceived"),
                  ("light_dither", "false"), ("backdrop", "#101a2a"), ("glow_light", hexes(GLASS))):
         rooms.prop(mp, k, v)

@@ -262,6 +262,7 @@ After it (`ParkDone`) the park stays tense and Hina gone.
 | | |
 |---|---|
 | Starting it | through the street's west door; on the PC `build/game --room park` |
+| Before the monsters | until the nightmare took Hina (`ParkDone`) Mitsuki walks at 60 % (`uneasy.ms`, attached to her room, the street and the park: `add_speed`), so the park's music builds as she nears the bench; the street's knight is not there yet (`cottage.ms`, the street's attachment, spawns it after), and the first time she comes near it she has a word for it (once: the flag `MitsukiKnight`) |
 | Hina | her full body (`hina.py`, 16 frames: hiding, the leap, the rocked hug, sobbing, led, on the bench, held up); a relaxed face for the bench (lids over her pupils, level brows, a soft smile: group `relaxed`); her soft portrait `hina_soft` |
 | Mitsuki | her frames for the scene in `mitsuki.py` (hug rocking, pat, leading, on the bench: `sit_hand`, `sit_leaned`, `caress`; reaching out) |
 | The nightmare | a shadow, emissive (`nightmare.py`): rising, hushing, reaching, holding, leaping away |

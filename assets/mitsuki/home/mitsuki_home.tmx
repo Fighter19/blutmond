@@ -4,7 +4,7 @@
   <property name="room_id" value="mitsuki_home" />
   <property name="title" value="Mitsuki's room" />
   <property name="music" value="none" />
-  <property name="attach" value="Prologue" />
+  <property name="attach" value="Prologue, Uneasy" />
   <property name="lighting" value="palette" />
   <property name="ambient" value="0.3" />
   <property name="light_levels" value="3" />

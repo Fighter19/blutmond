@@ -204,6 +204,7 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/lang/fr.bmlang
   # The park: Hina, the nightmare, the close-up of their hands, the music.
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/uneasy.ms
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/hina.ms
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/nightmare.ms
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/hands.ms

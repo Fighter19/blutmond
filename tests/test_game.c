@@ -50,6 +50,23 @@ static void frames(int n, uint16_t keys)
   }
 }
 
+// A story flag on (story.c: in the inventory under the FNV-1a hash of its name, changed).
+static void setStoryFlag(const char *name)
+{
+  uint32_t h = 2166136261u;
+  for (const char *p = name; *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+  h ^= 0x464C4147u;
+  if (bmInventoryCount(&s_game.inventory, h) == 0) bmInventoryGive(&s_game.inventory, h, 1);
+}
+
+// Mitsuki's story past the park's scene (ParkDone): the street's knight is there, and the
+// player walks at full speed (the Uneasy attachment gives it back).
+static void afterTheNightmare(void)
+{
+  setStoryFlag("ParkDone");
+  frames(2, 0);
+}
+
 static void testAutopilotPlaysThroughTheLevel(void)
 {
   start();
@@ -3311,6 +3328,7 @@ static int waitFor(int level, int limit)
 static void testTheStreetsMusicFollowsThePlayer(void)
 {
   startWith(s_data, s_size, "rural_street");
+  afterTheNightmare();   // (the street as it is once the monsters are out: its knight, full speed)
   frames(10, 0);
   TEST_ASSERT(strcmp(musicPlaying(), "night_escape") == 0);
   TEST_ASSERT(s_game.attachments.classKey[BM_ATTACH_ROOM_FIRST] != 0);
@@ -3351,6 +3369,7 @@ static void testTheStreetsMusicFollowsThePlayer(void)
 static void testTheStreetsBenchIsForResting(void)
 {
   startWith(s_data, s_size, "rural_street");
+  afterTheNightmare();   // (the street as it is once the monsters are out: its knight, full speed)
   frames(5, 0);
   const uint8_t slot = BM_ATTACH_ROOM_FIRST + 1;
   const int32_t *bench = &s_game.attachments.fields[slot * BM_SCRIPT_MAX_FIELDS];   // Sitting, UpBefore, Health
@@ -3435,6 +3454,7 @@ static int splashesShown(void)
 static void testPuddlesSplash(void)
 {
   startWith(s_data, s_size, "rural_street");
+  afterTheNightmare();   // (the street as it is once the monsters are out: its knight, full speed)
   frames(5, 0);
   TEST_ASSERT(s_game.reflect.on && s_game.splashSheet >= 0);
   int knight = actorOfClass("Knight");
@@ -3495,6 +3515,7 @@ static void testPuddlesSplash(void)
   }
   // The knight walking in it (towards the player): its splashes.
   startWith(s_data, s_size, "rural_street");
+  afterTheNightmare();   // (the street as it is once the monsters are out: its knight, full speed)
   frames(5, 0);
   knight = actorOfClass("Knight");
   bmBodyPlace(&s_game.player, 280, 128);   // in its sight (96), out of its reach
@@ -3513,6 +3534,7 @@ static void testPuddlesSplash(void)
 static void testThePuddleMirrorsTheStreet(void)
 {
   startWith(s_data, s_size, "rural_street");
+  afterTheNightmare();   // (the street as it is once the monsters are out: its knight, full speed)
   TEST_ASSERT(s_game.light.mode == BM_LIGHT_PALETTE && s_game.light.flicker != 0);
   TEST_ASSERT(s_game.reflect.on && s_game.reflect.bg == 2 && s_game.reflect.layer == 0);
   bmBodyPlace(&s_game.player, 300, 128);
@@ -3893,6 +3915,39 @@ static void testMitsukisParkScene(void)
   bmGameStart(&s_game, &s_pack, NULL);
 }
 
+// Before the nightmare took Hina (the story flag ParkDone) the street has no knight and Mitsuki
+// walks slowly (uneasy.ms: 60 %); after it the knight stands there, she walks at full speed, and
+// the first time she sees it she has a word for it (knight.ms: Remark, once).
+static void testTheStreetBeforeAndAfterTheNightmare(void)
+{
+  startWith(s_data, s_size, "rural_street");
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player_mitsuki")));
+  bmGameStart(&s_game, &s_pack, "rural_street");
+  frames(4, 0);
+  TEST_ASSERT(actorOfClass("Knight") < 0);   // no monsters out yet
+  bmBodyPlace(&s_game.player, 60, 128);
+  frames(20, BM_KEY_RIGHT);
+  int32_t x = s_game.player.x;
+  frames(60, BM_KEY_RIGHT);
+  const int32_t slow = s_game.player.x - x;
+  afterTheNightmare();
+  TEST_ASSERT(actorOfClass("Knight") >= 0);   // the knight is there now (cottage.ms)
+  bmBodyPlace(&s_game.player, 60, 128);
+  frames(20, BM_KEY_RIGHT);
+  x = s_game.player.x;
+  frames(60, BM_KEY_RIGHT);
+  const int32_t fast = s_game.player.x - x;
+  printf("    60 frames: %d px uneasy, %d px after\n", (int)BM_FIX_INT(slow), (int)BM_FIX_INT(fast));
+  TEST_ASSERT(slow * 10 >= fast * 5 && slow * 10 <= fast * 7);
+  // Toward the knight: her word for it, once.
+  int f = 0;
+  for (; f < 300 && s_game.dialogue == 0; f++) frames(1, BM_KEY_RIGHT);
+  TEST_ASSERT(s_game.dialogue != 0 && s_game.dialogueSpeaker == stringId("Mitsuki") &&
+              s_game.dialogueLine == stringId("...A knight. With a shield. On our street. Sure. Why not."));
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player")));
+  bmGameStart(&s_game, &s_pack, NULL);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -3937,6 +3992,7 @@ int main(int argc, char **argv)
   RUN_TEST(testChoosingACharacter);
   RUN_TEST(testMitsukisPrologue);
   RUN_TEST(testMitsukisParkScene);
+  RUN_TEST(testTheStreetBeforeAndAfterTheNightmare);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

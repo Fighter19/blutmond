@@ -74,7 +74,7 @@ record ParkOutLoud {
 
 record ParkLookAtMe {
   speaker = Mitsuki
-  says = "...Hina. Look at me."
+  says = "...Shh. You're safe now."
 }
 
 record ParkHere {
@@ -95,4 +95,9 @@ record ParkHina {
 record ParkGiveBack {
   speaker = Mitsuki
   says = "...Give her back."
+}
+
+record MitsukiKnight {
+  speaker = Mitsuki
+  says = "...A knight. With a shield. On our street. Sure. Why not."
 }

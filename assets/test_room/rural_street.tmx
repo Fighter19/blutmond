@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="9">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="8">
  <properties>
   <property name="music" value="night_escape" />
-  <property name="attach" value="Threat, Bench, Cottage" />
+  <property name="attach" value="Threat, Bench, Cottage, Uneasy" />
   <property name="room_id" value="rural_street" />
   <property name="title" value="Rural street" />
   <property name="lighting" value="palette" />
@@ -80,10 +80,7 @@
   <object id="2" name="start" type="PlayerStart" x="120" y="128">
    <point />
   </object>
-  <object id="3" name="knight" type="Knight" x="350" y="128">
-   <point />
-  </object>
-  <object id="4" name="lamp" type="Light" x="298" y="59">
+  <object id="3" name="lamp" type="Light" x="298" y="59">
    <point />
    <properties>
     <property name="colour" value="#ffd890" />
@@ -94,14 +91,14 @@
     <property name="flicker_speed" value="4" />
    </properties>
   </object>
-  <object id="5" name="puddle" type="Puddle" x="254" y="128" width="116" height="20">
+  <object id="4" name="puddle" type="Puddle" x="254" y="128" width="116" height="20">
    <properties>
     <property name="squash" value="4" />
     <property name="ripple" value="1" />
     <property name="strength" value="12" />
    </properties>
   </object>
-  <object id="6" name="exit_east" type="Door" x="464" y="80" width="16" height="48">
+  <object id="5" name="exit_east" type="Door" x="464" y="80" width="16" height="48">
    <properties>
     <property name="target_room" value="debug_lobby" />
     <property name="target_door" value="to_rural_street" />
@@ -109,14 +106,14 @@
     <property name="panel" value="door_panel" />
    </properties>
   </object>
-  <object id="7" name="to_park" type="Door" x="0" y="80" width="16" height="48">
+  <object id="6" name="to_park" type="Door" x="0" y="80" width="16" height="48">
    <properties>
     <property name="target_room" value="park" />
     <property name="target_door" value="to_street" />
     <property name="direction" value="west" />
    </properties>
   </object>
-  <object id="8" name="to_home" type="Door" x="82" y="80" width="24" height="48">
+  <object id="7" name="to_home" type="Door" x="82" y="80" width="24" height="48">
    <properties>
     <property name="target_room" value="mitsuki_home" />
     <property name="target_door" value="to_street" />

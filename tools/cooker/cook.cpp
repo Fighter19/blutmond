@@ -986,6 +986,16 @@ Bytes objectsChunk(const tmx::Map &map, StringTable &strings, Report &report, ui
     bool acoustics = key == "acoustics" || key == "echo" || key == "echo_feedback" || key == "echo_damping" || key == "muffle";
     if (key == "attach" || classValue || key == "effect" || key == "effect_a" || key == "effect_b" || key == "title" || acoustics)
       roomObject.properties[key] = value;
+    // The runtime has 4 slots for a room's attachments (attachments.h): more are not attached.
+    if (key == "attach")
+    {
+      int names = 0;
+      std::stringstream list(value);
+      for (std::string name; std::getline(list, name, ',');)
+        if (name.find_first_not_of(' ') != std::string::npos) names++;
+      if (names > 4)
+        report.error("room-scripts", map.path, std::to_string(names) + " attachments in 'attach': a room has 4 slots");
+    }
     if (key == "acoustics" && value != "dry" && value != "hall" && value != "cave" && value != "water")
       report.warning("acoustics", map.path, "unknown acoustics '" + value + "' (dry, hall, cave, water)");
     if (key == "echo" && std::atoi(value.c_str()) * BM_SOUND_RATE / 1000 > BM_SOUND_ECHO_MAX)

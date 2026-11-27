@@ -331,7 +331,7 @@ def write_room(path, tiles, maps, cols, rows):
     hexes = lambda cs: ", ".join("#%02x%02x%02x" % c for c in cs)   # noqa: E731
     # The lamp's glass glows with its flicker (glow_light); the cottage's window is Mitsuki's,
     # lit while her light is on (glow_switch, turned by assets/mitsuki/home/cottage.ms).
-    for k, v in (("music", "night_escape"), ("attach", "Threat, Bench, Cottage"), ("room_id", "rural_street"), ("title", "Rural street"), ("lighting", "palette"),
+    for k, v in (("music", "night_escape"), ("attach", "Threat, Bench, Cottage, Uneasy"), ("room_id", "rural_street"), ("title", "Rural street"), ("lighting", "palette"),
                  ("ambient", "0.3"), ("light_levels", "6"), ("light_curve", "perceived"), ("light_dither", "true"),
                  ("backdrop", "#101a2a"), ("glow_light", hexes(GLASS)), ("glow_switch", hexes(GLOW))):
         rooms.prop(mp, k, v)
@@ -358,7 +358,6 @@ def write_room(path, tiles, maps, cols, rows):
     objects = [
         ("CameraZone", "room", 0, 0, W, H, False, []),
         ("PlayerStart", "start", 120, GROUND, 0, 0, True, []),   # out of the knight's sight: the music calm
-        ("Knight", "knight", 350, GROUND, 0, 0, True, []),
         ("Light", "lamp", LAMP_LIGHT[0], LAMP_LIGHT[1], 0, 0, True,
          [("colour", "#ffd890"), ("radius", "140"), ("height", "24"), ("intensity", "1.6"), ("flicker", "0.2"),
           ("flicker_speed", "4")]),
