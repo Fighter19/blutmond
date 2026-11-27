@@ -4132,6 +4132,44 @@ static void testTheSnowman(void)
   bmGameStart(&s_game, &s_pack, NULL);
 }
 
+// Hina's call on the shrine path with the knight close by, on her west (a strike pushes her
+// east, toward the riverside's door): a scene holds her, and nothing strikes her meanwhile (no
+// knockback carrying her out through the doors into the park, still locked); she stays and is
+// free after it. Back in the park from the riverside, near the bench: no scene again (ParkDone).
+static void testTheCallWithTheKnightNear(void)
+{
+  startWith(s_data, s_size, "park");
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player_mitsuki")));
+  bmGameStart(&s_game, &s_pack, "park");
+  afterTheNightmare();
+  frames(4, 0);
+  const uint32_t shrine = (uint32_t)bmGameFindRoom(&s_pack, "shrine_path");
+  TEST_ASSERT(bmEffectsTeleport(&s_game, shrine, 440, 128));
+  frames(BM_TELEPORT_FRAMES + 6, 0);
+  TEST_ASSERT(s_game.roomIndex == shrine);
+  int f = 0;
+  for (; f < 600 && s_game.lockTimer == 0; f++) frames(1, BM_KEY_LEFT);
+  TEST_ASSERT(s_game.lockTimer != 0);
+  const int knight = actorOfClass("Knight");
+  TEST_ASSERT(knight >= 0);
+  int16_t health = s_game.health;
+  for (f = 0; f < 3000 && s_game.lockTimer != 0; f++)
+  {
+    if (f < 400) s_game.actors.x[knight] = s_game.player.x - BM_FIX(24), s_game.actors.y[knight] = s_game.player.y;
+    frames(1, s_game.dialogue != 0 && (f % 20) == 0 ? BM_KEY_A : 0);
+    if (s_game.roomIndex != shrine) break;
+  }
+  printf("    after the call: room %s, health %d of %d, lock %d, x %d\n", bmGameRoomId(&s_game), s_game.health, health,
+         s_game.lockTimer, (int)BM_FIX_INT(s_game.player.x));
+  TEST_ASSERT(s_game.roomIndex == shrine && s_game.lockTimer == 0 && s_game.health == health);
+  const uint32_t park = (uint32_t)bmGameFindRoom(&s_pack, "park");
+  TEST_ASSERT(bmEffectsTeleport(&s_game, park, 30, 128));
+  frames(BM_TELEPORT_FRAMES + 120, 0);
+  TEST_ASSERT(s_game.roomIndex == park && s_game.lockTimer == 0 && s_game.dialogue == 0);
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player")));
+  bmGameStart(&s_game, &s_pack, NULL);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -4179,6 +4217,7 @@ int main(int argc, char **argv)
   RUN_TEST(testTheStreetBeforeAndAfterTheNightmare);
   RUN_TEST(testTheSearchAndTheSnow);
   RUN_TEST(testTheSnowman);
+  RUN_TEST(testTheCallWithTheKnightNear);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

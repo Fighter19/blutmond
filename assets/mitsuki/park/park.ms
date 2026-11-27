@@ -39,7 +39,10 @@ defaultproperties {
 // The park before the scene: the music by the distance to the bench.
 state Approach {
   event tick() {
-    if flag(#ParkDone) { gotostate After; }
+    if flag(#ParkDone) {
+      gotostate After;
+      return;   // (not on into the scene: from the riverside she comes in near the bench)
+    }
     var int d = int(player_x()) - BENCH;
     var int level = 0;
     if d < 360 { level = 1; }

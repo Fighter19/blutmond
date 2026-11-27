@@ -99,6 +99,7 @@ typedef struct BmGame
   uint16_t keysPrevious;
   uint16_t hurtTimer;
   uint16_t lockTimer;              // frames the player cannot walk or jump (owner_lock)
+  bool sceneLock;                  // the lock is a scene's (the room's attachment, player_lock): the player is not struck meanwhile, and it ends with the room
   uint8_t animHeld;                // 1: a script's animation plays (owner_play_anim); 2: until the lock ends
   int16_t health;                  // the player's; at 0 they start again at the last safe place
   int16_t mana;                    // the player's; spent by spells, back 1 every 90 frames
@@ -446,6 +447,10 @@ int32_t bmGameStoryCall(BmGame *pGame, uint8_t current, uint32_t api, const int3
 /// The snow falling (set_snow) from OAM entry `firstOam`, at most `maxOam`; how many it used
 /// (story.c; nothing in the multiboot images).
 uint8_t bmGameDrawSnow(BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
+
+/// A scene's hold on the player (sceneLock): each frame (bmGameDrawSnow calls it), and with
+/// `roomLeft` as a room is entered, which ends it; story.c.
+void bmGameSceneFrame(BmGame *pGame, bool roomLeft);
 
 /// A colour (BGR555) under snow, `level` 0 (as it is) to 4 (story.c; the light shades the
 /// room's colours with it).

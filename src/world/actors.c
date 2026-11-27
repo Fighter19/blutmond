@@ -399,6 +399,8 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     else if (api == BM_SCRIPT_API_owner_lock)
     {
       g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
+      // The room's: a scene (game.h: sceneLock); the player's own: a swing.
+      g->sceneLock = i == BM_ACTORS_ROOM;
       // An attack: no walking, the speed fades; steering in the air (lock_move changes it).
       g->lockGround = BM_LOCK_SLIDE;
       g->lockAir = BM_LOCK_STEER;
@@ -708,6 +710,7 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
     break;
   case BM_SCRIPT_API_player_lock:
     g->lockTimer = (uint16_t)(args[0] < 0 ? 0 : args[0] > 0xFFFF ? 0xFFFF : args[0]);
+    g->sceneLock = true;
     // A scene: the player comes to a stand, no steering.
     g->lockGround = BM_LOCK_SLIDE;
     g->lockAir = BM_LOCK_DRIFT;

@@ -225,6 +225,7 @@ static void snowPalette(BmGame *g, uint8_t level)
 
 uint8_t bmGameDrawSnow(BmGame *g, uint8_t first, uint8_t max)
 {
+  bmGameSceneFrame(g, false);   // (the story's each frame: here, after the frame's game)
   // The world under snow: its colours by how much it snows (in four steps), the snow lying.
   uint8_t level = (uint8_t)((g->snow + 24) / 25);
   if (!g->snowCaps) memset(s_snowWhite, 0, sizeof(s_snowWhite));   // (another room's)
@@ -271,3 +272,12 @@ uint8_t bmGameDrawSnow(BmGame *g, uint8_t first, uint8_t max)
   return n;
 }
 
+// A scene (game.h: sceneLock) holds the player: nothing strikes them meanwhile, as through a
+// door; one left behind (the player carried out of its room) ends with the room.
+void bmGameSceneFrame(BmGame *g, bool roomLeft)
+{
+  if (g->lockTimer == 0) g->sceneLock = false;
+  if (!g->sceneLock) return;
+  if (roomLeft) g->lockTimer = 0, g->sceneLock = false;
+  else if (g->hurtTimer < 2) g->hurtTimer = 2;
+}

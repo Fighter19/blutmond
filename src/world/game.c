@@ -1023,6 +1023,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   // still there). A state just loaded (not fresh) brings its own.
   if (fresh) bmAttachmentsLeaveRoom(g);
   g->snow = 0;   // (a room's attachment snows again: set_snow)
+  if (fresh) bmGameSceneFrame(g, true);   // (a scene left behind ends with its room)
   g->snowLevel = 0, g->snowCaps = false;   // (the room shown as drawn)
   memset(g->effectAge, 0, sizeof(g->effectAge));
   if (fresh) bmHitsClear(g);

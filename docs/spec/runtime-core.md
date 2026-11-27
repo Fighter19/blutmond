@@ -484,7 +484,7 @@ value is dropped and counts as a script error.
 | 37 | `disarm(box)` | ends this figure's hits with that box name |
 | 38 | `hit_box(reach, frames, damage, element)` | starts a hit of this figure with a rectangle `reach` (0..255) pixels ahead for `frames` (1..65535) frames, of that element (1 to 3; others 0); a negative `reach` (to -255): that far on both sides |
 | 39 | `equip(slot, record)` | slot 0 to 7, record 0 empties it: false if the player has none of the record, or if its structure has roles and `slot` is not the one its role `equip` gives (data-format.md §6; nothing changes). Else `equipped[slot] = record`; the class its first field of type `attach` names (its table found by the key among all `DTAB` chunks) is attached in the player's slot of the same number, its first variable of type record set to the record before `attached()`; without such a class the slot is emptied |
-| 40 | `owner_lock(frames)` | from a player's or the room's attachment: `lockTimer = frames` (0..65535) |
+| 40 | `owner_lock(frames)` | from a player's or the room's attachment: `lockTimer = frames` (0..65535). From the room's it is a scene (`sceneLock`): while it lasts nothing strikes the player (as through a door), and entering another room ends it. Not in the multiboot images (story_off.c) |
 | 41 | `owner_play_anim(name)` | from a player's or the room's attachment: the player's sheet's animation of that name from its start; `animHeld = 2` if `lockTimer != 0`, else 1. Unknown: nothing |
 | 42 | `owner_busy()` | from a player's or the room's attachment: `lockTimer != 0` |
 | 43-49 | `ui_frame(x, y, w, h)`, `ui_label(x, y, text)`, `ui_number(x, y, value, digits)`, `ui_text(x, y, w, text)`, `ui_gauge(x, y, w, percent)`, `ui_clear(x, y, w, h)`, `ui_show(on)` | the UI layer (section 11): a frame, a text in the language shown, a right-aligned number, a text wrapped down to the last row, a gauge, empty cells, the layer on or off |
@@ -497,7 +497,7 @@ value is dropped and counts as a script error.
 | 63 | `destroy()` | the object is gone (section 8) |
 | 64 | `floor_y()` | `FIX` of the top of the first floor at or below `(INT(x), INT(y) - 1)` (jump-through floors count), the room's height if there is none |
 | 65, 66 | `say(speaker, line)`, `dialogue_done()` | the dialogue box (section 6) |
-| 67 | `player_lock(frames)` | `lockTimer = frames` (0..65535) |
+| 67 | `player_lock(frames)` | `lockTimer = frames` (0..65535); a scene, as `owner_lock` from the room's attachment |
 | 69 | `add_resist(element, n)` | element 1 to 3: `resists[element] += n` (0..255); 0 and others: nothing |
 | 70 | `set_affinity(weak, resists)` | object only: `affinity = (weak in 1..3 ? 1 << weak : 0) \| (resists in 1..3 ? 16 << resists : 0)` |
 | 71 | `strike_back(amount)` | if the figure striking the player now (section 6) is an object that can be struck (section 10): it is struck for `amount` without an element (its affinity applies, `health -=`, 20 frames invulnerable, its hits end, `hit(amount)`); true. Else false |

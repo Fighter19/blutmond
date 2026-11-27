@@ -6,7 +6,8 @@
 // The story functions (src/world/story.c) left out of the multiboot images: everything of one
 // shares 256 KB, and their packs have no scene that uses them (Mitsuki's prologue is left
 // out). Linked before the engine's library, this takes the place of story.c: flags are off,
-// owner_turn, set_light, set_glow, draw_in_front and set_snow do nothing.
+// owner_turn, set_light, set_glow, draw_in_front and set_snow do nothing, and no scene holds the
+// player (bmGameSceneFrame).
 
 #include "game.h"
 
@@ -27,3 +28,8 @@ uint8_t bmGameDrawSnow(BmGame *g, uint8_t first, uint8_t max)
   return 0;
 }
 
+void bmGameSceneFrame(BmGame *g, bool roomLeft)
+{
+  (void)g;
+  (void)roomLeft;
+}
