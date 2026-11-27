@@ -25,6 +25,11 @@ int32_t bmGameStoryCall(BmGame *g, uint8_t current, uint32_t api, const int32_t 
     bmLightGlow(g, args[0]);
     return 0;
   }
+  if (api == BM_SCRIPT_API_draw_in_front)
+  {
+    if (current < BM_ACTORS_MAX) g->actors.front[current] = args[0] != 0;
+    return 0;
+  }
   if (api == BM_SCRIPT_API_owner_turn)
   {
     // From an attachment, the player's or the room's (a scene drawing the player in a place).

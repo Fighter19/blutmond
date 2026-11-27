@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="hina.png" normal="hina_n.png">
+ <hitbox x="-5" y="-28" w="10" h="28" />
+ <frame x="0" y="0" w="1" h="1" ax="0" ay="0" />
+ <frame x="1" y="0" w="6" h="5" ax="3" ay="17" />
+ <frame x="7" y="0" w="5" h="3" ax="2" ay="16" />
+ <frame x="12" y="0" w="19" h="29" ax="9" ay="29" />
+ <frame x="31" y="0" w="14" h="29" ax="4" ay="25" />
+ <frame x="45" y="0" w="14" h="29" ax="4" ay="25" />
+ <frame x="59" y="0" w="15" h="30" ax="8" ay="27" />
+ <frame x="74" y="0" w="16" h="30" ax="9" ay="27" />
+ <frame x="90" y="0" w="13" h="30" ax="7" ay="27" />
+ <frame x="103" y="0" w="19" h="26" ax="10" ay="30" />
+ <frame x="122" y="0" w="20" h="26" ax="10" ay="30" />
+ <frame x="142" y="0" w="16" h="25" ax="12" ay="31" />
+ <frame x="158" y="0" w="15" h="28" ax="4" ay="24" />
+ <frame x="173" y="0" w="15" h="30" ax="6" ay="26" />
+ <animation name="hide" loop="1">
+  <step frame="1" duration="80" />
+  <step frame="2" duration="6" />
+  <step frame="1" duration="40" />
+  <step frame="2" duration="5" />
+ </animation>
+ <animation name="leap" loop="0">
+  <step frame="3" duration="1" />
+ </animation>
+ <animation name="hug" loop="1">
+  <step frame="12" duration="28" />
+  <step frame="4" duration="16" />
+  <step frame="13" duration="28" />
+  <step frame="4" duration="16" />
+ </animation>
+ <animation name="sob" loop="1">
+  <step frame="4" duration="20" />
+  <step frame="5" duration="20" />
+ </animation>
+ <animation name="walk" loop="1">
+  <step frame="6" duration="10" />
+  <step frame="7" duration="10" />
+ </animation>
+ <animation name="stand" loop="1">
+  <step frame="8" duration="60" />
+ </animation>
+ <animation name="sit" loop="1">
+  <step frame="9" duration="60" />
+ </animation>
+ <animation name="sit_low" loop="1">
+  <step frame="10" duration="60" />
+ </animation>
+ <animation name="grabbed" loop="1">
+  <step frame="11" duration="60" />
+ </animation>
+</sprite>

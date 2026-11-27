@@ -236,6 +236,37 @@ again.
 | Texts | the lines (`lines.bmdata`), German and French in `lang/` (a language may come in several files, pack-format.md §3.2) |
 | Multiboot | none of it: `assets/mitsuki/` and the room are left out of the multiboot pack, and their images leave out the story functions (`src/hal/gba/story_off.c`) and the light (`light_off.c`); a pack fitted for one over the link brings a room's scripts only with that room (runtime-abi.md §0) |
 
+### Mitsuki's park (`assets/mitsuki/park`)
+
+West of the rural street (its door at the west edge), a park at night drawn as the street is
+(`tools/make_park.py`: trees, hedges, an iron railing, a swing set, two gas lamps whose glass
+flickers with their light, `glow_light`; lit through the palettes, 4 levels): the bench at its
+west end, out of sight from where the street leads in.
+
+**The scene** (`park.ms`, the room's `attach`, directing Hina, the nightmare and the close-up
+through story flags `Park*`): the music (`park_dread`, dynamic: drones and wind; a heartbeat
+and a far music box; the heart faster, a saw pulsing; on every beat, a high tremolo) grows
+tenser the nearer she comes to the bench (intensity 0 to 3 by the distance). Under the bench
+only Hina's green eyes, blinking. Close to it Hina storms out into Mitsuki's arms (drawn in
+front of her, `draw_in_front`), and the music turns warm with an ache in it (`park_reunion`, F
+major leaning on D minor); Mitsuki rocks her, pats her head while she sobs; lets go, takes her
+hand and leads her to the bench (seen from the side); they sit close, Mitsuki holding Hina's
+hand in her lap, a close-up of their hands shown over the scene for a while. Hina opens up,
+slowly, about what has weighed on her since "that day" (never said what). Then the nightmare
+rises out of the ground, hushing, reaches for her and takes her; she reaches out for Mitsuki
+and is carried off into the night, screaming off-screen; Mitsuki is left reaching after her.
+After it (`ParkDone`) the park stays tense and Hina gone.
+
+| | |
+|---|---|
+| Starting it | through the street's west door; on the PC `build/game --room park` |
+| Hina | her full body (`hina.py`, 14 frames: hiding, the leap, the rocked hug, sobbing, led, sitting from the front, held up); her soft portrait `hina_soft` |
+| Mitsuki | her frames for the scene in `mitsuki.py` (hug rocking, pat, leading, sitting holding a hand, reaching out) |
+| The nightmare | a shadow, emissive (`nightmare.py`): rising, hushing, reaching, holding, leaping away |
+| The close-up | `hands.py`: both their models seated, their hands built as signed-distance shapes (metaballs skinned to bones), each hand a material `apart` (a line where one lies on the other, rig.py); a panel (`--clip yes`) |
+| Sprite memory | the room's sprites fill it with the player's; those not drawn for a while (the close-up, the nightmare) make room for the dialogue's portraits, least recently drawn first (runtime-core.md) |
+| Multiboot | none of it; a pack fitted over the link brings a room's sprites (named like its objects' classes) only with that room |
+
 ## 4. Open
 
 - **More colour slots for the light**: with 15 colours a lit sprite has no slot left to split

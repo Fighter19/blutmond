@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="8">
+<map version="1.8" tiledversion="1.8.0" orientation="orthogonal" renderorder="right-down" width="30" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="9">
  <properties>
   <property name="music" value="night_escape" />
   <property name="attach" value="Threat, Bench, Cottage" />
@@ -109,7 +109,14 @@
     <property name="panel" value="door_panel" />
    </properties>
   </object>
-  <object id="7" name="to_home" type="Door" x="82" y="80" width="24" height="48">
+  <object id="7" name="to_park" type="Door" x="0" y="80" width="16" height="48">
+   <properties>
+    <property name="target_room" value="park" />
+    <property name="target_door" value="to_street" />
+    <property name="direction" value="west" />
+   </properties>
+  </object>
+  <object id="8" name="to_home" type="Door" x="82" y="80" width="24" height="48">
    <properties>
     <property name="target_room" value="mitsuki_home" />
     <property name="target_door" value="to_street" />

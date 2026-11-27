@@ -48,7 +48,8 @@ set(BM_WARNINGS -Wall -Wextra -Werror -pedantic)
 # What the test level is cooked from besides its rooms. The base: the first two rooms, whose
 # scripts compiled to native code fit the 12 KB native slot in IWRAM; the native-script images
 # play it. The full level adds languages, menus and the boss; every other image plays that.
-set(BM_HOME_TILES ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home_tiles.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home_tiles_n.png)
+set(BM_HOME_TILES ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home_tiles.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home_tiles_n.png
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park_tiles.png ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park_tiles_n.png)
 set(BM_TEST_LEVEL_BASE_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/room.tmx ${PROJECT_SOURCE_DIR}/assets/test_room/room2.tmx)
 set(BM_TEST_LEVEL_BASE_ASSETS
   ${PROJECT_SOURCE_DIR}/assets/test_room/player_legs.bmsprite
@@ -86,7 +87,9 @@ set(BM_TEST_LEVEL_ROOMS ${BM_TEST_LEVEL_BASE_ROOMS} ${PROJECT_SOURCE_DIR}/assets
   ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_fitted.tmx
   ${PROJECT_SOURCE_DIR}/assets/test_room/rural_street.tmx
   # Mitsuki's prologue (assets/mitsuki/home): her room, behind the cottage door of the street.
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home.tmx)
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/mitsuki_home.tmx
+  # Her park scene (assets/mitsuki/park): west of the street, Hina under the bench.
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park.tmx)
 set(BM_TORCH_HALLS torch_hall torch_hall_layer torch_hall_fitted)
 if(BM_LIGHT_EXPERIMENTAL)
   list(APPEND BM_TEST_LEVEL_ROOMS ${PROJECT_SOURCE_DIR}/assets/test_room/torch_hall_normals.tmx)
@@ -198,7 +201,23 @@ set(BM_TEST_LEVEL_ASSETS ${BM_TEST_LEVEL_BASE_ASSETS}
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/voice_hina.bmsong
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/phone_ring.bmsong
   ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/lang/de.bmlang
-  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/lang/fr.bmlang)
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/home/lang/fr.bmlang
+  # The park: Hina, the nightmare, the close-up of their hands, the music.
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/hina.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/nightmare.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/hands.ms
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/sources/hina.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/sources/nightmare.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/sources/hands.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/hina_soft.bmsprite
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/speakers.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/lines.bmdata
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park_dread.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/park_reunion.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/hush.bmsong
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/lang/de.bmlang
+  ${PROJECT_SOURCE_DIR}/assets/mitsuki/park/lang/fr.bmlang)
 file(GLOB BM_CORE_SOURCES CONFIGURE_DEPENDS src/core/public/*.c)
 file(GLOB BM_GRAPHICS_SOURCES CONFIGURE_DEPENDS src/graphics/public/*.c)
 set(BM_PACK_SOURCES src/pack/pack.c)
@@ -327,7 +346,8 @@ if(BM_PLATFORM STREQUAL "gba")
     DEPENDS host_tools ${BM_BMCOOK} ${BM_TEST_LEVEL_CART_ROOMS} ${BM_TEST_LEVEL_ASSETS} ${BM_TEST_LEVEL_SAMPLES} ${PROJECT_SOURCE_DIR}/assets/test_room/tileset.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/torch_tiles_n.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles.png ${PROJECT_SOURCE_DIR}/assets/test_room/street_tiles_n.png ${BM_HOME_TILES}
     COMMENT "Cooking the test level for the cartridge game")
   # For the multiboot images, which share 256 KB with the engine: the same level with the debug
-  # rooms, the boss hall (with the boss's sprites, music and voice), the Hall of Abilities behind it,
+  # rooms, the boss hall (with the boss's sprites, music, voice, hit sound and fanfare, and the
+  # hero's face and voice, whose only line is said there), the Hall of Abilities behind it,
   # the Guard Room (with its knight and the Iron Bat's armour)
   # and the translations and the save game's history (MIGR: for loading a save of an earlier
   # version, and a multiboot image has no save memory) left out (pack-format.md §0: their entries
@@ -336,6 +356,7 @@ if(BM_PLATFORM STREQUAL "gba")
   set(BM_TEST_LEVEL_ABSENT --absent-room debug_lobby --absent-room debug_wave --absent-room debug_spotlight
     --absent-room debug_pulse --absent-room debug_gradient --absent-room boss_hall --absent-room ability_hall
     --absent-asset vesper --absent-asset moon_bat --absent-asset vesper_face --absent-asset voice_vesper
+    --absent-asset hero_face --absent-asset voice_hero --absent-asset fanfare --absent-asset hit_moon
     --absent-asset fireball --absent-room guard_room --absent-asset knight --absent-asset bat_armour --absent-asset clang
     --absent-asset torch --absent-asset night_escape --absent-asset splash
     --absent-kind LANG --absent-kind MIGR)
@@ -344,7 +365,7 @@ if(BM_PLATFORM STREQUAL "gba")
   # as absent entries: the multiboot images have no light and no puddles (light_off.c), and these
   # rooms come last, so the other rooms keep their numbers.
   set(BM_TEST_LEVEL_MB_ROOMS ${BM_TEST_LEVEL_ROOMS})
-  list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall|rural_street|mitsuki_home")
+  list(FILTER BM_TEST_LEVEL_MB_ROOMS EXCLUDE REGEX "torch_hall|rural_street|mitsuki_home|park")
   # Nor the street's scripts (the music's Threat, the bench): only that room uses them. Nor
   # Mitsuki, her prologue (assets/mitsuki/: all of it) and the Character menu: with one
   # playable character the System menu offers no choice.
@@ -1095,8 +1116,9 @@ if(BM_PLATFORM STREQUAL "host")
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+28=1
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+56=0 --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+92=2
           --check b ${BM_GBA_BUILD_DIR}/game.elf:bm_game_stats+96=2982369528)
+      # (1800 frames were enough until the park came into the test level: about 1950 now.)
       add_test(NAME gba_to_gba_boot
-        COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/bootstrap_mb.gba --frames 1800 --until a ${send}+24=1000
+        COMMAND bm_mgba_pair ${BM_GBA_BUILD_DIR}/game_send.gba ${BM_GBA_BUILD_DIR}/bootstrap_mb.gba --frames 2400 --until a ${send}+24=1000
           --check a ${send}+60=1 --check a ${send}+76=1 --check a ${send}+72=6 --check a ${send}+8=0 --check a ${send}+12=1
           --check a ${send}+64 --check a ${send}+80 --check a ${send}+68
           --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+16=1 --check b ${BM_GBA_BUILD_DIR}/game_mb.elf:bm_game_stats+28=2

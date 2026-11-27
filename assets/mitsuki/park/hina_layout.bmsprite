@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hina's frames (assets/mitsuki/home/hina.py; her park scene, park.ms): the phone call (only for her
+     panicked portrait: empty here), hiding under the bench (her eyes, blinking), the leap out, in Mitsuki's arms (rocked: 12,
+     13), led by the
+     hand, standing, sitting on the bench (seen from the front), snatched away. -->
+<sprite version="1" image="hina.png">
+ <hitbox x="-5" y="-28" w="10" h="28"/>
+ <frame x="0" y="0" w="8" h="8" ax="4" ay="4"/>
+ <frame x="0" y="0" w="24" h="20" ax="12" ay="16"/>
+ <frame x="0" y="0" w="24" h="20" ax="12" ay="16"/>
+ <frame x="0" y="0" w="44" h="48" ax="22" ay="44"/>
+ <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
+ <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
+ <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
+ <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
+ <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
+ <frame x="0" y="0" w="32" h="44" ax="16" ay="40"/>
+ <frame x="0" y="0" w="32" h="44" ax="16" ay="40"/>
+ <frame x="0" y="0" w="44" h="48" ax="22" ay="44"/>
+ <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
+ <frame x="0" y="0" w="36" h="40" ax="18" ay="36"/>
+ <animation name="hide" loop="1">
+  <step frame="1" duration="80"/>
+  <step frame="2" duration="6"/>
+  <step frame="1" duration="40"/>
+  <step frame="2" duration="5"/>
+ </animation>
+ <animation name="leap" loop="0">
+  <step frame="3" duration="1"/>
+ </animation>
+ <animation name="hug" loop="1">
+  <step frame="12" duration="28"/>
+  <step frame="4" duration="16"/>
+  <step frame="13" duration="28"/>
+  <step frame="4" duration="16"/>
+ </animation>
+ <animation name="sob" loop="1">
+  <step frame="4" duration="20"/>
+  <step frame="5" duration="20"/>
+ </animation>
+ <animation name="walk" loop="1">
+  <step frame="6" duration="10"/>
+  <step frame="7" duration="10"/>
+ </animation>
+ <animation name="stand" loop="1">
+  <step frame="8" duration="60"/>
+ </animation>
+ <animation name="sit" loop="1">
+  <step frame="9" duration="60"/>
+ </animation>
+ <animation name="sit_low" loop="1">
+  <step frame="10" duration="60"/>
+ </animation>
+ <animation name="grabbed" loop="1">
+  <step frame="11" duration="60"/>
+ </animation>
+</sprite>

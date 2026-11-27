@@ -310,4 +310,32 @@ def poses():
     # 50: reaching ahead to the light switch on the wall by the bed, leaning in a little.
     out.append(pose(spine=(-6, 0, -6), head=(2, -4, 4), hip_R=10, knee_R=-14, ankle_R=4, hip_L=-6, knee_L=-10,
                     **swing(96, elbow=4, hand=-6), shoulder_L=(-12, 6), elbow_L=30, hair=2, scarf=2))
+    # The park (assets/mitsuki/park), seen from the side until they sit: 51 holding Hina, her
+    # arms around her (Hina's own sprite curled against her, behind); 52 a hand on her head (a
+    # pat); 53, 54 walking, leading her by the hand behind her (her near arm back); 55 on the
+    # bench, seen from the front, Hina close at her side, her left hand reaching over into
+    # Hina's lap, holding hers; 56
+    # reaching out after her, too late.
+    hug = dict(spine=-10, chest=-6, head=16, shoulder_R=(84, 12), elbow_R=36, hand_R=20, shoulder_L=(80, -12), elbow_L=40,
+               hand_L=20, hip_R=8, knee_R=-16, hip_L=-4, knee_L=-10, hair=2, scarf=4)
+    out.append(pose(**hug))
+    rock = dict(hug)
+    hug.update(shoulder_R=(124, -4), elbow_R=24, hand_R=-40, head=18)
+    out.append(pose(**hug))
+    for k in (1, -1):
+        out.append(pose(spine=-4, head=2, hip_R=26 * k, knee_R=-20 if k > 0 else -36, hip_L=-26 * k,
+                        knee_L=-36 if k > 0 else -20, shoulder_R=(-48, -6), elbow_R=6, hand_R=10,
+                        shoulder_L=(18 * k, 8), elbow_L=30, hair=-8, scarf=-10))
+    sit_hand = dict(hip_R=(102, 30), knee_R=(-78, 28), ankle_R=10, hip_L=(86, -6), knee_L=-88, shoulder_R=(26, 18), elbow_R=55,
+                    shoulder_L=(44, 34), elbow_L=26, hand_L=10, spine=(0, 4, 0), hair=4, scarf=6, head=(-4, 6, -8))
+    out.append(pose(view=FRONT, show=('far_eye',), root=(0, 0, 3.0), **sit_hand))
+    out.append(pose(spine=-14, head=6, hip_R=34, knee_R=-30, hip_L=-24, knee_L=-8, **swing(100, elbow=0, hand=-4),
+                    shoulder_L=(-30, 8), elbow_L=30, hair=-14, scarf=-18))
+    # 57, 58: rocking her: the whole hold leaning toward Hina (forward) and away (back), about
+    # her feet; Hina's own frames lean the same way in the world (hina.py, 12 and 13).
+    for lean in (5, -5):
+        r2 = dict(rock)
+        r2.update(pelvis=lean, spine=rock['spine'] + lean // 2, hip_R=rock['hip_R'] - lean, hip_L=rock['hip_L'] - lean,
+                  hair=rock['hair'] - lean, scarf=rock['scarf'] - lean)
+        out.append(pose(**r2))
     return out

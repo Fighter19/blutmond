@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprite version="1" image="nightmare.png" normal="nightmare_n.png">
+ <hitbox x="-8" y="-48" w="16" h="48" />
+ <frame x="0" y="0" w="11" h="17" ax="-4" ay="19">
+  <point name="hand" x="8" y="-16" />
+ </frame>
+ <frame x="11" y="0" w="25" h="55" ax="10" ay="50">
+  <point name="hand" x="8" y="-46" />
+ </frame>
+ <frame x="36" y="0" w="1" h="1" ax="0" ay="0">
+  <point name="hand" x="21" y="-19" />
+ </frame>
+ <frame x="37" y="0" w="36" h="55" ax="10" ay="50">
+  <point name="hand" x="18" y="-29" />
+ </frame>
+ <frame x="73" y="0" w="47" h="46" ax="10" ay="47">
+  <point name="hand" x="28" y="-36" />
+ </frame>
+ <animation name="rise" loop="0">
+  <step frame="0" duration="1" />
+ </animation>
+ <animation name="hush" loop="1">
+  <step frame="1" duration="60" />
+ </animation>
+ <animation name="reach" loop="0">
+  <step frame="3" duration="1" />
+ </animation>
+ <animation name="hold" loop="1">
+  <step frame="3" duration="60" />
+ </animation>
+ <animation name="leap" loop="1">
+  <step frame="4" duration="60" />
+ </animation>
+</sprite>

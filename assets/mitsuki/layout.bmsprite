@@ -2,7 +2,8 @@
 <sprite version="1" image="player.png" normal="auto">
 <!-- The layout of Mitsuki's sprite (assets/mitsuki/mitsuki.py, tools/sprite3d/make_sprite.py): the
      player's frames and animations (assets/sources/player.bmsprite), then her bed at home for
-     the prologue (43 on: sleep, ring, call, wake) and her reach for the light switch (50: flip). -->
+     the prologue (43 on: sleep, ring, call, wake) and her reach for the light switch (50: flip); the park (51 on: hug, pat, lead,
+     sit_hand, reach_out; 57, 58 rocking her in the hug). -->
  <hitbox x="-5" y="-30" w="10" h="30"/>
  <frame x="0" y="0" w="16" h="32" ax="8" ay="30"/>
  <frame x="16" y="0" w="16" h="32" ax="8" ay="30"/>
@@ -85,6 +86,14 @@
  <frame x="0" y="96" w="56" h="52" ax="44" ay="44"/>
  <frame x="0" y="96" w="24" h="48" ax="12" ay="44"/>
  <frame x="0" y="0" w="24" h="40" ax="10" ay="34"/>
+ <frame x="0" y="0" w="28" h="40" ax="12" ay="34"/>
+ <frame x="0" y="0" w="28" h="44" ax="12" ay="38"/>
+ <frame x="0" y="0" w="28" h="40" ax="14" ay="34"/>
+ <frame x="0" y="0" w="28" h="40" ax="14" ay="34"/>
+ <frame x="0" y="0" w="32" h="44" ax="16" ay="40"/>
+ <frame x="0" y="0" w="32" h="40" ax="10" ay="34"/>
+ <frame x="0" y="0" w="28" h="40" ax="12" ay="34"/>
+ <frame x="0" y="0" w="28" h="40" ax="12" ay="34"/>
  <palette name="steel">
   <swap from="#b51021" to="#8c94a5"/>
   <swap from="#820a18" to="#5a6270"/>
@@ -180,5 +189,25 @@
  </animation>
  <animation name="flip" loop="0">
   <step frame="50" duration="1"/>
+ </animation>
+ <animation name="hug" loop="1">
+  <step frame="57" duration="28"/>
+  <step frame="51" duration="16"/>
+  <step frame="58" duration="28"/>
+  <step frame="51" duration="16"/>
+ </animation>
+ <animation name="pat" loop="1">
+  <step frame="52" duration="14"/>
+  <step frame="51" duration="10"/>
+ </animation>
+ <animation name="lead" loop="1">
+  <step frame="53" duration="10"/>
+  <step frame="54" duration="10"/>
+ </animation>
+ <animation name="sit_hand" loop="1">
+  <step frame="55" duration="60"/>
+ </animation>
+ <animation name="reach_out" loop="0">
+  <step frame="56" duration="1"/>
  </animation>
 </sprite>

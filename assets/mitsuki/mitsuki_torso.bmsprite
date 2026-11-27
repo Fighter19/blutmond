@@ -63,6 +63,14 @@
  <frame x="139" y="110" w="22" h="24" ax="17" ay="24" />
  <frame x="161" y="110" w="10" h="27" ax="5" ay="19" />
  <frame x="171" y="110" w="12" h="32" ax="5" ay="16" />
+ <frame x="183" y="110" w="14" h="32" ax="5" ay="16" />
+ <frame x="197" y="110" w="14" h="31" ax="5" ay="15" />
+ <frame x="211" y="110" w="14" h="32" ax="8" ay="16" />
+ <frame x="225" y="110" w="15" h="31" ax="9" ay="16" />
+ <frame x="240" y="110" w="15" h="27" ax="7" ay="18" />
+ <frame x="0" y="142" w="14" h="30" ax="6" ay="15" />
+ <frame x="14" y="142" w="14" h="32" ax="6" ay="16" />
+ <frame x="28" y="142" w="15" h="31" ax="5" ay="15" />
  <palette name="steel">
   <swap from="#1e203e" to="#404656" />
   <swap from="#343a68" to="#6e768a" />
@@ -159,5 +167,25 @@
  </animation>
  <animation name="flip" loop="0">
   <step frame="49" duration="1" />
+ </animation>
+ <animation name="hug" loop="1">
+  <step frame="56" duration="28" />
+  <step frame="50" duration="16" />
+  <step frame="57" duration="28" />
+  <step frame="50" duration="16" />
+ </animation>
+ <animation name="pat" loop="1">
+  <step frame="51" duration="14" />
+  <step frame="50" duration="10" />
+ </animation>
+ <animation name="lead" loop="1">
+  <step frame="52" duration="10" />
+  <step frame="53" duration="10" />
+ </animation>
+ <animation name="sit_hand" loop="1">
+  <step frame="54" duration="60" />
+ </animation>
+ <animation name="reach_out" loop="0">
+  <step frame="55" duration="1" />
  </animation>
 </sprite>

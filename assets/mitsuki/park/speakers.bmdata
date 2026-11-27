@@ -1,0 +1,10 @@
+# Hina in the park (structure Speaker in assets/test_room/data/dialogue.ms): the same voice,
+# her soft portrait (relieved, close to tears: hina_soft); the panicked one is Hina's
+# (assets/mitsuki/home/speakers.bmdata).
+table Speaker
+
+record HinaSoft {
+  name = "Hina"
+  portrait = "hina_soft"
+  voice = "voice_hina"
+}

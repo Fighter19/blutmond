@@ -9,7 +9,8 @@ times. Its colour is a step of that material's ramp: the light (the character's 
 the camera's space: x right, y up, z toward the viewer) on the mean normal of its part of the
 pixel, cut at the material's `bands`. Around the figure goes a line in the outline colour (the
 pixels next to it, left, right, above and below); where a part lies well in front of another
-(`inner_lines`: units of depth), the farther one's edge pixel takes the line too. The normal
+(`inner_lines`: units of depth), the farther one's edge pixel takes the line too, as it does
+where two materials `apart` meet however near they lie. The normal
 map is the mean normal (x right, y down, z toward the viewer, as lighting.md wants), the
 line's pointing out of the figure.
 """
@@ -106,11 +107,19 @@ def pixelize(meta, render_dir, n):
     gap = settings.get('inner_lines')
     if gap:
         far = np.zeros((h, w), bool)
-        for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+        apart = np.zeros(max(list(mats.keys()) + [0]) + 2, bool)
+        for i, m in mats.items():
+            apart[i] = bool(m.get('apart', False))
+        # (Diagonal neighbours too for `apart`: its line unbroken where the edge runs slant.)
+        for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)):
             nb = np.roll(depth, (dy, dx), (0, 1))
             nbm = np.roll(material, (dy, dx), (0, 1))
             with np.errstate(invalid='ignore'):
-                edge = (material > 0) & (nbm > 0) & (depth - nb > gap)
+                edge = np.zeros((h, w), bool)
+                if dy == 0 or dx == 0:
+                    edge = (material > 0) & (nbm > 0) & (depth - nb > gap)
+                # Two materials `apart`: the farther takes the line where they meet, however near.
+                edge |= (material > 0) & (nbm > 0) & (material != nbm) & apart[material] & apart[nbm] & (depth > nb)
             if dy == 1: edge[0, :] = False
             if dy == -1: edge[-1, :] = False
             if dx == 1: edge[:, 0] = False

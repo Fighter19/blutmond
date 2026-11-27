@@ -49,6 +49,10 @@ leads out to the street with the bench. Up in front of the switch, the rabbit on
 or the bed does something each. The PC game can also start there: `build/game --room mitsuki_home`.
 The cottage's door in the street (Up) leads back in.
 
+**The park**: west of the street (its west edge leads there), or `build/game --room park`.
+Walk west toward the bench under the far lamp: the music grows tense; near it Hina's scene
+plays (A through its lines). As Mitsuki (Character) it plays as written.
+
 Keys: arrows to move, X or Space is A (jump), Z is B, A and S are L and R, Return is Start,
 Backspace is Select, F11 full screen, Escape ends (in the browser it only leaves full screen). Gamepads work. The window keeps a save game
 in a file and listens for the link on `127.0.0.1:7414`.

@@ -293,12 +293,16 @@ static void findPlayer(BmGame *g)
 
 static int8_t sheetBank(BmGame *g, int8_t sheet, uint8_t palette);
 
-// Notes a pair the room draws (once).
-static void noteUsed(BmGame *g, int8_t sheet, uint8_t palette)
+// Notes that a sheet was drawn now (least recently drawn goes first: bmGameSheetBank).
+static void noteUsed(BmGame *g, int8_t sheet)
 {
-  for (uint8_t k = 0; k < g->usedCount; k++)
-    if (g->usedSheet[k] == sheet && g->usedPalette[k] == palette) return;
-  if (g->usedCount < sizeof(g->usedSheet)) g->usedSheet[g->usedCount] = sheet, g->usedPalette[g->usedCount++] = palette;
+  g->sheetDrawn[sheet] = (uint16_t)g->frame;
+}
+
+// How many frames ago a sheet was last drawn.
+static uint16_t drawnAgo(const BmGame *g, uint8_t sheet)
+{
+  return (uint16_t)((uint16_t)g->frame - g->sheetDrawn[sheet]);
 }
 
 int8_t bmGameSheetBank(BmGame *g, int8_t sheet, uint8_t palette)
@@ -309,35 +313,47 @@ int8_t bmGameSheetBank(BmGame *g, int8_t sheet, uint8_t palette)
   int8_t bank = sheetBank(g, sheet, palette);
   if (g->spriteMisses == misses)
   {
-    if (bank >= 0) noteUsed(g, sheet, palette);
+    if (bank >= 0) noteUsed(g, sheet);
     return bank;
   }
-  // It did not fit beside what earlier rooms left (a dialogue's portrait, an effect): those
-  // go, what this room has drawn is loaded again, then this one. Pictures already given out
-  // this frame may show the old tiles for one frame.
-  bool stale = false;   // something loaded that this room has not drawn (not the player's)
-  for (uint8_t k = 0; k < g->sheetCount && !stale; k++)
+  // It did not fit: the least recently drawn make room. What is loaded (its pairs, from the
+  // banks; not the player's) is forgotten; the pairs drawn this frame or the last are loaded
+  // again, then this one, then the others, the most recently drawn first, while they fit.
+  // Pictures already given out this frame may show other tiles for one frame.
+  uint8_t pairSheet[BM_GAME_BANKS], pairPalette[BM_GAME_BANKS], n = 0;
+  for (uint8_t b = 0; b < BM_GAME_BANKS; b++)
   {
-    if (g->sheetTile[k] == BM_GAME_NO_TILES) continue;
-    bool kept = false;
-    for (uint8_t i = 0; i < g->playerSheetCount; i++) kept |= g->playerSheets[i] == (int8_t)k;
-    for (uint8_t i = 0; i < g->usedCount; i++) kept |= g->usedSheet[i] == (int8_t)k;
-    stale = !kept;
+    if (g->bankSheet[b] == 0xFF || g->bankSheet[b] == (uint8_t)sheet) continue;
+    bool player = false;
+    for (uint8_t i = 0; i < g->playerSheetCount; i++) player |= g->playerSheets[i] == (int8_t)g->bankSheet[b];
+    if (!player) pairSheet[n] = g->bankSheet[b], pairPalette[n++] = g->bankPalette[b];
   }
-  for (uint8_t b = 0; b < BM_GAME_BANKS && !stale; b++)
-  {
-    if (g->bankSheet[b] == 0xFF) continue;
-    bool kept = false;
-    for (uint8_t i = 0; i < g->playerSheetCount; i++) kept |= g->playerSheets[i] == (int8_t)g->bankSheet[b];
-    for (uint8_t i = 0; i < g->usedCount; i++) kept |= g->usedSheet[i] == (int8_t)g->bankSheet[b] && g->usedPalette[i] == g->bankPalette[b];
-    stale = !kept;
-  }
-  if (!stale) return bank;   // nothing to make room with: it stays missing (counted)
+  if (n == 0) return bank;   // nothing to make room with: it stays missing (counted)
+  // Most recently drawn first (insertion sort: a few pairs).
+  for (uint8_t i = 1; i < n; i++)
+    for (uint8_t j = i; j > 0 && drawnAgo(g, pairSheet[j]) < drawnAgo(g, pairSheet[j - 1]); j--)
+    {
+      uint8_t t = pairSheet[j];
+      pairSheet[j] = pairSheet[j - 1], pairSheet[j - 1] = t;
+      t = pairPalette[j];
+      pairPalette[j] = pairPalette[j - 1], pairPalette[j - 1] = t;
+    }
   g->spriteMisses = misses;
   forgetSprites(g);
-  for (uint8_t k = 0; k < g->usedCount; k++) sheetBank(g, g->usedSheet[k], g->usedPalette[k]);
+  uint8_t k = 0;
+  for (; k < n && drawnAgo(g, pairSheet[k]) <= 1; k++) sheetBank(g, (int8_t)pairSheet[k], pairPalette[k]);
   bank = sheetBank(g, sheet, palette);
-  if (bank >= 0) noteUsed(g, sheet, palette);
+  if (bank >= 0) noteUsed(g, sheet);
+  for (; k < n; k++)
+  {
+    // The rest only while they fit (not counted as misses: they are not drawn now).
+    const BmSpriteSheet *o = &g->sheets[pairSheet[k]];
+    uint8_t freeBanks = 0;
+    for (uint8_t b = 0; b < BM_GAME_BANKS; b++) freeBanks += g->bankSheet[b] == 0xFF;
+    if (freeBanks == 0) break;
+    if (g->sheetTile[pairSheet[k]] == BM_GAME_NO_TILES && (uint32_t)g->tileNext + o->tileCount > BM_GAME_OBJ_TILES) continue;
+    sheetBank(g, (int8_t)pairSheet[k], pairPalette[k]);
+  }
   return bank;
 }
 
@@ -744,6 +760,8 @@ static void updateSprites(BmGame *g)
     next = (uint8_t)(next + bmSpriteSheetDraw(s, bmAnimFrameAt(s, 0, (uint32_t)(g->effectAge[k] - 1)), g->effectX[k] - camX,
                                               g->effectY[k] - camY, false, 1, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
   }
+  // Objects held in front of the player (draw_in_front), then the player.
+  next = (uint8_t)(next + bmActorsDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next), true));
   if (g->playerSheet >= 0)
   {
     const BmSpriteSheet *s = &g->sheets[g->playerSheet];
@@ -794,7 +812,7 @@ static void updateSprites(BmGame *g)
     bmSpriteSet(next++, &s);
   }
 
-  next = (uint8_t)(next + bmActorsDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
+  next = (uint8_t)(next + bmActorsDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next), false));
   next = (uint8_t)(next + bmPuzzleDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
   next = (uint8_t)(next + bmGrappleDraw(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
   next = (uint8_t)(next + bmEffectsDrawDoors(g, next, (uint8_t)(BM_GAME_MAX_OAM - next)));
@@ -960,7 +978,6 @@ static void preloadSprites(BmGame *g)
   int8_t sheets[24];
   uint8_t palettes[24], n = 0;
   const BmActors *a = &g->actors;
-  g->usedCount = 0;   // a new room: what it draws is counted anew
   for (uint16_t i = 0; i < g->objectCount && n < 24; i++)
     if (g->objectSheet[i] >= 0) sheets[n] = g->objectSheet[i], palettes[n++] = 0;
   for (uint8_t i = 0; a->hasModule && i < a->count && n < 24; i++)

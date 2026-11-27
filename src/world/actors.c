@@ -839,6 +839,7 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_owner_turn:
   case BM_SCRIPT_API_set_light:
   case BM_SCRIPT_API_set_glow:
+  case BM_SCRIPT_API_draw_in_front:
     *result = bmGameStoryCall(g, i, api, args);
     break;
   case BM_SCRIPT_API_layer_track:
@@ -1429,6 +1430,7 @@ void bmActorsEnterRoom(BmGame *g, bool fresh)
     a->facing[i] = 1;
     a->hidden[i] = 0;
     a->touching[i] = 0;
+    a->front[i] = 0;
     a->health[i] = 0;
   a->affinity[i] = 0;
   a->knock[i] = 0;
@@ -1503,13 +1505,13 @@ void bmActorsFrame(BmGame *g)
   }
 }
 
-uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam)
+uint8_t bmActorsDraw(BmGame *g, uint8_t firstOam, uint8_t maxOam, bool front)
 {
   BmActors *a = &g->actors;
   uint8_t used = 0;
   for (uint8_t i = 0; a->hasModule && i < a->count && used < maxOam; i++)
   {
-    if (a->hidden[i]) continue;
+    if (a->hidden[i] || (a->front[i] != 0) != front) continue;
     if (a->sheet[i] < 0)
     {
       // No sprite: the placeholder frame, for objects placed as points.
@@ -1644,7 +1646,7 @@ static bool spawnNamed(BmGame *g, const char *name, int32_t x, int32_t y, uint32
   a->spawnHomeX[i] = a->homeX[i] = a->x[i] = x;
   a->spawnHomeY[i] = a->homeY[i] = a->y[i] = y;
   a->facing[i] = 1;
-  a->hidden[i] = a->touching[i] = 0;
+  a->hidden[i] = a->touching[i] = a->front[i] = 0;
   a->health[i] = 0;
   a->affinity[i] = 0;
   a->knock[i] = 0;

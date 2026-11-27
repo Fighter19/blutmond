@@ -29,7 +29,7 @@
 #include "ui.h"
 
 #define BM_GAME_MAX_OBJECTS 64
-#define BM_GAME_MAX_SHEETS 24   // sprites in a pack (their data; what is in sprite memory: bmGameSheetBank)
+#define BM_GAME_MAX_SHEETS 28   // sprites in a pack (their data; what is in sprite memory: bmGameSheetBank; the cooker checks)
 #define BM_GAME_BANKS 13        // sprite palette banks given out (13: hit flash, 14-15: built in)
 #define BM_GAME_OBJ_TILES 1024  // sprite memory, in tiles
 #define BM_GAME_NO_TILES 0xFFFF
@@ -169,11 +169,9 @@ typedef struct BmGame
   uint16_t tileNext, tileFloor;
   uint8_t bankSheet[BM_GAME_BANKS], bankPalette[BM_GAME_BANKS];
   uint16_t spriteMisses;                       // sheets or banks that did not fit (counted)
-  // The (sheet, palette) pairs the room has drawn since it was entered: what is loaded again
-  // when one more does not fit beside the sheets earlier rooms left (bmGameSheetBank).
-  uint8_t usedCount;
-  int8_t usedSheet[32];
-  uint8_t usedPalette[32];
+  // The frame each sheet was last drawn (its low 16 bits): when one more does not fit, the
+  // least recently drawn make room (bmGameSheetBank).
+  uint16_t sheetDrawn[BM_GAME_MAX_SHEETS];
   int8_t playerSheet;                          // -1: the built-in figure
   // The player as a figure (figure.h): the figure "player" if the pack has one (playerSheet is
   // its root layer's sheet), else the sprite "player" alone (layerCount 0). Its layers' sheets
@@ -269,10 +267,6 @@ typedef struct BmGame
 /// The dialogue box (say, the bottom five rows of the UI layer; until A is pressed): the
 /// speaker's name and a line of up to two rows (string ids, in the language chosen), and the
 /// speaker's portrait, a sprite of the pack by its name's string id (0xFFFF: none), at the box's left.
-/// The palette bank sheet `sheet` is drawn with in palette `palette` (0: its own; one it does
-/// not have: its own), loading its tiles into sprite memory and the palette into a free bank
-/// the first time in a room. -1 if the sheet does not fit (counted in spriteMisses); with
-/// no bank free, a bank with another palette of the sheet.
 #define BM_GAME_ROOM_WAIT_FRAMES 180   // waiting for a left-out room before the menu (3 s)
 
 /// Whether the game waits for a room over the link (a door into a room the pack left out);
@@ -289,6 +283,11 @@ bool bmGamePlayerPoint(BmGame *pGame, int8_t layer, uint16_t point, int32_t *pX,
 /// layer_aim ... layer_point_angle (script_api.h) on the player's figure; the result.
 int32_t bmGameLayerCall(BmGame *pGame, uint16_t api, const int32_t *pArgs);
 
+/// The palette bank sheet `sheet` is drawn with in palette `palette` (0: its own; one it does
+/// not have: its own), loading its tiles into sprite memory and the palette into a free bank
+/// if they are not there; when they do not fit, the sheets least recently drawn make room.
+/// -1 if the sheet still does not fit (counted in spriteMisses); with no bank free, a bank
+/// with another palette of the sheet.
 int8_t bmGameSheetBank(BmGame *pGame, int8_t sheet, uint8_t palette);
 
 /// A spark at room pixel (x, y): the first frames of the sprite "spark" (if the pack has one),
@@ -436,7 +435,7 @@ const char *bmGameChosenCharacter(const BmGame *pGame);
 int32_t bmGameCharacterCall(BmGame *pGame, uint32_t api, int32_t arg);
 
 /// The scripts' story functions (story.c): owner_turn(side), flag(#name), set_flag(#name, on),
-/// set_light(colour, intensity, ambient), set_glow(percent) (`api`: their BmScriptApi index;
+/// set_light(colour, intensity, ambient), set_glow(percent), draw_in_front(on) (`api`: their BmScriptApi index;
 /// `current`: who calls, actors.h). Left out of the multiboot images (src/hal/gba/story_off.c:
 /// nothing, flags off).
 int32_t bmGameStoryCall(BmGame *pGame, uint8_t current, uint32_t api, const int32_t *pArgs);

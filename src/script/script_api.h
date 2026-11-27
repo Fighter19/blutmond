@@ -171,7 +171,8 @@ typedef enum BmScriptType {
   X(set_light,         VOID, 3, INT,   INT,   INT,   VOID, 0) \
   X(flag,              BOOL, 1, NAME,  VOID,  VOID,  VOID, 0) \
   X(set_flag,          VOID, 2, NAME,  BOOL,  VOID,  VOID, 0) \
-  X(set_glow,          VOID, 1, INT,   VOID,  VOID,  VOID, 0)
+  X(set_glow,          VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(draw_in_front,     VOID, 1, BOOL,  VOID,  VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -322,6 +323,9 @@ typedef enum BmScriptType {
 //
 // set_glow(percent): a lit room's switched glowing colours (its property glow_switch: a
 // window lit from inside) at that much of as drawn (100 when the room is entered; 0 black).
+//
+// draw_in_front(on): the object drawn in front of the player (on) or behind it, as objects are
+// (off; off when it is made): one held in the player's arms. Nothing in the multiboot images.
 //
 // flag(#name), set_flag(#name, on): story flags (docs/plans/dialogue.md §5, a first part): a
 // name that is on or off, the same in every room and kept in the save game (in the inventory,

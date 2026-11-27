@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<song version="1" bpm="120" length="192" loop="-1" effect="1" echo="160" echo-feedback="60">
+ <instrument name="breath" wave="noise" attack="40" decay="60" sustain="0" release="40" volume="110" pan="0" />
+ <instrument name="sink" wave="sine" attack="10" decay="50" sustain="60" release="30" volume="120" pan="0" />
+ <track name="breath" instrument="breath">
+  <note t="0" key="76" len="60" vel="100" />
+ </track>
+ <track name="sink" instrument="sink">
+  <note t="6" key="40" len="20" vel="90" />
+  <note t="26" key="38" len="20" vel="80" />
+  <note t="46" key="36" len="30" vel="70" />
+ </track>
+</song>

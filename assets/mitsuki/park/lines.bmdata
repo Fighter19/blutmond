@@ -1,0 +1,98 @@
+# The lines of Mitsuki's park scene (structure Line in assets/test_room/data/dialogue.ms),
+# in the order park.ms says them.
+table Line
+
+record ParkMitsuki {
+  speaker = HinaSoft
+  says = "MITSUKI!!"
+}
+
+record ParkCame {
+  speaker = HinaSoft
+  says = "You came... you actually came..."
+}
+
+record ParkTwelve {
+  speaker = Mitsuki
+  says = "I said ten minutes. It was twelve."
+}
+
+record ParkScared {
+  speaker = HinaSoft
+  says = "I was so scared. They were everywhere..."
+}
+
+record ParkDidWell {
+  speaker = Mitsuki
+  says = "I know. You stayed put. You did well."
+}
+
+record ParkDontLetGo {
+  speaker = HinaSoft
+  says = "Don't let go yet, okay?"
+}
+
+record ParkSitDown {
+  speaker = Mitsuki
+  says = "...I won't. Come. Let's sit down."
+}
+
+record ParkCold {
+  speaker = HinaSoft
+  says = "Your hands are always so cold."
+}
+
+record ParkWarm {
+  speaker = Mitsuki
+  says = "Yours are always warm. It evens out."
+}
+
+record ParkTellYou {
+  speaker = HinaSoft
+  says = "Hey... can I tell you something?"
+}
+
+record ParkMhm {
+  speaker = Mitsuki
+  says = "Mhm."
+}
+
+record ParkSince {
+  speaker = HinaSoft
+  says = "Ever since... that day, I can't sleep."
+}
+
+record ParkChest {
+  speaker = HinaSoft
+  says = "Something sits on my chest at night."
+}
+
+record ParkOutLoud {
+  speaker = HinaSoft
+  says = "I thought if I said it out loud..."
+}
+
+record ParkLookAtMe {
+  speaker = Mitsuki
+  says = "...Hina. Look at me."
+}
+
+record ParkHere {
+  speaker = HinaSoft
+  says = "It's here. It's always been here..."
+}
+
+record ParkScream {
+  speaker = Hina
+  says = "MITSUKIII!!"
+}
+
+record ParkHina {
+  speaker = Mitsuki
+  says = "...Hina."
+}
+
+record ParkGiveBack {
+  speaker = Mitsuki
+  says = "...Give her back."
+}

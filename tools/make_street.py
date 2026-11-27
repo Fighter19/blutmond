@@ -4,7 +4,7 @@
 cottage with a lit window, a picket fence, a tree, a bench and a gas lamp whose light falls on
 all of it (lighting = palette, dithered), a puddle on the road that mirrors the lamp, the bench,
 the sky and whoever stands over it (a `Puddle` object, src/world/reflect.h), and a knight on
-watch by the bench. West of the debug lobby; the cottage is Mitsuki's home (its door leads to
+watch by the bench. West of the debug lobby, east of the park; the cottage is Mitsuki's home (its door leads to
 assets/mitsuki/home, her prologue), its window lit while her light is on (the room's
 `glow_switch`, turned by assets/mitsuki/home/cottage.ms); the lamp's glass glows with its
 flicker (`glow_light`).
@@ -365,6 +365,9 @@ def write_room(path, tiles, maps, cols, rows):
         ("Puddle", "puddle", px, py, pw, ph, False, [("squash", "4"), ("ripple", "1"), ("strength", "12")]),
         ("Door", "exit_east", W - 16, GROUND - 48, 16, 48, False,
          [("target_room", "debug_lobby"), ("target_door", "to_rural_street"), ("direction", "east"), ("panel", "door_panel")]),
+        # West: the park (assets/mitsuki/park, tools/make_park.py), where Hina waits.
+        ("Door", "to_park", 0, GROUND - 48, 16, 48, False,
+         [("target_room", "park"), ("target_door", "to_street"), ("direction", "west")]),
         # The cottage's door: Mitsuki's home (assets/mitsuki/home), with Up.
         ("Door", "to_home", 82, GROUND - 48, 24, 48, False,
          [("target_room", "mitsuki_home"), ("target_door", "to_street"), ("direction", "north")]),

@@ -39,7 +39,8 @@ Most of this document is the design. Built so far (`src/link/live.h`,
   through doors first, then those no door leads to, each whole where it fits; then the
   languages and the save game's history. What a room names: its maps, collision, objects, area and layers, and its light
   (`LITE`, room-format.md §7), and the script modules (`MODB`, by their first class) of its
-  objects' classes and of its `attach` list: these come with their room, not before it (a
+  objects' classes and of its `attach` list, and the sprites named like its objects' classes
+(whatever the case, as the runtime binds them): these come with their room, not before it (a
   class one room has as an object and a script of another spawns is there only with the
   first). Left out of every fitted push: the choice of playable character (the figures
   `player_<name>` and their sprites, the data table `Character`, the screen `CharacterMenu`).

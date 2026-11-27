@@ -561,6 +561,7 @@ value is dropped and counts as a script error.
 | 142 | `set_light(colour, intensity, ambient)` | a lit room's light from now on, until a room is entered: `red, green, blue` the colour's (0xRRGGBB) top 5 bits each, `intensity = intensity × 64 / 100`, `ambient = ambient × 255 / 100` (each clamped to 0..255); if any changed, the palettes and the sprites' lit banks are shaded anew at the next present. Nothing in an unlit room, nor in the multiboot images (`light_off.c`) |
 | 143, 144 | `flag(#name)`, `set_flag(#name, on)` | story flags: on while the inventory holds one of the key `FNV-1a(name) ^ 0x464C4147` (no record's key: no menu lists it), so the same in every room and in the save game; `set_flag` gives or takes that one |
 | 145 | `set_glow(percent)` | a lit room's switched glowing colours (room property `glow_switch`, room-format.md) at `percent × 255 / 100` (clamped to 0..255; 255 when a room is entered) of as drawn; the palettes shaded anew if it changed. Nothing in an unlit room nor in the multiboot images |
+| 146 | `draw_in_front(on)` | the object drawn in front of the player (`on`: its sprite before the player's in OAM) or, as objects are, behind it (off; off when it is made or comes back): one held in the player's arms (Mitsuki's park scene). Nothing in the multiboot images |
 
 Layer functions (112-122) work only from the player's attachments, on the player's figure (a
 layer named by the figure file); from an object, or for a layer the figure does not have,
@@ -604,10 +605,12 @@ their objects have), door panels and the puzzle's are loaded. A sheet not loaded
 the first time it is drawn (an effect, an object made at run time): its tiles after the last
 loaded ones (a sheet that would pass tile 1024 is not drawn), and each (sheet, palette) pair
 takes the lowest free bank of 0 to 12, its 16 colours that palette's. One that does not fit
-(tiles or a bank) while sheets the room has not drawn are still there from earlier rooms:
-those are forgotten, the pairs the room has drawn since it was entered are loaded again (at
-new places: what was given out earlier in that frame may show other tiles for one frame), then
-this one. Still no room: a bank with another palette of the sheet; none: not drawn. What did
+(tiles or a bank): the least recently drawn make room. Each sheet notes the frame it was last
+drawn; everything loaded but the player's is forgotten, the pairs drawn this frame or the last
+are loaded again (at new places: what was given out earlier in that frame may show other tiles
+for one frame), then this one, then the other pairs, the most recently drawn first, while they
+fit. So a room's sheets not drawn for a while (an object hidden, a sprite of a scene) give
+their place to one drawn now (a dialogue's portrait), and are loaded again when drawn. Still no room: a bank with another palette of the sheet; none: not drawn. What did
 not fit is counted (`spriteMisses`). When a room is entered, the sheets it needs (its objects',
 the puzzle's, the grapple's if it has anchors, the extra layers of kinds) are counted first;
 only if they do not fit beside what is loaded is everything but the player's forgotten. Which sheet is where is derived, not state. Sprite tiles are mapped

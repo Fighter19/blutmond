@@ -25,7 +25,9 @@ above the anchor) in <out>; with --figure, <out>/<figure name>.bmfigure of the t
 `player`, it is the engine's player). A character with a portrait gets <out>/<name>_face.png
 and .bmsprite (the dialogue box's, its anchor at the top left). --preview writes a sheet of
 every frame four times larger on a grey ground; --keep leaves the render's passes in a folder.
---face-only yes writes the portrait and nothing else (a character who is only heard: on the phone).
+--clip yes renders a panel (a close-up): the layout's rectangles exactly, what reaches past
+them cut off, a border in the outline's colour. --face-name N names the portrait N instead of
+<name>_face. --face-only yes writes the portrait and nothing else (a character who is only heard: on the phone).
 Needs Blender (4.0 or later; --blender or $BLENDER, else `blender` on the path), numpy and PIL.
 """
 import copy
@@ -91,8 +93,12 @@ def main(argv):
     frames = layout_frames(lroot)
     # Each frame is rendered MARGIN pixels larger each way than the layout's, then cut to what
     # is drawn: nothing that moves out of the layout's rectangle (hair flying up) is cut off.
-    jobs = [{'frame': i, 'w': f['w'] + 2 * MARGIN, 'h': f['h'] + 2 * MARGIN, 'ax': f['ax'] + MARGIN,
-             'ay': f['ay'] + MARGIN, 'ground': f['ay'] + sink + MARGIN} for i, f in enumerate(frames)]
+    # --clip yes: a panel (a close-up): exactly the layout's rectangle, cut at its edges, with a
+    # border in the outline's colour.
+    clip = opts.get('clip') == 'yes'
+    margin = 0 if clip else MARGIN
+    jobs = [{'frame': i, 'w': f['w'] + 2 * margin, 'h': f['h'] + 2 * margin, 'ax': f['ax'] + margin,
+             'ay': f['ay'] + margin, 'ground': f['ay'] + sink + margin} for i, f in enumerate(frames)]
 
     work = opts.get('keep') or tempfile.mkdtemp(prefix='sprite3d_')
     os.makedirs(work, exist_ok=True)
@@ -141,7 +147,14 @@ def main(argv):
             if m.get('emissive'):
                 nmap[material == m['index']] = (0, 0, 0, 255)
         used |= {tuple(c) for c in rgba[rgba[..., 3] > 0][:, :3]}
-        ax, ay, ground = f['ax'] + MARGIN, f['ay'] + MARGIN, f['ay'] + sink + MARGIN
+        ax, ay, ground = f['ax'] + margin, f['ay'] + margin, f['ay'] + sink + margin
+        if clip:
+            outline = pixelize.hex_rgb(settings['outline'])
+            for edge in (rgba[0], rgba[-1], rgba[:, 0], rgba[:, -1]):
+                edge[:, :3] = outline
+                edge[:, 3] = 255
+            for edge in (nmap[0], nmap[-1], nmap[:, 0], nmap[:, -1]):
+                edge[:] = (128, 128, 255, 255)
         for box in fel.findall('box'):
             if box.get('kind') == 'hit' and box.get('name') in mats:
                 b = pixelize.bounds(material, mats[box.get('name')])
@@ -158,14 +171,16 @@ def main(argv):
             if loc is not None:
                 pt.set('x', str(int(round(loc[0] - 0.5)) - ax))
                 pt.set('y', str(int(round(loc[1] - 0.5)) - ay))
-        # Cut to the drawn pixels; the anchor moves with the cut.
+        # Cut to the drawn pixels; the anchor moves with the cut (a panel stays whole).
         ys, xs = np.nonzero(rgba[..., 3])
+        if clip:
+            ys, xs = np.array([0, rgba.shape[0] - 1]), np.array([0, rgba.shape[1] - 1])
         if len(xs) == 0:
             x0, y0, x1, y1 = ax, ay, ax, ay
         else:
             x0, y0, x1, y1 = int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())
         h, w = rgba.shape[:2]
-        if x0 == 0 or y0 == 0 or x1 == w - 1 or y1 == h - 1:
+        if not clip and (x0 == 0 or y0 == 0 or x1 == w - 1 or y1 == h - 1):
             print('make_sprite: frame %d reaches %d pixels past the layout\'s rectangle: cut off there' % (i, MARGIN),
                   file=sys.stderr)
         if x1 - x0 + 1 > 128 or y1 - y0 + 1 > 128:
@@ -221,14 +236,15 @@ def main(argv):
     if portrait:
         n = meta['jobs'].index(portrait[0])
         rgba, nmap, _ = pixelize.pixelize(meta, work, n)
-        Image.fromarray(rgba).save(os.path.join(out, name + '_face.png'))
+        face_name = opts.get('face-name', name + '_face')
+        Image.fromarray(rgba).save(os.path.join(out, face_name + '.png'))
         pw, ph = portrait[0]['job']['w'], portrait[0]['job']['h']
-        face = ET.Element('sprite', {'version': '1', 'image': name + '_face.png'})
+        face = ET.Element('sprite', {'version': '1', 'image': face_name + '.png'})
         ET.SubElement(face, 'hitbox', {'x': '0', 'y': '0', 'w': str(pw), 'h': str(ph)})
         ET.SubElement(face, 'frame', {'x': '0', 'y': '0', 'w': str(pw), 'h': str(ph), 'ax': '0', 'ay': '0'})
         a = ET.SubElement(face, 'animation', {'name': 'neutral', 'loop': '1'})
         ET.SubElement(a, 'step', {'frame': '0', 'duration': '60'})
-        write_xml(face, os.path.join(out, name + '_face.bmsprite'))
+        write_xml(face, os.path.join(out, face_name + '.bmsprite'))
 
     if 'split' in opts:
         r = subprocess.run([sys.executable, os.path.join(HERE, '..', 'split_sprite.py'),

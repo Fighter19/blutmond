@@ -235,8 +235,8 @@ static bool chunkNamed(const BmPack *pPack, uint32_t i, uint32_t id, const char 
 }
 
 // The script modules (MODB, by the name of their first class) a room's objects are of, and those
-// of its attachments (the property `attach` of its `@room` object: "Wind, Rain"), each once, at
-// most ROOM_MODULES. A fitted pack brings them with the room, not before it: the scripts of a
+// of its attachments (the property `attach` of its `@room` object: "Wind, Rain"), and the
+// sprites named like its objects' classes, each once, at most ROOM_MODULES. A fitted pack brings them with the room, not before it: the scripts of a
 // room left out (a bench, a prologue) are left out with it. (A class one room has as an object
 // and another's script spawns is then there only with the first.)
 static uint32_t roomModules(const BmPack *pPack, uint32_t index, uint16_t *pOut)
@@ -258,6 +258,17 @@ static uint32_t roomModules(const BmPack *pPack, uint32_t index, uint16_t *pOut)
       {
         const char *key = bmPackString(pPack, bmRead16(o + at + p * 4));
         if (key != NULL && strcmp(key, "attach") == 0) list = bmPackString(pPack, bmRead16(o + at + p * 4 + 2));
+      }
+      // The sprite named like the object's class, whatever the case (the runtime's binding,
+      // game.c): it comes with the room too (Hina's in the park).
+      for (uint32_t c = 0; cls != NULL && list == NULL && c < count; c++)
+      {
+        const char *sn = bmPackString(pPack, chunkName(pPack, c, BM_CHUNK_SPRT)), *a = sn, *b = cls;
+        for (; a != NULL && *a && *b && (*a | 32) == (*b | 32); a++, b++) {}
+        if (sn == NULL || *a != 0 || *b != 0) continue;
+        bool seen = false;
+        for (uint32_t q = 0; q < out && !seen; q++) seen = pOut[q] == c;
+        if (!seen && out < ROOM_MODULES) pOut[out++] = (uint16_t)c;
       }
       // The object's class, then each name of the list.
       for (const char *name = list != NULL ? list : cls; name != NULL && *name != 0;)

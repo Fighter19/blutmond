@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The close-up of their hands on the bench (hands.py): one frame. -->
+<sprite version="1" image="hands.png">
+ <hitbox x="-56" y="-32" w="112" h="64"/>
+ <frame x="0" y="0" w="96" h="48" ax="48" ay="24"/>
+ <animation name="hands" loop="1">
+  <step frame="0" duration="60"/>
+ </animation>
+</sprite>

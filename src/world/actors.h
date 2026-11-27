@@ -20,8 +20,8 @@
 
 #define BM_ACTORS_MAX 8
 #define BM_ACTORS_STORE 32
-#define BM_ACTORS_MODULES 40   // script modules in a pack (one per class); the cooker reports more
-#define BM_ACTORS_CLASSES 48   // classes in all of them
+#define BM_ACTORS_MODULES 48   // script modules in a pack (one per class); the cooker reports more
+#define BM_ACTORS_CLASSES 56   // classes in all of them
 #define BM_ACTORS_OWNER 0xFF   // `current` while an attachment of the player runs
 #define BM_ACTORS_ROOM 0xFE    // `current` while an attachment of the room runs
 #define BM_ACTORS_SCREEN 0xFD  // `current` while a screen runs (currentSlot: its place on the stack)
@@ -64,6 +64,7 @@ typedef struct BmActors
   int32_t x[BM_ACTORS_MAX], y[BM_ACTORS_MAX];   // fix 24.8, the anchor
   int8_t facing[BM_ACTORS_MAX];
   uint8_t hidden[BM_ACTORS_MAX], touching[BM_ACTORS_MAX];
+  uint8_t front[BM_ACTORS_MAX];        // drawn in front of the player (draw_in_front)
   uint8_t anim[BM_ACTORS_MAX], animFinished[BM_ACTORS_MAX];
   uint16_t animStep[BM_ACTORS_MAX], animTimer[BM_ACTORS_MAX];
   int32_t health[BM_ACTORS_MAX];       // struck only while above 0 (hits.h)
@@ -132,8 +133,9 @@ void bmActorsEnterRoom(struct BmGame *pGame, bool fresh);
 /// One frame: tick and touch events, state code, animations.
 void bmActorsFrame(struct BmGame *pGame);
 
-/// Draws the scripted objects from OAM entry `firstOam`; returns how many entries it used.
-uint8_t bmActorsDraw(struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
+/// Draws the scripted objects from OAM entry `firstOam`, those in front of the player (`front`,
+/// draw_in_front) or the others; returns how many entries it used.
+uint8_t bmActorsDraw(struct BmGame *pGame, uint8_t firstOam, uint8_t maxOam, bool front);
 
 /// The box of scripted object `actor` in room pixels: its rectangle, its sprite's body box, or
 /// 16x16 above its anchor.

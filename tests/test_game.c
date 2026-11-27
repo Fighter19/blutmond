@@ -2547,8 +2547,11 @@ static void testSheetsAndPalettesPerRoom(void)
   for (int f = 0; f < 120 && strcmp(bmGameRoomId(&s_game), "guard_room") != 0; f++) frames(1, BM_KEY_LEFT);
   frames(5, 0);
   TEST_ASSERT(strcmp(bmGameRoomId(&s_game), "guard_room") == 0);
-  // The bat sheet is back for the Iron Bat (red, with its armour), the plain one not.
-  TEST_ASSERT(s_game.sheetTile[knight] != BM_GAME_NO_TILES && banksOf(bat, 0) == 0 && banksOf(bat, 1) == 1 && s_game.tileNext < BM_GAME_OBJ_TILES - 200);
+  // The bat sheet is back for the Iron Bat (red, with its armour); the plain one's palette may
+  // stay from the room before (it fits: the least recently drawn go only when room is needed).
+  TEST_ASSERT(s_game.sheetTile[knight] != BM_GAME_NO_TILES && banksOf(bat, 1) == 1 && banksOf(bat, 0) <= 1 &&
+              s_game.tileNext < BM_GAME_OBJ_TILES - 200);
+  TEST_ASSERT(s_game.spriteMisses == 0);
   // The player is the figure "player" (legs and torso): both sheets stay through all this, in
   // banks 0 and 1, and both are drawn, the torso in front.
   int legs = sheetOf("player_legs"), torso = sheetOf("player_torso");
@@ -3776,6 +3779,113 @@ static void testMitsukisPrologue(void)
   bmGameStart(&s_game, &s_pack, NULL);
 }
 
+// Mitsuki's park scene (assets/mitsuki/park): from the street's east end she walks west; the
+// music grows tenser the nearer the bench (its intensity); Hina's eyes under it; close to it
+// the scene: Hina storms out into her arms (the music turns: park_reunion), they talk, Mitsuki
+// leads her to the bench, they sit (the close-up of their hands shows a while), Hina opens up,
+// the nightmare comes and takes her, and the player has Mitsuki again; after it Hina is gone.
+// The room's first object of class `cls`, or -1.
+static int actorOf(const char *cls)
+{
+  for (uint8_t i = 0; i < s_game.actors.count; i++)
+    if (!s_game.actors.gone[i] && s_game.actors.object[i] != 0xFF &&
+        strcmp(s_game.objects[s_game.actors.object[i]].className, cls) == 0)
+      return i;
+  return -1;
+}
+
+static void shoot(const char *name)
+{
+  if (s_outDir == NULL) return;
+  uint16_t shot[BM_PPU_WIDTH * BM_PPU_HEIGHT];
+  bmHalHostRender(shot);
+  char path[512];
+  snprintf(path, sizeof(path), "%s/%s.ppm", s_outDir, name);
+  FILE *f = fopen(path, "wb");
+  if (f == NULL) return;
+  fprintf(f, "P6\n%d %d\n255\n", BM_PPU_WIDTH, BM_PPU_HEIGHT);
+  for (int i = 0; i < BM_PPU_WIDTH * BM_PPU_HEIGHT; i++)
+    for (int k = 0; k < 3; k++)
+    {
+      uint8_t v = (uint8_t)((shot[i] >> (5 * k)) & 31);
+      fputc((v << 3) | (v >> 2), f);
+    }
+  fclose(f);
+}
+
+static void testMitsukisParkScene(void)
+{
+  startWith(s_data, s_size, "park");
+  const uint32_t errors = bm_script_errors;
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player_mitsuki")));
+  bmGameStart(&s_game, &s_pack, "park");
+  frames(4, 0);
+  TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "park") && s_game.character == stringId("player_mitsuki"));
+  const int hina = actorOf("Hina"), nightmare = actorOf("Nightmare"), hands = actorOf("Hands");
+  TEST_ASSERT(hina >= 0 && nightmare >= 0 && hands >= 0);
+  TEST_ASSERT(!s_game.actors.hidden[hina] && s_game.actors.hidden[nightmare] && s_game.actors.hidden[hands]);
+  TEST_ASSERT(actorPlaying("Hina", "hide") == hina);
+  // The bench is not in sight from where she comes in.
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) > 137 + BM_PPU_WIDTH);
+  const uint8_t first = s_game.sound.intensity;
+  // West, until the scene takes her over.
+  int f = 0, most = 0;
+  for (; f < 1200 && s_game.lockTimer == 0; f++)
+  {
+    frames(1, BM_KEY_LEFT);
+    if (s_game.sound.intensity > most) most = s_game.sound.intensity;
+    if (BM_FIX_INT(s_game.player.x) == 240) shoot("park_eyes");
+  }
+  printf("    the music: intensity %d at the door, %d near the bench\n", first, most);
+  TEST_ASSERT(s_game.lockTimer != 0 && most == 3 && first < most);
+  TEST_ASSERT(BM_FIX_INT(s_game.player.x) - 137 <= 70);
+  // Through the scene: A at each line.
+  int lines = 0, theirs = 0, hug = 0, led = 0, sat = 0, close = 0, taken = 0, portraits = 0, spoken = 0, handsLoaded = 0;
+  uint16_t line = 0xFFFF;
+  for (f = 0; f < 8000 && (f < 20 || s_game.lockTimer != 0); f++)
+  {
+    if (s_game.dialogue != 0 && s_game.dialogueLine != line)
+    {
+      line = s_game.dialogueLine;
+      lines++;
+      theirs += s_game.dialogueSpeaker == stringId("Hina");
+    }
+    // Each speaker's portrait is drawn: the room's sprites not drawn for a while (the close-up,
+    // the nightmare) give it their place.
+    if (s_game.dialogue != 0 && s_game.dialoguePortrait != 0xFFFF)
+    {
+      int8_t p = -1;
+      for (uint8_t k = 0; k < s_game.sheetCount; k++)
+        if (s_game.sheets[k].nameId == s_game.dialoguePortrait) p = (int8_t)k;
+      portraits += p >= 0 && s_game.sheetTile[p] != BM_GAME_NO_TILES;
+      spoken++;
+    }
+    if (actorPlaying("Hina", "hug") == hina && hug++ == 30) shoot("park_hug");
+    if (actorPlaying("Hina", "walk") == hina && led++ == 20) shoot("park_lead");
+    if (actorPlaying("Hina", "sit") == hina && sat++ == 30) shoot("park_sit");
+    if (!s_game.actors.hidden[hands])
+    {
+      if (close++ == 30) shoot("park_hands");
+      handsLoaded += s_game.sheetTile[s_game.actors.sheet[hands]] != BM_GAME_NO_TILES;
+    }
+    if (actorPlaying("Hina", "grabbed") == hina && taken++ == 10) shoot("park_taken");
+    frames(1, (f % 24) == 0 ? BM_KEY_A : 0);
+  }
+  printf("    the scene: %d lines, %d of them Hina's\n", lines, theirs);
+  TEST_ASSERT(s_game.lockTimer == 0 && hug > 0 && led > 0 && sat > 0 && close > 0 && taken > 0);
+  TEST_ASSERT(lines == 19 && theirs >= 8);
+  printf("    portraits drawn %d of %d frames with a speaker\n", portraits, spoken);
+  TEST_ASSERT(spoken > 0 && portraits >= spoken - 2);   // (loaded the frame after it is first needed)
+  TEST_ASSERT(handsLoaded >= close - 1);   // the close-up back in sprite memory once shown
+  shoot("park_after");
+  // After: Hina gone, the close-up and the nightmare too, the park tense.
+  TEST_ASSERT(s_game.actors.hidden[hina] && s_game.actors.hidden[hands] && s_game.actors.hidden[nightmare]);
+  TEST_ASSERT(s_game.sound.intensity == 3);
+  TEST_ASSERT(bm_script_errors == errors);
+  TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player")));
+  bmGameStart(&s_game, &s_pack, NULL);
+}
+
 int main(int argc, char **argv)
 {
   if (argc < 2)
@@ -3819,6 +3929,7 @@ int main(int argc, char **argv)
   RUN_TEST(testColourCorrection);
   RUN_TEST(testChoosingACharacter);
   RUN_TEST(testMitsukisPrologue);
+  RUN_TEST(testMitsukisParkScene);
   RUN_TEST(testAimingTheTorso);
   RUN_TEST(testIronBat);
   RUN_TEST(testEquipmentShows);

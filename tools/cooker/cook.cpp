@@ -2359,6 +2359,10 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       report.error("does-not-fit", path, e.what());
     }
   }
+  // The runtime keeps the data of 28 sprites (BM_GAME_MAX_SHEETS, src/world/game.h); more are
+  // not loaded (their objects drawn as the placeholder).
+  if (spriteMemory.size() > 28)
+    report.error("does-not-fit", "sprites", std::to_string(spriteMemory.size()) + " sprites: the runtime loads 28");
   // Figures (figure_asset.h): their sprites, points and palettes must be there.
   std::set<std::string> figureNames;
   std::map<std::string, std::vector<std::string>> figureSprites;   // a figure's sprites, each once
@@ -2507,9 +2511,9 @@ std::vector<uint8_t> cook(const std::vector<tmx::Map> &maps, const CookOptions &
       for (const script::ClassInfo &c : module.classes) words += size_t(c.codeWords);
       for (const script::ClassInfo &c : module.classes)
         if (!c.sprite.empty()) classSprites[c.name] = c.sprite;
-      // The runtime holds 40 modules (src/world/actors.h, BM_ACTORS_MODULES): more are not loaded.
-      if (module.classModules.size() > 40)
-        report.error("script", "modules", std::to_string(module.classModules.size()) + " classes: the runtime loads 40");
+      // The runtime holds 48 modules (src/world/actors.h, BM_ACTORS_MODULES): more are not loaded.
+      if (module.classModules.size() > 48)
+        report.error("script", "modules", std::to_string(module.classModules.size()) + " classes: the runtime loads 48");
       report.info("script", "modules", std::to_string(module.classes.size()) + " classes, " + std::to_string(words * 2) + " bytes of code, " +
                                          std::to_string(bytes) + " bytes in the pack");
       for (const script::StructInfo &s : module.structs)
