@@ -84,3 +84,7 @@ void bmLightGlow(struct BmGame *pGame, int32_t percent);
 
 /// Whether the room is lit (any mode).
 bool bmLightOn(const struct BmGame *pGame);
+
+/// The light level colour `index` of background bank `bank` takes in palette mode, 0 up;
+/// 0xFF: it glows (as drawn); 0xFE: no light shades it.
+uint8_t bmLightLevelOf(const struct BmGame *pGame, uint8_t bank, uint8_t index);

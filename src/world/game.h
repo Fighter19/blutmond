@@ -105,6 +105,8 @@ typedef struct BmGame
   int16_t speedPercent;            // added to the player's running speed (add_speed: heavy armour)
   uint8_t snow;                    // snow falling, percent (set_snow; 0 when a room is entered)
   bool snowTile;                   // the snowflake's tile is loaded (story.c)
+  uint8_t snowLevel;               // the room's colours under snow, 0 to 4 (story.c: bmGameSnowColour)
+  bool snowCaps;                   // snow lies on the room's tiles (story.c)
   uint8_t resists[BM_GAME_ELEMENTS];   // per element: what the player wears that resists it
   uint8_t striker;                 // the figure striking the player right now (hits.h), else 0xFF
   uint8_t hitStop;                 // frames the game holds still after a hit with #Stop struck
@@ -444,6 +446,14 @@ int32_t bmGameStoryCall(BmGame *pGame, uint8_t current, uint32_t api, const int3
 /// The snow falling (set_snow) from OAM entry `firstOam`, at most `maxOam`; how many it used
 /// (story.c; nothing in the multiboot images).
 uint8_t bmGameDrawSnow(BmGame *pGame, uint8_t firstOam, uint8_t maxOam);
+
+/// A colour (BGR555) under snow, `level` 0 (as it is) to 4 (story.c; the light shades the
+/// room's colours with it).
+uint16_t bmGameSnowColour(uint8_t level, uint16_t colour);
+
+/// The same for colour `index` of background bank `bank` at the room's snow (game snowLevel):
+/// the colour the snow lying is drawn in (story.c) a cold white.
+uint16_t bmGameSnowColourAt(const BmGame *pGame, uint8_t bank, uint8_t index, uint16_t colour);
 void bmGameReloadPlayer(BmGame *pGame);
 
 /// Save game in the save memory: the `save` fields. Loading returns false if there is none

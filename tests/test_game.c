@@ -4010,7 +4010,25 @@ static void testTheSearchAndTheSnow(void)
   TEST_ASSERT(bmEffectsTeleport(&s_game, (uint32_t)bmGameFindRoom(&s_pack, "park"), 300, 128));
   frames(BM_TELEPORT_FRAMES + 6, 0);
   TEST_ASSERT(s_game.roomIndex == (uint32_t)bmGameFindRoom(&s_pack, "park") && s_game.snow == 70);
+  // The world under snow: its colours colder (in the light's shading too: palette lighting),
+  // and snow lying on what is open to the sky (the path's tiles changed in video memory).
+  TEST_ASSERT(s_game.snowLevel == 3 && s_game.snowCaps);
+  TEST_ASSERT(bmGameSnowColour(3, bmColorRGB(4, 20, 4).color) != bmColorRGB(4, 20, 4).color);
   shoot("park_snow");
+  // And by the river and in the street.
+  for (f = 0; f < 200 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  TEST_ASSERT(bmEffectsTeleport(&s_game, (uint32_t)bmGameFindRoom(&s_pack, "riverside"), 300, 128));
+  frames(BM_TELEPORT_FRAMES + 6, 0);
+  TEST_ASSERT(s_game.snow == 70 && s_game.snowLevel == 3 && s_game.snowCaps);
+  for (f = 0; f < 300 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  frames(30, 0);
+  shoot("riverside_snow");
+  TEST_ASSERT(bmEffectsTeleport(&s_game, (uint32_t)bmGameFindRoom(&s_pack, "rural_street"), 300, 128));
+  frames(BM_TELEPORT_FRAMES + 6, 0);
+  TEST_ASSERT(s_game.snow == 70 && s_game.snowLevel == 3 && s_game.snowCaps);
+  for (f = 0; f < 300 && s_game.dialogue != 0; f++) frames(1, (f % 20) == 0 ? BM_KEY_A : 0);
+  frames(30, 0);
+  shoot("street_snow");
   TEST_ASSERT(bm_script_errors == errors);
   TEST_ASSERT(bmGameSetCharacter(&s_game, stringId("player")));
   bmGameStart(&s_game, &s_pack, NULL);

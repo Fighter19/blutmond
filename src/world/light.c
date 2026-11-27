@@ -473,6 +473,10 @@ static void shadePalette(BmGame *g, int32_t now, uint16_t *out)
   {
     if (cc != NULL) shadeLevelsCurved(out + b * 16, src + b * 32, levelOf + b * 16, fac, cc->curve);
     else shadeLevels(out + b * 16, src + b * 32, levelOf + b * 16, fac);
+    // Under snow (story.c): what the light shades; not what glows (a lamp's glass as it is).
+    if (g->snowLevel != 0)
+      for (uint32_t i = 0; i < 16; i++)
+        if (levelOf[b * 16 + i] < l->levels) out[b * 16 + i] = bmGameSnowColourAt(g, (uint8_t)(l->paletteFirst + b), (uint8_t)i, out[b * 16 + i]);
   }
 }
 
@@ -744,6 +748,14 @@ static void presentSprites(BmGame *g)
   }
   bm_light_banks = lit;
   l->now = now;
+}
+
+uint8_t bmLightLevelOf(const BmGame *g, uint8_t bank, uint8_t index)
+{
+  const BmLight *l = &g->light;
+  if (l->mode != BM_LIGHT_PALETTE || bank < l->paletteFirst || bank >= l->paletteFirst + l->bankCount || index > 15) return 0xFE;
+  uint8_t level = l->pLite[LITE_HEAD + (bank - l->paletteFirst) * 16u + index];
+  return level < l->levels ? level : 0xFF;
 }
 
 // Processor cycles the last frame's light took, per part (tests read them: tools/bmlink check).

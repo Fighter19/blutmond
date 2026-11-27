@@ -285,7 +285,8 @@ room by the property `Search.Room`):
   dark and round, "like the inside of a Christmas ball. But wrong. The glass is cold... and it
   breathes."; the call drops. Then it starts to snow (the story flag `Snowing`; outside it
   snows from now on: the engine's `set_snow`, runtime-core.md, called by the rooms'
-  attachments), and she puts it together: "A Christmas ball. Snow. ...The park." At the gate:
+  attachments; the rooms' colours turn colder, leaves and grass frosted, snow lies on the
+  paths and walls), and she puts it together: "A Christmas ball. Snow. ...The park." At the gate:
   "The way's closed. She's not here."
 
 ### The snowman (`assets/mitsuki/snowman`)

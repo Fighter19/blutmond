@@ -1023,6 +1023,7 @@ static BmResult enterRoom(BmGame *g, uint32_t index, bool fresh)
   // still there). A state just loaded (not fresh) brings its own.
   if (fresh) bmAttachmentsLeaveRoom(g);
   g->snow = 0;   // (a room's attachment snows again: set_snow)
+  g->snowLevel = 0, g->snowCaps = false;   // (the room shown as drawn)
   memset(g->effectAge, 0, sizeof(g->effectAge));
   if (fresh) bmHitsClear(g);
   BmResult r = bmRoomOpen(&g->room, g->pPack, index);
@@ -2443,6 +2444,7 @@ void bmGameSetLanguage(BmGame *g, uint8_t language)
 static void reloadPalettes(BmGame *g)
 {
   bmRoomLoadPalette(&g->room);
+  g->snowLevel = 0;   // (under snow again next frame)
   bmUiLoadPalette();
   for (uint8_t b = 0; b < BM_GAME_BANKS; b++)
     if (g->bankSheet[b] != 0xFF) bmSpriteSheetLoadPalette(&g->sheets[g->bankSheet[b]], g->bankPalette[b], b);
