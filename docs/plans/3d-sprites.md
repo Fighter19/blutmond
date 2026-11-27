@@ -293,7 +293,7 @@ room by the property `Search.Room`):
 
 Back in the snowy park a snowman stands by the path (`snowman.py`: three balls of snow, coal
 eyes, a carrot nose, stick arms, a red scarf, and in his hands a Christmas ball: clear glass,
-dark inside with a faint violet glow, a silver cap and ring). Up beside him the first time:
+a silver cap and ring, and in it a snowy diorama). Up beside him the first time:
 "Who builds a snowman in the middle of the night?" The second time she grabs the ball; he holds
 on, grows to 170 % and fights (`snowman.ms`, health 30, the music `frost_waltz`):
 
@@ -311,6 +311,12 @@ How it fits:
 - **Grown by the PPU**: all his frames are rendered at one size; grown, the engine draws him at
   170 % (`set_scale`, runtime-core.md: affine sprites). The grown frames' boxes are made as
   large in the sheet (`snowman_sheet.py`), so the hits need nothing.
+- **The Christmas ball**: glass a renderer of 15 colours does not do, so `snowman_sheet.py`
+  draws what is seen in it, each pose rendered again without it: his body behind it tinted
+  violet, where nothing of him is behind every other pixel left empty (the park through the
+  glass), a diorama (a floor of snow, a tree under snow, Hina: a yellow hoodie, flakes), a rim
+  light on the lit side, a shine, an outline all round. It glows (its colours' normals black:
+  the park's light does not darken it), in colours of its own.
 - **One sheet**: the pack has its 28 sprites, so his fight's things are frames of his sheet
   (the snowball, the ripple, the pillar rising and standing, an icicle, the shadow, the beam).
   183 tiles: in the park, besides Mitsuki's figure and the doors' sheet, 287 are left.

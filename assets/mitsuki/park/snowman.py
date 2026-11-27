@@ -23,13 +23,14 @@ fight's things. Struck, he flashes (the engine's).
 OUT = (24, 20, 36)
 SNOW = [(150, 170, 200), (205, 220, 240), (250, 252, 255)]
 COAL = [(30, 28, 36)]
-SCARF = [(150, 30, 44), (210, 60, 70)]
-INSIDE = [(36, 16, 52), (110, 56, 150)]   # the Christmas ball's inside: dark, a faint violet glow (Hina there)
+SCARF = [(184, 44, 58)]
 CAP = [(220, 180, 80)]
 STICK = [(100, 70, 44)]
 CARROT = [(230, 120, 36)]
 ICE = [(110, 170, 225), (190, 230, 255)]
 SILVER = [(96, 100, 120), SNOW[0]]      # the ball's cap (darker than the snow it is seen against)
+INSIDE = [(110, 56, 150)]                # in the ball: a violet glow over the dark (snowman_sheet.py)
+GLOW = [(236, 244, 255), (150, 200, 240)]  # in the ball, lit from inside: its snow, its rim (not the light's)
 
 SIZE = 1.0          # both of him (grown: drawn at 170 %, snowman.ms)
 SMALL, BIG = SIZE, SIZE
@@ -47,15 +48,13 @@ def build(Rig):
     r.inner_lines = 3.0
     r.material('snow', SNOW, bands=[0.35, 0.75])
     r.material('coal', COAL, weight=8, min_cover=0.15, bands=[], keep_inner=True)
-    # The Christmas ball: clear glass (its rim, light blue; a shine), dark inside, a silver cap.
+    # The Christmas ball: its glass (snowman_sheet.py draws what is seen in it), its silver cap.
     r.material('glass', ICE + [SNOW[2]], weight=6, min_cover=0.15, bands=[0.4, 0.8], keep_inner=True, emissive=True)
-    r.material('inside', INSIDE, weight=7, min_cover=0.2, bands=[0.5], keep_inner=True, emissive=True)
     r.material('silver', SILVER, weight=8, min_cover=0.1, bands=[0.5], keep_inner=True)
     r.material('cap', CAP, weight=7, min_cover=0.2, bands=[], keep_inner=True)
-    r.material('shine', [SNOW[2]], weight=9, min_cover=0.1, bands=[], keep_inner=True, emissive=True)
     r.material('carrot', CARROT, weight=7, min_cover=0.2, bands=[], keep_inner=True)
     r.material('stick', STICK, weight=3, min_cover=0.15, bands=[])
-    r.material('scarf', SCARF, bands=[0.5])
+    r.material('scarf', SCARF, bands=[])
     # (The fight's things: what strikes has a material of its own, its hit box.)
     r.material('ice', ICE + [SNOW[2]], bands=[0.4, 0.8])
     r.material('frost', ICE + [SNOW[2]], bands=[0.3, 0.7], emissive=True)
@@ -92,7 +91,7 @@ def man(r, n, k):
     r.tube(j('body'), 'scarf', at(0, 0, 23.6), at(0, 0, 22.4), 4.6 * k, 4.8 * k, caps=False, group=g)
     r.tube(j('body'), 'scarf', at(2.5, -3.0, 23.0), at(3.5, -3.6, 18.0), 1.1 * k, 0.9 * k, group=g)
     # The Christmas ball, set into his forehead: red glass with a shine, its golden cap and hook.
-    christmas_ball(r, j('body'), at, k, g)
+    christmas_ball(r, j('body'), at, k, g + '_ball')
     # The carrot nose.
     r.tube(j('head'), 'carrot', at(4.2, 0, 28.2), at(7.8, 0.3, 27.6), 0.85 * k, 0.12 * k, group=g)
     # Coal eyes; a mouth of coal under the nose: straight, angry (down at the ends), smiling, or
@@ -119,26 +118,19 @@ def man(r, n, k):
                    group=g)
 
 
-BALL_AT = (8.2, 0.0, 16.5)   # the Christmas ball before his chest, in his hands
-BALL_R = 4.2
+BALL_AT = (6.6, 0.0, 15.5)   # the Christmas ball before his chest, in his hands (his body behind it)
+BALL_R = 5.0
 
 
 def christmas_ball(r, joint, at, k, g):
-    """The Christmas ball he holds: clear glass (a light blue rim, a shine up toward the light),
-    dark inside with a faint violet glow and a little snow at its bottom, a silver cap and ring.
-    What is inside lies toward the viewer (from (0.866, -0.5)), so the glass shows as a rim."""
+    """The Christmas ball he holds, before his chest: here only its glass (where it lies, the
+    picture's disc) and its silver cap and ring; what is seen in it, snowman_sheet.py draws:
+    his body behind it through dark glass, the diorama inside, the glass's rim and shine."""
     cx, cy, cz = BALL_AT
     rr = BALL_R
-
-    def near(f, up=0.0, side=0.0):
-        # From the middle toward the viewer by f radii, up and along the view's right by radii.
-        return at(cx + rr * (0.866 * f + 0.5 * side), cy + rr * (-0.5 * f + 0.866 * side), cz + rr * up)
     r.ellipsoid(joint, 'glass', at(cx, cy, cz), (rr * k, rr * k, rr * k), group=g)
-    r.ellipsoid(joint, 'inside', near(0.3), (0.78 * rr * k,) * 3, group=g)
-    r.ellipsoid(joint, 'snow', near(0.45, -0.5), (0.62 * rr * k, 0.62 * rr * k, 0.25 * rr * k), group=g)
-    r.ellipsoid(joint, 'shine', near(0.8, 0.45, -0.35), (0.2 * rr * k,) * 3, group=g)
-    r.tube(joint, 'silver', at(cx, cy, cz + rr * 0.9), at(cx, cy, cz + rr * 1.25), 0.38 * rr * k, 0.36 * rr * k, group=g)
-    r.tube(joint, 'silver', at(cx, cy - 0.3, cz + rr * 1.22), at(cx, cy + 0.3, cz + rr * 1.5), 0.08 * rr * k, group=g)
+    r.tube(joint, 'silver', at(cx, cy, cz + rr * 0.9), at(cx, cy, cz + rr * 1.22), 0.34 * rr * k, 0.32 * rr * k, group=g)
+    r.tube(joint, 'silver', at(cx, cy - 0.3, cz + rr * 1.2), at(cx, cy + 0.3, cz + rr * 1.45), 0.07 * rr * k, group=g)
 
 
 def things(r):
@@ -181,11 +173,12 @@ def thing(group, view=None, **joints):
     return {'joints': joints, 'root': (0, 0, 0), 'show': (group,), 'view': view}
 
 
-def pose(size, face, root=(0, 0, 0), extra=(), **joints):
+def pose(size, face, root=(0, 0, 0), extra=(), ball=True, **joints):
     js = {}
     for name, a in joints.items():
         js[name + '_' + size] = a
-    return {'joints': js, 'root': root, 'show': (size, size + '_' + face) + tuple(extra), 'view': None}
+    show = (size, size + '_' + face) + tuple(extra) + ((size + '_ball',) if ball else ())
+    return {'joints': js, 'root': root, 'show': show, 'view': None}
 
 
 SIDE = (0.0, 0.0)   # straight from the side: the beam's rows the same all along
@@ -194,7 +187,7 @@ SIDE = (0.0, 0.0)   # straight from the side: the beam's rows the same all along
 def poses():
     hold = dict(arm_R=(62, 10), arm_L=(62, -10))          # his hands round the ball
     tight = dict(arm_R=(64, 16), arm_L=(64, -16))         # holding on (she grabs it)
-    return [
+    mine = [
         pose('s', 'still', **hold),                                                     # 0 still
         pose('s', 'angry', head=-6, **tight),                                           # 1 holding on
         pose('s', 'happy', **hold),                                                     # 2 happy
@@ -202,6 +195,8 @@ def poses():
         pose('b', 'angry', arm_R=(-60, -40), arm_L=(62, -10), body=6, head=-6),         # 4 throwing (one hand on it)
         pose('b', 'angry', head=-8, **tight),                                           # 5 in a jump
         pose('b', 'roar', extra=('b_breath',), body=4, head=8, **hold),                 # 6 frost breath
+    ]
+    return mine + [
         # The fight's things: 7, 8 the snowball rolling; 9, 10 the ripple; 11, 12 the pillar
         # (rising, standing); 13 an icicle; 14, 15 the shadow; 16 on the frost beam, 1 to BEAMS
         # pieces long.
@@ -210,4 +205,7 @@ def poses():
         thing('pillar_low'), thing('pillar'),
         thing('icicle', view=SIDE),
         thing('shade_a'), thing('shade_b'),
-    ] + [thing('beam%d' % n, view=SIDE) for n in range(1, BEAMS + 1)]
+    ] + [thing('beam%d' % n, view=SIDE) for n in range(1, BEAMS + 1)] + [
+        # 20 on: his poses 0 to 6 again without the ball: what is behind it (snowman_sheet.py
+        # draws it seen through the glass, then drops these frames).
+        dict(p, show=tuple(x for x in p['show'] if not x.endswith('_ball'))) for p in mine]
