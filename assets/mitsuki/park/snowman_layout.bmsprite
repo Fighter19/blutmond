@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- The snowman (snowman.py, snowman.ms): small (still, holding on, happy), the boss (standing,
      throwing, in a jump, his frost breath); then the fight's things (frost.ms): the snowball, the
-     ripple, the pillar of ice (rising, standing), an icicle, the shadow, the frost beam in 4
-     lengths. Hit boxes around their materials: snow (his stomp: the jump frame), frost (the
-     breath, the beam), ice (ripple, rising pillar, icicle), dust (the snowball). -->
+     ripple, the block of ice (rising, standing), an icicle, the shadow. Hit boxes around their
+     materials: snow (his stomp: the jump frame), ice (ripple, rising block, icicle), dust (the
+     snowball). (His frost beam is no sprite: set_beam.) -->
 <sprite version="1" image="snowman.png">
  <hitbox x="-10" y="-42" w="20" h="42"/>
  <frame x="0" y="0" w="32" h="48" ax="16" ay="46"/>
@@ -21,7 +21,6 @@
  </frame>
  <frame x="0" y="0" w="56" h="56" ax="28" ay="54">
    <box kind="hurt" x="-8" y="-37" w="16" h="37"/>
-   <box kind="hit" name="frost" x="0" y="0" w="1" h="1"/>
  </frame>
  <frame x="0" y="0" w="16" h="16" ax="8" ay="14">
    <box kind="hit" name="dust" x="0" y="0" w="1" h="1"/>
@@ -35,28 +34,16 @@
  <frame x="0" y="0" w="24" h="16" ax="12" ay="14">
    <box kind="hit" name="ice" x="0" y="0" w="1" h="1"/>
  </frame>
- <frame x="0" y="0" w="24" h="24" ax="12" ay="22">
+ <frame x="0" y="0" w="32" h="32" ax="16" ay="30">
    <box kind="hit" name="ice" x="0" y="0" w="1" h="1"/>
  </frame>
- <frame x="0" y="0" w="24" h="48" ax="12" ay="46"/>
+ <frame x="0" y="0" w="32" h="56" ax="16" ay="54"/>
  <frame x="0" y="0" w="24" h="16" ax="12" ay="14">
    <box kind="hit" name="ice" x="0" y="0" w="1" h="1"/>
  </frame>
  <frame x="0" y="0" w="20" h="32" ax="10" ay="30"/>
  <frame x="0" y="0" w="20" h="32" ax="10" ay="30"/>
- <frame x="0" y="0" w="32" h="16" ax="0" ay="14">
-   <box kind="hit" name="frost" x="0" y="0" w="1" h="1"/>
- </frame>
- <frame x="0" y="0" w="64" h="16" ax="0" ay="14">
-   <box kind="hit" name="frost" x="0" y="0" w="1" h="1"/>
- </frame>
- <frame x="0" y="0" w="96" h="16" ax="0" ay="14">
-   <box kind="hit" name="frost" x="0" y="0" w="1" h="1"/>
- </frame>
- <frame x="0" y="0" w="128" h="16" ax="0" ay="14">
-   <box kind="hit" name="frost" x="0" y="0" w="1" h="1"/>
- </frame>
- <!-- 20 on: his frames 0 to 6 without the ball (snowman_sheet.py: what is behind it; dropped) -->
+ <!-- 16 on: his frames 0 to 6 without the ball (snowman_sheet.py: what is behind it; dropped) -->
  <frame x="0" y="0" w="32" h="48" ax="16" ay="46"/>
  <frame x="0" y="0" w="32" h="48" ax="16" ay="46"/>
  <frame x="0" y="0" w="32" h="48" ax="16" ay="46"/>
@@ -108,7 +95,7 @@
   <step frame="11" duration="6"/>
   <step frame="12" duration="60"/>
  </animation>
- <animation name="pillar" loop="1">
+ <animation name="block" loop="1">
   <step frame="12" duration="60"/>
  </animation>
  <animation name="icicle" loop="1">
@@ -117,17 +104,5 @@
  <animation name="shade" loop="1">
   <step frame="14" duration="8"/>
   <step frame="15" duration="8"/>
- </animation>
- <animation name="beam1" loop="1">
-  <step frame="16" duration="60"/>
- </animation>
- <animation name="beam2" loop="1">
-  <step frame="17" duration="60"/>
- </animation>
- <animation name="beam3" loop="1">
-  <step frame="18" duration="60"/>
- </animation>
- <animation name="beam4" loop="1">
-  <step frame="19" duration="60"/>
  </animation>
 </sprite>

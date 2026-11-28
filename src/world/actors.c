@@ -845,6 +845,8 @@ static bool hostCall(void *pContext, BmVmInstance *inst, uint16_t api, const int
   case BM_SCRIPT_API_draw_in_front:
   case BM_SCRIPT_API_set_snow:
   case BM_SCRIPT_API_set_scale:
+  case BM_SCRIPT_API_set_beam:
+  case BM_SCRIPT_API_set_solid:
     *result = bmGameStoryCall(g, i, api, args);
     break;
   case BM_SCRIPT_API_layer_track:

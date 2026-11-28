@@ -299,9 +299,9 @@ on, grows to 200 % and fights (`snowman.ms`, health 30, the music `frost_waltz`)
 
 | Attack | |
 |---|---|
-| A stomp | he jumps at her, landing where she stood (striking in the air); a ripple runs through the ground to where she is, and a pillar of ice breaks out there. The ripple and the pillar breaking out strike |
+| A stomp | he jumps at her, low (some 21 pixels: she does not get under him), landing just short of where she stood (striking in the air); a ripple runs through the ground to where she is, and a block of ice breaks out there. The ripple and the block breaking out strike; standing, the block is solid (`set_solid`): she stands on it |
 | Snowballs | rolled along the ground: jump over them |
-| Frost breath | once his newest pillar is out, he draws breath and a beam grows out along the ground; it stops at the nearest pillar in front of him: stand behind one |
+| Frost breath | once his newest block is out, a straight beam from his mouth (`set_beam`: the engine draws it, a brightened band through window 0), first at the ground just before his feet, sweeping out and up; snow sprays where it hits the ground; a block stops it: get behind one (the block is a little taller than she is, so the beam from high up does not reach her behind it) |
 | Icicles | from half his health on, instead of the snowballs: fast, at her knees, always two close, a pause, two close |
 
 Beaten, a shadow leaves him and he is a happy snowman again (`SnowmanDone`, saved).
@@ -319,20 +319,19 @@ How it fits:
   light on the lit side, a shine, an outline all round. It glows (its colours' normals black:
   the park's light does not darken it), in colours of its own.
 - **One sheet**: the pack has its 28 sprites, so his fight's things are frames of his sheet
-  (the snowball, the ripple, the pillar rising and standing, an icicle, the shadow, the beam).
-  183 tiles: in the park, besides Mitsuki's figure and the doors' sheet, 287 are left.
-- **The beam**: four lengths of 32 pixels each, one tile row high (two rows would be covered
-  with 64 x 32 pieces, half empty), its middle one column repeated, so its pieces are shared; a
-  beam longer than 128 pixels (a frame's most) is two, the far one beyond the near one.
+  (the snowball, the ripple, the block of ice rising and standing, an icicle, the shadow).
+  199 tiles: in the park, besides Mitsuki's figure and the doors' sheet, 287 are left.
+- **The beam** is no sprite: the engine draws it as a window (one span a line, brightened), so
+  it is straight at any angle and costs no sprite memory; it finds where it ends itself (the
+  ground, a solid block), strikes, and sprays snow there.
 - **One class**: `Frost` does each thing by its record (`things.ms`, `things.bmdata`): the
-  pack's 48 classes. The snowman reckons where the pillars are (the ripple goes where she stands,
-  the same reckoning as his) and when they are out, and stops the beam there.
+  pack's 48 classes. The snowman reckons when his newest block is out (the ripple goes where she
+  stands, the same reckoning as his), to breathe only then.
 - **Four places**: the park's own objects (Hina, the snowman, two doors) take four of the eight,
-  so the things live short: at most two pillars (each stands 300 frames), the beam's two parts,
-  two icicles in the air (they fly about a screen), a snowball or two.
+  so the things live short: at most two blocks (each stands 300 frames), the beam, two icicles
+  in the air (they fly about a screen), a snowball or two.
 - **Hits**: a hit holds while the animation it was armed in plays (hits.h), so each is armed
-  right after its animation starts (the jump, the breath, each length of the beam, the pillar
-  rising).
+  right after its animation starts (the jump, the block rising).
 
 ## 4. Open
 

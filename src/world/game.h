@@ -456,6 +456,17 @@ void bmGameSceneFrame(BmGame *pGame, bool roomLeft);
 /// `maxOam`, as it is or larger (set_scale; story.c). Returns the entries used.
 uint8_t bmGameDrawActor(BmGame *pGame, uint8_t i, uint16_t frame, uint8_t bank, uint8_t firstOam, uint8_t maxOam);
 
+/// Objects made solid (set_solid) as boxes of the collision grid, after the push blocks' (each
+/// frame before the player moves); story.c.
+void bmGameStoryBoxes(BmGame *pGame);
+
+/// A beam (set_beam), each frame after the effects: where it gets to, whom it strikes, its
+/// window; story.c.
+void bmGameStoryPresent(BmGame *pGame);
+
+/// How long the beam shown is (pixels, roughly), 0 when none (for tests); story.c.
+uint16_t bmGameBeamShown(const BmGame *pGame);
+
 /// A colour (BGR555) under snow, `level` 0 (as it is) to 4 (story.c; the light shades the
 /// room's colours with it).
 uint16_t bmGameSnowColour(uint8_t level, uint16_t colour);

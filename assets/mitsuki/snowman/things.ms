@@ -11,6 +11,7 @@ struct Thing {
   fix speed = 0.0;   // along the way it goes, a frame
   int life = 300;    // frames until it is gone
   int damage = 2;
-  int length = 0;    // a beam: how many pieces of 32 pixels it grows to
-  int delay = 0;     // a beam: frames before it shows (the far one waits for the near one)
+  int reach = 0;     // a beam: how far it goes at most (pixels)
+  int aim_from = 0;  // a beam: its angle at first and at the end of its life (256 a turn
+  int aim_to = 0;    // from the way it faces, clockwise on the screen: 64 straight down)
 }

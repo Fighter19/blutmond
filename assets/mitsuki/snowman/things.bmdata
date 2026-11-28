@@ -12,7 +12,7 @@ record FrostBall {
 }
 
 # The ripple his stomp sends through the ground, to where Mitsuki stood: there a pillar of ice
-# breaks out and stands (frost.ms STANDS; life: at most, its way and that).
+# breaks out, a block of ice, and stands (frost.ms STANDS; life: at most, its way and that).
 record FrostRipple {
   does = Ripple
   speed = 2.8
@@ -30,74 +30,18 @@ record FrostIcicle {
   damage = 2
 }
 
-# The frost beam: from where his breath meets the ground (dx), 1 to 4 pieces; a longer one has a
-# far part beyond it (dx + 121), which waits for the near one to have grown.
-record FrostBeam1 {
+# The frost beam: from his mouth (grown: 50 pixels up), first at the ground just before his
+# feet (40: some 56 degrees down), sweeping out and up to 6 (some 8 degrees down: the ground
+# 300 pixels away) over its life.
+record FrostBeam {
   does = Beam
-  dx = 24
-  life = 96
+  dx = 6
+  dy = -50
+  life = 84
   damage = 3
-  length = 1
-}
-
-record FrostBeam2 {
-  does = Beam
-  dx = 24
-  life = 96
-  damage = 3
-  length = 2
-}
-
-record FrostBeam3 {
-  does = Beam
-  dx = 24
-  life = 96
-  damage = 3
-  length = 3
-}
-
-record FrostBeam4 {
-  does = Beam
-  dx = 24
-  life = 96
-  damage = 3
-  length = 4
-}
-
-record FrostBeamFar1 {
-  does = Beam
-  dx = 145
-  life = 96
-  damage = 3
-  length = 1
-  delay = 12
-}
-
-record FrostBeamFar2 {
-  does = Beam
-  dx = 145
-  life = 96
-  damage = 3
-  length = 2
-  delay = 12
-}
-
-record FrostBeamFar3 {
-  does = Beam
-  dx = 145
-  life = 96
-  damage = 3
-  length = 3
-  delay = 12
-}
-
-record FrostBeamFar4 {
-  does = Beam
-  dx = 145
-  life = 96
-  damage = 3
-  length = 4
-  delay = 12
+  reach = 340
+  aim_from = 40
+  aim_to = 6
 }
 
 record FrostShade {

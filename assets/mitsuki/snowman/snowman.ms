@@ -5,46 +5,42 @@ class Snowman extends Actor;
 // Mitsuki doubts anyone built him tonight; twice: she grabs the ball (SnowmanGrab, park.ms), he
 // holds on, grows and fights, in turns:
 //
-// - a stomp: he jumps at her (where she stands as he jumps off; he strikes in the air) and lands;
-//   a ripple goes through the ground to where she stood, and there a pillar of ice breaks out
-//   (the ripple and the pillar breaking out strike; standing, it is cover);
+// - a stomp: he jumps at her (a low jump, to land just short of where she stands as he jumps
+//   off; he strikes in the air) and lands; a ripple goes through the ground to where she
+//   stood, and there a block of ice breaks out (the ripple and the block breaking out strike;
+//   standing, it is solid: she stands on it, and it is cover);
 // - snowballs rolling at her along the ground: jump over them;
-// - his frost breath: a beam along the ground, growing out from his breath; a pillar stops it:
-//   stand behind one;
+// - his frost breath: once his newest block is out, a straight beam from his mouth, first at
+//   the ground before his feet, then sweeping out and up (the engine draws it: set_beam); a
+//   block stops it: get behind one, or onto one before it passes;
 // - from half his health on, icicles instead of the snowballs: fast, at her knees, always in the
 //   same rhythm (two close, a pause, two close): jump over them.
 // (These things are one class, Frost, by kind: frost.ms, things.bmdata.)
 //
-// The pillars are the snowman's to reckon with: he notes each one's place and the frame it is
-// out (the ripple's way at its speed: PillarA, PillarB, place + 1024 x frame; two at most: one
-// stomp is more than a pillar's time after the one before the last), and stops the beam at the
-// nearest that stands in front of him (for PILLAR_STANDS frames: then it crumbles, frost.ms).
+// He notes when his newest block is out (the ripple's way at its speed: PillarA, its place +
+// 1024 x the frame), to breathe only then.
 //
 // Beaten, a shadow leaves him and gets away, and he is a happy snowman again (Defeated,
 // kept in the save game; the story flag SnowmanDone).
 
 const int Health = 30;
 const int ROOM_W = 640;
-const int NEAR_MIN = 40;      // a pillar stands at least this far from him (frost.ms the same)
+const int NEAR_MIN = 40;      // a block stands at least this far from him (frost.ms the same)
 const int ARENA_L = 40;
 const int ARENA_R = 600;
-const int PILLAR_STANDS = 296;  // frames a pillar is counted on once out (frost.ms STANDS 300; out a
-                                // frame or two before he reckons)
 const int RIPPLE_SPEED10 = 28;  // the ripple's speed x 10 (FrostRipple: 2.8)
-const int PILLAR_HALF = 6;    // half a pillar's width
-const int BEAM_DX = 24;       // where the beam starts (FrostBeam*: where his breath meets the ground)
-const int BEAM = 32;          // a piece of the beam
 const int GROWN = 200;        // his size grown, percent (snowman_sheet.py SCALE: twice, so each pixel 2 x 2)
-const int JUMP = 42;          // frames in the air
-const fix JUMP_UP = 4.1;      // his speed up as he jumps off; down by GRAVITY each frame
+const int JUMP = 29;          // frames in the air: up at JUMP_UP, down by GRAVITY a frame (some 21
+const fix JUMP_UP = 2.9;      // pixels high: she does not get under him)
 const fix GRAVITY = 0.2;
+const int SHORT = 22;         // he lands this far short of her (his front at her)
+const int JUMP_MOST = 150;    // and jumps at most this far
 
 var save bool Defeated;
 var int Turn;
 var int Shots;
 var int Clock;               // frames since the fight began
-var int PillarA;             // the newest pillar: its place + 1024 x the frame it is out (0: none)
-var int PillarB;             // the one before
+var int PillarA;             // the newest block: its place + 1024 x the frame it is out (0: none)
 var fix Vx;                  // in a jump
 var fix Vy;
 
@@ -120,7 +116,7 @@ function face() {
   face_player();
 }
 
-// Where the pillar of a stomp stands: where Mitsuki is, not too near him, in the park.
+// Where the block of a stomp stands: where Mitsuki is, not too near him, in the park.
 // (frost.ms has the same: the ripple goes there.)
 function int pillar_at() {
   var int px = int(player_x());
@@ -133,51 +129,25 @@ function int pillar_at() {
   return px;
 }
 
-// A pillar breaking out at `at`, once the ripple has got there from him.
+// Where a jump at her lands: SHORT of her, at most JUMP_MOST away, in the park.
+function int landing() {
+  var int px = int(player_x());
+  var int me = int(x);
+  var int side = 1;
+  if px < me { side = -1; }
+  var int dest = px - SHORT * side;
+  if (dest - me) * side < 0 { dest = me; }
+  if (dest - me) * side > JUMP_MOST { dest = me + JUMP_MOST * side; }
+  if dest < ARENA_L { dest = ARENA_L; }
+  if dest > ARENA_R { dest = ARENA_R; }
+  return dest;
+}
+
+// A block breaking out at `at`, once the ripple has got there from him.
 function note_pillar(int at) {
   var int way = at - int(x);
   if way < 0 { way = -way; }
-  PillarB = PillarA;
   PillarA = at + 1024 * (Clock + way * 10 / RIPPLE_SPEED10 + 2);
-}
-
-// Which way the beam goes: toward her.
-function int beam_side() {
-  if player_x() < x { return -1; }
-  return 1;
-}
-
-// How far the beam gets from its start: to the pillar `p` if it stands in the way and nearer
-// than `room`.
-function int blocked(int room, int p) {
-  if p == 0 { return room; }
-  var int side = beam_side();
-  var int start = int(x) + BEAM_DX * side;
-  var int age = Clock - p / 1024;
-  if age < 0 || age >= PILLAR_STANDS { return room; }
-  var int d = (p % 1024 - start) * side - PILLAR_HALF;
-  if d >= 0 && d < room { return d; }
-  return room;
-}
-
-// His frost beam toward her: its pieces, up to a pillar or the park's end; a longer one in two.
-function breathe() {
-  var int side = beam_side();
-  var int start = int(x) + BEAM_DX * side;
-  var int room = ROOM_W - start;
-  if side < 0 { room = start; }
-  room = blocked(room, PillarA);
-  room = blocked(room, PillarB);
-  var int n = room / BEAM;
-  if n > 8 { n = 8; }
-  if n == 1 { spawn_with(#Frost, #FrostBeam1); }
-  else if n == 2 { spawn_with(#Frost, #FrostBeam2); }
-  else if n == 3 { spawn_with(#Frost, #FrostBeam3); }
-  else if n >= 4 { spawn_with(#Frost, #FrostBeam4); }
-  if n == 5 { spawn_with(#Frost, #FrostBeamFar1); }
-  else if n == 6 { spawn_with(#Frost, #FrostBeamFar2); }
-  else if n == 7 { spawn_with(#Frost, #FrostBeamFar3); }
-  else if n == 8 { spawn_with(#Frost, #FrostBeamFar4); }
 }
 
 state Idle {
@@ -233,17 +203,15 @@ begin:
   gotostate Idle;
 }
 
-// He jumps at her: off toward where she stands, landing there (in the park); the ground breaks,
-// a ripple runs to where she is and a pillar of ice breaks out.
+// He jumps at her: low, landing just short of where she stands (in the park); the ground breaks,
+// a ripple runs to where she is and a block of ice breaks out.
 state Stomp {
   event tick() { fighting(); }
 begin:
   face();
   play_anim(#idle);
   sleep(10);
-  Shots = int(player_x());
-  if Shots < ARENA_L { Shots = ARENA_L; }
-  if Shots > ARENA_R { Shots = ARENA_R; }
+  Shots = landing();
   Vx = fix(Shots - int(x)) / fix(JUMP);
   Vy = -JUMP_UP;
   play_anim(#jump);
@@ -267,21 +235,20 @@ begin:
   gotostate Idle;
 }
 
-// His frost breath: once his newest pillar is out, he draws breath (a moment to take cover),
-// then it pours out and the beam runs along the ground.
+// His frost breath: once his newest block is out, he draws breath (a moment to take cover),
+// then the beam sweeps from his feet out and up.
 state Breath {
   event tick() { fighting(); }
 begin:
   face();
   play_anim(#idle);
-  while Clock < PillarA / 1024 { sleep(1); }   // (his newest pillar out first)
+  while Clock < PillarA / 1024 { sleep(1); }   // (his newest block out first)
   play_sound(#hush);
   sleep(50);
   face();
   play_anim(#breath);
-  arm(#frost, 3, Element.Ice);  // where his breath pours (its box `frost`)
-  breathe();
-  sleep(96);
+  spawn_with(#Frost, #FrostBeam);
+  sleep(90);
   gotostate Idle;
 }
 
@@ -291,7 +258,6 @@ begin:
   Defeated = true;
   player_lock(600);
   disarm(#snow);
-  disarm(#frost);
   ui_clear(0, 4, 16, 3);
   fade_music(0, 120);
   y = home_y;

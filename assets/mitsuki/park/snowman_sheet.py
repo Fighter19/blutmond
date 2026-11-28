@@ -3,15 +3,11 @@
 
 - the Christmas ball in his hands: what is seen in it, drawn (glass is not something a renderer
   of 15 colours does): his body behind it, tinted (his poses rendered again without the ball,
-  frames 20 on, then dropped), and past him the park itself (every other pixel left empty), the diorama inside (a floor of snow, a tree under snow, a
-  small figure in a yellow hoodie: Hina, a few flakes), the glass's rim and its shine, its
-  outline all round;
-
+  frames 16 on, then dropped), and past him the park itself (every other pixel left empty), the
+  diorama inside (a floor of snow, a tree under snow, a small figure in a yellow hoodie: Hina,
+  a few flakes), the glass's rim and its shine, its outline all round;
 - the boss's frames, drawn larger by the engine (snowman.ms: set_scale), get their boxes made
-  as large;
-- the frost beam's lengths are made of one column repeated (its middle) and the same rounded
-  end: each 32 pixels a piece like the others. (The beam is one tile row high: two rows
-  would be covered with 64 x 32 pieces, half of them empty.)
+  as large.
 
   python3 assets/mitsuki/park/snowman_sheet.py assets/mitsuki/park/sources/snowman
 
@@ -28,13 +24,10 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import snowman as model  # noqa: E402  (its colours)
 
-HIM = 7                              # his frames 0 to 6 (with the ball), again from 20 without
-BARE = 20
+HIM = 7                              # his frames 0 to 6 (with the ball), again from BARE without
+BARE = 16
 BOSS = (3, 4, 5, 6)                  # drawn at SCALE (snowman.ms set_scale): their boxes as large
 SCALE = 2.0   # (a whole number: each pixel 2 x 2, the outline as even as drawn)
-BEAMS = (16, 17, 18, 19)             # the beam, 1 to 4 pieces of BEAM long
-BEAM = 32
-TIP = 6                              # the beam's rounded end (pixels)
 SHEET_W = 256
 
 
@@ -66,21 +59,6 @@ def main(base):
         del frames[i], rect[i]
         for sfx in pics:
             del pics[sfx][i]
-    # The beam: the longest one's middle column and its end; every length from them.
-    longest = BEAMS[-1]
-    for s in pics:
-        src = pics[s][longest]
-        w, h = src.size
-        mid = src.crop((w // 2, 0, w // 2 + 1, h))
-        end = src.crop((w - TIP, 0, w, h))
-        for n, i in enumerate(BEAMS, 1):
-            length = BEAM * n - (BEAM - w % BEAM if w % BEAM else 0)
-            pic = Image.new('RGBA', (length, h), (0, 0, 0, 0))
-            for x in range(0, length - TIP):
-                pic.paste(mid, (x, 0))
-            pic.paste(end, (length - TIP, 0))
-            pics[s][i] = pic
-            rect[i].update(w=length, h=h)
     # The boss's boxes as large as he is drawn.
     for i in BOSS:
         for box in frames[i].findall('box'):

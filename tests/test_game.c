@@ -4057,11 +4057,10 @@ static int madePlaying(const char *cls, const char *anim)
   return -1;
 }
 
-// The snowman's frost beam is out (any of its lengths).
+// The snowman's frost beam is out (set_beam: drawn by the engine).
 static bool frostBeam(void)
 {
-  return madePlaying("Frost", "beam1") >= 0 || madePlaying("Frost", "beam2") >= 0 || madePlaying("Frost", "beam3") >= 0 ||
-         madePlaying("Frost", "beam4") >= 0;
+  return bmGameBeamShown(&s_game) > 0;
 }
 
 static void testTheSnowman(void)
@@ -4101,12 +4100,13 @@ static void testTheSnowman(void)
   TEST_ASSERT(lines == 2 && actorPlaying("Snowman", "grow") < 0);
   TEST_ASSERT(s_game.actors.health[man] == 30);
   shoot("snowman_fight");
-  // His attacks, in turn: a jump at her (he lands where she stood), the ripple and the pillar
-  // of ice it breaks out as, snowballs, his frost beam. She keeps behind the newest pillar
-  // (away from him): a beam while she is there does not strike her (it stops at the pillar).
+  // His attacks, in turn: a low jump at her (landing 22 pixels short of where she stood, at
+  // most 150 away), the ripple and the block of ice it breaks out as, snowballs, his frost
+  // beam. She keeps behind the block farthest from him: his beam, sweeping out from his feet,
+  // does not strike her there (it stops at the block).
   int jumps = 0, aimed = 0, ripples = 0, pillars = 0, balls = 0, sheltered = 0, beams = 0;
   bool wasJump = false;
-  int32_t aimX = 0, farX = 150;
+  int32_t aimX = 0, farX = 150, fromX = 0, peak = 0;
   int beamHurts = -1;
   for (f = 0; f < 4000 && !(aimed && ripples && pillars && balls && sheltered); f++)
   {
@@ -4129,26 +4129,60 @@ static void testTheSnowman(void)
     s_game.health = 30;
     frames(1, 0);
     const bool jumping = actorPlaying("Snowman", "jump") == man;
-    if (jumping && !wasJump) jumps++, aimX = px < 40 ? 40 : px > 600 ? 600 : px, farX = aimX < 320 ? aimX + 180 : aimX - 180;
-    if (!jumping && wasJump && abs((int)(BM_FIX_INT(s_game.actors.x[man]) - aimX)) <= 4) aimed++;
+    if (jumping && !wasJump)
+    {
+      // Where he should land: short of her, not past 150 (from where he jumped off).
+      const int side = px < mx ? -1 : 1;
+      int32_t to = px - 22 * side;
+      if ((to - mx) * side < 0) to = mx;
+      if ((to - mx) * side > 150) to = mx + 150 * side;
+      jumps++, fromX = mx, aimX = to < 40 ? 40 : to > 600 ? 600 : to, farX = px < 320 ? px + 180 : px - 180, peak = 0;
+    }
+    if (jumping && 128 - BM_FIX_INT(s_game.actors.y[man]) > peak) peak = 128 - BM_FIX_INT(s_game.actors.y[man]);
+    if (!jumping && wasJump && abs((int)(BM_FIX_INT(s_game.actors.x[man]) - aimX)) <= 4 && peak <= 24) aimed++;
+    (void)fromX;
     wasJump = jumping;
     ripples += madePlaying("Frost", "ripple") >= 0;
     pillars += pillar >= 0;
     balls += madePlaying("Frost", "roll") >= 0;
     const bool beam = frostBeam();
-    // (A beam counts as sheltered from if it would reach her without the pillar: 20 + 256.)
+    // (A beam counts as sheltered from if it would reach her without the block: the ground
+    // 300 pixels away at its end.)
     if (beam && beamHurts == -1)
-      beamHurts = pillar >= 0 && abs((int)(BM_FIX_INT(s_game.player.x) - mx)) < 260 ? (int)s_game.hurts : -2, beams++;
+      beamHurts = pillar >= 0 && abs((int)(BM_FIX_INT(s_game.player.x) - mx)) < 280 ? (int)s_game.hurts : -2, beams++;
     if (!beam && beamHurts != -1)
     {
       if (beamHurts >= 0 && (int)s_game.hurts == beamHurts) sheltered = 1;
       beamHurts = -1;
     }
   }
-  printf("    his attacks: jumps %d (landed where she stood %d), ripples %d, pillars %d, snowballs %d, beams %d (sheltered %d)\n",
+  printf("    his attacks: jumps %d (low, landed short of her %d), ripples %d, blocks %d, snowballs %d, beams %d (sheltered %d)\n",
          jumps, aimed, ripples > 0, pillars > 0, balls > 0, beams, sheltered);
   TEST_ASSERT(aimed && ripples && pillars && balls && sheltered);
-  // Caught in the open, between him and the pillar, the beam strikes her.
+  // The block is solid: she stands on it.
+  {
+    int block = -1;
+    const int rise = bmSpriteSheetAnim(&s_game.sheets[s_game.actors.sheet[man]], &s_pack, "rise");
+    for (f = 0; f < 3000 && block < 0; f++)
+    {
+      bmBodyPlace(&s_game.player, 150, 128);
+      s_game.health = 30;
+      frames(1, 0);
+      for (uint8_t i = 0; i < s_game.actors.count; i++)
+        if (!s_game.actors.gone[i] && s_game.actors.object[i] == 0xFF && s_game.actors.anim[i] == (uint8_t)rise &&
+            s_game.actors.animStep[i] != 0)
+          block = i;
+    }
+    TEST_ASSERT(block >= 0);
+    frames(8, 0);   // (solid once it is out)
+    const int32_t bx = BM_FIX_INT(s_game.actors.x[block]), by = BM_FIX_INT(s_game.actors.y[block]);
+    bmBodyPlace(&s_game.player, bx, by - 60);
+    for (f = 0; f < 30; f++) frames(1, 0);
+    printf("    on the block (at %d, %d): she stands at %d, %d\n", (int)bx, (int)by, (int)BM_FIX_INT(s_game.player.x),
+           (int)BM_FIX_INT(s_game.player.y));
+    TEST_ASSERT(s_game.player.onGround && BM_FIX_INT(s_game.player.y) == by - 40);
+  }
+  // Caught in the open, between him and the block, the beam strikes her.
   bool struck = false;
   for (f = 0; f < 3000 && !struck; f++)
   {
@@ -4197,7 +4231,8 @@ static void testTheSnowman(void)
   s_game.actors.health[man] = 1;
   for (f = 0; f < 600 && actorPlaying("Snowman", "happy") < 0; f++)
   {
-    bmBodyPlace(&s_game.player, 284, 128);
+    // (Beside him, facing him: wherever his jumps took him.)
+    bmBodyPlace(&s_game.player, BM_FIX_INT(s_game.actors.x[man]) - 18, 128);
     s_game.player.facing = 1;
     s_game.health = 30;
     frames(1, (f % 30) == 0 ? BM_KEY_B : 0);

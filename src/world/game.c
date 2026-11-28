@@ -1960,6 +1960,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   {
     // Blocks pushed (the way the player walks), plates, gates: before the player moves.
     bmPuzzleFrame(g, in.dx);
+    bmGameStoryBoxes(g);   // (objects solid: set_solid, story.c)
     events = bmBodyStep(&g->player, &params, &g->collision, &g->physics, in);
     if (keepFacing) g->player.facing = facing;
   }
@@ -2074,6 +2075,7 @@ void bmGameFrame(BmGame *g, uint16_t keys)
   updateSprites(g);
   PROFILE(7);
   bmEffectsPresent(g);
+  bmGameStoryPresent(g);   // (a beam: set_beam, story.c; over the effects' windows)
   PROFILE(8);
   bmLightPresent(g);
   PROFILE(9);

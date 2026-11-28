@@ -174,7 +174,9 @@ typedef enum BmScriptType {
   X(set_glow,          VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
   X(draw_in_front,     VOID, 1, BOOL,  VOID,  VOID,  VOID, 0) \
   X(set_snow,          VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
-  X(set_scale,         VOID, 1, INT,   VOID,  VOID,  VOID, 0)
+  X(set_scale,         VOID, 1, INT,   VOID,  VOID,  VOID, 0) \
+  X(set_beam,          VOID, 3, INT,   INT,   INT,   VOID, 0) \
+  X(set_solid,         VOID, 2, INT,   INT,   VOID,  VOID, 0)
 
 // record_get(table, key, field), record_count(table), record_at(table, index): what the
 // compiler makes of record<S> values (docs/plans/structures.md §6). table: string id of the
@@ -328,6 +330,16 @@ typedef enum BmScriptType {
 //
 // set_snow(percent): snow falling over the room, that much of the most (0: none; 24 flakes at
 // 100), in front of everything but the UI; until the room is left. Nothing in the multiboot images.
+//
+// set_beam(angle, reach, damage): a straight beam from the object's anchor along `angle` (256
+// a turn from the way it faces, clockwise on the screen: 64 straight down) until the ground, a
+// wall or a solid object stops it, at most `reach` pixels (0: none); it strikes the player it
+// touches for `damage` (ice), throws up snow where it ends on something, and is drawn as a
+// brightened band (window 0, line table slot 0). One at a time. Nothing in the multiboot images.
+//
+// set_solid(w, h): the object a solid box (w x h standing on its anchor) the player stands on
+// and walks against, as a push block (0, 0: not). Until the room is left. Nothing in the
+// multiboot images.
 //
 // set_scale(percent): the object drawn that much of its size (100: as it is; up to 200),
 // about its anchor (affine sprites); its boxes stay as the sheet has them. Until the room is
